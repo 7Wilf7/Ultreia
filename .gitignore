@@ -30,3 +30,6 @@ dist-ssr
 
 # Vite cache
 .vite/
+
+# Claude Code local settings
+.claude/settings.local.json

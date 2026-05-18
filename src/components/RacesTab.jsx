@@ -12,9 +12,28 @@ const EMPTY_RACE = (isTarget) => ({
 
 const BOCHA_ENDPOINT = "https://api.bochaai.com/v1/web-search";
 
+// Decompose a stored race into the editable form shape. Inverse of how `commitRace` builds the race object.
+function raceToForm(race) {
+  return {
+    isTarget: !!race.isTarget,
+    priority: race.priority || "A",
+    name: race.name || "",
+    date: race.date || "",
+    distance: race.distance || "",
+    category: race.category || "",
+    ascent: race.ascent || "",
+    resultH: race.resultH || "",
+    resultM: race.resultM || "",
+    resultS: race.resultS || "",
+    itraScore: race.itraScore || "",
+    isTrailDetected: race.isTrailDetected ?? null,
+  };
+}
+
 export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEndpoint, apiModel, bochaApiKey }) {
   const t = useT();
   const [showRaceAdd, setShowRaceAdd] = useState(false);
+  const [editingRaceId, setEditingRaceId] = useState(null);
   const [raceMode, setRaceMode] = useState("target");
   const [newRace, setNewRace] = useState(EMPTY_RACE(true));
   const [raceLookupMsg, setRaceLookupMsg] = useState("");
@@ -24,11 +43,27 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
 
   useEffect(() => {
     setShowRaceAdd(false);
+    setEditingRaceId(null);
     setRaceLookupMsg("");
     setRaceCategoryModal(null);
     setPastRaceWarning(null);
     setNewRace(EMPTY_RACE(raceMode === "target"));
   }, [raceMode]);
+
+  function startEdit(race) {
+    setEditingRaceId(race.id);
+    setShowRaceAdd(false);
+    setNewRace(raceToForm(race));
+    setRaceLookupMsg("");
+    setRaceCategoryModal(null);
+  }
+
+  function cancelEdit() {
+    setEditingRaceId(null);
+    setNewRace(EMPTY_RACE(raceMode === "target"));
+    setRaceLookupMsg("");
+    setPastRaceWarning(null);
+  }
 
   function deleteRace(id) {
     setConfirmDelete({ type: "race", id });
@@ -38,8 +73,8 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
     setRaces(races.map(r => r.id === id ? { ...r, category } : r));
   }
 
-  async function lookupRaceWithCategories(input) {
-    // Two-step lookup: Bocha web search → AI Coach LLM parses results into JSON.
+  async function lookupRace(input) {
+    // Two-step lookup: Bocha web search → AI Coach LLM parses results into structured categories.
     // Both keys are required; warn early if either is missing.
     if (!bochaApiKey) {
       setRaceLookupMsg(t("races.lookup_no_bocha"));
@@ -55,7 +90,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
     setRaceLookupMsg(t("races.lookup_searching_web"));
 
     const currentDate = now.toISOString().slice(0, 10);
-    const searchHint = raceMode === "target"
+    const searchHint = newRace.isTarget
       ? `The user is adding a FUTURE target race. Today is ${currentDate}. Prefer the NEXT upcoming edition if you know its date; otherwise omit the date and let the user fill it in.`
       : `The user is adding a HISTORICAL race result. Today is ${currentDate}. The edition is in the past.`;
 
@@ -76,7 +111,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
         }),
       });
       const bochaData = await bochaResp.json();
-      if (!bochaResp.ok || bochaData.code && bochaData.code !== 200) {
+      if (!bochaResp.ok || (bochaData.code && bochaData.code !== 200)) {
         const msg = bochaData.msg || bochaData.message || `HTTP ${bochaResp.status}`;
         setRaceLookupMsg(t("races.lookup_bocha_error", { msg }));
         setTimeout(() => setRaceLookupMsg(""), 6000);
@@ -104,9 +139,11 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
       `[${i + 1}] ${r.name || ""}\nURL: ${r.url || ""}\n${r.summary || r.snippet || ""}`
     ).join("\n\n");
 
+    // max_tokens 8000: reasoning models (deepseek-v4-pro) burn most tokens in `thinking` blocks
+    // before producing text output. 1000 was too low and stopped the model mid-think (max_tokens stop_reason).
     const parseBody = {
       model: apiModel,
-      max_tokens: 1000,
+      max_tokens: 8000,
       messages: [{
         role: "user",
         content: `Today's date is ${currentDate}. The user entered race name: "${input}".
@@ -202,7 +239,9 @@ JSON ONLY.`,
 
   function tryAddRace() {
     if (!newRace.name || !newRace.date) return;
-    if (newRace.isTarget && new Date(newRace.date) < new Date(now.toISOString().slice(0, 10))) {
+    // Only warn-and-move when ADDING a new target whose date slipped past.
+    // For edits, trust the user's input — they may be backdating intentionally.
+    if (newRace.isTarget && !editingRaceId && new Date(newRace.date) < new Date(now.toISOString().slice(0, 10))) {
       setPastRaceWarning(true);
       return;
     }
@@ -211,18 +250,36 @@ JSON ONLY.`,
 
   function commitRace(asTarget) {
     const finalCategory = newRace.category || inferRaceCategory(newRace) || "";
-    setRaces([
-      { id: Date.now(), ...newRace, category: finalCategory, isTarget: asTarget, priority: asTarget ? newRace.priority : null },
-      ...races,
-    ]);
+    const built = {
+      ...newRace,
+      category: finalCategory,
+      isTarget: asTarget,
+      priority: asTarget ? newRace.priority : null,
+    };
+    if (editingRaceId) {
+      setRaces(races.map(r => r.id === editingRaceId ? { ...r, ...built } : r));
+    } else {
+      setRaces([{ id: Date.now(), ...built }, ...races]);
+    }
     setNewRace(EMPTY_RACE(raceMode === "target"));
     setShowRaceAdd(false);
+    setEditingRaceId(null);
     setRaceLookupMsg("");
     setPastRaceWarning(null);
   }
 
-  const targetRacesList = races.filter(r => r.isTarget);
-  const historyRacesList = races.filter(r => !r.isTarget);
+  // Sort: target races by date ASC (next race coming up first); history by date DESC (most recent first).
+  // Missing date sorts last for targets and first for history (treated as "unknown future" / "recent unknown").
+  const targetRacesList = races.filter(r => r.isTarget).sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(a.date) - new Date(b.date);
+  });
+  const historyRacesList = races.filter(r => !r.isTarget).sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(b.date) - new Date(a.date);
+  });
 
   function renderCategoryTag(cat) {
     if (!cat) return null;
@@ -242,11 +299,13 @@ JSON ONLY.`,
         <button onClick={() => setRaceMode("history")} style={s.chip(raceMode === "history")}>{t("races.history_tab", { n: historyRacesList.length })}</button>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
+      <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={() => {
+          if (editingRaceId) cancelEdit();
           setNewRace(EMPTY_RACE(raceMode === "target"));
           setShowRaceAdd(!showRaceAdd);
         }} style={s.btn}>{raceMode === "target" ? t("races.add_target") : t("races.add_history")}</button>
+        <span style={{ ...s.muted, fontSize: 11 }}>{t("races.edit_hint")}</span>
       </div>
 
       {pastRaceWarning && (
@@ -278,77 +337,8 @@ JSON ONLY.`,
         </div>
       )}
 
-      {showRaceAdd && (
-        <div style={{ ...s.cardDark, marginBottom: 14 }}>
-          <div style={s.section}>{raceMode === "target" ? t("races.new_target") : t("races.new_history")}</div>
-
-          {raceMode === "target" && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.priority")}</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {RACE_PRIORITY.map(p => (
-                  <button key={p} onClick={() => setNewRace({ ...newRace, priority: p })}
-                    style={s.chip(newRace.priority === p)}>{p}{t("races.priority_suffix")}</button>
-                ))}
-              </div>
-              <div style={{ ...s.muted, marginTop: 4, fontSize: 11 }}>{t("races.priority_hint")}</div>
-            </div>
-          )}
-
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input placeholder={t("races.name_placeholder")} value={newRace.name}
-                onChange={e => setNewRace({ ...newRace, name: e.target.value })}
-                style={{ ...s.input, flex: 1 }} />
-              <button onClick={() => lookupRaceWithCategories(newRace.name)}
-                disabled={raceLookupLoading || !newRace.name.trim()}
-                title={t("races.lookup_web")}
-                style={{ ...s.btnGhost, padding: "9px 14px", opacity: raceLookupLoading ? 0.5 : 1 }}>
-                {raceLookupLoading ? "..." : "🔍"}
-              </button>
-            </div>
-            <div style={{ fontSize: 11, color: "#888", marginTop: 6, lineHeight: 1.5 }}>
-              {t("races.lookup_web_hint")}
-            </div>
-            {raceLookupMsg && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{raceLookupMsg}</div>}
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <input type="date" value={newRace.date}
-              onChange={e => setNewRace({ ...newRace, date: e.target.value })}
-              onClick={e => e.currentTarget.showPicker?.()}
-              style={{ ...s.input, cursor: "pointer" }} />
-            <input placeholder={t("races.distance_placeholder")} value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
-            <select value={newRace.category}
-              onChange={e => setNewRace({ ...newRace, category: e.target.value })}
-              style={s.input}>
-              <option value="">{t("races.category_placeholder")}</option>
-              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-            </select>
-          </div>
-
-          {newRace.isTrailDetected !== false && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <input placeholder={t("races.ascent_placeholder")} value={newRace.ascent} onChange={e => setNewRace({ ...newRace, ascent: e.target.value })} style={s.input} />
-              <input placeholder={t("races.itra_placeholder")} value={newRace.itraScore} onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })} style={s.input} />
-            </div>
-          )}
-
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{raceMode === "target" ? t("races.goal_time") : t("races.result_time")}</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-              <input type="number" placeholder={t("races.h")} value={newRace.resultH} onChange={e => setNewRace({ ...newRace, resultH: e.target.value })} style={s.input} />
-              <input type="number" placeholder={t("races.m")} value={newRace.resultM} onChange={e => setNewRace({ ...newRace, resultM: e.target.value })} style={s.input} />
-              <input type="number" placeholder={t("races.s")} value={newRace.resultS} onChange={e => setNewRace({ ...newRace, resultS: e.target.value })} style={s.input} />
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={tryAddRace} style={s.btn}>{t("common.save")}</button>
-            <button onClick={() => { setShowRaceAdd(false); setRaceLookupMsg(""); }} style={s.btnGhost}>{t("common.cancel")}</button>
-          </div>
-        </div>
-      )}
+      {/* Add-mode form sits at the top. Edit-mode form replaces the card in-place (rendered inside the list below). */}
+      {showRaceAdd && !editingRaceId && renderRaceForm("add")}
 
       {(raceMode === "target" ? targetRacesList : historyRacesList).length === 0 ? (
         <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px" }}>
@@ -360,8 +350,12 @@ JSON ONLY.`,
             const timeStr = [r.resultH, r.resultM, r.resultS].some(Boolean)
               ? `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`
               : "";
+            if (editingRaceId === r.id) {
+              return <div key={r.id}>{renderRaceForm("edit")}</div>;
+            }
             return (
-              <div key={r.id} style={s.card}>
+              <div key={r.id} onClick={() => startEdit(r)}
+                style={{ ...s.card, cursor: "pointer" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                     {r.isTarget && r.priority && (
@@ -372,7 +366,8 @@ JSON ONLY.`,
                   </div>
                   <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
                     <div style={s.muted}>{r.date}</div>
-                    <button onClick={() => deleteRace(r.id)} style={{ border: "none", background: "none", color: "#bbb", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+                    <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
+                      style={{ border: "none", background: "none", color: "#bbb", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -382,6 +377,7 @@ JSON ONLY.`,
                   {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
                   {!r.category && (
                     <select value=""
+                      onClick={(e) => e.stopPropagation()}
                       onChange={e => updateRaceCategory(r.id, e.target.value)}
                       style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888" }}>
                       <option value="">{t("races.set_category")}</option>
@@ -396,4 +392,90 @@ JSON ONLY.`,
       )}
     </div>
   );
+
+  // Renders the add/edit form. Goal time is hidden for target races (only finished races have actual result times).
+  function renderRaceForm(mode) {
+    const isEdit = mode === "edit";
+    return (
+      <div style={{ ...s.cardDark, marginBottom: 14 }}>
+        <div style={s.section}>
+          {isEdit
+            ? t("races.edit_title")
+            : (raceMode === "target" ? t("races.new_target") : t("races.new_history"))}
+        </div>
+
+        {newRace.isTarget && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.priority")}</div>
+            <div style={{ display: "flex", gap: 6 }}>
+              {RACE_PRIORITY.map(p => (
+                <button key={p} onClick={() => setNewRace({ ...newRace, priority: p })}
+                  style={s.chip(newRace.priority === p)}>{p}{t("races.priority_suffix")}</button>
+              ))}
+            </div>
+            <div style={{ ...s.muted, marginTop: 4, fontSize: 11 }}>{t("races.priority_hint")}</div>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input placeholder={t("races.name_placeholder")} value={newRace.name}
+              onChange={e => setNewRace({ ...newRace, name: e.target.value })}
+              style={{ ...s.input, flex: 1 }} />
+            <button onClick={() => lookupRace(newRace.name)}
+              disabled={raceLookupLoading || !newRace.name.trim()}
+              title={t("races.lookup_web")}
+              style={{ ...s.btnGhost, padding: "9px 14px", opacity: raceLookupLoading ? 0.5 : 1 }}>
+              {raceLookupLoading ? "..." : "🔍"}
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: "#888", marginTop: 6, lineHeight: 1.5 }}>
+            {t("races.lookup_web_hint")}
+          </div>
+          {raceLookupMsg && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{raceLookupMsg}</div>}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <input type="date" value={newRace.date}
+            onChange={e => setNewRace({ ...newRace, date: e.target.value })}
+            onClick={e => e.currentTarget.showPicker?.()}
+            style={{ ...s.input, cursor: "pointer" }} />
+          <input placeholder={t("races.distance_placeholder")} value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
+          <select value={newRace.category}
+            onChange={e => setNewRace({ ...newRace, category: e.target.value })}
+            style={s.input}>
+            <option value="">{t("races.category_placeholder")}</option>
+            {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+          </select>
+        </div>
+
+        {newRace.isTrailDetected !== false && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <input placeholder={t("races.ascent_placeholder")} value={newRace.ascent} onChange={e => setNewRace({ ...newRace, ascent: e.target.value })} style={s.input} />
+            <input placeholder={t("races.itra_placeholder")} value={newRace.itraScore} onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })} style={s.input} />
+          </div>
+        )}
+
+        {/* Time fields only for history races — target races don't have a finish time yet */}
+        {!newRace.isTarget && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.result_time")}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+              <input type="number" placeholder={t("races.h")} value={newRace.resultH} onChange={e => setNewRace({ ...newRace, resultH: e.target.value })} style={s.input} />
+              <input type="number" placeholder={t("races.m")} value={newRace.resultM} onChange={e => setNewRace({ ...newRace, resultM: e.target.value })} style={s.input} />
+              <input type="number" placeholder={t("races.s")} value={newRace.resultS} onChange={e => setNewRace({ ...newRace, resultS: e.target.value })} style={s.input} />
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={tryAddRace} style={s.btn}>{isEdit ? t("common.save_changes") : t("common.save")}</button>
+          <button onClick={() => {
+            if (isEdit) cancelEdit();
+            else { setShowRaceAdd(false); setRaceLookupMsg(""); }
+          }} style={s.btnGhost}>{t("common.cancel")}</button>
+        </div>
+      </div>
+    );
+  }
 }

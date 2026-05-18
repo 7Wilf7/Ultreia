@@ -22,6 +22,9 @@ function formatHMS(sec) {
 export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
   const t = useT();
   const [itraDraft, setItraDraft] = useState(itraPI ?? "");
+  // Card mode while a value is saved; switches to edit form on click. First-time
+  // fill (no value yet) shows the form immediately so the user has something to do.
+  const [itraEditing, setItraEditing] = useState(!itraPI);
 
   const records = useMemo(() => {
     const history = races.filter(r => !r.isTarget);
@@ -50,7 +53,20 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
   }, [races]);
 
   function saveItra() {
-    setItraPI(itraDraft.trim());
+    const v = itraDraft.trim();
+    setItraPI(v);
+    // Drop back to card view once a value is saved
+    if (v) setItraEditing(false);
+  }
+
+  function startEditItra() {
+    setItraDraft(itraPI ?? "");
+    setItraEditing(true);
+  }
+
+  function cancelEditItra() {
+    setItraDraft(itraPI ?? "");
+    setItraEditing(false);
   }
 
   return (
@@ -101,25 +117,38 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
         </div>
       )}
 
-      <div style={{ ...s.cardDark, marginBottom: 14 }}>
-        <div style={s.section}>{t("pr.itra_title")}</div>
-        <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.6 }}>{t("pr.itra_desc")}</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="number"
-            placeholder={t("pr.itra_placeholder")}
-            value={itraDraft}
-            onChange={e => setItraDraft(e.target.value)}
-            style={{ ...s.input, maxWidth: 120 }}
-          />
-          <button onClick={saveItra}
-            disabled={itraDraft === (itraPI ?? "")}
-            style={{ ...s.btn, opacity: itraDraft === (itraPI ?? "") ? 0.5 : 1 }}>{t("common.save")}</button>
-          {itraPI && (
-            <span style={{ ...s.muted, fontFamily: "var(--font-mono)" }}>{t("pr.itra_saved", { v: itraPI })}</span>
-          )}
+      {itraEditing ? (
+        <div style={{ ...s.cardDark, marginBottom: 14 }}>
+          <div style={s.section}>{t("pr.itra_title")}</div>
+          <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.6 }}>{t("pr.itra_desc")}</div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              type="number"
+              placeholder={t("pr.itra_placeholder")}
+              value={itraDraft}
+              onChange={e => setItraDraft(e.target.value)}
+              style={{ ...s.input, maxWidth: 120 }}
+            />
+            <button onClick={saveItra}
+              disabled={itraDraft === (itraPI ?? "")}
+              style={{ ...s.btn, opacity: itraDraft === (itraPI ?? "") ? 0.5 : 1 }}>{t("common.save")}</button>
+            {itraPI && (
+              <button onClick={cancelEditItra} style={s.btnGhost}>{t("common.cancel")}</button>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div onClick={startEditItra} style={{ ...s.card, cursor: "pointer", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ ...s.label, marginBottom: 2 }}>{t("pr.itra_title")}</div>
+            <div style={{ ...s.metricVal, fontSize: 24 }}>
+              {itraPI}
+              <span style={{ fontSize: 12, color: "#888", fontWeight: 400, marginLeft: 6 }}>ITRA</span>
+            </div>
+          </div>
+          <span style={{ ...s.muted, fontSize: 11 }}>{t("pr.itra_edit_hint")}</span>
+        </div>
+      )}
     </div>
   );
 }

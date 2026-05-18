@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES } from "../constants";
+import { RUN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { formatDateShort } from "../utils/format";
 import { getPeriodLabel } from "../utils/period";
@@ -22,7 +22,7 @@ export function ChartsTab({ filteredAllLogs }) {
         const end = new Date(start); end.setDate(start.getDate() + 7);
         const km = filteredAllLogs.filter(l => {
           const d = new Date(l.date);
-          return d >= start && d < end && (l.type === "Running" || l.type === "Trail Running");
+          return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
         }).reduce((sum, l) => sum + l.distance, 0);
         const endDisplay = new Date(end); endDisplay.setDate(endDisplay.getDate() - 1);
         buckets.push({
@@ -37,7 +37,7 @@ export function ChartsTab({ filteredAllLogs }) {
         const end = new Date(nowD.getFullYear(), nowD.getMonth() - i + 1, 1);
         const km = filteredAllLogs.filter(l => {
           const d = new Date(l.date);
-          return d >= start && d < end && (l.type === "Running" || l.type === "Trail Running");
+          return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
         }).reduce((sum, l) => sum + l.distance, 0);
         buckets.push({
           label: `${start.getFullYear()}-${start.getMonth() + 1}`,
@@ -52,7 +52,7 @@ export function ChartsTab({ filteredAllLogs }) {
         const end = new Date(yy + 1, 0, 1);
         const km = filteredAllLogs.filter(l => {
           const d = new Date(l.date);
-          return d >= start && d < end && (l.type === "Running" || l.type === "Trail Running");
+          return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
         }).reduce((sum, l) => sum + l.distance, 0);
         buckets.push({ label: String(yy), rangeText: String(yy), km: +km.toFixed(1) });
       }

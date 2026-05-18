@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { getPeriodRange } from "../utils/period";
+import { RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
 import { PeriodSelector } from "./PeriodSelector";
@@ -30,7 +31,7 @@ export function TrainingTab({
   }, [filteredAllLogs, period]);
 
   const periodSessions = periodLogs.length;
-  const periodKm = periodLogs.filter(l => l.type === "Running" || l.type === "Trail Running")
+  const periodKm = periodLogs.filter(l => RUN_GROUP_TYPES.includes(l.type))
     .reduce((sum, l) => sum + (l.distance || 0), 0);
   const periodAscent = periodLogs.reduce((sum, l) => sum + (l.ascent || 0), 0);
   const hrLogs = periodLogs.filter(l => l.hr);

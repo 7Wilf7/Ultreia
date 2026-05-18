@@ -40,7 +40,10 @@ export const API_PRESETS = [
 export const TABS = ["Training", "Races", "PR", "AI Coach"];
 
 // Activity types (stored in log.type)
-export const ACTIVITY_TYPES = ["Running", "Trail Running", "Strength", "HIIT"];
+export const ACTIVITY_TYPES = ["Running", "Trail Running", "Hiking", "Floor Climbing", "Strength", "HIIT"];
+
+// Types that aggregate into the Run filter group (kept here so it's the single source of truth)
+export const RUN_GROUP_TYPES = ["Running", "Trail Running", "Hiking", "Floor Climbing"];
 
 // Running sub-types — split into two groups:
 //   PACE: heart-rate-based classification (single-select per activity)
@@ -56,17 +59,23 @@ export const STRENGTH_SUBS = ["Upper Body", "Lower Body", "Core"];
 export const TYPE_COLOR = {
   "Running": "#222",
   "Trail Running": "#555",
+  "Hiking": "#4a7c4a",
+  "Floor Climbing": "#7a5a00",
   "Strength": "#888",
   "HIIT": "#b35900",
 };
 
-// Global-filter parent → child mapping (used by GlobalFilter UI + filter logic)
+// Global-filter parent → child mapping (used by GlobalFilter UI + filter logic).
+// `section` groups children visually inside the dropdown — children with the same
+// section render under one divider/header. No section = main list.
 export const FILTER_GROUPS = {
   run: {
     label: "Run",
     children: [
       { id: "Running", label: "Running" },
       { id: "Trail Running", label: "Trail Run" },
+      { id: "Hiking", label: "Hiking", section: "other" },
+      { id: "Floor Climbing", label: "Floor Climbing", section: "other" },
     ],
   },
   strength: {
@@ -154,10 +163,44 @@ export const DEFAULT_PROFILE = {
   injuriesNote: "",       // free-text — older history, severity notes, etc.
   equipment: [],          // multi-select
   equipmentOther: "",     // free-text additional equipment
+  restingHR: "",          // bpm; optional — feeds HR-zone calc
+  maxHR: "",              // bpm; optional — feeds HR-zone calc
+  hrZoneMethod: "karvonen-strict", // which 5-zone split to use; see HR_ZONE_METHODS
   notes: "",              // free-form extra context
 };
 
 export const PROFILE_REQUIRED_FIELDS = ["displayName", "birthDate", "gender", "city", "experience"];
+
+// Two common ways to split HRR into 5 zones. Both apply on top of the Karvonen
+// formula: target HR = (MaxHR − RestHR) × intensity% + RestHR.
+//   - karvonen-strict: tighter Z3/Z4 band, traditional Karvonen literature
+//   - standard-5z:     even 10% bands, most consumer apps default
+export const HR_ZONE_METHODS = [
+  {
+    id: "karvonen-strict",
+    label: "Karvonen (严格分法)",
+    note: "Z1 50–59 · Z2 59–74 · Z3 74–84 · Z4 84–88 · Z5 88–100 %HRR",
+    zones: [
+      { id: "Z1", low: 0.50, high: 0.59 },
+      { id: "Z2", low: 0.59, high: 0.74 },
+      { id: "Z3", low: 0.74, high: 0.84 },
+      { id: "Z4", low: 0.84, high: 0.88 },
+      { id: "Z5", low: 0.88, high: 1.00 },
+    ],
+  },
+  {
+    id: "standard-5z",
+    label: "Standard 5-Zone (通用 5 区)",
+    note: "Z1 50–60 · Z2 60–70 · Z3 70–80 · Z4 80–90 · Z5 90–100 %HRR",
+    zones: [
+      { id: "Z1", low: 0.50, high: 0.60 },
+      { id: "Z2", low: 0.60, high: 0.70 },
+      { id: "Z3", low: 0.70, high: 0.80 },
+      { id: "Z4", low: 0.80, high: 0.90 },
+      { id: "Z5", low: 0.90, high: 1.00 },
+    ],
+  },
+];
 
 // ===== UI language =====
 export const DEFAULT_LANG = "en";

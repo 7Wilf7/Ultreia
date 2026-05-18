@@ -3,6 +3,7 @@ import {
   GENDERS, OCCUPATIONS, RUN_EXPERIENCE, RACE_TYPES_DONE,
   INJURY_HISTORY, EQUIPMENT_AVAILABLE,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
+  HR_ZONE_METHODS,
 } from "../constants";
 
 export function calculateAge(birthDate, today = new Date()) {
@@ -29,6 +30,24 @@ function labelFor(opts, id) {
 
 function labelsFor(opts, ids) {
   return (ids || []).map(id => opts.find(o => o.id === id)?.label || id);
+}
+
+/**
+ * Karvonen-formula zone calculation.
+ * Returns null if either HR value is missing or the math doesn't make sense
+ * (e.g. resting >= max). Otherwise returns an array of { id, low, high } in bpm.
+ */
+export function computeHRZones(restingHR, maxHR, methodId) {
+  const rest = parseInt(restingHR);
+  const max = parseInt(maxHR);
+  if (!rest || !max || rest >= max) return null;
+  const method = HR_ZONE_METHODS.find(m => m.id === methodId) || HR_ZONE_METHODS[0];
+  const hrr = max - rest;
+  return method.zones.map(z => ({
+    id: z.id,
+    low: Math.round(hrr * z.low + rest),
+    high: Math.round(hrr * z.high + rest),
+  }));
 }
 
 /**
@@ -61,6 +80,20 @@ export function profileBlock(profile) {
   if (profile.equipmentOther && profile.equipmentOther.trim()) {
     lines.push(`Other equipment: ${profile.equipmentOther.trim()}`);
   }
+
+  // Heart rate + Karvonen-derived zones (only if both values present and sensible)
+  const zones = computeHRZones(profile.restingHR, profile.maxHR, profile.hrZoneMethod);
+  if (zones) {
+    const method = HR_ZONE_METHODS.find(m => m.id === profile.hrZoneMethod) || HR_ZONE_METHODS[0];
+    lines.push(`Resting HR: ${profile.restingHR} bpm · Max HR: ${profile.maxHR} bpm`);
+    lines.push(`HR zones (${method.label}, Karvonen formula on HRR = MaxHR − RestHR):`);
+    zones.forEach(z => lines.push(`  ${z.id}: ${z.low}–${z.high} bpm`));
+    lines.push(`When suggesting intensity, reference these zones by ID (e.g. "Z2 base run") and bpm range. Use the user's selected ${method.label} split — do not re-derive zones from age formulas.`);
+  } else if (profile.restingHR || profile.maxHR) {
+    // Only one of the two is set — let the model know it's intentional, not silent
+    lines.push(`HR data partially filled (Resting=${profile.restingHR || "—"}, Max=${profile.maxHR || "—"}). Skip zone-based recommendations until both are set.`);
+  }
+
   if (profile.notes && profile.notes.trim()) lines.push(`Extra notes: ${profile.notes.trim()}`);
   if (!lines.length) return "";
   return `[User Profile]\n${lines.join("\n")}`;

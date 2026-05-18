@@ -79,6 +79,11 @@ export function migrateProfile(profile) {
     delete out.injuries;
   }
 
+  // HR fields added later — initialise so the editor controls render cleanly
+  if (out.restingHR == null) out.restingHR = "";
+  if (out.maxHR == null) out.maxHR = "";
+  if (!out.hrZoneMethod) out.hrZoneMethod = "karvonen-strict";
+
   return out;
 }
 

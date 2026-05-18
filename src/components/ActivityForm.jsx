@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS } from "../constants";
+import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { parseTimeToSeconds, formatPaceFromSec } from "../utils/format";
 
@@ -73,10 +73,18 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
     if (initial) setForm(fromLog(initial));
   }, [initial]);
 
-  const isRun = form.type === "Running" || form.type === "Trail Running";
+  const isRun = RUN_GROUP_TYPES.includes(form.type);
+  const isRoadRun = form.type === "Running";
   const isStrength = form.type === "Strength";
+  // Only road Running uses pace types (Easy/Aerobic/Tempo/Interval). Trail / Hiking / Stair just track time + climb.
+  const showPaceTypes = isRoadRun;
+  // GAP + cadence make sense for road running only. Trail/hiking pace is dominated by terrain, strength has no distance.
+  const showCadenceAndGap = isRoadRun;
+  // Distance + ascent are meaningless for Strength/HIIT (indoor, non-locomotive).
+  const showDistance = isRun;
+  const showAscent = isRun;
 
-  const pickedPace = isRun ? (form.subTypes.find(t => RUN_PACE_TYPES.includes(t)) || "") : "";
+  const pickedPace = isRoadRun ? (form.subTypes.find(t => RUN_PACE_TYPES.includes(t)) || "") : "";
   const pickedFlags = isRun ? form.subTypes.filter(t => RUN_FLAGS.includes(t)) : [];
 
   function setPace(p) {
@@ -101,11 +109,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
   }
 
   function changeType(t) {
-    let nextSubTypes;
-    if (t === "Running") nextSubTypes = ["Easy Run"];
-    else if (t === "Trail Running") nextSubTypes = [];
-    else if (t === "Strength") nextSubTypes = [];
-    else nextSubTypes = []; // HIIT
+    // Only road Running auto-picks a pace type; everything else starts blank.
+    const nextSubTypes = t === "Running" ? ["Easy Run"] : [];
     setForm({ ...form, type: t, subTypes: nextSubTypes });
   }
 
@@ -123,9 +128,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
       alert(t("form.alert_run"));
       return;
     }
-    const dist = parseFloat(form.distance) || 0;
-    const isAerobicLike = form.type === "Strength" || form.type === "HIIT";
-    const pace = (dist > 0 && !isAerobicLike) ? Math.round(dur / dist) : 0;
+    const dist = showDistance ? (parseFloat(form.distance) || 0) : 0;
+    const pace = (dist > 0 && isRun) ? Math.round(dur / dist) : 0;
 
     onSave({
       date: form.date,
@@ -136,10 +140,10 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
       pace,
       hr:        parseInt(form.hr)         || 0,
       maxHR:     parseInt(form.maxHR)      || 0,
-      ascent:    parseInt(form.ascent)     || 0,
-      cadence:   parseInt(form.cadence)    || 0,
+      ascent:    showAscent ? (parseInt(form.ascent) || 0) : 0,
+      cadence:   showCadenceAndGap ? (parseInt(form.cadence) || 0) : 0,
       aerobicTE: parseFloat(form.aerobicTE)|| 0,
-      gap:       parseTimeToSeconds(form.gapText) || 0,
+      gap:       showCadenceAndGap ? (parseTimeToSeconds(form.gapText) || 0) : 0,
     });
   }
 
@@ -163,31 +167,31 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
         </label>
       </div>
 
+      {showPaceTypes && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ ...s.label, marginBottom: 6 }}>
+            {t("form.run_type")} {t("form.run_type_required")}
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {RUN_PACE_TYPES.map(sub => (
+              <button key={sub} type="button"
+                onClick={() => setPace(pickedPace === sub ? "" : sub)}
+                style={s.chip(pickedPace === sub)}>{t(`enum.subtype.${sub}`)}</button>
+            ))}
+          </div>
+        </div>
+      )}
       {isRun && (
-        <>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>
-              {t("form.run_type")} {form.type === "Running" ? t("form.run_type_required") : t("form.run_type_optional")}
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {RUN_PACE_TYPES.map(sub => (
-                <button key={sub} type="button"
-                  onClick={() => setPace(pickedPace === sub ? "" : sub)}
-                  style={s.chip(pickedPace === sub)}>{t(`enum.subtype.${sub}`)}</button>
-              ))}
-            </div>
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("form.flags")}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {RUN_FLAGS.map(flag => (
+              <button key={flag} type="button"
+                onClick={() => toggleFlag(flag)}
+                style={s.chip(pickedFlags.includes(flag))}>🏆 {t(`enum.subtype.${flag}`)}</button>
+            ))}
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("form.flags")}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {RUN_FLAGS.map(flag => (
-                <button key={flag} type="button"
-                  onClick={() => toggleFlag(flag)}
-                  style={s.chip(pickedFlags.includes(flag))}>🏆 {t(`enum.subtype.${flag}`)}</button>
-              ))}
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {isStrength && (
@@ -216,31 +220,39 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
         </div>
       </div>
 
-      {/* Core metrics: distance / heart rate */}
+      {/* Core metrics: distance (optional) / heart rate */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-        <LabeledInput label={t("form.distance")} unit="km" placeholder="0"
-          value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
+        {showDistance ? (
+          <LabeledInput label={t("form.distance")} unit="km" placeholder="0"
+            value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
+        ) : <div />}
         <LabeledInput label={t("form.avg_hr")} unit="bpm" placeholder="0"
           value={form.hr} onChange={e => setForm({ ...form, hr: e.target.value })} />
         <LabeledInput label={t("form.max_hr")} unit="bpm" placeholder="0"
           value={form.maxHR} onChange={e => setForm({ ...form, maxHR: e.target.value })} />
       </div>
 
-      {/* Advanced metrics: ascent / cadence / TE */}
+      {/* Advanced metrics: ascent / cadence (road run only) / TE */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-        <LabeledInput label={t("form.ascent")} unit="m" placeholder="0"
-          value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
-        <LabeledInput label={t("form.cadence")} unit="spm" placeholder="0"
-          value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
+        {showAscent ? (
+          <LabeledInput label={t("form.ascent")} unit="m" placeholder="0"
+            value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
+        ) : <div />}
+        {showCadenceAndGap ? (
+          <LabeledInput label={t("form.cadence")} unit="spm" placeholder="0"
+            value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
+        ) : <div />}
         <LabeledInput label={t("form.te")} unit="1–5" placeholder="0" step="0.1"
           value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
       </div>
 
-      {/* GAP — pace-format mm:ss text input */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
-        <LabeledInput label={t("form.gap")} unit="min/km" placeholder="6:30" type="text"
-          value={form.gapText} onChange={e => setForm({ ...form, gapText: e.target.value })} />
-      </div>
+      {/* GAP — road running only (pace-format mm:ss text input) */}
+      {showCadenceAndGap && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+          <LabeledInput label={t("form.gap")} unit="min/km" placeholder="6:30" type="text"
+            value={form.gapText} onChange={e => setForm({ ...form, gapText: e.target.value })} />
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={handleSave} style={s.btn}>{mode === "edit" ? t("common.save_changes") : t("common.save")}</button>

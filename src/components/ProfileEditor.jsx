@@ -2,9 +2,9 @@ import { useState } from "react";
 import { s } from "../styles";
 import {
   GENDERS, OCCUPATIONS, RUN_EXPERIENCE, RACE_TYPES_DONE,
-  INJURY_HISTORY, EQUIPMENT_AVAILABLE, DEFAULT_PROFILE,
+  INJURY_HISTORY, EQUIPMENT_AVAILABLE, DEFAULT_PROFILE, HR_ZONE_METHODS,
 } from "../constants";
-import { calculateAge, isProfileComplete } from "../utils/profile";
+import { calculateAge, isProfileComplete, computeHRZones } from "../utils/profile";
 import { useT } from "../i18n/LanguageContext";
 
 function toggleArr(arr, id) {
@@ -175,6 +175,50 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
             value={draft.equipmentOther}
             onChange={e => setDraft({ ...draft, equipmentOther: e.target.value })}
             style={{ ...s.input, marginTop: 8 }} />
+        </div>
+
+        {/* Heart Rate (optional, but unlocks Karvonen-based zone advice from AI Coach) */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.heart_rate")}</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 8 }}>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, color: "#666" }}>{t("profile.resting_hr")} <span style={{ color: "#aaa" }}>(bpm)</span></span>
+              <input type="number" placeholder="55" value={draft.restingHR}
+                onChange={e => setDraft({ ...draft, restingHR: e.target.value })}
+                style={{ ...s.input, width: 100 }} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 11, color: "#666" }}>{t("profile.max_hr")} <span style={{ color: "#aaa" }}>(bpm)</span></span>
+              <input type="number" placeholder="190" value={draft.maxHR}
+                onChange={e => setDraft({ ...draft, maxHR: e.target.value })}
+                style={{ ...s.input, width: 100 }} />
+            </label>
+          </div>
+          <div style={{ ...s.label, marginBottom: 6, fontSize: 12 }}>{t("profile.hr_zone_method")}</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            {HR_ZONE_METHODS.map(m => (
+              <button key={m.id} type="button"
+                onClick={() => setDraft({ ...draft, hrZoneMethod: m.id })}
+                title={m.note}
+                style={s.chip(draft.hrZoneMethod === m.id)}>{m.label}</button>
+            ))}
+          </div>
+          {(() => {
+            const zones = computeHRZones(draft.restingHR, draft.maxHR, draft.hrZoneMethod);
+            if (!zones) {
+              return (draft.restingHR || draft.maxHR)
+                ? <div style={{ ...s.muted, fontSize: 11 }}>{t("profile.hr_zone_need_both")}</div>
+                : null;
+            }
+            return (
+              <div style={{ background: "#fafafa", borderRadius: 6, padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 11, color: "#555", lineHeight: 1.8 }}>
+                <div style={{ marginBottom: 4, fontFamily: "var(--font-sans)", color: "#444" }}>{t("profile.hr_zone_preview")}</div>
+                {zones.map(z => (
+                  <div key={z.id}>{z.id}: {z.low}–{z.high} bpm</div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Notes */}

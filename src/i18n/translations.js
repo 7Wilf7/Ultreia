@@ -62,6 +62,12 @@ const dict = {
   "profile.notes":               { en: "Anything Else (optional)", zh: "其他备注（可选）" },
   "profile.notes_placeholder":   { en: "e.g. preferred training time, dietary preferences, recent goals…", zh: "例如：偏好训练时段、饮食习惯、近期目标……" },
   "profile.get_started":         { en: "Get Started",       zh: "开始使用" },
+  "profile.heart_rate":          { en: "Heart Rate (optional — enables zone-based AI Coach advice)", zh: "心率（可选 —— 启用基于区间的 AI 教练建议）" },
+  "profile.resting_hr":          { en: "Resting HR",        zh: "静息心率" },
+  "profile.max_hr":              { en: "Max HR",            zh: "最大心率" },
+  "profile.hr_zone_method":      { en: "5-zone breakdown",  zh: "5 区分法" },
+  "profile.hr_zone_preview":     { en: "Computed zones (Karvonen formula):", zh: "计算出的心率区间（Karvonen 公式）：" },
+  "profile.hr_zone_need_both":   { en: "Fill both Resting & Max HR to preview zones.", zh: "请同时填写静息心率和最大心率以预览区间。" },
 
   // ===== Enum: Gender =====
   "enum.gender.male":     { en: "Male",                     zh: "男" },
@@ -115,6 +121,8 @@ const dict = {
   // ===== Enum: Activity types & sub-types =====
   "enum.activity.Running":        { en: "Running",          zh: "公路跑" },
   "enum.activity.Trail Running":  { en: "Trail Running",    zh: "越野跑" },
+  "enum.activity.Hiking":         { en: "Hiking",           zh: "徒步" },
+  "enum.activity.Floor Climbing": { en: "Floor Climbing",   zh: "爬楼" },
   "enum.activity.Strength":       { en: "Strength",         zh: "力量" },
   "enum.activity.HIIT":           { en: "HIIT",             zh: "HIIT" },
 
@@ -197,6 +205,9 @@ const dict = {
   "filter.group.hiit":        { en: "HIIT",                 zh: "HIIT" },
   "filter.child.Running":     { en: "Running",              zh: "公路跑" },
   "filter.child.Trail Running": { en: "Trail Run",          zh: "越野跑" },
+  "filter.child.Hiking":      { en: "Hiking",               zh: "徒步" },
+  "filter.child.Floor Climbing": { en: "Floor Climbing",    zh: "爬楼" },
+  "filter.section.other":     { en: "Other",                zh: "其他" },
   "filter.child.Upper Body":  { en: "Upper Body",           zh: "上肢" },
   "filter.child.Lower Body":  { en: "Lower Body",           zh: "下肢" },
   "filter.child.Core":        { en: "Core",                 zh: "核心" },
@@ -262,6 +273,10 @@ const dict = {
   "activities.added_one":     { en: "✓ Added.",             zh: "✓ 已添加。" },
   "activities.csv_empty":     { en: "CSV is empty.",        zh: "CSV 文件为空。" },
   "activities.unsupported":   { en: "Unsupported. Use .csv (bulk export) or .fit (single activity).", zh: "不支持的文件。请使用 .csv (批量导出) 或 .fit (单次活动)。" },
+  "activities.unknown_type_title": { en: "⚠ Unknown Activity Types", zh: "⚠ 无法识别的活动类型" },
+  "activities.unknown_type_body":  { en: "{n} row(s) have activity types we couldn't auto-map. Pick a target type for each before importing.", zh: "{n} 条记录的活动类型无法自动识别，导入前请为每条选择目标类型。" },
+  "activities.unknown_type_original": { en: "Original: ", zh: "原始：" },
+  "activities.unknown_type_apply": { en: "Apply Mappings", zh: "应用映射" },
   "activities.delete_tooltip":{ en: "Delete",               zh: "删除" },
   "activities.sort.date_desc":{ en: "Date ↓",               zh: "日期 ↓" },
   "activities.sort.date_asc": { en: "Date ↑",               zh: "日期 ↑" },
@@ -339,6 +354,8 @@ const dict = {
   "races.past_warn_move":     { en: "Move to History",      zh: "移到历史" },
   "races.empty_target":       { en: "No target races yet",  zh: "暂无目标比赛" },
   "races.empty_history":      { en: "No race history yet",  zh: "暂无历史比赛" },
+  "races.edit_title":         { en: "Edit Race",            zh: "编辑比赛" },
+  "races.edit_hint":          { en: "Click any race to edit. Click ✕ to delete.", zh: "点击比赛卡片可编辑，点击 ✕ 删除。" },
 
   // ===== Personal Records tab =====
   "pr.title":                 { en: "Personal Records",     zh: "个人最佳成绩" },
@@ -349,6 +366,7 @@ const dict = {
   "pr.itra_desc":             { en: "Your global ITRA Performance Index (跑步指数). Enter manually for now. Future: pull from itra.run automatically.", zh: "你的 ITRA 全球跑步指数。目前需手动填写，未来可从 itra.run 自动同步。" },
   "pr.itra_placeholder":      { en: "e.g. 580",             zh: "例如 580" },
   "pr.itra_saved":            { en: "Saved: {v}",           zh: "已保存：{v}" },
+  "pr.itra_edit_hint":        { en: "click to edit",        zh: "点击编辑" },
 
   // ===== AI Coach tab =====
   "coach.edit_profile":       { en: "⚙ Edit Profile",       zh: "⚙ 编辑资料" },

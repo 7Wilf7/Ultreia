@@ -1,12 +1,27 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_FLAGS, SORT_OPTIONS } from "../constants";
+import { RUN_SUBTYPES, RUN_FLAGS, SORT_OPTIONS, ACTIVITY_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import {
   autoClassifyRun, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
 } from "../utils/format";
 import { ActivityForm } from "./ActivityForm";
+
+// Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
+// Returns { type, unknown }. When unknown, type is a safe placeholder ("Running") so the row
+// stays renderable while the user is prompted to pick the real mapping.
+function mapGarminActivityType(at) {
+  if (!at) return { type: "Running", unknown: true };
+  if (at.includes("trail")) return { type: "Trail Running", unknown: false };
+  if (at.includes("hiking") || at.includes("walking") || at === "walk") return { type: "Hiking", unknown: false };
+  if (at.includes("stair") || at.includes("stepper") || at.includes("step machine") || at.includes("floor")) return { type: "Floor Climbing", unknown: false };
+  if (at.includes("hiit") || at.includes("interval training") || at.includes("crossfit")) return { type: "HIIT", unknown: false };
+  if (at.includes("strength") || at.includes("weight")) return { type: "Strength", unknown: false };
+  if (at.includes("yoga") || at.includes("pilates") || at.includes("stretch")) return { type: "Strength", unknown: false };
+  if (at.includes("run")) return { type: "Running", unknown: false };
+  return { type: "Running", unknown: true };
+}
 
 export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
   const t = useT();
@@ -18,6 +33,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
   const [uploadMsg, setUploadMsg] = useState("");
   const [parsedRows, setParsedRows] = useState(null);
   const [duplicateWarning, setDuplicateWarning] = useState(null);
+  const [unknownTypeRows, setUnknownTypeRows] = useState(null); // { rows, dupIds? } – staged until user maps
   const fileRef = useRef();
 
   const displayedLogs = useMemo(() => {
@@ -180,10 +196,10 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
           startTime = first.timestamp;
         }
 
-        let type = "Running";
-        if (sport.includes("trail")) type = "Trail Running";
-        else if (sport === "running") type = "Running";
-        else if (["cycling", "swimming", "training", "fitness_equipment"].includes(sport)) type = "Strength";
+        // Use the same mapping as CSV — works because FIT sport strings ("hiking",
+        // "trail_running", "stair_climbing") match the same substring checks.
+        const mapped = mapGarminActivityType(sport);
+        const type = mapped.type;
 
         const pace = (type !== "Strength" && type !== "HIIT" && distance > 0) ? Math.round(duration / distance) : 0;
         const date = (startTime ? new Date(startTime) : new Date()).toISOString().slice(0, 10);
@@ -239,10 +255,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       const c = parseLine(lines[i]);
       if (!c[iDate]) continue;
       const at = (c[iType] || "").toLowerCase();
-      let type = "Running";
-      if (at.includes("trail")) type = "Trail Running";
-      else if (at.includes("hiit") || at.includes("interval training") || at.includes("crossfit")) type = "HIIT";
-      else if (at.includes("strength") || at.includes("cardio") || at.includes("yoga") || !at.includes("run")) type = "Strength";
+      const mapped = mapGarminActivityType(at);
 
       const distance = num(c[iDist]);
       const duration = parseTimeToSeconds(c[iTime]);
@@ -252,13 +265,35 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       const cadence = iCadence >= 0 ? Math.round(num(c[iCadence])) : 0;
       const aerobicTE = iTE >= 0 ? +num(c[iTE]).toFixed(1) : 0;
       const gap = iGAP >= 0 ? parseTimeToSeconds(c[iGAP]) : 0;
-      const isAerobicLike = type === "Strength" || type === "HIIT";
+      // pace only meaningful for activities with real distance (Run/Trail/Hiking/Stair); placeholder Running for unknowns is overridden later
+      const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
       const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
       const date = c[iDate].split(" ")[0];
-      const subTypes = type === "Running" ? [autoClassifyRun(hr, false)] : [];
+      const subTypes = mapped.type === "Running" ? [autoClassifyRun(hr, false)] : [];
 
-      rows.push({ id: Date.now() + i, date, type, subTypes, distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE, gap, _selected: true });
+      rows.push({
+        id: Date.now() + i, date,
+        type: mapped.type, subTypes,
+        distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE, gap,
+        _selected: true,
+        _unknown: mapped.unknown,
+        _originalType: mapped.unknown ? (c[iType] || "(empty)") : undefined,
+      });
     }
+
+    // If any row had an unrecognized type, surface the mapping modal first.
+    // Duplicate detection waits until after mapping is resolved (type may change).
+    const unknowns = rows.filter(r => r._unknown);
+    if (unknowns.length > 0) {
+      setUnknownTypeRows(rows);
+      setUploadMsg("");
+      return;
+    }
+
+    finalizeParsedRows(rows);
+  }
+
+  function finalizeParsedRows(rows) {
     const dups = rows.filter(r => logs.some(l => isDuplicate(l, r)));
     if (dups.length > 0) {
       setDuplicateWarning({ existing: null, incoming: rows, dupIds: dups.map(d => d.id), source: "csv" });
@@ -266,6 +301,26 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       setParsedRows(rows);
       setUploadMsg(t("activities.parsed", { n: rows.length }));
     }
+  }
+
+  function applyUnknownMappings() {
+    // user picked a type for each unknown row; strip the staging-only flags and continue
+    const cleaned = unknownTypeRows.map(r => {
+      const rest = { ...r };
+      delete rest._unknown;
+      delete rest._originalType;
+      // recompute subTypes if the user remapped a row into Running
+      if (rest.type === "Running" && (!rest.subTypes || rest.subTypes.length === 0)) {
+        rest.subTypes = [autoClassifyRun(rest.hr, false)];
+      }
+      return rest;
+    });
+    setUnknownTypeRows(null);
+    finalizeParsedRows(cleaned);
+  }
+
+  function updateUnknownTypeRow(id, newType) {
+    setUnknownTypeRows(unknownTypeRows.map(r => r.id === id ? { ...r, type: newType, _unknown: false } : r));
   }
 
   function confirmDuplicates(skipDups) {
@@ -337,6 +392,42 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
             <button onClick={() => confirmDuplicates(true)} style={s.btn}>{t("activities.skip_dups")}</button>
             <button onClick={() => confirmDuplicates(false)} style={s.btnGhost}>{t("activities.add_anyway")}</button>
             <button onClick={() => setDuplicateWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+          </div>
+        </div>
+      )}
+
+      {unknownTypeRows && (
+        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
+          <div style={{ ...s.section, color: "#7a5a00" }}>{t("activities.unknown_type_title")}</div>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
+            {t("activities.unknown_type_body", { n: unknownTypeRows.filter(r => r._unknown).length })}
+          </div>
+          <div style={{ maxHeight: 320, overflowY: "auto", marginBottom: 10 }}>
+            {unknownTypeRows.filter(r => r._unknown).map(r => (
+              <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 11, color: "#888", minWidth: 60 }}>{formatDateShort(r.date)}</div>
+                <div style={{ fontSize: 12, flex: 1, minWidth: 160 }}>
+                  <span style={{ color: "#999" }}>{t("activities.unknown_type_original")}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", color: "#333" }}>{r._originalType}</span>
+                </div>
+                <select value={r.type} onChange={e => updateUnknownTypeRow(r.id, e.target.value)}
+                  style={{ ...s.input, width: "auto", padding: "4px 8px", fontSize: 12 }}>
+                  {ACTIVITY_TYPES.map(at => <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>)}
+                </select>
+                <button onClick={() => updateUnknownTypeRow(r.id, r.type)}
+                  style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px" }}>
+                  ✓
+                </button>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={applyUnknownMappings}
+              disabled={unknownTypeRows.some(r => r._unknown)}
+              style={{ ...s.btn, opacity: unknownTypeRows.some(r => r._unknown) ? 0.5 : 1 }}>
+              {t("activities.unknown_type_apply")}
+            </button>
+            <button onClick={() => { setUnknownTypeRows(null); setUploadMsg(""); }} style={s.btnGhost}>{t("common.cancel")}</button>
           </div>
         </div>
       )}

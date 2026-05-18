@@ -73,7 +73,7 @@ function AppShell({
 }) {
   const t = useT();
   const [tab, setTab] = useState(0);
-  const [period, setPeriod] = useState({ type: "month" });
+  const [period, setPeriod] = useState({ type: "all" });
   const [periodDropdown, setPeriodDropdown] = useState(null);
   const [filterDropdown, setFilterDropdown] = useState(null);
   const [globalFilter, setGlobalFilter] = useState(INITIAL_FILTER);

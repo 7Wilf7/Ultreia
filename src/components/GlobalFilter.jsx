@@ -1,5 +1,5 @@
 import { s } from "../styles";
-import { FILTER_GROUPS } from "../constants";
+import { FILTER_GROUPS, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 
 /**
@@ -25,7 +25,7 @@ export const INITIAL_FILTER = {
 export function logMatchesFilter(log, filter) {
   if (filter.all) return true;
   const g = filter.groups;
-  if (g.run.enabled && (log.type === "Running" || log.type === "Trail Running")) {
+  if (g.run.enabled && RUN_GROUP_TYPES.includes(log.type)) {
     if (g.run.subs.length === 0) return true;
     if (g.run.subs.includes(log.type)) return true;
   }
@@ -152,20 +152,36 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
             background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 6,
             zIndex: 100, minWidth: 180, boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
           }}>
-            {group.children.map(child => {
-              const checked = state.subs.length === 0 || state.subs.includes(child.id);
-              return (
-                <label key={child.id}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", fontSize: 13, color: "#333", cursor: "pointer", borderRadius: 4 }}
-                  onMouseEnter={e => e.currentTarget.style.background = "#f5f5f5"}
-                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                  <input type="checkbox" checked={checked}
-                    onChange={() => toggleSub(key, child.id)}
-                    style={{ width: 14, height: 14 }} />
-                  {t(`filter.child.${child.id}`)}
-                </label>
-              );
-            })}
+            {(() => {
+              // Group children by their `section` field so we can render a divider/header
+              // before each named subsection. Children without a section render at the top.
+              const nodes = [];
+              let lastSection = null;
+              group.children.forEach(child => {
+                if (child.section && child.section !== lastSection) {
+                  nodes.push(
+                    <div key={`__sec_${child.section}`}
+                      style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", color: "#999", padding: "8px 10px 4px", borderTop: lastSection === null ? "1px solid #eee" : "none", marginTop: lastSection === null ? 4 : 0 }}>
+                      {t(`filter.section.${child.section}`)}
+                    </div>
+                  );
+                  lastSection = child.section;
+                }
+                const checked = state.subs.length === 0 || state.subs.includes(child.id);
+                nodes.push(
+                  <label key={child.id}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", fontSize: 13, color: "#333", cursor: "pointer", borderRadius: 4 }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#f5f5f5"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                    <input type="checkbox" checked={checked}
+                      onChange={() => toggleSub(key, child.id)}
+                      style={{ width: 14, height: 14 }} />
+                    {t(`filter.child.${child.id}`)}
+                  </label>
+                );
+              });
+              return nodes;
+            })()}
             <div style={{ borderTop: "1px solid #eee", marginTop: 4, paddingTop: 4 }}>
               <button onClick={() => disableGroup(key)}
                 style={{ display: "block", width: "100%", border: "none", background: "transparent", padding: "5px 10px", textAlign: "left", fontSize: 12, color: "#c0392b", cursor: "pointer", borderRadius: 4 }}>

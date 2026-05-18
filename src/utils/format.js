@@ -45,6 +45,18 @@ export function formatDateShort(dateStr) {
   return `${String(d.getFullYear()).slice(2)}-${m}-${day}`;
 }
 
+// Pull a distance-in-km number from anything the user/LLM may have typed:
+// "42.195", "42.195 km", "42.195km", "Marathon (42.195 km)", "21.1KM" — all → 42.195/21.1.
+// Returns 0 if no number found.
+export function parseDistanceKm(input) {
+  if (input == null || input === "") return 0;
+  if (typeof input === "number") return isFinite(input) ? input : 0;
+  const m = String(input).match(/(\d+(?:\.\d+)?)/);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  return isFinite(n) ? n : 0;
+}
+
 export function isDuplicate(a, b) {
   if (a.date !== b.date) return false;
   if (a.type !== b.type) return false;

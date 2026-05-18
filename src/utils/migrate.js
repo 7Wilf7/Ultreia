@@ -1,6 +1,8 @@
 // Backward-compatible data migrations.
 // Applied once at app boot to logs loaded from localStorage.
 
+import { parseDistanceKm } from "./format";
+
 const RUN_PACE_SET = new Set(["Easy Run", "Aerobic Run", "Tempo Run", "Interval Run", "Recovery Run"]);
 
 export function migrateLog(log) {
@@ -46,8 +48,16 @@ export function inferRaceCategory(race) {
 
 export function migrateRace(race) {
   if (!race) return race;
-  if (race.category) return race; // already migrated
-  return { ...race, category: inferRaceCategory(race) || "" };
+  const out = { ...race };
+  // Distance: normalize legacy string forms ("Marathon (42.195 km)", "42.195km", "42.195")
+  // to a plain number in km. Stored shape is now always Number (or undefined/0).
+  if (typeof out.distance === "string") {
+    out.distance = parseDistanceKm(out.distance);
+  }
+  if (!out.category) {
+    out.category = inferRaceCategory(out) || "";
+  }
+  return out;
 }
 
 export function migrateRaces(races) {

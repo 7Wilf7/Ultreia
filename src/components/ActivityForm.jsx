@@ -220,35 +220,60 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
         </div>
       </div>
 
-      {/* Core metrics: distance (optional) / heart rate */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-        {showDistance ? (
-          <LabeledInput label={t("form.distance")} unit="km" placeholder="0"
-            value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
-        ) : <div />}
-        <LabeledInput label={t("form.avg_hr")} unit="bpm" placeholder="0"
-          value={form.hr} onChange={e => setForm({ ...form, hr: e.target.value })} />
-        <LabeledInput label={t("form.max_hr")} unit="bpm" placeholder="0"
-          value={form.maxHR} onChange={e => setForm({ ...form, maxHR: e.target.value })} />
-      </div>
+      {/* Core metrics: distance (run-types only) / heart rate.
+          Column count adapts to what's visible so we don't leave ugly empty grid cells. */}
+      {(() => {
+        const items = [];
+        if (showDistance) {
+          items.push(
+            <LabeledInput key="dist" label={t("form.distance")} unit="km" placeholder="0"
+              value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
+          );
+        }
+        items.push(
+          <LabeledInput key="hr" label={t("form.avg_hr")} unit="bpm" placeholder="0"
+            value={form.hr} onChange={e => setForm({ ...form, hr: e.target.value })} />
+        );
+        items.push(
+          <LabeledInput key="maxhr" label={t("form.max_hr")} unit="bpm" placeholder="0"
+            value={form.maxHR} onChange={e => setForm({ ...form, maxHR: e.target.value })} />
+        );
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`, gap: 10, marginBottom: 10 }}>
+            {items}
+          </div>
+        );
+      })()}
 
-      {/* Advanced metrics: ascent / cadence (road run only) / TE */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-        {showAscent ? (
-          <LabeledInput label={t("form.ascent")} unit="m" placeholder="0"
-            value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
-        ) : <div />}
-        {showCadenceAndGap ? (
-          <LabeledInput label={t("form.cadence")} unit="spm" placeholder="0"
-            value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
-        ) : <div />}
-        <LabeledInput label={t("form.te")} unit="1–5" placeholder="0" step="0.1"
-          value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
-      </div>
+      {/* Advanced metrics: ascent (run-types) / cadence (road run only) / TE (always) */}
+      {(() => {
+        const items = [];
+        if (showAscent) {
+          items.push(
+            <LabeledInput key="ascent" label={t("form.ascent")} unit="m" placeholder="0"
+              value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
+          );
+        }
+        if (showCadenceAndGap) {
+          items.push(
+            <LabeledInput key="cad" label={t("form.cadence")} unit="spm" placeholder="0"
+              value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
+          );
+        }
+        items.push(
+          <LabeledInput key="te" label={t("form.te")} unit="1–5" placeholder="0" step="0.1"
+            value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
+        );
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))`, gap: 10, marginBottom: 10 }}>
+            {items}
+          </div>
+        );
+      })()}
 
-      {/* GAP — road running only (pace-format mm:ss text input) */}
+      {/* GAP — road running only */}
       {showCadenceAndGap && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 10, marginBottom: 14, maxWidth: 240 }}>
           <LabeledInput label={t("form.gap")} unit="min/km" placeholder="6:30" type="text"
             value={form.gapText} onChange={e => setForm({ ...form, gapText: e.target.value })} />
         </div>

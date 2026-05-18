@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { inferRaceCategory } from "../utils/migrate";
+import { parseDistanceKm } from "../utils/format";
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
@@ -13,13 +14,16 @@ const EMPTY_RACE = (isTarget) => ({
 const BOCHA_ENDPOINT = "https://api.bochaai.com/v1/web-search";
 
 // Decompose a stored race into the editable form shape. Inverse of how `commitRace` builds the race object.
+// Distance is normalized to a plain number string so the input shows just digits,
+// even for legacy data stored as "Marathon (42.195 km)" or similar.
 function raceToForm(race) {
+  const distNum = parseDistanceKm(race.distance);
   return {
     isTarget: !!race.isTarget,
     priority: race.priority || "A",
     name: race.name || "",
     date: race.date || "",
-    distance: race.distance || "",
+    distance: distNum > 0 ? String(distNum) : "",
     category: race.category || "",
     ascent: race.ascent || "",
     resultH: race.resultH || "",
@@ -156,7 +160,7 @@ WEB RESULTS:
 ${snippets}
 
 Return one JSON object only (no prose, no markdown):
-{"baseName": "Official base name without year", "year": "YYYY", "isTrail": true/false, "raceFamily": "<one of: Half Marathon | Marathon | 10K | Trail | Spartan | Hyrox | Other>", "categories": [{"name": "Category", "distance": "Distance with km/miles", "category": "<one of the raceFamily values>", "ascent": "Number only or empty", "date": "YYYY-MM-DD or empty"}]}
+{"baseName": "Official base name without year", "year": "YYYY", "date": "YYYY-MM-DD or empty (event-level date when no per-category dates)", "isTrail": true/false, "raceFamily": "<one of: Half Marathon | Marathon | 10K | Trail | Spartan | Hyrox | Other>", "categories": [{"name": "Category", "distance": "Distance with km/miles", "category": "<one of the raceFamily values>", "ascent": "Number only or empty", "date": "YYYY-MM-DD or empty"}]}
 
 - raceFamily = overall classification of the race event.
 - For each category, same raceFamily applies (e.g. UTMB has Trail family, CCC/OCC/UTMB-main are all Trail).
@@ -164,7 +168,8 @@ Return one JSON object only (no prose, no markdown):
 - For trail races: list all distance categories with typical ascent (numbers only, e.g. "1200").
 - For road races: list distance options, ascent empty.
 - Only output dates you can verify from the search snippets above. If unsure, leave date empty.
-- If the snippets don't cover this race: {"baseName": "${input}", "year": "", "isTrail": false, "raceFamily": "Other", "categories": []}
+- Top-level "date" should be the main event date when there are no per-category dates, or empty if unknown.
+- If the snippets don't cover this race: {"baseName": "${input}", "year": "", "date": "", "isTrail": false, "raceFamily": "Other", "categories": []}
 JSON ONLY.`,
       }],
     };
@@ -198,13 +203,16 @@ JSON ONLY.`,
           setRaceCategoryModal(parsed);
           setRaceLookupMsg(t("races.lookup_categories_web", { n: parsed.categories.length }));
         } else {
+          // No sub-categories — fall back to event-level fields. Top-level date helps for events
+          // without per-category breakdown (single-distance road races, future editions).
           setNewRace(prev => ({
             ...prev,
             name: parsed.baseName ? `${parsed.year} ${parsed.baseName}`.trim() : input,
+            date: parsed.date || prev.date,
             isTrailDetected: parsed.isTrail,
             category: family || prev.category,
           }));
-          setRaceLookupMsg(t("races.lookup_name_web"));
+          setRaceLookupMsg(parsed.date ? t("races.lookup_name_date_web") : t("races.lookup_name_web"));
           setTimeout(() => setRaceLookupMsg(""), 5000);
         }
       } else {
@@ -223,10 +231,12 @@ JSON ONLY.`,
     const category = RACE_CATEGORIES.includes(cat.category)
       ? cat.category
       : (RACE_CATEGORIES.includes(raceCategoryModal.raceFamily) ? raceCategoryModal.raceFamily : "");
+    // LLM returns distance as a string like "42.195km"; normalize for the form input.
+    const distNum = parseDistanceKm(cat.distance);
     setNewRace(prev => ({
       ...prev,
       name: `${raceCategoryModal.year} ${raceCategoryModal.baseName} - ${cat.name}`,
-      distance: cat.distance,
+      distance: distNum > 0 ? String(distNum) : "",
       ascent: cat.ascent || "",
       date: cat.date || prev.date,
       category: category || prev.category,
@@ -250,8 +260,11 @@ JSON ONLY.`,
 
   function commitRace(asTarget) {
     const finalCategory = newRace.category || inferRaceCategory(newRace) || "";
+    // Distance normalized to a plain number (km). UI always re-appends "km" on display.
+    const distanceNum = parseDistanceKm(newRace.distance);
     const built = {
       ...newRace,
+      distance: distanceNum,
       category: finalCategory,
       isTarget: asTarget,
       priority: asTarget ? newRace.priority : null,
@@ -371,7 +384,7 @@ JSON ONLY.`,
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
-                  {r.distance && <span style={{ fontSize: 13, color: "#555" }}>{r.distance}</span>}
+                  {r.distance > 0 && <span style={{ fontSize: 13, color: "#555" }}>{r.distance} km</span>}
                   {r.ascent && <span style={{ fontSize: 13, color: "#555" }}>+{r.ascent}m</span>}
                   {timeStr && <span style={{ fontSize: 16, fontWeight: 500, color: "#111" }}>{timeStr}</span>}
                   {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
@@ -440,7 +453,7 @@ JSON ONLY.`,
             onChange={e => setNewRace({ ...newRace, date: e.target.value })}
             onClick={e => e.currentTarget.showPicker?.()}
             style={{ ...s.input, cursor: "pointer" }} />
-          <input placeholder={t("races.distance_placeholder")} value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
+          <input type="number" step="0.001" placeholder={t("races.distance_placeholder")} value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
           <select value={newRace.category}
             onChange={e => setNewRace({ ...newRace, category: e.target.value })}
             style={s.input}>

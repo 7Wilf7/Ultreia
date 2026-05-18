@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useClickOutside } from "../utils/useClickOutside";
 
 function resultSeconds(r) {
   const h = parseInt(r.resultH) || 0;
@@ -69,6 +70,14 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
     setItraEditing(false);
   }
 
+  // Click-outside collapses the ITRA edit form back to its card. Only active
+  // when there's already a saved value (first-time fill has no card to fall
+  // back to, so we never auto-dismiss the initial entry).
+  const itraDirty = () => (itraDraft.trim() !== (itraPI ?? ""));
+  const itraEditRef = useClickOutside(() => {
+    if (!itraDirty() || window.confirm(t("form.discard_confirm"))) cancelEditItra();
+  }, itraEditing && !!itraPI);
+
   return (
     <div>
       <div style={s.section}>{t("pr.title")}</div>
@@ -118,7 +127,7 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
       )}
 
       {itraEditing ? (
-        <div style={{ ...s.cardDark, marginBottom: 14 }}>
+        <div ref={itraEditRef} style={{ ...s.cardDark, marginBottom: 14 }}>
           <div style={s.section}>{t("pr.itra_title")}</div>
           <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.6 }}>{t("pr.itra_desc")}</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

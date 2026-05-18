@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { parseTimeToSeconds, formatPaceFromSec } from "../utils/format";
+import { useClickOutside } from "../utils/useClickOutside";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -68,10 +69,23 @@ function LabeledInput({ label, unit, value, onChange, placeholder, type = "numbe
 export function ActivityForm({ mode, initial, onSave, onCancel }) {
   const t = useT();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
+  // Snapshot of the form's initial state — used to detect unsaved changes when
+  // the user clicks outside in edit mode.
+  const initialFormRef = useRef(initial ? fromLog(initial) : buildEmpty());
 
   useEffect(() => {
-    if (initial) setForm(fromLog(initial));
+    if (initial) {
+      const snapshot = fromLog(initial);
+      setForm(snapshot);
+      initialFormRef.current = snapshot;
+    }
   }, [initial]);
+
+  // Click-outside cancels edit; warn first if there are unsaved changes.
+  const isDirty = () => JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
+  const rootRef = useClickOutside(() => {
+    if (!isDirty() || window.confirm(t("form.discard_confirm"))) onCancel();
+  }, mode === "edit");
 
   const isRun = RUN_GROUP_TYPES.includes(form.type);
   const isRoadRun = form.type === "Running";
@@ -148,7 +162,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
   }
 
   return (
-    <div style={{ ...s.cardDark, marginBottom: 14 }}>
+    <div ref={rootRef} style={{ ...s.cardDark, marginBottom: 14 }}>
       <div style={s.section}>{mode === "edit" ? t("form.edit_title") : t("form.add_title")}</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>

@@ -312,6 +312,7 @@ const dict = {
   "form.alert_duration":      { en: "Please enter duration.", zh: "请填写时长。" },
   "form.alert_body":          { en: "Select at least one body part for Strength.", zh: "力量训练请至少选择一个身体部位。" },
   "form.alert_run":           { en: "Pick a run type (Easy / Aerobic / Tempo / Interval).", zh: "请选择跑步类型（轻松/有氧/节奏/间歇）。" },
+  "form.discard_confirm":     { en: "Discard unsaved changes?", zh: "放弃未保存的修改？" },
 
   // ===== Races tab =====
   "races.target_tab":         { en: "Target Races ({n})",   zh: "目标比赛 ({n})" },

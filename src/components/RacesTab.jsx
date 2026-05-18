@@ -4,6 +4,7 @@ import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constant
 import { useT } from "../i18n/LanguageContext";
 import { inferRaceCategory } from "../utils/migrate";
 import { parseDistanceKm } from "../utils/format";
+import { useClickOutside } from "../utils/useClickOutside";
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
@@ -68,6 +69,19 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
     setRaceLookupMsg("");
     setPastRaceWarning(null);
   }
+
+  // Click-outside auto-collapses the inline edit form (race cards). Warn first
+  // if the form has unsaved changes; the dirty check compares the current draft
+  // to a snapshot of the race being edited.
+  function isEditFormDirty() {
+    if (!editingRaceId) return false;
+    const original = races.find(r => r.id === editingRaceId);
+    if (!original) return false;
+    return JSON.stringify(newRace) !== JSON.stringify(raceToForm(original));
+  }
+  const editFormRef = useClickOutside(() => {
+    if (!isEditFormDirty() || window.confirm(t("form.discard_confirm"))) cancelEdit();
+  }, !!editingRaceId);
 
   function deleteRace(id) {
     setConfirmDelete({ type: "race", id });
@@ -364,7 +378,7 @@ JSON ONLY.`,
               ? `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`
               : "";
             if (editingRaceId === r.id) {
-              return <div key={r.id}>{renderRaceForm("edit")}</div>;
+              return <div key={r.id} ref={editFormRef}>{renderRaceForm("edit")}</div>;
             }
             return (
               <div key={r.id} onClick={() => startEdit(r)}

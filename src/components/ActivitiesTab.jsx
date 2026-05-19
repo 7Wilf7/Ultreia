@@ -10,18 +10,18 @@ import { ActivityForm } from "./ActivityForm";
 import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon } from "./Icons";
 
 // Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
-// Returns { type, unknown }. When unknown, type is a safe placeholder ("Running") so the row
+// Returns { type, unknown }. When unknown, type is a safe placeholder ("Road Run") so the row
 // stays renderable while the user is prompted to pick the real mapping.
 function mapGarminActivityType(at) {
-  if (!at) return { type: "Running", unknown: true };
-  if (at.includes("trail")) return { type: "Trail Running", unknown: false };
+  if (!at) return { type: "Road Run", unknown: true };
+  if (at.includes("trail")) return { type: "Trail Run", unknown: false };
   if (at.includes("hiking") || at.includes("walking") || at === "walk") return { type: "Hiking", unknown: false };
   if (at.includes("stair") || at.includes("stepper") || at.includes("step machine") || at.includes("floor")) return { type: "Floor Climbing", unknown: false };
   if (at.includes("hiit") || at.includes("interval training") || at.includes("crossfit")) return { type: "HIIT", unknown: false };
   if (at.includes("strength") || at.includes("weight")) return { type: "Strength", unknown: false };
   if (at.includes("yoga") || at.includes("pilates") || at.includes("stretch")) return { type: "Strength", unknown: false };
-  if (at.includes("run")) return { type: "Running", unknown: false };
-  return { type: "Running", unknown: true };
+  if (at.includes("run")) return { type: "Road Run", unknown: false };
+  return { type: "Road Run", unknown: true };
 }
 
 export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
@@ -204,7 +204,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
 
         const pace = (type !== "Strength" && type !== "HIIT" && distance > 0) ? Math.round(duration / distance) : 0;
         const date = (startTime ? new Date(startTime) : new Date()).toISOString().slice(0, 10);
-        const subTypes = type === "Running" ? [autoClassifyRun(hr, false)] : [];
+        const subTypes = type === "Road Run" ? [autoClassifyRun(hr, false)] : [];
 
         const newRow = { id: Date.now(), date, type, subTypes, distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE: 0, gap: 0 };
 
@@ -270,7 +270,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
       const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
       const date = c[iDate].split(" ")[0];
-      const subTypes = mapped.type === "Running" ? [autoClassifyRun(hr, false)] : [];
+      const subTypes = mapped.type === "Road Run" ? [autoClassifyRun(hr, false)] : [];
 
       rows.push({
         id: Date.now() + i, date,
@@ -311,7 +311,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
       delete rest._unknown;
       delete rest._originalType;
       // recompute subTypes if the user remapped a row into Running
-      if (rest.type === "Running" && (!rest.subTypes || rest.subTypes.length === 0)) {
+      if (rest.type === "Road Run" && (!rest.subTypes || rest.subTypes.length === 0)) {
         rest.subTypes = [autoClassifyRun(rest.hr, false)];
       }
       return rest;
@@ -452,7 +452,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                   {r.distance > 0 && <span>{r.distance}km · </span>}
                   {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`} {r.aerobicTE > 0 && `· TE ${r.aerobicTE}`}
                 </div>
-                {r.type === "Running" && (
+                {r.type === "Road Run" && (
                   <select value={r.subTypes[0] || ""} onChange={(e) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [e.target.value] } : x))}
                     style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11 }}>
                     {RUN_SUBTYPES.map(st => <option key={st} value={st}>{t(`enum.subtype.${st}`)}</option>)}
@@ -506,89 +506,114 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
               onClick={onCardClick}
               style={{
                 ...s.card,
-                display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap",
+                display: "flex", alignItems: "center", gap: 12,
                 cursor: "pointer",
                 ...(isSelected ? { background: "#eef5ff", borderColor: "#7aa8e0" } : {}),
               }}>
               {selectMode && (
                 <input type="checkbox" checked={isSelected} readOnly
-                  style={{ width: 16, height: 16, pointerEvents: "none" }} />
+                  style={{ width: 16, height: 16, pointerEvents: "none", flexShrink: 0 }} />
               )}
-              <div style={{ minWidth: 54, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums" }}>{formatDateShort(l.date)}</div>
-              <div style={s.tag(l.type)}>{t(`enum.activity.${l.type}`)}</div>
-              {/* Pace sub-types only render for road Running. Flags (Race) render
-                  for any Run-group activity. Other types: nothing. */}
-              {l.subTypes.filter(st => {
-                if (RUN_FLAGS.includes(st)) return true;          // flag — keep for runs (filtered below by tag color)
-                if (RUN_PACE_TYPES.includes(st)) return l.type === "Running"; // pace — Running only
-                return l.type === "Strength";                     // strength body-parts only on Strength
-              }).map(st => {
-                const isFlag = RUN_FLAGS.includes(st);
-                return (
-                  <div key={st} style={isFlag
-                    ? { ...s.subTag, background: "rgba(181,78,26,0.08)", color: "var(--warn)", borderColor: "rgba(181,78,26,0.3)" }
-                    : s.subTag}>
-                    {isFlag ? "▲ " : ""}{t(`enum.subtype.${st}`)}
-                  </div>
-                );
-              })}
-              <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 4, columnGap: 14, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                {/* Primary readout: distance (km) or, if no distance, the duration */}
-                {l.distance > 0 ? (
-                  <span style={{ fontWeight: 500, fontSize: 16, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--ink-3)" }}><RouteIcon size={14} /></span>
-                    {l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 11 }}>km</span>
-                  </span>
-                ) : (
-                  <span style={{ fontWeight: 500, fontSize: 15, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--ink-3)" }}><ClockIcon size={14} /></span>
-                    {formatDuration(l.duration)}
-                  </span>
-                )}
-                {/* When distance > 0, duration moves to secondary slot with the clock icon */}
-                {l.distance > 0 && (
-                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
-                    {formatDuration(l.duration)}
-                    {l.pace ? <span style={{ color: "var(--ink-3)", marginLeft: 6 }}>· {formatPaceFromSec(l.pace)}<span style={{ fontSize: 10 }}>/km</span></span> : null}
-                  </span>
-                )}
-                {l.hr > 0 && (
-                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
-                    {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
-                  </span>
-                )}
-                {l.ascent > 0 && (
-                  <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
-                    +{l.ascent}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
-                  </span>
-                )}
-                {/* Cadence is only meaningful for road Running — trail/hiking
-                    pace is terrain-driven and spm doesn't carry useful signal. */}
-                {l.cadence > 0 && l.type === "Running" && (
-                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--ink-3)" }}><FootIcon size={13} /></span>
-                    {l.cadence}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>
-                  </span>
-                )}
-                {l.aerobicTE > 0 && (
-                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--warn)" }}><BoltIcon size={12} /></span>
-                    {l.aerobicTE}
-                  </span>
-                )}
-                {l.gap > 0 && (
-                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                    <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
-                    {formatPaceFromSec(l.gap)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/km</span>
-                  </span>
-                )}
+              {/* Left-side identifiers: date + type tag + (variable) sub-type chips.
+                  Sub-types box flexes to take leftover space; the metrics grid below stays right-aligned. */}
+              <div style={{ minWidth: 54, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{formatDateShort(l.date)}</div>
+              <div style={{ ...s.tag(l.type), flexShrink: 0 }}>{t(`enum.activity.${l.type}`)}</div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {l.subTypes.filter(st => {
+                  if (RUN_FLAGS.includes(st)) return true;
+                  if (RUN_PACE_TYPES.includes(st)) return l.type === "Road Run";
+                  return l.type === "Strength";
+                }).map(st => {
+                  const isFlag = RUN_FLAGS.includes(st);
+                  return (
+                    <div key={st} style={isFlag
+                      ? { ...s.subTag, background: "rgba(181,78,26,0.08)", color: "var(--warn)", borderColor: "rgba(181,78,26,0.3)" }
+                      : s.subTag}>
+                      {isFlag ? "▲ " : ""}{t(`enum.subtype.${st}`)}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Metrics grid — fixed column widths so the same metric lines up
+                  vertically across every row. Empty cells when a metric isn't
+                  available for this activity type (cadence on trail, etc.). */}
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "90px 140px 80px 90px 80px 55px 85px",
+                gap: 8,
+                alignItems: "center",
+                fontFamily: "var(--font-mono)",
+                fontVariantNumeric: "tabular-nums",
+                flexShrink: 0,
+              }}>
+                {/* Distance */}
+                <div>
+                  {l.distance > 0 && (
+                    <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
+                      {l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span>
+                    </span>
+                  )}
+                </div>
+                {/* Duration (+ pace if available) */}
+                <div>
+                  {l.duration > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+                      {formatDuration(l.duration)}
+                      {l.pace ? <span style={{ color: "var(--ink-3)", marginLeft: 4, fontSize: 11 }}>· {formatPaceFromSec(l.pace)}</span> : null}
+                    </span>
+                  )}
+                </div>
+                {/* HR */}
+                <div>
+                  {l.hr > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
+                      {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
+                    </span>
+                  )}
+                </div>
+                {/* Ascent */}
+                <div>
+                  {l.ascent > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
+                      +{l.ascent}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
+                    </span>
+                  )}
+                </div>
+                {/* Cadence — Road Run only */}
+                <div>
+                  {l.cadence > 0 && l.type === "Road Run" && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><FootIcon size={13} /></span>
+                      {l.cadence}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>
+                    </span>
+                  )}
+                </div>
+                {/* TE */}
+                <div>
+                  {l.aerobicTE > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--warn)" }}><BoltIcon size={12} /></span>
+                      {l.aerobicTE}
+                    </span>
+                  )}
+                </div>
+                {/* GAP */}
+                <div>
+                  {l.gap > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
+                      {formatPaceFromSec(l.gap)}
+                    </span>
+                  )}
+                </div>
               </div>
               {!selectMode && (
                 <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
-                  style={{ border: "none", background: "none", color: "#bbb", cursor: "pointer", fontSize: 14, padding: "0 4px" }}
+                  style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: "0 4px", flexShrink: 0 }}
                   title={t("activities.delete_tooltip")}>✕</button>
               )}
             </div>

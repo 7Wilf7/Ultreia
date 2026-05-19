@@ -280,8 +280,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
             <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
             <input type="date" value={newRace.date}
               onChange={e => setNewRace({ ...newRace, date: e.target.value })}
-              onClick={e => e.currentTarget.showPicker?.()}
-              style={{ ...s.input, cursor: "pointer" }} />
+              style={s.input} />
           </div>
           <div>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label")}</div>

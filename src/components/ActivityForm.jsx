@@ -26,7 +26,7 @@ function normalizeDate(d) {
 function buildEmpty() {
   return {
     date: "",
-    type: "Running",
+    type: "Road Run",
     subTypes: ["Easy Run"],
     distance: "",
     durationH: "", durationM: "", durationS: "",
@@ -42,7 +42,7 @@ function fromLog(log) {
   const d = splitDuration(log.duration || 0);
   return {
     date: normalizeDate(log.date),
-    type: log.type || "Running",
+    type: log.type || "Road Run",
     subTypes: Array.isArray(log.subTypes) ? log.subTypes : [],
     distance: log.distance ? String(log.distance) : "",
     durationH: d.h, durationM: d.m, durationS: d.s,
@@ -88,14 +88,15 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
   }, mode === "edit");
 
   const isRun = RUN_GROUP_TYPES.includes(form.type);
-  const isRoadRun = form.type === "Running";
+  const isRoadRun = form.type === "Road Run";
   const isStrength = form.type === "Strength";
-  // Only road Running uses pace types (Easy/Aerobic/Tempo/Interval). Trail / Hiking / Stair just track time + climb.
+  // Only road Running uses pace types (Easy/Aerobic/Tempo/Interval). Trail / Hiking / Floor just track time + climb.
   const showPaceTypes = isRoadRun;
   // GAP + cadence make sense for road running only. Trail/hiking pace is dominated by terrain, strength has no distance.
   const showCadenceAndGap = isRoadRun;
-  // Distance + ascent are meaningless for Strength/HIIT (indoor, non-locomotive).
-  const showDistance = isRun;
+  // Floor Climbing tracks vertical only — no horizontal distance. Other Run-group types do track distance.
+  const showDistance = isRun && form.type !== "Floor Climbing";
+  // All Run-group types track ascent (Floor Climbing is essentially pure ascent).
   const showAscent = isRun;
 
   const pickedPace = isRoadRun ? (form.subTypes.find(t => RUN_PACE_TYPES.includes(t)) || "") : "";
@@ -124,7 +125,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
 
   function changeType(t) {
     // Only road Running auto-picks a pace type; everything else starts blank.
-    const nextSubTypes = t === "Running" ? ["Easy Run"] : [];
+    const nextSubTypes = t === "Road Run" ? ["Easy Run"] : [];
     setForm({ ...form, type: t, subTypes: nextSubTypes });
   }
 
@@ -138,7 +139,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
       alert(t("form.alert_body"));
       return;
     }
-    if (form.type === "Running" && !pickedPace) {
+    if (form.type === "Road Run" && !pickedPace) {
       alert(t("form.alert_run"));
       return;
     }
@@ -168,10 +169,11 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.date")}</span>
+          {/* Native date input. Click the calendar icon at the right to open the picker;
+              the rest of the input remains editable so users can type YYYY-MM-DD directly. */}
           <input type="date" value={form.date}
             onChange={e => setForm({ ...form, date: e.target.value })}
-            onClick={e => e.currentTarget.showPicker?.()}
-            style={{ ...s.input, cursor: "pointer" }} />
+            style={s.input} />
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.type")}</span>
@@ -234,15 +236,14 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
         </div>
       </div>
 
-      {/* Fixed 3-column layout for all types — hidden fields render as empty
-          spacer cells so the visible inputs keep a consistent 1/3 width.
-          The minor unused space on the left is preferable to fields stretching
-          full-width when only HR + Max HR show (Strength/HIIT). */}
+      {/* Fixed 3-column grid; only visible fields are rendered, in document order.
+          Grid auto-places them starting at column 1 — each visible field gets a
+          fixed 1/3 width, no full-width stretching, no empty placeholder cells. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
-        {showDistance ? (
+        {showDistance && (
           <LabeledInput label={t("form.distance")} unit="km" placeholder="0"
             value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
-        ) : <div />}
+        )}
         <LabeledInput label={t("form.avg_hr")} unit="bpm" placeholder="0"
           value={form.hr} onChange={e => setForm({ ...form, hr: e.target.value })} />
         <LabeledInput label={t("form.max_hr")} unit="bpm" placeholder="0"
@@ -250,25 +251,23 @@ export function ActivityForm({ mode, initial, onSave, onCancel }) {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
-        {showAscent ? (
+        {showAscent && (
           <LabeledInput label={t("form.ascent")} unit="m" placeholder="0"
             value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
-        ) : <div />}
-        {showCadenceAndGap ? (
+        )}
+        {showCadenceAndGap && (
           <LabeledInput label={t("form.cadence")} unit="spm" placeholder="0"
             value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
-        ) : <div />}
+        )}
         <LabeledInput label={t("form.te")} unit="1–5" placeholder="0" step="0.1"
           value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
       </div>
 
-      {/* GAP — road running only. Stays in a 3-col grid for visual consistency
-          with the rows above; the other two cells are empty spacers. */}
+      {/* GAP — road running only. Stays in a 3-col grid for visual consistency. */}
       {showCadenceAndGap && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
           <LabeledInput label={t("form.gap")} unit="min/km" placeholder="6:30" type="text"
             value={form.gapText} onChange={e => setForm({ ...form, gapText: e.target.value })} />
-          <div /><div />
         </div>
       )}
 

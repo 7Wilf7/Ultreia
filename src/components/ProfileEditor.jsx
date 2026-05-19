@@ -62,8 +62,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
           </div>
           <input type="date" value={draft.birthDate}
             onChange={e => setDraft({ ...draft, birthDate: e.target.value })}
-            onClick={e => e.currentTarget.showPicker?.()}
-            style={{ ...s.input, maxWidth: 200, cursor: "pointer" }} />
+            style={{ ...s.input, maxWidth: 200 }} />
         </div>
 
         {/* Gender */}

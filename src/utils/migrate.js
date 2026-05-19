@@ -23,6 +23,11 @@ export function migrateLog(log) {
     out.type = "Floor Climbing";
   }
 
+  // Running → Road Run, Trail Running → Trail Run (consistency rename to match UI label).
+  // Keeps display/storage aligned with the new short names.
+  if (out.type === "Running") out.type = "Road Run";
+  if (out.type === "Trail Running") out.type = "Trail Run";
+
   // Recovery Run → Easy Run (sub-type collapsed)
   if (Array.isArray(out.subTypes) && out.subTypes.includes("Recovery Run")) {
     out.subTypes = out.subTypes.map(s => s === "Recovery Run" ? "Easy Run" : s);
@@ -30,10 +35,10 @@ export function migrateLog(log) {
     out.subTypes = [...new Set(out.subTypes)];
   }
 
-  // Strip stale pace sub-types from non-Running activities. Earlier versions
+  // Strip stale pace sub-types from non–Road-Run activities. Earlier versions
   // could leave "Easy Run" on a Strength/Trail/etc entry when the user changed
-  // the type without clearing sub-types.
-  if (out.type !== "Running" && Array.isArray(out.subTypes) && out.subTypes.length > 0) {
+  // the type without clearing sub-types. Pace classifications belong to Road Run only.
+  if (out.type !== "Road Run" && Array.isArray(out.subTypes) && out.subTypes.length > 0) {
     out.subTypes = out.subTypes.filter(st => !STALE_PACE_TYPES.has(st));
   }
 

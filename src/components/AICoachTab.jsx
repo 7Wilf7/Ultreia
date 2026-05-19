@@ -10,17 +10,111 @@ import { buildSystemPrompt } from "../utils/profile";
 
 export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
+  coachMemory, setCoachMemory,
   chatMessages, setChatMessages, now, setConfirmDelete,
   apiKey, apiEndpoint, apiModel, onEditProfile,
 }) {
   const t = useT();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
+  const [showMemory, setShowMemory] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState(coachMemory);
+  const [memoryEditing, setMemoryEditing] = useState(false);
+  const [memoryUpdating, setMemoryUpdating] = useState(false);
+  const [memoryProposal, setMemoryProposal] = useState(null); // { text } when LLM has proposed an update
   const [chatInput, setChatInput] = useState(DEFAULT_DAILY_TEMPLATE);
   const [chatLoading, setChatLoading] = useState(false);
 
   function clearChat() {
     setConfirmDelete({ type: "chat", id: null });
+  }
+
+  function startEditMemory() {
+    setMemoryDraft(coachMemory);
+    setMemoryEditing(true);
+  }
+  function saveMemory() {
+    setCoachMemory(memoryDraft);
+    setMemoryEditing(false);
+  }
+  function cancelEditMemory() {
+    setMemoryDraft(coachMemory);
+    setMemoryEditing(false);
+  }
+
+  // Ask the LLM to produce an updated memory from the current chat + existing memory.
+  // User reviews the proposal before it replaces the live memory.
+  async function proposeMemoryUpdate() {
+    if (!apiKey) {
+      alert(t("coach.no_key"));
+      return;
+    }
+    if (chatMessages.length === 0) {
+      alert(t("coach.memory_need_chat"));
+      return;
+    }
+    setMemoryUpdating(true);
+    const chatTranscript = chatMessages.map(m => `[${m.role}]\n${m.content}`).join("\n\n");
+    const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
+
+Current memory:
+${coachMemory || "(empty)"}
+
+Recent conversation:
+${chatTranscript}
+
+Return ONLY the updated memory text. Guidelines:
+- Plain text, no markdown headings. Short labeled lines or paragraphs.
+- Keep durable facts (preferences, goals, injuries, training style, recurring concerns).
+- DROP session-specific things (today's specific question, one-off advice).
+- Don't repeat what's already in the user's profile (age, location, basic stats).
+- Maximum ~500 words. Trim older entries if needed.
+- If nothing meaningful to add or update, return the existing memory unchanged.
+
+Output the memory text only, nothing else.`;
+
+    try {
+      const resp = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: apiModel,
+          max_tokens: 4000,
+          messages: [{ role: "user", content: memoryPrompt }],
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
+        setMemoryUpdating(false);
+        return;
+      }
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      if (!text.trim()) {
+        alert(t("coach.memory_empty_response"));
+        setMemoryUpdating(false);
+        return;
+      }
+      setMemoryProposal({ text: text.trim() });
+    } catch (err) {
+      console.error("[AI Coach] Memory update error:", err);
+      alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
+    }
+    setMemoryUpdating(false);
+  }
+
+  function acceptMemoryProposal() {
+    setCoachMemory(memoryProposal.text);
+    setMemoryDraft(memoryProposal.text);
+    setMemoryProposal(null);
+  }
+  function rejectMemoryProposal() {
+    setMemoryProposal(null);
   }
 
   function setStyle(id)        { setCoachConfig({ ...coachConfig, style: id }); }
@@ -54,7 +148,7 @@ ${historyRaces}
 ${recentLogs}`;
   }
 
-  const previewPrompt = buildSystemPrompt({ profile, coachConfig, dataBlock: buildDataBlock() });
+  const previewPrompt = buildSystemPrompt({ profile, coachConfig, coachMemory, dataBlock: buildDataBlock() });
 
   async function sendChat() {
     if (!chatInput.trim() || chatLoading) return;
@@ -65,7 +159,7 @@ ${recentLogs}`;
     const userMsg = chatInput.trim();
     setChatLoading(true);
 
-    const systemPrompt = buildSystemPrompt({ profile, coachConfig, dataBlock: buildDataBlock() });
+    const systemPrompt = buildSystemPrompt({ profile, coachConfig, coachMemory, dataBlock: buildDataBlock() });
     const newMessages = [...chatMessages, { role: "user", content: userMsg }];
     setChatMessages(newMessages);
     setChatInput("");
@@ -113,6 +207,9 @@ ${recentLogs}`;
         <button onClick={() => setShowCoachConfig(!showCoachConfig)} style={s.btnGhost}>
           {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
         </button>
+        <button onClick={() => setShowMemory(!showMemory)} style={s.btnGhost}>
+          {showMemory ? t("coach.hide_memory") : t("coach.show_memory")}{coachMemory ? " ●" : ""}
+        </button>
         <button onClick={() => setShowPromptPreview(!showPromptPreview)} style={s.btnGhost}>
           {showPromptPreview ? t("coach.hide_prompt") : t("coach.show_prompt")}
         </button>
@@ -155,6 +252,64 @@ ${recentLogs}`;
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {showMemory && (
+        <div style={{ ...s.cardDark, marginBottom: 14 }}>
+          <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <span>{t("coach.memory_title")}</span>
+            <div style={{ display: "flex", gap: 6 }}>
+              {!memoryEditing && !memoryProposal && (
+                <>
+                  <button onClick={proposeMemoryUpdate}
+                    disabled={memoryUpdating || chatMessages.length === 0}
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
+                    {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
+                  </button>
+                  <button onClick={startEditMemory}
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>
+                    {t("coach.memory_edit")}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          <div style={{ ...s.muted, marginBottom: 10, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+
+          {memoryProposal ? (
+            <>
+              <div style={{ ...s.label, marginBottom: 6, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
+              <pre style={{
+                ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
+                color: "var(--ink-1)", background: "var(--moss-bg)",
+                borderColor: "var(--moss)",
+              }}>{memoryProposal.text}</pre>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={acceptMemoryProposal} style={s.btn}>{t("coach.memory_accept")}</button>
+                <button onClick={rejectMemoryProposal} style={s.btnGhost}>{t("coach.memory_reject")}</button>
+              </div>
+            </>
+          ) : memoryEditing ? (
+            <>
+              <textarea rows={10} value={memoryDraft}
+                onChange={e => setMemoryDraft(e.target.value)}
+                placeholder={t("coach.memory_placeholder")}
+                style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, resize: "vertical" }} />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button onClick={saveMemory} style={s.btn}>{t("common.save")}</button>
+                <button onClick={cancelEditMemory} style={s.btnGhost}>{t("common.cancel")}</button>
+              </div>
+            </>
+          ) : (
+            <pre style={{
+              ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+              whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
+              color: coachMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
+              minHeight: 80,
+            }}>{coachMemory || t("coach.memory_empty")}</pre>
+          )}
         </div>
       )}
 

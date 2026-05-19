@@ -40,10 +40,10 @@ export const API_PRESETS = [
 export const TABS = ["Training", "Races", "PR", "AI Coach"];
 
 // Activity types (stored in log.type)
-export const ACTIVITY_TYPES = ["Running", "Trail Running", "Hiking", "Floor Climbing", "Strength", "HIIT"];
+export const ACTIVITY_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing", "Strength", "HIIT"];
 
 // Types that aggregate into the Run filter group (kept here so it's the single source of truth)
-export const RUN_GROUP_TYPES = ["Running", "Trail Running", "Hiking", "Floor Climbing"];
+export const RUN_GROUP_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing"];
 
 // Running sub-types — split into two groups:
 //   PACE: heart-rate-based classification (single-select per activity)
@@ -58,8 +58,8 @@ export const STRENGTH_SUBS = ["Upper Body", "Lower Body", "Core"];
 // Color tag per top-level type — palette matches the moss/stone/earth theme.
 // All saturated low; uses var()-equivalent hex so styles.tag() still works inline.
 export const TYPE_COLOR = {
-  "Running":        "#141413",   /* ink-1: default black, road-running is "baseline" */
-  "Trail Running":  "#4a5e3a",   /* moss: green for trail */
+  "Road Run":        "#141413",   /* ink-1: default black, road-running is "baseline" */
+  "Trail Run":  "#4a5e3a",   /* moss: green for trail */
   "Hiking":         "#7a8d6a",   /* moss-light: lighter green */
   "Floor Climbing": "#8b6a3e",   /* earth: stair / indoor climb */
   "Strength":       "#57564f",   /* ink-2: stone gray */
@@ -73,8 +73,8 @@ export const FILTER_GROUPS = {
   run: {
     label: "Run",
     children: [
-      { id: "Running", label: "Running" },
-      { id: "Trail Running", label: "Trail Run" },
+      { id: "Road Run", label: "Road Run" },
+      { id: "Trail Run", label: "Trail Run" },
       { id: "Hiking", label: "Hiking", section: "other" },
       { id: "Floor Climbing", label: "Floor Climbing", section: "other" },
     ],

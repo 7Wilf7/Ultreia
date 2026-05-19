@@ -34,15 +34,17 @@ export default function App() {
   const [itraPI, setItraPI] = useState(() => loadFromStorage("itraPI", ""));
   const [profile, setProfile] = useState(() => ({ ...DEFAULT_PROFILE, ...migrateProfile(loadFromStorage("profile", {})) }));
   const [coachConfig, setCoachConfig] = useState(() => ({ ...DEFAULT_COACH_CONFIG, ...migrateCoachConfig(loadFromStorage("coachConfig", {})) }));
+  // Long-term coach memory — plain text the user or the model can update over time.
+  const [coachMemory, setCoachMemory] = useState(() => loadFromStorage("coachMemory", ""));
   const [lang, setLang] = useState(() => loadFromStorage("lang", DEFAULT_LANG));
 
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        logs, races, chatMessages, apiKey, apiEndpoint, apiModel, itraPI, profile, coachConfig, lang,
+        logs, races, chatMessages, apiKey, apiEndpoint, apiModel, itraPI, profile, coachConfig, coachMemory, lang,
       }));
     } catch {}
-  }, [logs, races, chatMessages, apiKey, apiEndpoint, apiModel, itraPI, profile, coachConfig, lang]);
+  }, [logs, races, chatMessages, apiKey, apiEndpoint, apiModel, itraPI, profile, coachConfig, coachMemory, lang]);
 
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
@@ -56,6 +58,7 @@ export default function App() {
         itraPI={itraPI} setItraPI={setItraPI}
         profile={profile} setProfile={setProfile}
         coachConfig={coachConfig} setCoachConfig={setCoachConfig}
+        coachMemory={coachMemory} setCoachMemory={setCoachMemory}
         lang={lang} setLang={setLang}
       />
     </LanguageProvider>
@@ -66,6 +69,7 @@ function AppShell({
   logs, setLogs, races, setRaces, chatMessages, setChatMessages,
   apiKey, setApiKey, apiEndpoint, setApiEndpoint, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
+  coachMemory, setCoachMemory,
   lang, setLang,
 }) {
   const t = useT();
@@ -253,6 +257,8 @@ function AppShell({
           profile={profile}
           coachConfig={coachConfig}
           setCoachConfig={setCoachConfig}
+          coachMemory={coachMemory}
+          setCoachMemory={setCoachMemory}
           chatMessages={chatMessages}
           setChatMessages={setChatMessages}
           now={now}

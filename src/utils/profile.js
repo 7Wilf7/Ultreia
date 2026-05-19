@@ -111,17 +111,28 @@ Risk reminders: ${interventionLabel}`;
 }
 
 /**
+ * Long-term memory block — durable observations carried across chat sessions.
+ * Always included between coach config and the dynamic data block when present.
+ */
+function memoryBlock(memory) {
+  if (!memory || !memory.trim()) return "";
+  return `[Long-term Memory]\nDurable facts about this user accumulated over time. Treat these as ground truth unless the user corrects them.\n\n${memory.trim()}`;
+}
+
+/**
  * Assemble the full system prompt:
  *   Fixed instructions (unchangeable)
  *   + User profile (static)
  *   + Coach config (user-selected style/length/intervention)
+ *   + Long-term memory (user/auto-curated cross-session facts)
  *   + Dynamic data block (races + recent activities, prepared by caller)
  */
-export function buildSystemPrompt({ profile, coachConfig, dataBlock }) {
+export function buildSystemPrompt({ profile, coachConfig, coachMemory, dataBlock }) {
   return [
     FIXED_SYSTEM_PROMPT,
     profileBlock(profile),
     coachConfigBlock(coachConfig),
+    memoryBlock(coachMemory),
     dataBlock || "",
   ].filter(Boolean).join("\n\n");
 }

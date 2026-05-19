@@ -81,7 +81,7 @@ export function ChartsTab({ filteredAllLogs }) {
   const runTypeDist = useMemo(() => {
     const counts = {};
     RUN_SUBTYPES.forEach(sub => counts[sub] = 0);
-    chartRangeLogs.filter(l => l.type === "Running" && l.subTypes.length > 0).forEach(l => {
+    chartRangeLogs.filter(l => l.type === "Road Run" && l.subTypes.length > 0).forEach(l => {
       counts[l.subTypes[0]] = (counts[l.subTypes[0]] || 0) + 1;
     });
     return Object.entries(counts);

@@ -35,28 +35,40 @@ function raceToForm(race) {
 
 export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
   const t = useT();
-  const [showRaceAdd, setShowRaceAdd] = useState(false);
+  // addingMode: null = no add form; "target" or "history" = the new race kind being added.
+  // No more target/history TAB switching — both lists render on the same page.
+  const [addingMode, setAddingMode] = useState(null);
   const [editingRaceId, setEditingRaceId] = useState(null);
-  const [raceMode, setRaceMode] = useState("target");
   const [newRace, setNewRace] = useState(EMPTY_RACE(true));
   const [pastRaceWarning, setPastRaceWarning] = useState(null);
 
-  useEffect(() => {
-    setShowRaceAdd(false);
-    setEditingRaceId(null);
+  function startAdd(mode) {
+    if (editingRaceId) cancelEdit();
+    // Toggle off if clicking the same Add button while it's already showing
+    if (addingMode === mode) {
+      setAddingMode(null);
+      return;
+    }
+    setAddingMode(mode);
+    setNewRace(EMPTY_RACE(mode === "target"));
     setPastRaceWarning(null);
-    setNewRace(EMPTY_RACE(raceMode === "target"));
-  }, [raceMode]);
+  }
+
+  function cancelAdd() {
+    setAddingMode(null);
+    setNewRace(EMPTY_RACE(true));
+    setPastRaceWarning(null);
+  }
 
   function startEdit(race) {
     setEditingRaceId(race.id);
-    setShowRaceAdd(false);
+    setAddingMode(null);
     setNewRace(raceToForm(race));
   }
 
   function cancelEdit() {
     setEditingRaceId(null);
-    setNewRace(EMPTY_RACE(raceMode === "target"));
+    setNewRace(EMPTY_RACE(true));
     setPastRaceWarning(null);
   }
 
@@ -108,8 +120,8 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
     } else {
       setRaces([{ id: Date.now(), ...built }, ...races]);
     }
-    setNewRace(EMPTY_RACE(raceMode === "target"));
-    setShowRaceAdd(false);
+    setNewRace(EMPTY_RACE(true));
+    setAddingMode(null);
     setEditingRaceId(null);
     setPastRaceWarning(null);
   }
@@ -141,19 +153,23 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
     );
   }
 
+  // Render a single race card OR its inline edit form. Used twice below (target + history sections).
+  function renderRaceCard(r) {
+    const timeStr = [r.resultH, r.resultM, r.resultS].some(Boolean)
+      ? `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`
+      : "";
+    if (editingRaceId === r.id) {
+      return <div key={r.id} ref={editFormRef}>{renderRaceForm("edit")}</div>;
+    }
+    return renderRaceCardInner(r, timeStr);
+  }
+
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-        <button onClick={() => setRaceMode("target")} style={s.chip(raceMode === "target")}>{t("races.target_tab", { n: targetRacesList.length })}</button>
-        <button onClick={() => setRaceMode("history")} style={s.chip(raceMode === "history")}>{t("races.history_tab", { n: historyRacesList.length })}</button>
-      </div>
-
+      {/* Two add buttons at the top. Click one to open the corresponding add form below. */}
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={() => {
-          if (editingRaceId) cancelEdit();
-          setNewRace(EMPTY_RACE(raceMode === "target"));
-          setShowRaceAdd(!showRaceAdd);
-        }} style={s.btn}>{raceMode === "target" ? t("races.add_target") : t("races.add_history")}</button>
+        <button onClick={() => startAdd("target")} style={addingMode === "target" ? s.btn : s.btnGhost}>{t("races.add_target")}</button>
+        <button onClick={() => startAdd("history")} style={addingMode === "history" ? s.btn : s.btnGhost}>{t("races.add_history")}</button>
         <span style={{ ...s.muted, fontSize: 11 }}>{t("races.edit_hint")}</span>
       </div>
 
@@ -162,99 +178,113 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
           <div style={{ ...s.section, color: "#7a5a00" }}>{t("races.past_warn_title")}</div>
           <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => { setRaceMode("history"); commitRace(false); }} style={s.btn}>{t("races.past_warn_move")}</button>
+            <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
             <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
 
-      {/* Add-mode form sits at the top. Edit-mode form replaces the card in-place (rendered inside the list below). */}
-      {showRaceAdd && !editingRaceId && renderRaceForm("add")}
+      {/* Add-mode form sits at the top (between the buttons and the lists).
+          Edit-mode form replaces the card in-place inside the list. */}
+      {addingMode && !editingRaceId && renderRaceForm("add")}
 
-      {(raceMode === "target" ? targetRacesList : historyRacesList).length === 0 ? (
-        <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px" }}>
-          {raceMode === "target" ? t("races.empty_target") : t("races.empty_history")}
+      {/* === Target Races section === */}
+      <div style={{ ...s.section, marginTop: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span>{t("races.section_target")}</span>
+        <span style={{ ...s.muted, fontWeight: 400 }}>{targetRacesList.length}</span>
+      </div>
+      {targetRacesList.length === 0 ? (
+        <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", marginBottom: 22, fontSize: 13 }}>
+          {t("races.empty_target")}
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+          {targetRacesList.map(renderRaceCard)}
+        </div>
+      )}
+
+      {/* === History section === */}
+      <div style={{ ...s.section, display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span>{t("races.section_history")}</span>
+        <span style={{ ...s.muted, fontWeight: 400 }}>{historyRacesList.length}</span>
+      </div>
+      {historyRacesList.length === 0 ? (
+        <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", fontSize: 13 }}>
+          {t("races.empty_history")}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {(raceMode === "target" ? targetRacesList : historyRacesList).map(r => {
-            const timeStr = [r.resultH, r.resultM, r.resultS].some(Boolean)
-              ? `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`
-              : "";
-            if (editingRaceId === r.id) {
-              return <div key={r.id} ref={editFormRef}>{renderRaceForm("edit")}</div>;
-            }
-            // Whether a second metric row is needed at all.
-            // Distance is no longer shown on the card (the category + name implies it for
-            // road races, and trail races have it in the form). Time goes on row 1.
-            // Only ascent + ITRA need a dedicated row when present.
-            const hasRow2 = (r.ascent && parseInt(r.ascent) > 0) || r.itraScore;
-            return (
-              <div key={r.id} onClick={() => startEdit(r)}
-                style={{ ...s.card, cursor: "pointer" }}>
-                {/* Row 1: priority + category tag + name (truncated) | time? + date + ✕ */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: hasRow2 ? 8 : 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
-                    {r.isTarget && r.priority && (
-                      <span style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
-                        background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
-                        border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
-                        padding: "2px 8px",
-                        flexShrink: 0,
-                      }}>▲ {r.priority}</span>
-                    )}
-                    {renderCategoryTag(r.category)}
-                    {/* Race name — constrained max-width with ellipsis so the row stays tidy */}
-                    <div style={{
-                      fontWeight: 500, fontSize: 15, color: "var(--ink-1)",
-                      maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>{r.name}</div>
-                    {!r.category && (
-                      <select value=""
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={e => updateRaceCategory(r.id, e.target.value)}
-                        style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888", flexShrink: 0 }}>
-                        <option value="">{t("races.set_category")}</option>
-                        {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-                      </select>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: 14, alignItems: "center", flexShrink: 0, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                    {timeStr && (
-                      <span style={{ fontSize: 16, fontWeight: 500, color: "var(--ink-1)", letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                        <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
-                        {timeStr}
-                      </span>
-                    )}
-                    <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{r.date}</div>
-                    <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-                      style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
-                  </div>
-                </div>
-                {/* Row 2 (only when something useful to show): ascent ▲ + ITRA.
-                    Road + Hyrox cards skip this row entirely. */}
-                {hasRow2 && (
-                  <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                    {r.ascent && parseInt(r.ascent) > 0 && (
-                      <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                        <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
-                        +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>m</span>
-                      </span>
-                    )}
-                    {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {historyRacesList.map(renderRaceCard)}
         </div>
       )}
     </div>
   );
+
+  // Card content (used when not in edit mode). Pulled out so we can reuse it from both sections.
+  function renderRaceCardInner(r, timeStr) {
+    // Distance no longer shown on the card (category + name carries the signal for road
+    // races, trail's distance is in the form). Time goes in row 1. Row 2 exists only for
+    // ascent / ITRA — road & hyrox cards become single-row.
+    const hasRow2 = (r.ascent && parseInt(r.ascent) > 0) || r.itraScore;
+    return (
+      <div key={r.id} onClick={() => startEdit(r)}
+        style={{ ...s.card, cursor: "pointer" }}>
+        {/* Row 1: priority + category tag + name (truncated) | time? + date + ✕ */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: hasRow2 ? 8 : 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0 }}>
+            {r.isTarget && r.priority && (
+              <span style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                fontWeight: 600,
+                color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
+                background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
+                border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+                padding: "2px 8px",
+                flexShrink: 0,
+              }}>▲ {r.priority}</span>
+            )}
+            {renderCategoryTag(r.category)}
+            <div style={{
+              fontWeight: 500, fontSize: 15, color: "var(--ink-1)",
+              maxWidth: 380, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>{r.name}</div>
+            {!r.category && (
+              <select value=""
+                onClick={(e) => e.stopPropagation()}
+                onChange={e => updateRaceCategory(r.id, e.target.value)}
+                style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11, color: "#888", flexShrink: 0 }}>
+                <option value="">{t("races.set_category")}</option>
+                {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+              </select>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 14, alignItems: "center", flexShrink: 0, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+            {timeStr && (
+              <span style={{ fontSize: 16, fontWeight: 500, color: "var(--ink-1)", letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+                {timeStr}
+              </span>
+            )}
+            <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{r.date}</div>
+            <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
+              style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+          </div>
+        </div>
+        {hasRow2 && (
+          <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+            {r.ascent && parseInt(r.ascent) > 0 && (
+              <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
+                +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>m</span>
+              </span>
+            )}
+            {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // Renders the add/edit form. Layout:
   //   Row 1: Category + Race name
@@ -278,7 +308,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
         <div style={s.section}>
           {isEdit
             ? t("races.edit_title")
-            : (raceMode === "target" ? t("races.new_target") : t("races.new_history"))}
+            : (newRace.isTarget ? t("races.new_target") : t("races.new_history"))}
         </div>
 
         {newRace.isTarget && (
@@ -368,7 +398,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
           <button onClick={tryAddRace} style={s.btn}>{isEdit ? t("common.save_changes") : t("common.save")}</button>
           <button onClick={() => {
             if (isEdit) cancelEdit();
-            else { setShowRaceAdd(false); }
+            else { cancelAdd(); }
           }} style={s.btnGhost}>{t("common.cancel")}</button>
         </div>
       </div>

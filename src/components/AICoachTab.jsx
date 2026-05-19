@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { s } from "../styles";
 import {
-  DEFAULT_DAILY_TEMPLATE,
+  DEFAULT_API_ENDPOINT,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -34,8 +34,10 @@ export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   chatMessages, setChatMessages, now, setConfirmDelete,
-  apiKey, apiEndpoint, apiModel, onEditProfile,
+  apiKey, apiModel, onEditProfile,
 }) {
+  // DeepSeek is the only supported provider now; endpoint is hardcoded.
+  const apiEndpoint = DEFAULT_API_ENDPOINT;
   const t = useT();
   const { lang } = useLanguage();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
@@ -48,7 +50,10 @@ export function AICoachTab({
   const [memoryEditing, setMemoryEditing] = useState(false);
   const [memoryUpdating, setMemoryUpdating] = useState(false);
   const [memoryProposal, setMemoryProposal] = useState(null); // { text } when LLM has proposed an update
-  const [chatInput, setChatInput] = useState(DEFAULT_DAILY_TEMPLATE);
+  // Empty by default — the daily template is shown as a placeholder so it
+  // disappears the moment the user starts typing, instead of being pre-filled
+  // content the user has to delete.
+  const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
 
   function clearChat() {

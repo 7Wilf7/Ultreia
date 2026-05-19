@@ -158,9 +158,12 @@ const dict = {
 
   // ===== API Settings =====
   "api.title":                { en: "API Settings",         zh: "API 设置" },
-  "api.desc":                 { en: "Two independent APIs. Configure each separately. All keys stored only in this browser's localStorage.", zh: "两个独立的 API，分别配置。所有 Key 仅保存在本浏览器的 localStorage 中。" },
+  "api.desc_ds":              { en: "Uses DeepSeek's Anthropic-compatible API. Your key is stored only in this browser's localStorage and never sent anywhere except DeepSeek.", zh: "使用 DeepSeek 的 Anthropic 兼容接口。Key 仅保存在本浏览器的 localStorage 中，仅发送给 DeepSeek。" },
   "api.section_coach":        { en: "AI Coach API",         zh: "AI 教练 API" },
-  "api.section_coach_desc":   { en: "Used for chat replies in the AI Coach tab.", zh: "用于 AI 教练对话回复。" },
+  "api.section_coach_desc":   { en: "Get an API key by signing up at", zh: "在以下网站注册获取 API Key：" },
+  "api.signup_link":          { en: "platform.deepseek.com →", zh: "platform.deepseek.com →" },
+  "api.ds_key_placeholder":   { en: "sk-… (your DeepSeek API key)", zh: "sk-…… （你的 DeepSeek API Key）" },
+  "api.model_hint_ds":        { en: "Pro = higher quality & deeper reasoning. Flash = faster & cheaper. Pick what fits your usage.", zh: "Pro = 质量高、推理深。Flash = 更快、更便宜。按你的用量选。" },
   "api.preset_label":         { en: "Quick Preset (fills URL + Model)", zh: "快速预设（填入 URL + 模型）" },
   "api.preset_note":          { en: "Picking a preset overwrites URL and Model only. Your API key is never touched — paste a matching one below.", zh: "选择预设只会覆盖 URL 和模型，不会动你的 API Key —— 请在下方粘贴对应的 Key。" },
   "api.key_label":            { en: "API Key",              zh: "API Key" },
@@ -315,8 +318,8 @@ const dict = {
   "form.discard_confirm":     { en: "Discard unsaved changes?", zh: "放弃未保存的修改？" },
 
   // ===== Races tab =====
-  "races.target_tab":         { en: "Target Races ({n})",   zh: "目标比赛 ({n})" },
-  "races.history_tab":        { en: "History ({n})",        zh: "历史比赛 ({n})" },
+  "races.section_target":     { en: "Target Races",         zh: "目标比赛" },
+  "races.section_history":    { en: "Race History",         zh: "历史比赛" },
   "races.add_target":         { en: "+ Add Target Race",    zh: "+ 添加目标比赛" },
   "races.add_history":        { en: "+ Add Race Result",    zh: "+ 添加比赛成绩" },
   "races.new_target":         { en: "New Target Race",      zh: "新目标比赛" },
@@ -393,7 +396,7 @@ const dict = {
   "coach.api_error":          { en: "API error: {msg}",     zh: "API 错误：{msg}" },
   "coach.no_response":        { en: "No response.",         zh: "无响应。" },
   "coach.network_error":      { en: "Network error: {msg}\nURL used: {url}\n\nOpen DevTools (F12) → Network tab → try Send again to see the failing request.", zh: "网络错误：{msg}\n请求 URL：{url}\n\n打开开发者工具 (F12) → Network 标签 → 再次点击发送以查看失败请求。" },
-  "coach.input_placeholder":  { en: "Today's check-in...",  zh: "今日打卡……" },
+  "coach.input_placeholder":  { en: "Type your message — daily check-in, training question, or anything you want the coach to see.", zh: "输入你想和教练说的话 —— 今日打卡、训练疑问，或任何想让 ta 看到的内容。" },
   "coach.send":               { en: "Send",                 zh: "发送" },
   "coach.tip":                { en: "Tip: Ctrl/⌘+Enter to send · Chat history saved locally", zh: "提示：Ctrl/⌘+Enter 发送 · 聊天记录保存在本地" },
 };

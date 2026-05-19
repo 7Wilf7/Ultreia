@@ -1,40 +1,15 @@
 export const STORAGE_KEY = "wilf_training_studio_v1";
 
-// Default Anthropic API endpoint. Overridable in AI Coach settings (for third-party relays).
-export const DEFAULT_API_ENDPOINT = "https://api.anthropic.com/v1/messages";
+// DeepSeek's Anthropic-compatible endpoint — fixed (no longer user-configurable).
+// We standardized on DeepSeek for cost/access; the URL stays hidden from the UI.
+export const DEFAULT_API_ENDPOINT = "https://api.deepseek.com/anthropic/v1/messages";
+export const DEEPSEEK_SIGNUP_URL = "https://platform.deepseek.com/";
 
-// Default model. Anthropic-official names work on api.anthropic.com.
-// Third-party relays often use custom aliases (e.g. "claude-opus-4-7"); set via AI Coach settings.
-export const DEFAULT_MODEL = "claude-sonnet-4-20250514";
-
-// Common model names — shown as quick-select chips inside API Settings
+// Default model and supported presets — DeepSeek only.
+export const DEFAULT_MODEL = "deepseek-v4-pro";
 export const MODEL_PRESETS = [
-  "claude-sonnet-4-20250514",          // Anthropic official Sonnet 4
-  "claude-opus-4-20250514",            // Anthropic official Opus 4
-  "deepseek-v4-pro",                   // DeepSeek (Anthropic-compatible endpoint)
-  "deepseek-v4-flash",                 // DeepSeek lighter model
-  "claude-opus-4-7",                   // Common third-party relay alias
-];
-
-/**
- * One-click presets that fill endpoint + model together. API key is NOT touched
- * (different providers issue different keys, user always pastes their own).
- */
-export const API_PRESETS = [
-  {
-    id: "anthropic-official",
-    label: "Anthropic 官方",
-    endpoint: "https://api.anthropic.com/v1/messages",
-    model: "claude-sonnet-4-20250514",
-    note: "Official; needs USD-billed Anthropic Console key",
-  },
-  {
-    id: "deepseek-official",
-    label: "DeepSeek (Anthropic-compatible)",
-    endpoint: "https://api.deepseek.com/anthropic/v1/messages",
-    model: "deepseek-v4-pro",
-    note: "国内可充值；走 DeepSeek 的 Anthropic 兼容接口",
-  },
+  "deepseek-v4-pro",      // higher quality, reasoning-heavy
+  "deepseek-v4-flash",    // faster + cheaper
 ];
 
 export const TABS = ["Training", "Races", "PR", "AI Coach"];

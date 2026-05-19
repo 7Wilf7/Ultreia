@@ -7,7 +7,7 @@ import {
   formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
 } from "../utils/format";
 import { ActivityForm } from "./ActivityForm";
-import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon } from "./Icons";
+import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon } from "./Icons";
 
 // Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
 // Returns { type, unknown }. When unknown, type is a safe placeholder ("Road Run") so the row
@@ -350,9 +350,9 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>{t("activities.add_manual")}</button>
         <button onClick={() => fileRef.current.click()} style={s.btnGhost}>{t("activities.upload")}</button>
         <input ref={fileRef} type="file" accept=".csv,.fit" style={{ display: "none" }} onChange={handleFileSelect} />
-        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>{t("activities.add_manual")}</button>
         <button onClick={toggleSelectMode} style={selectMode ? s.btn : s.btnGhost}>
           {selectMode ? t("activities.select_on", { n: selectedIds.size }) : t("activities.select_off")}
         </button>
@@ -542,18 +542,18 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                   })}
                 </div>
               </div>
-              {/* Metrics grid — fixed columns so each metric stacks vertically across rows.
-                  Duration column widened to 170px so "4h 23m 45s · 10:46" stays single-line. */}
+              {/* Metrics grid — 8 fixed columns so each metric stacks vertically across rows.
+                  Order (per user request): Distance · Ascent · Duration · Pace · GAP · HR · TE · Cadence. */}
               <div style={{
                 display: "grid",
-                gridTemplateColumns: "90px 170px 80px 90px 80px 55px 85px",
+                gridTemplateColumns: "90px 80px 110px 80px 80px 80px 55px 75px",
                 gap: 8,
                 alignItems: "center",
                 fontFamily: "var(--font-mono)",
                 fontVariantNumeric: "tabular-nums",
                 flexShrink: 0,
               }}>
-                {/* Distance */}
+                {/* 1. Distance */}
                 <div>
                   {l.distance > 0 && (
                     <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -562,26 +562,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                     </span>
                   )}
                 </div>
-                {/* Duration (+ pace if available) */}
-                <div>
-                  {l.duration > 0 && (
-                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
-                      {formatDuration(l.duration)}
-                      {l.pace ? <span style={{ color: "var(--ink-3)", marginLeft: 4, fontSize: 11 }}>· {formatPaceFromSec(l.pace)}</span> : null}
-                    </span>
-                  )}
-                </div>
-                {/* HR */}
-                <div>
-                  {l.hr > 0 && (
-                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
-                      {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
-                    </span>
-                  )}
-                </div>
-                {/* Ascent */}
+                {/* 2. Ascent — right after distance */}
                 <div>
                   {l.ascent > 0 && (
                     <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -590,16 +571,43 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                     </span>
                   )}
                 </div>
-                {/* Cadence — Road Run only */}
+                {/* 3. Duration */}
                 <div>
-                  {l.cadence > 0 && l.type === "Road Run" && (
+                  {l.duration > 0 && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--ink-3)" }}><FootIcon size={13} /></span>
-                      {l.cadence}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>
+                      <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+                      {formatDuration(l.duration)}
                     </span>
                   )}
                 </div>
-                {/* TE */}
+                {/* 4. Pace — separated from duration so it gets its own icon and column */}
+                <div>
+                  {l.pace > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={13} /></span>
+                      {formatPaceFromSec(l.pace)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/km</span>
+                    </span>
+                  )}
+                </div>
+                {/* 5. GAP — grade-adjusted pace, sits right after the regular pace */}
+                <div>
+                  {l.gap > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
+                      {formatPaceFromSec(l.gap)}
+                    </span>
+                  )}
+                </div>
+                {/* 6. HR */}
+                <div>
+                  {l.hr > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
+                      {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
+                    </span>
+                  )}
+                </div>
+                {/* 7. TE */}
                 <div>
                   {l.aerobicTE > 0 && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -608,12 +616,12 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                     </span>
                   )}
                 </div>
-                {/* GAP */}
+                {/* 8. Cadence (SPM) — Road Run only, last column per user request */}
                 <div>
-                  {l.gap > 0 && (
+                  {l.cadence > 0 && l.type === "Road Run" && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
-                      {formatPaceFromSec(l.gap)}
+                      <span style={{ color: "var(--ink-3)" }}><FootIcon size={13} /></span>
+                      {l.cadence}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>
                     </span>
                   )}
                 </div>

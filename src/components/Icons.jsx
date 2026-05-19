@@ -77,6 +77,18 @@ export function GaugeIcon({ size = 13 }) {
   );
 }
 
+// Stopwatch-style icon — used for pace (running speed per km)
+export function RunnerIcon({ size = 13 }) {
+  return (
+    <svg {...baseProps(size)}>
+      <circle cx="7" cy="8" r="4.2" />
+      <path d="M7 5 V 8 L 9 9.5" />
+      <path d="M5.5 1.8 H 8.5" />
+      <path d="M7 1.8 V 3" />
+    </svg>
+  );
+}
+
 // Route / distance — squiggly path
 export function RouteIcon({ size = 13 }) {
   return (

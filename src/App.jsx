@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { STORAGE_KEY, TABS, DEFAULT_API_ENDPOINT, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG } from "./constants";
+import { STORAGE_KEY, TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG } from "./constants";
 import { isProfileComplete } from "./utils/profile";
 import { sampleLogs, sampleRaces } from "./data/samples";
 import { migrateLogs, migrateRaces, migrateProfile, migrateCoachConfig } from "./utils/migrate";
@@ -29,7 +29,6 @@ export default function App() {
   const [races, setRaces] = useState(() => migrateRaces(loadFromStorage("races", sampleRaces)));
   const [chatMessages, setChatMessages] = useState(() => loadFromStorage("chatMessages", []));
   const [apiKey, setApiKey] = useState(() => loadFromStorage("apiKey", ""));
-  const [apiEndpoint, setApiEndpoint] = useState(() => loadFromStorage("apiEndpoint", DEFAULT_API_ENDPOINT));
   const [apiModel, setApiModel] = useState(() => loadFromStorage("apiModel", DEFAULT_MODEL));
   const [itraPI, setItraPI] = useState(() => loadFromStorage("itraPI", ""));
   const [profile, setProfile] = useState(() => ({ ...DEFAULT_PROFILE, ...migrateProfile(loadFromStorage("profile", {})) }));
@@ -41,10 +40,10 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        logs, races, chatMessages, apiKey, apiEndpoint, apiModel, itraPI, profile, coachConfig, coachMemory, lang,
+        logs, races, chatMessages, apiKey, apiModel, itraPI, profile, coachConfig, coachMemory, lang,
       }));
     } catch {}
-  }, [logs, races, chatMessages, apiKey, apiEndpoint, apiModel, itraPI, profile, coachConfig, coachMemory, lang]);
+  }, [logs, races, chatMessages, apiKey, apiModel, itraPI, profile, coachConfig, coachMemory, lang]);
 
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
@@ -53,7 +52,6 @@ export default function App() {
         races={races} setRaces={setRaces}
         chatMessages={chatMessages} setChatMessages={setChatMessages}
         apiKey={apiKey} setApiKey={setApiKey}
-        apiEndpoint={apiEndpoint} setApiEndpoint={setApiEndpoint}
         apiModel={apiModel} setApiModel={setApiModel}
         itraPI={itraPI} setItraPI={setItraPI}
         profile={profile} setProfile={setProfile}
@@ -67,7 +65,7 @@ export default function App() {
 
 function AppShell({
   logs, setLogs, races, setRaces, chatMessages, setChatMessages,
-  apiKey, setApiKey, apiEndpoint, setApiEndpoint, apiModel, setApiModel,
+  apiKey, setApiKey, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   lang, setLang,
@@ -265,7 +263,6 @@ function AppShell({
           now={now}
           setConfirmDelete={setConfirmDelete}
           apiKey={apiKey}
-          apiEndpoint={apiEndpoint}
           apiModel={apiModel}
           onEditProfile={() => setProfileEditorMode("edit")}
         />
@@ -290,8 +287,6 @@ function AppShell({
         <ApiSettingsModal
           apiKey={apiKey}
           setApiKey={setApiKey}
-          apiEndpoint={apiEndpoint}
-          setApiEndpoint={setApiEndpoint}
           apiModel={apiModel}
           setApiModel={setApiModel}
           onClose={() => setShowApiSettings(false)}

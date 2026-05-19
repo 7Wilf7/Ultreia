@@ -73,6 +73,19 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
     setOpenDropdown(null);
   }
 
+  // Helper: when enabling a pill would mean ALL top-level groups are on,
+  // collapse back to the simpler "all" state instead. (Filtering by all three
+  // groups individually is functionally identical to "show everything".)
+  function applyPillEnable(key) {
+    const nextGroups = { ...filter.groups, [key]: { enabled: true, subs: [] } };
+    const everyOn = Object.values(nextGroups).every(g => g.enabled);
+    if (everyOn) {
+      setAll();
+      return;
+    }
+    setFilter({ ...filter, all: false, groups: nextGroups });
+  }
+
   function clickPill(key) {
     const cur = filter.groups[key];
     const group = FILTER_GROUPS[key];
@@ -81,22 +94,14 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
       if (cur.enabled) {
         disableGroup(key);
       } else {
-        setFilter({
-          ...filter,
-          all: false,
-          groups: { ...filter.groups, [key]: { enabled: true, subs: [] } },
-        });
+        applyPillEnable(key);
       }
       setOpenDropdown(null);
       return;
     }
 
     if (!cur.enabled) {
-      setFilter({
-        ...filter,
-        all: false,
-        groups: { ...filter.groups, [key]: { enabled: true, subs: [] } },
-      });
+      applyPillEnable(key);
       setOpenDropdown(key);
     } else {
       setOpenDropdown(openDropdown === key ? null : key);

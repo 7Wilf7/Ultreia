@@ -386,21 +386,42 @@ JSON ONLY.`,
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                     {r.isTarget && r.priority && (
-                      <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: r.priority === "A" ? "#222" : r.priority === "B" ? "#666" : "#aaa", borderRadius: 3, padding: "1px 6px" }}>{r.priority}</span>
+                      <span style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
+                        background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
+                        border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+                        padding: "2px 7px",
+                        letterSpacing: "0.06em",
+                      }}>▲ {r.priority}</span>
                     )}
-                    <div style={{ fontWeight: 500, fontSize: 15 }}>{r.name}</div>
+                    <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)" }}>{r.name}</div>
                     {renderCategoryTag(r.category)}
                   </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-                    <div style={s.muted}>{r.date}</div>
+                  <div style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
+                    <div style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.06em" }}>{r.date}</div>
                     <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-                      style={{ border: "none", background: "none", color: "#bbb", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+                      style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 14, alignItems: "baseline", flexWrap: "wrap" }}>
-                  {r.distance > 0 && <span style={{ fontSize: 13, color: "#555" }}>{r.distance} km</span>}
-                  {r.ascent && <span style={{ fontSize: 13, color: "#555" }}>+{r.ascent}m</span>}
-                  {timeStr && <span style={{ fontSize: 16, fontWeight: 500, color: "#111" }}>{timeStr}</span>}
+                <div style={{ display: "flex", gap: 18, alignItems: "baseline", flexWrap: "wrap" }}>
+                  {r.distance > 0 && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-1)", fontVariantNumeric: "tabular-nums" }}>
+                      {r.distance}<span style={{ color: "var(--ink-3)", marginLeft: 3, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>KM</span>
+                    </span>
+                  )}
+                  {r.ascent && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--moss)", fontVariantNumeric: "tabular-nums" }}>
+                      ▲ +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 3, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>M</span>
+                    </span>
+                  )}
+                  {timeStr && (
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 17, fontWeight: 500, color: "var(--ink-1)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>
+                      {timeStr}
+                    </span>
+                  )}
                   {r.itraScore && <span style={s.subTag}>ITRA {r.itraScore}</span>}
                   {!r.category && (
                     <select value=""

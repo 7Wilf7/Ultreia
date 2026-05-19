@@ -513,32 +513,32 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                 <input type="checkbox" checked={isSelected} readOnly
                   style={{ width: 16, height: 16, pointerEvents: "none" }} />
               )}
-              <div style={{ minWidth: 50, fontSize: 12, color: "#888", fontVariantNumeric: "tabular-nums" }}>{formatDateShort(l.date)}</div>
+              <div style={{ minWidth: 50, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", letterSpacing: "0.04em" }}>{formatDateShort(l.date)}</div>
               <div style={s.tag(l.type)}>{t(`enum.activity.${l.type}`)}</div>
               {l.subTypes.map(st => {
                 const isFlag = RUN_FLAGS.includes(st);
                 return (
                   <div key={st} style={isFlag
-                    ? { ...s.subTag, background: "#fff5e6", color: "#b35900", borderColor: "#e8c897" }
+                    ? { ...s.subTag, background: "rgba(181,78,26,0.08)", color: "var(--warn)", borderColor: "rgba(181,78,26,0.3)" }
                     : s.subTag}>
-                    {isFlag ? "🏆 " : ""}{t(`enum.subtype.${st}`)}
+                    {isFlag ? "▲ " : ""}{t(`enum.subtype.${st}`)}
                   </div>
                 );
               })}
-              <div style={{ flex: 1, minWidth: 120, display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontWeight: 500, fontSize: 14 }}>
-                  {l.distance > 0 ? l.distance + " km" : formatDuration(l.duration)}
+              <div style={{ flex: 1, minWidth: 120, display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 12, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)" }}>
+                  {l.distance > 0 ? <>{l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 3, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>KM</span></> : formatDuration(l.duration)}
                 </span>
                 {l.distance > 0 && (
-                  <span style={s.muted}>{formatDuration(l.duration)} {l.pace ? "· " + formatPaceFromSec(l.pace) + "/km" : ""}</span>
+                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{formatDuration(l.duration)} {l.pace ? "· " + formatPaceFromSec(l.pace) + "/km" : ""}</span>
                 )}
                 {l.hr > 0 && (
-                  <span style={s.muted}>♥ {l.hr}{l.maxHR > 0 ? ` / ${l.maxHR}` : ""}</span>
+                  <span style={{ fontSize: 11, color: "var(--ink-2)" }}>♥ {l.hr}{l.maxHR > 0 ? `/${l.maxHR}` : ""}</span>
                 )}
-                {l.ascent > 0 && <span style={s.muted}>+{l.ascent}m</span>}
-                {l.cadence > 0 && <span style={s.muted}>🦶 {l.cadence}</span>}
-                {l.aerobicTE > 0 && <span style={s.muted}>TE {l.aerobicTE}</span>}
-                {l.gap > 0 && <span style={s.muted}>GAP {formatPaceFromSec(l.gap)}</span>}
+                {l.ascent > 0 && <span style={{ fontSize: 11, color: "var(--moss)" }}>▲ +{l.ascent}m</span>}
+                {l.cadence > 0 && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{l.cadence} spm</span>}
+                {l.aerobicTE > 0 && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>TE {l.aerobicTE}</span>}
+                {l.gap > 0 && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>GAP {formatPaceFromSec(l.gap)}</span>}
               </div>
               {!selectMode && (
                 <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}

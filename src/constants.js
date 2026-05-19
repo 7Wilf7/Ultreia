@@ -55,14 +55,15 @@ export const RUN_SUBTYPES = [...RUN_PACE_TYPES, ...RUN_FLAGS]; // full list, use
 // Strength sub-types (formerly "Aerobic" — migrated)
 export const STRENGTH_SUBS = ["Upper Body", "Lower Body", "Core"];
 
-// Color tag per top-level type
+// Color tag per top-level type — palette matches the moss/stone/earth theme.
+// All saturated low; uses var()-equivalent hex so styles.tag() still works inline.
 export const TYPE_COLOR = {
-  "Running": "#222",
-  "Trail Running": "#555",
-  "Hiking": "#4a7c4a",
-  "Floor Climbing": "#7a5a00",
-  "Strength": "#888",
-  "HIIT": "#b35900",
+  "Running":        "#141413",   /* ink-1: default black, road-running is "baseline" */
+  "Trail Running":  "#4a5e3a",   /* moss: green for trail */
+  "Hiking":         "#7a8d6a",   /* moss-light: lighter green */
+  "Floor Climbing": "#8b6a3e",   /* earth: stair / indoor climb */
+  "Strength":       "#57564f",   /* ink-2: stone gray */
+  "HIIT":           "#b54e1a",   /* burnt orange: alert/intensity */
 };
 
 // Global-filter parent → child mapping (used by GlobalFilter UI + filter logic).
@@ -116,15 +117,15 @@ export const RACE_CATEGORIES = [
   "Other",
 ];
 
-// Color per category (subtle bg + dark text)
+// Color per race category — muted, parchment / stone tints. Used as tag bg.
 export const RACE_CATEGORY_COLOR = {
-  "Half Marathon": "#e8f1ff",
-  "Marathon":      "#dde6ff",
-  "10K":           "#eef5e8",
-  "Trail":         "#efe6d4",
-  "Spartan":       "#fde4e1",
-  "Hyrox":         "#fff2d6",
-  "Other":         "#f0f0f0",
+  "Half Marathon": "#e1dccc",   /* warm stone */
+  "Marathon":      "#d6cfb8",   /* darker stone */
+  "10K":           "#e0e4d5",   /* moss-bg */
+  "Trail":         "#cdc4ad",   /* parchment-deep */
+  "Spartan":       "#e8d4ce",   /* faded brick */
+  "Hyrox":         "#ecdec0",   /* faded amber */
+  "Other":         "#e1dfd6",   /* rule-soft */
 };
 
 // Fixed system prompt — not user-editable. Keep it short and principled.

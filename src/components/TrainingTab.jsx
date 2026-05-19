@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { s } from "../styles";
+import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
@@ -67,18 +67,42 @@ export function TrainingTab({
 
       {view === "activities" && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 24 }}>
+          {/* Instrument-readout stats — four cells in a single row, each like a
+              meter on a control panel. Hairline rules between cells, contour
+              decoration on the bottom-right, position number in the corner. */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 0,
+            marginBottom: 28,
+            border: "1px solid var(--rule)",
+            background: "var(--bg-elevated)",
+          }}>
             {[
-              { label: t("training.sessions"),       val: periodSessions,                  unit: "" },
-              { label: t("training.total_distance"), val: periodKm.toFixed(1),             unit: "km" },
-              { label: t("training.total_ascent"),   val: periodAscent.toLocaleString(),   unit: "m" },
-              { label: t("training.avg_hr"),         val: periodAvgHR || t("common.no_data"), unit: periodAvgHR ? "bpm" : "" },
-            ].map(c => (
-              <div key={c.label} style={s.cardDark}>
-                <div style={s.label}>{c.label}</div>
-                <div style={s.metricVal}>
-                  {c.val}
-                  {c.unit && <span style={{ fontSize: 14, color: "#888", fontWeight: 400, marginLeft: 4 }}>{c.unit}</span>}
+              { label: t("training.sessions"),       val: String(periodSessions),                                    unit: "" },
+              { label: t("training.total_distance"), val: periodKm.toFixed(1),                                       unit: "km" },
+              { label: t("training.total_ascent"),   val: periodAscent.toLocaleString(),                             unit: "m" },
+              { label: t("training.avg_hr"),         val: periodAvgHR ? String(periodAvgHR) : t("common.no_data"),   unit: periodAvgHR ? "bpm" : "" },
+            ].map((c, i) => (
+              <div key={c.label} style={{
+                position: "relative",
+                padding: "18px 20px 22px",
+                borderRight: i < 3 ? "1px solid var(--rule)" : "none",
+                minHeight: 96,
+                ...CONTOUR_BG,
+              }}>
+                {/* corner position number — "01/04" style */}
+                <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.06em" }}>
+                  {String(i + 1).padStart(2, "0")} / 04
+                </div>
+                <div style={{ ...s.label, marginBottom: 8 }}>{c.label}</div>
+                <div style={{ ...s.metricVal, display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span>{c.val}</span>
+                  {c.unit && (
+                    <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                      {c.unit}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

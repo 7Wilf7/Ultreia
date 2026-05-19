@@ -134,50 +134,87 @@ function AppShell({
   useEffect(() => { document.title = titleText; }, [titleText]);
 
   return (
-    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "1.25rem 1.5rem", fontFamily: "var(--font-sans)", color: "#111", position: "relative" }}>
+    <div style={{ maxWidth: 1280, margin: "0 auto", padding: "1.5rem 1.75rem 2rem", fontFamily: "var(--font-sans)", color: "var(--ink-1)", position: "relative" }}>
 
-      {/* Top-right floating controls (absolute, so the title can sit centered) */}
-      <div style={{ position: "absolute", top: 20, right: 24, display: "flex", alignItems: "flex-start", gap: 12 }}>
-        <div style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+      {/* Top instrument bar — runs full-width across the top with hairline ruling
+          underneath. Layout is a 3-column grid: brand mark / center title / readout + controls. */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "1fr auto 1fr",
+        alignItems: "flex-start",
+        gap: 16,
+        paddingBottom: 18,
+        borderBottom: "1px solid var(--rule)",
+        marginBottom: 24,
+      }}>
+
+        {/* Left: brand mark — coordinate-style identifier */}
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", lineHeight: 1.6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ color: "var(--moss)", fontWeight: 600 }}>▲ TS / FIELD</div>
+          <div>STN · GMT+8</div>
           <div>{now.toLocaleDateString("en-CA")}</div>
-          <div style={{ fontSize: 14, color: "#333", fontWeight: 500 }}>{now.toLocaleTimeString("en-GB", { hour12: false })}</div>
-          <div>GMT+8</div>
         </div>
-        <button onClick={toggleLang}
-          title={t("header.lang_tooltip")}
-          style={{ border: "1px solid #ddd", background: "#fff", borderRadius: 8, height: 36, padding: "0 12px", fontSize: 13, cursor: "pointer", color: "#444", fontWeight: 500, fontFamily: "var(--font-mono)" }}>
-          {lang === "en" ? "中" : "EN"}
-        </button>
-        <button onClick={() => setShowApiSettings(true)}
-          title={t("header.api_tooltip")}
-          style={{ border: "1px solid #ddd", background: apiKey ? "#fff" : "#fff4e0", borderRadius: 8, height: 36, padding: "0 12px", fontSize: 13, cursor: "pointer", color: "#444", fontWeight: 500 }}>
-          🔑 {t("header.api")}{!apiKey && " ⚠"}
-        </button>
-        <button onClick={() => setProfileEditorMode("edit")}
-          title={t("header.profile")}
-          style={{ border: "1px solid #ddd", background: "#fff", borderRadius: 8, width: 36, height: 36, fontSize: 16, cursor: "pointer", color: "#444" }}>
-          ⚙
-        </button>
+
+        {/* Center: title — display weight, generous space */}
+        <div style={{ textAlign: "center", maxWidth: 520 }}>
+          <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 28, fontWeight: 500, margin: 0, color: "var(--ink-1)", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+            {titleText}
+          </h2>
+          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", margin: "8px 0 0", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+            {t("header.subtitle")}
+          </p>
+        </div>
+
+        {/* Right: clock + controls. Clock as instrument readout (big mono), buttons as ruled cells. */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          <div style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)", textAlign: "right", lineHeight: 1.1 }}>
+            <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+              {now.toLocaleTimeString("en-GB", { hour12: false })}
+            </div>
+            <div style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 4, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+              LOCAL TIME
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 0 }}>
+            <button onClick={toggleLang} title={t("header.lang_tooltip")}
+              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 30, padding: "0 12px", fontSize: 11, color: "var(--ink-2)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", borderRadius: 0 }}>
+              {lang === "en" ? "中" : "EN"}
+            </button>
+            <button onClick={() => setShowApiSettings(true)} title={t("header.api_tooltip")}
+              style={{ border: "1px solid var(--rule)", borderRight: "none", background: apiKey ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)", height: 30, padding: "0 12px", fontSize: 11, color: apiKey ? "var(--ink-2)" : "var(--warn)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", borderRadius: 0 }}>
+              {t("header.api")}{!apiKey && " ⚠"}
+            </button>
+            <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
+              style={{ border: "1px solid var(--rule)", background: "var(--bg-elevated)", height: 30, width: 36, fontSize: 14, color: "var(--ink-2)", borderRadius: 0 }}>
+              ⚙
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Centered title block */}
-      <div style={{ textAlign: "center", marginBottom: 22, paddingTop: 4 }}>
-        <h2 style={{ fontSize: 24, fontWeight: 500, margin: 0, color: "#111" }}>{titleText}</h2>
-        <p style={{ fontSize: 14, color: "#888", margin: "4px 0 0" }}>{t("header.subtitle")}</p>
-      </div>
-
-      {/* Centered tabs — each tab takes equal width, label centered */}
-      <div style={{ display: "flex", borderBottom: "1px solid #e8e8e8", marginBottom: 22, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+      {/* Tabs — full-width segmented ruler with elevation tick on the active one. */}
+      <div style={{ display: "flex", marginBottom: 28, borderBottom: "1px solid var(--rule)", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {TABS.map((label, i) => {
           const key = ["tabs.training", "tabs.races", "tabs.pr", "tabs.ai_coach"][i];
+          const active = tab === i;
           return (
             <button key={label} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
-              background: "none", border: "none",
-              borderBottom: tab === i ? "2px solid #111" : "2px solid transparent",
-              padding: "12px 22px", fontSize: 15, fontWeight: tab === i ? 500 : 400,
-              color: tab === i ? "#111" : "#888", cursor: "pointer", marginBottom: -1, whiteSpace: "nowrap",
-            }}>{t(key)}</button>
+              background: "transparent", border: "none",
+              padding: "14px 18px 18px",
+              fontSize: 11, fontFamily: "var(--font-mono)",
+              fontWeight: active ? 600 : 500,
+              textTransform: "uppercase", letterSpacing: "0.14em",
+              color: active ? "var(--ink-1)" : "var(--ink-3)",
+              cursor: "pointer", whiteSpace: "nowrap",
+              position: "relative",
+              borderBottom: active ? "2px solid var(--ink-1)" : "2px solid transparent",
+              marginBottom: -1,
+              transition: "color 120ms",
+            }}>
+              <span style={{ color: "var(--ink-3)", marginRight: 8, fontWeight: 400 }}>{String(i + 1).padStart(2, "0")}</span>
+              {t(key)}
+            </button>
           );
         })}
       </div>

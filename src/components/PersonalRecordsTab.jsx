@@ -83,39 +83,42 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
       <div style={s.section}>{t("pr.title")}</div>
 
       {records.length === 0 ? (
-        <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px", fontSize: 13 }}>
+        <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "32px 16px", fontSize: 12, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
           {t("pr.empty")}
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginBottom: 22 }}>
-          {records.map(rec => (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 0, marginBottom: 24, border: "1px solid var(--rule)", background: "var(--bg-elevated)" }}>
+          {records.map((rec, i) => (
             <div key={rec.category} style={{
-              ...s.card,
-              borderLeft: `4px solid ${RACE_CATEGORY_COLOR[rec.category] || "#ccc"}`,
+              padding: "18px 20px 20px",
+              borderRight: (i + 1) % 4 === 0 ? "none" : "1px solid var(--rule)",
+              borderBottom: "1px solid var(--rule)",
+              borderTop: "3px solid " + (RACE_CATEGORY_COLOR[rec.category] || "var(--rule)"),
+              position: "relative",
             }}>
-              <div style={{ ...s.label, marginBottom: 2 }}>{t(`enum.race_cat.${rec.category}`)}</div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t(`enum.race_cat.${rec.category}`)}</div>
               {rec.best ? (
                 <>
-                  <div style={{ ...s.metricVal, fontSize: 24 }}>
+                  <div style={{ ...s.metricVal, fontSize: 22 }}>
                     {formatHMS(rec.bestSeconds)}
                   </div>
-                  <div style={{ fontSize: 12, color: "#555", marginTop: 6, lineHeight: 1.4 }}>
-                    {rec.best.name}<br />
-                    <span style={{ ...s.muted }}>{rec.best.date}</span>
+                  <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 10, lineHeight: 1.45 }}>
+                    {rec.best.name}
+                    <div style={{ ...s.dataNum, fontSize: 10, color: "var(--ink-3)", marginTop: 2, letterSpacing: "0.04em" }}>{rec.best.date}</div>
                   </div>
                 </>
               ) : (
-                <div style={{ ...s.muted, marginTop: 2 }}>{t("pr.no_times", { n: rec.all.length })}</div>
+                <div style={{ ...s.muted, marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>{t("pr.no_times", { n: rec.all.length })}</div>
               )}
               {rec.all.length > 1 && (
-                <details style={{ marginTop: 8 }}>
-                  <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
-                    {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
+                <details style={{ marginTop: 10 }}>
+                  <summary style={{ ...s.muted, cursor: "pointer", fontSize: 10, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
                   </summary>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
                     {rec.all.slice(1).map(r => (
-                      <div key={r.id} style={{ fontSize: 11, color: "#666" }}>
-                        {formatHMS(resultSeconds(r))} · {r.name} · <span style={s.muted}>{r.date}</span>
+                      <div key={r.id} style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-2)" }}>
+                        {formatHMS(resultSeconds(r))} · <span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
                       </div>
                     ))}
                   </div>
@@ -147,15 +150,15 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
           </div>
         </div>
       ) : (
-        <div onClick={startEditItra} style={{ ...s.card, cursor: "pointer", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <div onClick={startEditItra} style={{ ...s.card, cursor: "pointer", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", borderLeft: "3px solid var(--moss)" }}>
           <div>
-            <div style={{ ...s.label, marginBottom: 2 }}>{t("pr.itra_title")}</div>
-            <div style={{ ...s.metricVal, fontSize: 24 }}>
-              {itraPI}
-              <span style={{ fontSize: 12, color: "#888", fontWeight: 400, marginLeft: 6 }}>ITRA</span>
+            <div style={{ ...s.label, marginBottom: 4 }}>{t("pr.itra_title")}</div>
+            <div style={{ ...s.metricVal, fontSize: 28, display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span>{itraPI}</span>
+              <span style={{ fontSize: 10, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.12em" }}>ITRA Index</span>
             </div>
           </div>
-          <span style={{ ...s.muted, fontSize: 11 }}>{t("pr.itra_edit_hint")}</span>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{t("pr.itra_edit_hint")} →</span>
         </div>
       )}
     </div>

@@ -1,12 +1,59 @@
-:root {
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Cascadia Code", monospace;
+/* ============================================================
+   Wilf's Training Studio — Instrument Aesthetic
+   Brutalist-minimal monochrome + low-sat moss accent + topographic language.
+   Industrial sans (Geist) for UI/display, JetBrains Mono for data readouts.
+   ============================================================ */
 
-  color: #111;
-  background: #fafafa;
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* ---- Type ---- */
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  /* ---- Surface ---- */
+  --bg:           #f2f1ec;   /* slightly warm off-white (parchment-ish) */
+  --bg-elevated: #fafaf7;
+  --bg-sunken:   #e8e7e1;
+  --bg-deep:     #1a1a18;   /* near-black for chart/dark accents */
+
+  /* ---- Ink (text) ---- */
+  --ink-1: #141413;          /* primary */
+  --ink-2: #57564f;          /* secondary */
+  --ink-3: #9b9991;          /* tertiary, hints */
+  --ink-inv: #fafaf7;         /* on dark surfaces */
+
+  /* ---- Rules / borders ---- */
+  --rule:         #d1cfc6;   /* hairline */
+  --rule-soft:    #e1dfd6;   /* even softer */
+  --rule-strong:  #57564f;   /* heavy */
+  --rule-ink:     #141413;   /* maximum */
+
+  /* ---- Accent: moss (low-sat) ---- */
+  --moss:        #4a5e3a;
+  --moss-light:  #7a8d6a;
+  --moss-deep:   #2f3d24;
+  --moss-bg:     #e0e4d5;
+
+  /* ---- Sparse signal colors ---- */
+  --warn:    #b54e1a;        /* burnt orange — alerts */
+  --danger:  #8b2a23;        /* deep red */
+  --info:    #3a5566;        /* slate */
+
+  /* ---- Sizing rhythm ---- */
+  --gap-xs:  4px;
+  --gap-sm:  8px;
+  --gap-md:  14px;
+  --gap-lg:  22px;
+  --gap-xl:  36px;
+
+  /* ---- Base type setup ---- */
+  color: var(--ink-1);
+  background: var(--bg);
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.5;
+  font-feature-settings: "ss01", "ss02", "cv11";  /* Geist stylistic alternates */
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -15,19 +62,57 @@
 
 * { box-sizing: border-box; }
 
-body {
+html, body, #root {
   margin: 0;
   min-height: 100vh;
+  background: var(--bg);
 }
 
-#root {
-  min-height: 100vh;
+/* Subtle topographic contour pattern on the page background.
+   Encoded as inline SVG so we don't ship an asset. Almost imperceptible
+   but adds depth — the "instrument is sitting on a map" feel. */
+body {
+  background-image:
+    radial-gradient(circle at 20% -10%, rgba(74,94,58,0.04) 0%, transparent 50%),
+    radial-gradient(circle at 110% 10%, rgba(20,20,19,0.03) 0%, transparent 40%);
+  background-attachment: fixed;
 }
 
-button {
+button, input, select, textarea {
   font-family: inherit;
+  font-size: inherit;
+  color: inherit;
 }
 
-input, select, textarea {
-  font-family: inherit;
+button { cursor: pointer; }
+
+/* Numbers everywhere should be tabular so columns align. */
+.num, .mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
+
+/* Hide native number input spinners for a cleaner instrument look. */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] { -moz-appearance: textfield; }
+
+/* Selection — moss tint, not the default blue. */
+::selection {
+  background: var(--moss);
+  color: var(--ink-inv);
+}
+
+/* Focus ring — single thin moss line, no chunky outline. */
+:focus-visible {
+  outline: 1px solid var(--moss);
+  outline-offset: 2px;
+}
+
+/* Small reset on details/summary used in PR list. */
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }

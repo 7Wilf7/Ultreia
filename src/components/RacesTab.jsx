@@ -244,9 +244,23 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
     </div>
   );
 
-  // Renders the add/edit form. Goal time is hidden for target races (only finished races have actual result times).
+  // Renders the add/edit form. Layout:
+  //   Row 1: Category + Race name
+  //   Row 2: Date + Distance + Ascent (each shown based on category)
+  //   ITRA row: only for Trail HISTORY races
+  //   Time row: only for HISTORY races
   function renderRaceForm(mode) {
     const isEdit = mode === "edit";
+    // Field visibility by category. Road races (HM/M/10K) skip ascent;
+    // Hyrox is fixed-format indoor so skips both distance and ascent.
+    const isRoadOnly = ["Half Marathon", "Marathon", "10K"].includes(newRace.category);
+    const isHyrox = newRace.category === "Hyrox";
+    const showAscent = !isRoadOnly && !isHyrox;
+    const showDistance = !isHyrox;
+    // ITRA only shown for Trail HISTORY entries (target races have no result yet,
+    // road / hyrox don't get ITRA scores).
+    const showItra = !newRace.isTarget && newRace.category === "Trail";
+
     return (
       <div style={{ ...s.cardDark, marginBottom: 14 }}>
         <div style={s.section}>
@@ -268,26 +282,8 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
           </div>
         )}
 
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>
-          <input placeholder={t("races.name_placeholder")} value={newRace.name}
-            onChange={e => setNewRace({ ...newRace, name: e.target.value })}
-            style={s.input} />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-          <div>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
-            <input type="date" value={newRace.date}
-              onChange={e => setNewRace({ ...newRace, date: e.target.value })}
-              style={s.input} />
-          </div>
-          <div>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label")}</div>
-            <input type="number" step="0.001" placeholder="0" value={newRace.distance}
-              onChange={e => setNewRace({ ...newRace, distance: e.target.value })}
-              style={s.input} />
-          </div>
+        {/* Row 1: Category (narrow) + Name (flex) */}
+        <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 10, marginBottom: 10 }}>
           <div>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
             <select value={newRace.category}
@@ -297,25 +293,52 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
               {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
             </select>
           </div>
-        </div>
-
-        {/* Ascent + ITRA — ITRA only shown for HISTORY races (target races have no result yet). */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div>
-            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.ascent_label")}</div>
-            <input type="number" placeholder="0" value={newRace.ascent}
-              onChange={e => setNewRace({ ...newRace, ascent: e.target.value })}
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>
+            <input placeholder={t("races.name_placeholder")} value={newRace.name}
+              onChange={e => setNewRace({ ...newRace, name: e.target.value })}
               style={s.input} />
           </div>
-          {!newRace.isTarget && (
+        </div>
+
+        {/* Row 2: Date + Distance + Ascent (each shown by category rules).
+            Empty cells are NOT rendered so visible fields sit adjacent. */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
+          <div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
+            <input type="date" value={newRace.date}
+              onChange={e => setNewRace({ ...newRace, date: e.target.value })}
+              style={s.input} />
+          </div>
+          {showDistance && (
+            <div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label")}</div>
+              <input type="number" step="0.001" placeholder="0" value={newRace.distance}
+                onChange={e => setNewRace({ ...newRace, distance: e.target.value })}
+                style={s.input} />
+            </div>
+          )}
+          {showAscent && (
+            <div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.ascent_label")}</div>
+              <input type="number" placeholder="0" value={newRace.ascent}
+                onChange={e => setNewRace({ ...newRace, ascent: e.target.value })}
+                style={s.input} />
+            </div>
+          )}
+        </div>
+
+        {/* ITRA — Trail history races only */}
+        {showItra && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ ...s.label, marginBottom: 6 }}>{t("races.itra_label")}</div>
               <input type="number" placeholder="0" value={newRace.itraScore}
                 onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })}
                 style={s.input} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Time fields only for history races — target races don't have a finish time yet */}
         {!newRace.isTarget && (

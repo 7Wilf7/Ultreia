@@ -381,6 +381,7 @@ const dict = {
   "coach.intervention":       { en: "Risk Reminder Intensity", zh: "风险提醒强度" },
   "coach.prompt_title":       { en: "System Prompt Preview (auto-assembled, read-only)", zh: "系统 Prompt 预览（自动拼装，只读）" },
   "coach.prompt_hint":        { en: "This is sent as the system prompt with every message. Change it via Edit Profile or Coach Config.", zh: "这段会作为系统 Prompt 随每条消息发送。可通过「编辑资料」或「教练配置」修改。" },
+  "coach.prompt_zh_note":     { en: "(Chinese view is for reading only — the LLM always receives the English version for stable instruction-following.)", zh: "（中文版仅供阅读，发给 LLM 的始终是英文版，指令执行更稳定。）" },
   "coach.empty":              { en: "Daily check-in with your AI coach.\nYour profile, coach config, target races, and recent activities are sent automatically with each message.", zh: "和你的 AI 教练做每日打卡。\n你的个人资料、教练配置、目标比赛和近期活动会随每条消息自动发送。" },
   "coach.thinking":           { en: "Coach is thinking...", zh: "教练思考中……" },
   "coach.no_key":             { en: "⚠ No Anthropic API key configured. Click the 🔑 API button in the top-right and set one.", zh: "⚠ 未配置 API Key。请点右上角的 🔑 API 按钮设置。" },

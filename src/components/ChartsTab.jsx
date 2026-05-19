@@ -2,8 +2,16 @@ import { useState, useMemo } from "react";
 import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
-import { formatDateShort } from "../utils/format";
+import { formatDateShort, formatDuration } from "../utils/format";
 import { getPeriodLabel } from "../utils/period";
+
+// "5-11~5-17" style label for a week bucket. Both endpoints are formatted
+// short (year omitted when current) so the axis stays compact.
+function weekRangeLabel(start, endExclusive) {
+  const endDisplay = new Date(endExclusive);
+  endDisplay.setDate(endDisplay.getDate() - 1);
+  return `${formatDateShort(start.toISOString().slice(0, 10))}~${formatDateShort(endDisplay.toISOString().slice(0, 10))}`;
+}
 
 export function ChartsTab({ filteredAllLogs }) {
   const t = useT();
@@ -24,10 +32,10 @@ export function ChartsTab({ filteredAllLogs }) {
           const d = new Date(l.date);
           return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
         }).reduce((sum, l) => sum + l.distance, 0);
-        const endDisplay = new Date(end); endDisplay.setDate(endDisplay.getDate() - 1);
+        const rangeLabel = weekRangeLabel(start, end);
         buckets.push({
-          label: formatDateShort(start.toISOString().slice(0, 10)),
-          rangeText: `${formatDateShort(start.toISOString().slice(0, 10))} → ${formatDateShort(endDisplay.toISOString().slice(0, 10))}`,
+          label: rangeLabel,
+          rangeText: rangeLabel,
           km: +km.toFixed(1),
         });
       }
@@ -78,13 +86,16 @@ export function ChartsTab({ filteredAllLogs }) {
     return filteredAllLogs.filter(l => new Date(l.date) >= from);
   }, [filteredAllLogs, chartPeriod]);
 
+  // Run-type distribution by DURATION (seconds), not session count. A 90-min
+  // tempo run weighs more than three 20-min easy runs, which better reflects
+  // training load allocation than raw frequency.
   const runTypeDist = useMemo(() => {
-    const counts = {};
-    RUN_SUBTYPES.forEach(sub => counts[sub] = 0);
+    const durations = {};
+    RUN_SUBTYPES.forEach(sub => durations[sub] = 0);
     chartRangeLogs.filter(l => l.type === "Road Run" && l.subTypes.length > 0).forEach(l => {
-      counts[l.subTypes[0]] = (counts[l.subTypes[0]] || 0) + 1;
+      durations[l.subTypes[0]] = (durations[l.subTypes[0]] || 0) + (l.duration || 0);
     });
-    return Object.entries(counts);
+    return Object.entries(durations);
   }, [chartRangeLogs]);
 
   function chartPeriodLabel() {
@@ -95,6 +106,7 @@ export function ChartsTab({ filteredAllLogs }) {
   }
 
   const chartMax = Math.max(...chartData.map(w => w.km), 1);
+  // totalRunsForPie now holds total DURATION in seconds (not session count).
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
 
   const presets = [
@@ -172,15 +184,17 @@ export function ChartsTab({ filteredAllLogs }) {
           <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.no_classified")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {runTypeDist.map(([name, count], i) => {
-              const pct = totalRunsForPie ? (count / totalRunsForPie) * 100 : 0;
+            {runTypeDist.map(([name, durSec], i) => {
+              const pct = totalRunsForPie ? (durSec / totalRunsForPie) * 100 : 0;
               // Bar shade ramp from ink → moss tints, intensity-keyed
               const shade = ["var(--ink-1)", "var(--ink-2)", "var(--moss-deep)", "var(--moss)", "var(--moss-light)"][i] || "var(--ink-2)";
               return (
                 <div key={name}>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
                     <span style={{ color: "var(--ink-1)" }}>{t(`enum.subtype.${name}`)}</span>
-                    <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{count} · {pct.toFixed(0)}%</span>
+                    <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                      {durSec > 0 ? formatDuration(durSec) : "—"} · {pct.toFixed(0)}%
+                    </span>
                   </div>
                   <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
                     <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />

@@ -4,9 +4,31 @@ import {
   DEFAULT_DAILY_TEMPLATE,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
 } from "../constants";
-import { useT } from "../i18n/LanguageContext";
+import { useT, useLanguage } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { buildSystemPrompt } from "../utils/profile";
+
+// Locale-aware headers for the dynamic data block (current date / target races /
+// race history / recent activities). Numbers + race names stay as-is — only the
+// section titles change. The "en" version is canonical (LLM-facing).
+const DATA_LABELS = {
+  en: {
+    currentDate: "[Current Date]",
+    targets: "[Target Races]",
+    history: "[Race History]",
+    recent: "[Recent Activities (last 10)]",
+    none: "None",
+    goal: "goal",
+  },
+  zh: {
+    currentDate: "[当前时间]",
+    targets: "[目标比赛]",
+    history: "[比赛历史]",
+    recent: "[近期活动（最近 10 条）]",
+    none: "无",
+    goal: "目标",
+  },
+};
 
 export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
@@ -15,8 +37,12 @@ export function AICoachTab({
   apiKey, apiEndpoint, apiModel, onEditProfile,
 }) {
   const t = useT();
+  const { lang } = useLanguage();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
+  // Preview language is independent of UI language — defaults to UI language
+  // but the user can flip it to read the prompt in the other language.
+  const [previewLang, setPreviewLang] = useState(lang);
   const [showMemory, setShowMemory] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState(coachMemory);
   const [memoryEditing, setMemoryEditing] = useState(false);
@@ -55,6 +81,11 @@ export function AICoachTab({
     }
     setMemoryUpdating(true);
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${m.content}`).join("\n\n");
+    // Output language = current UI language. Chinese users get Chinese memory,
+    // English users get English memory. This is regardless of the prompt language.
+    const outputLangHint = lang === "zh"
+      ? "Write the memory in Chinese (简体中文)."
+      : "Write the memory in English.";
     const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
 Current memory:
@@ -70,6 +101,7 @@ Return ONLY the updated memory text. Guidelines:
 - Don't repeat what's already in the user's profile (age, location, basic stats).
 - Maximum ~500 words. Trim older entries if needed.
 - If nothing meaningful to add or update, return the existing memory unchanged.
+- ${outputLangHint}
 
 Output the memory text only, nothing else.`;
 
@@ -121,34 +153,42 @@ Output the memory text only, nothing else.`;
   function setOutputLength(id) { setCoachConfig({ ...coachConfig, outputLength: id }); }
   function setIntervention(id) { setCoachConfig({ ...coachConfig, intervention: id }); }
 
-  // Dynamic data block injected into the system prompt. Always sent in English to
-  // keep prompt structure stable across languages; the model replies in user's language.
-  function buildDataBlock() {
+  // Dynamic data block injected into the system prompt. Only the section titles
+  // are localized; values (dates, race names, numbers) stay verbatim across
+  // languages so the model receives consistent data.
+  function buildDataBlock(useLang = "en") {
+    const D = DATA_LABELS[useLang] || DATA_LABELS.en;
     const recentLogs = logs.slice(0, 10).map(l =>
       `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
     ).join("\n");
     const targetRaces = races.filter(r => r.isTarget).map(r => {
       const goal = [r.resultH, r.resultM, r.resultS].some(Boolean) ? `${r.resultH || "0"}h${r.resultM || "0"}m${r.resultS || "0"}s` : "—";
-      return `[${r.priority}] ${r.name}${r.category ? ` (${r.category})` : ""} on ${r.date} (${r.distance}${r.ascent ? ", +" + r.ascent + "m" : ""}) - goal: ${goal}`;
-    }).join("\n") || "None";
+      return `[${r.priority}] ${r.name}${r.category ? ` (${r.category})` : ""} on ${r.date} (${r.distance}${r.ascent ? ", +" + r.ascent + "m" : ""}) - ${D.goal}: ${goal}`;
+    }).join("\n") || D.none;
     const historyRaces = races.filter(r => !r.isTarget).map(r => {
       const result = [r.resultH, r.resultM, r.resultS].some(Boolean) ? `${r.resultH || "0"}:${r.resultM || "0"}:${r.resultS || "0"}` : "—";
       return `${r.date} ${r.name}${r.category ? ` [${r.category}]` : ""} ${r.distance} → ${result}${r.itraScore ? " ITRA " + r.itraScore : ""}`;
-    }).join("\n") || "None";
+    }).join("\n") || D.none;
 
-    return `[Current Date] ${now.toISOString().slice(0, 16).replace("T", " ")} GMT+8
+    return `${D.currentDate} ${now.toISOString().slice(0, 16).replace("T", " ")} GMT+8
 
-[Target Races]
+${D.targets}
 ${targetRaces}
 
-[Race History]
+${D.history}
 ${historyRaces}
 
-[Recent Activities (last 10)]
+${D.recent}
 ${recentLogs}`;
   }
 
-  const previewPrompt = buildSystemPrompt({ profile, coachConfig, coachMemory, dataBlock: buildDataBlock() });
+  // Preview honors the user's toggle. The actual prompt sent to the LLM (in
+  // sendChat below) always uses English for stable instruction-following.
+  const previewPrompt = buildSystemPrompt({
+    profile, coachConfig, coachMemory,
+    dataBlock: buildDataBlock(previewLang),
+    lang: previewLang,
+  });
 
   async function sendChat() {
     if (!chatInput.trim() || chatLoading) return;
@@ -159,7 +199,13 @@ ${recentLogs}`;
     const userMsg = chatInput.trim();
     setChatLoading(true);
 
-    const systemPrompt = buildSystemPrompt({ profile, coachConfig, coachMemory, dataBlock: buildDataBlock() });
+    // Canonical English prompt for LLM (more stable). The model still replies
+    // in the user's language because FIXED_SYSTEM_PROMPT includes that directive.
+    const systemPrompt = buildSystemPrompt({
+      profile, coachConfig, coachMemory,
+      dataBlock: buildDataBlock("en"),
+      lang: "en",
+    });
     const newMessages = [...chatMessages, { role: "user", content: userMsg }];
     setChatMessages(newMessages);
     setChatInput("");
@@ -315,13 +361,31 @@ ${recentLogs}`;
 
       {showPromptPreview && (
         <div style={{ ...s.cardDark, marginBottom: 14 }}>
-          <div style={s.section}>{t("coach.prompt_title")}</div>
+          <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+            <span>{t("coach.prompt_title")}</span>
+            {/* EN ↔ ZH toggle — only affects the preview, not what the LLM sees. */}
+            <div style={{ display: "flex", gap: 0 }}>
+              <button onClick={() => setPreviewLang("en")}
+                style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
+                  borderRight: "none",
+                  background: previewLang === "en" ? "var(--ink-1)" : "transparent",
+                  color: previewLang === "en" ? "var(--ink-inv)" : "var(--ink-2)" }}>
+                EN
+              </button>
+              <button onClick={() => setPreviewLang("zh")}
+                style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
+                  background: previewLang === "zh" ? "var(--ink-1)" : "transparent",
+                  color: previewLang === "zh" ? "var(--ink-inv)" : "var(--ink-2)" }}>
+                中
+              </button>
+            </div>
+          </div>
           <pre style={{
             ...s.input, fontFamily: "var(--font-mono)", fontSize: 11,
-            whiteSpace: "pre-wrap", lineHeight: 1.5, maxHeight: 360, overflowY: "auto",
-            color: "#444", background: "#fafafa",
+            whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 380, overflowY: "auto",
+            color: "var(--ink-1)", background: "var(--bg-elevated)",
           }}>{previewPrompt}</pre>
-          <div style={{ ...s.muted, marginTop: 6 }}>{t("coach.prompt_hint")}</div>
+          <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.prompt_hint")}{previewLang === "zh" ? ` ${t("coach.prompt_zh_note")}` : ""}</div>
         </div>
       )}
 

@@ -169,20 +169,20 @@ export function ChartsTab({ filteredAllLogs }) {
       <div style={s.section}>{t("charts.run_type_title", { label: chartPeriodLabel() })}</div>
       <div style={s.card}>
         {totalRunsForPie === 0 ? (
-          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 11, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{t("charts.no_classified")}</div>
+          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.no_classified")}</div>
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {runTypeDist.map(([name, count], i) => {
               const pct = totalRunsForPie ? (count / totalRunsForPie) * 100 : 0;
               // Bar shade ramp from ink → moss tints, intensity-keyed
               const shade = ["var(--ink-1)", "var(--ink-2)", "var(--moss-deep)", "var(--moss)", "var(--moss-light)"][i] || "var(--ink-2)";
               return (
                 <div key={name}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4, alignItems: "baseline" }}>
-                    <span style={{ color: "var(--ink-1)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t(`enum.subtype.${name}`)}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
+                    <span style={{ color: "var(--ink-1)" }}>{t(`enum.subtype.${name}`)}</span>
                     <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>{count} · {pct.toFixed(0)}%</span>
                   </div>
-                  <div style={{ background: "var(--bg-sunken)", height: 4, overflow: "hidden" }}>
+                  <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
                     <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
                   </div>
                 </div>

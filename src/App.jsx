@@ -149,18 +149,18 @@ function AppShell({
       }}>
 
         {/* Left: brand mark — coordinate-style identifier */}
-        <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", lineHeight: 1.6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          <div style={{ color: "var(--moss)", fontWeight: 600 }}>▲ TS / FIELD</div>
-          <div>STN · GMT+8</div>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)", lineHeight: 1.6 }}>
+          <div style={{ color: "var(--moss)", fontWeight: 600 }}>▲ Training Studio</div>
+          <div>GMT+8</div>
           <div>{now.toLocaleDateString("en-CA")}</div>
         </div>
 
         {/* Center: title — display weight, generous space */}
         <div style={{ textAlign: "center", maxWidth: 520 }}>
-          <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 28, fontWeight: 500, margin: 0, color: "var(--ink-1)", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
+          <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 30, fontWeight: 500, margin: 0, color: "var(--ink-1)", letterSpacing: "-0.02em", lineHeight: 1.15 }}>
             {titleText}
           </h2>
-          <p style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)", margin: "8px 0 0", textTransform: "uppercase", letterSpacing: "0.12em" }}>
+          <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-3)", margin: "8px 0 0" }}>
             {t("header.subtitle")}
           </p>
         </div>
@@ -168,31 +168,32 @@ function AppShell({
         {/* Right: clock + controls. Clock as instrument readout (big mono), buttons as ruled cells. */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
           <div style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)", textAlign: "right", lineHeight: 1.1 }}>
-            <div style={{ fontSize: 22, fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+            <div style={{ fontSize: 24, fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
               {now.toLocaleTimeString("en-GB", { hour12: false })}
             </div>
-            <div style={{ fontSize: 9, color: "var(--ink-3)", marginTop: 4, textTransform: "uppercase", letterSpacing: "0.12em" }}>
-              LOCAL TIME
+            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
+              local time
             </div>
           </div>
           <div style={{ display: "flex", gap: 0 }}>
             <button onClick={toggleLang} title={t("header.lang_tooltip")}
-              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 30, padding: "0 12px", fontSize: 11, color: "var(--ink-2)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", borderRadius: 0 }}>
+              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, padding: "0 12px", fontSize: 13, color: "var(--ink-2)", fontFamily: "var(--font-sans)", borderRadius: 0 }}>
               {lang === "en" ? "中" : "EN"}
             </button>
             <button onClick={() => setShowApiSettings(true)} title={t("header.api_tooltip")}
-              style={{ border: "1px solid var(--rule)", borderRight: "none", background: apiKey ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)", height: 30, padding: "0 12px", fontSize: 11, color: apiKey ? "var(--ink-2)" : "var(--warn)", fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", borderRadius: 0 }}>
+              style={{ border: "1px solid var(--rule)", borderRight: "none", background: apiKey ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)", height: 32, padding: "0 12px", fontSize: 13, color: apiKey ? "var(--ink-2)" : "var(--warn)", fontFamily: "var(--font-sans)", borderRadius: 0 }}>
               {t("header.api")}{!apiKey && " ⚠"}
             </button>
             <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
-              style={{ border: "1px solid var(--rule)", background: "var(--bg-elevated)", height: 30, width: 36, fontSize: 14, color: "var(--ink-2)", borderRadius: 0 }}>
+              style={{ border: "1px solid var(--rule)", background: "var(--bg-elevated)", height: 32, width: 38, fontSize: 15, color: "var(--ink-2)", borderRadius: 0 }}>
               ⚙
             </button>
           </div>
         </div>
       </div>
 
-      {/* Tabs — full-width segmented ruler with elevation tick on the active one. */}
+      {/* Tabs — full-width segmented ruler. Position number stays small + mono
+          to keep the instrument feel; the label is sentence case + readable. */}
       <div style={{ display: "flex", marginBottom: 28, borderBottom: "1px solid var(--rule)", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
         {TABS.map((label, i) => {
           const key = ["tabs.training", "tabs.races", "tabs.pr", "tabs.ai_coach"][i];
@@ -202,9 +203,8 @@ function AppShell({
               flex: 1, textAlign: "center",
               background: "transparent", border: "none",
               padding: "14px 18px 18px",
-              fontSize: 11, fontFamily: "var(--font-mono)",
+              fontSize: 15, fontFamily: "var(--font-sans)",
               fontWeight: active ? 600 : 500,
-              textTransform: "uppercase", letterSpacing: "0.14em",
               color: active ? "var(--ink-1)" : "var(--ink-3)",
               cursor: "pointer", whiteSpace: "nowrap",
               position: "relative",
@@ -212,7 +212,7 @@ function AppShell({
               marginBottom: -1,
               transition: "color 120ms",
             }}>
-              <span style={{ color: "var(--ink-3)", marginRight: 8, fontWeight: 400 }}>{String(i + 1).padStart(2, "0")}</span>
+              <span style={{ color: "var(--ink-3)", marginRight: 8, fontWeight: 400, fontFamily: "var(--font-mono)", fontSize: 11 }}>{String(i + 1).padStart(2, "0")}</span>
               {t(key)}
             </button>
           );

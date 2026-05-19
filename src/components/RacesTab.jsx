@@ -5,6 +5,7 @@ import { useT } from "../i18n/LanguageContext";
 import { inferRaceCategory } from "../utils/migrate";
 import { parseDistanceKm } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
+import { RouteIcon, PeakIcon, ClockIcon } from "./Icons";
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
@@ -388,37 +389,39 @@ JSON ONLY.`,
                     {r.isTarget && r.priority && (
                       <span style={{
                         fontFamily: "var(--font-mono)",
-                        fontSize: 10,
+                        fontSize: 12,
                         fontWeight: 600,
                         color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
                         background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
                         border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
-                        padding: "2px 7px",
-                        letterSpacing: "0.06em",
+                        padding: "2px 8px",
                       }}>▲ {r.priority}</span>
                     )}
-                    <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)" }}>{r.name}</div>
+                    <div style={{ fontWeight: 500, fontSize: 15, color: "var(--ink-1)" }}>{r.name}</div>
                     {renderCategoryTag(r.category)}
                   </div>
                   <div style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
-                    <div style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-3)", letterSpacing: "0.06em" }}>{r.date}</div>
+                    <div style={{ ...s.dataNum, fontSize: 13, color: "var(--ink-3)" }}>{r.date}</div>
                     <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-                      style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+                      style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 18, alignItems: "baseline", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
                   {r.distance > 0 && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-1)", fontVariantNumeric: "tabular-nums" }}>
-                      {r.distance}<span style={{ color: "var(--ink-3)", marginLeft: 3, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>KM</span>
+                    <span style={{ fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
+                      {r.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 11 }}>km</span>
                     </span>
                   )}
                   {r.ascent && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--moss)", fontVariantNumeric: "tabular-nums" }}>
-                      ▲ +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 3, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>M</span>
+                    <span style={{ fontSize: 14, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
+                      +{r.ascent}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 11 }}>m</span>
                     </span>
                   )}
                   {timeStr && (
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 17, fontWeight: 500, color: "var(--ink-1)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>
+                    <span style={{ fontSize: 17, fontWeight: 500, color: "var(--ink-1)", letterSpacing: "-0.01em", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
                       {timeStr}
                     </span>
                   )}

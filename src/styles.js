@@ -25,62 +25,64 @@ export const s = {
   },
 
   // --- Tags ---
-  // Activity-type tag: solid block, uppercase, mono — like a stamp.
+  // Activity-type tag: solid block — stamp aesthetic. Uppercase is intentional
+  // here because the tag acts as a categorical marker, not running text.
   tag: (t) => ({
     fontFamily: "var(--font-mono)",
-    fontSize: 10,
+    fontSize: 11,
     background: TYPE_COLOR[t] || "var(--ink-2)",
     color: "var(--ink-inv)",
     borderRadius: 0,
-    padding: "3px 8px",
+    padding: "3px 9px",
     whiteSpace: "nowrap",
     fontWeight: 500,
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.05em",
   }),
-  // Secondary tag: outlined chip for sub-types.
+  // Secondary tag: outlined chip for sub-types. Also stays uppercase as a marker.
   subTag: {
     fontFamily: "var(--font-mono)",
-    fontSize: 10,
+    fontSize: 11,
     background: "transparent",
     color: "var(--ink-2)",
     border: "1px solid var(--rule)",
     borderRadius: 0,
-    padding: "2px 7px",
+    padding: "2px 8px",
     whiteSpace: "nowrap",
     textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.05em",
   },
 
   // --- Typography roles ---
-  // Field label: uppercase, mono, hint color — feels like a control panel.
+  // Field label — small caps marker for control panels and form inputs.
+  // Kept slightly uppercase but smaller letterspacing for legibility.
   label: {
     fontFamily: "var(--font-mono)",
-    fontSize: 10,
+    fontSize: 11,
     color: "var(--ink-3)",
-    marginBottom: 4,
+    marginBottom: 6,
     textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    letterSpacing: "0.06em",
   },
+  // Section header — sentence case, weight contrast. No longer uppercase.
   section: {
     fontFamily: "var(--font-sans)",
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: 600,
     color: "var(--ink-1)",
     marginBottom: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    letterSpacing: "-0.005em",
   },
   muted: {
     fontFamily: "var(--font-sans)",
-    fontSize: 12,
+    fontSize: 13,
     color: "var(--ink-3)",
   },
 
   // Hero metric value — used for big stat readouts.
   metricVal: {
     fontFamily: "var(--font-mono)",
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: 500,
     color: "var(--ink-1)",
     marginTop: 6,
@@ -102,8 +104,8 @@ export const s = {
     boxSizing: "border-box",
     border: "1px solid var(--rule)",
     borderRadius: 2,
-    padding: "9px 11px",
-    fontSize: 13,
+    padding: "10px 12px",
+    fontSize: 14,
     background: "var(--bg-elevated)",
     color: "var(--ink-1)",
     outline: "none",
@@ -111,49 +113,44 @@ export const s = {
     transition: "border-color 120ms",
   },
 
-  // Primary action — solid ink, hard edges, mono label.
+  // Primary action — solid ink, sharp edges, sentence case for readability.
   btn: {
     border: "1px solid var(--ink-1)",
     borderRadius: 2,
     padding: "9px 18px",
-    fontSize: 11,
+    fontSize: 13,
     background: "var(--ink-1)",
     color: "var(--ink-inv)",
     cursor: "pointer",
     fontWeight: 500,
-    fontFamily: "var(--font-mono)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    fontFamily: "var(--font-sans)",
     transition: "background-color 120ms, transform 80ms",
   },
   btnGhost: {
     border: "1px solid var(--rule)",
     borderRadius: 2,
     padding: "9px 16px",
-    fontSize: 11,
+    fontSize: 13,
     background: "transparent",
     color: "var(--ink-2)",
     cursor: "pointer",
-    fontFamily: "var(--font-mono)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    fontFamily: "var(--font-sans)",
+    fontWeight: 500,
     transition: "border-color 120ms, color 120ms",
   },
 
-  // Chip — used for filter pills, mode toggles, etc.
+  // Chip — filter pills / mode toggles. Sentence case + sans, easier to scan.
   chip: (active) => ({
     border: "1px solid " + (active ? "var(--ink-1)" : "var(--rule)"),
     background: active ? "var(--ink-1)" : "transparent",
     color: active ? "var(--ink-inv)" : "var(--ink-2)",
     borderRadius: 2,
-    padding: "5px 11px",
-    fontSize: 10,
+    padding: "6px 12px",
+    fontSize: 13,
     cursor: "pointer",
     whiteSpace: "nowrap",
     flexShrink: 0,
-    fontFamily: "var(--font-mono)",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
+    fontFamily: "var(--font-sans)",
     fontWeight: 500,
     transition: "background-color 120ms, border-color 120ms",
   }),

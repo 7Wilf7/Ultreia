@@ -86,20 +86,20 @@ export function TrainingTab({
             ].map((c, i) => (
               <div key={c.label} style={{
                 position: "relative",
-                padding: "18px 20px 22px",
+                padding: "20px 22px 24px",
                 borderRight: i < 3 ? "1px solid var(--rule)" : "none",
-                minHeight: 96,
+                minHeight: 110,
                 ...CONTOUR_BG,
               }}>
-                {/* corner position number — "01/04" style */}
-                <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--ink-3)", letterSpacing: "0.06em" }}>
+                {/* corner position number — keeps the instrument hint, stays tiny */}
+                <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
                   {String(i + 1).padStart(2, "0")} / 04
                 </div>
-                <div style={{ ...s.label, marginBottom: 8 }}>{c.label}</div>
-                <div style={{ ...s.metricVal, display: "flex", alignItems: "baseline", gap: 6 }}>
+                <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-2)", marginBottom: 10, fontWeight: 500 }}>{c.label}</div>
+                <div style={{ ...s.metricVal, fontSize: 32, display: "flex", alignItems: "baseline", gap: 6 }}>
                   <span>{c.val}</span>
                   {c.unit && (
-                    <span style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+                    <span style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>
                       {c.unit}
                     </span>
                   )}

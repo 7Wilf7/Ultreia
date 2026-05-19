@@ -51,8 +51,8 @@
   color: var(--ink-1);
   background: var(--bg);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.55;
   font-feature-settings: "ss01", "ss02", "cv11";  /* Geist stylistic alternates */
 
   -webkit-font-smoothing: antialiased;

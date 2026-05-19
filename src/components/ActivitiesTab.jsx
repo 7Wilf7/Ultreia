@@ -7,6 +7,7 @@ import {
   formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
 } from "../utils/format";
 import { ActivityForm } from "./ActivityForm";
+import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon } from "./Icons";
 
 // Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
 // Returns { type, unknown }. When unknown, type is a safe placeholder ("Running") so the row
@@ -513,7 +514,7 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                 <input type="checkbox" checked={isSelected} readOnly
                   style={{ width: 16, height: 16, pointerEvents: "none" }} />
               )}
-              <div style={{ minWidth: 50, fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", letterSpacing: "0.04em" }}>{formatDateShort(l.date)}</div>
+              <div style={{ minWidth: 54, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums" }}>{formatDateShort(l.date)}</div>
               <div style={s.tag(l.type)}>{t(`enum.activity.${l.type}`)}</div>
               {l.subTypes.map(st => {
                 const isFlag = RUN_FLAGS.includes(st);
@@ -525,20 +526,57 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                   </div>
                 );
               })}
-              <div style={{ flex: 1, minWidth: 120, display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 12, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)" }}>
-                  {l.distance > 0 ? <>{l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 3, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em" }}>KM</span></> : formatDuration(l.duration)}
-                </span>
+              <div style={{ flex: 1, minWidth: 140, display: "flex", alignItems: "center", flexWrap: "wrap", rowGap: 4, columnGap: 14, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                {/* Primary readout: distance (km) or, if no distance, the duration */}
+                {l.distance > 0 ? (
+                  <span style={{ fontWeight: 500, fontSize: 16, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--ink-3)" }}><RouteIcon size={14} /></span>
+                    {l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 11 }}>km</span>
+                  </span>
+                ) : (
+                  <span style={{ fontWeight: 500, fontSize: 15, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--ink-3)" }}><ClockIcon size={14} /></span>
+                    {formatDuration(l.duration)}
+                  </span>
+                )}
+                {/* When distance > 0, duration moves to secondary slot with the clock icon */}
                 {l.distance > 0 && (
-                  <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{formatDuration(l.duration)} {l.pace ? "· " + formatPaceFromSec(l.pace) + "/km" : ""}</span>
+                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
+                    {formatDuration(l.duration)}
+                    {l.pace ? <span style={{ color: "var(--ink-3)", marginLeft: 6 }}>· {formatPaceFromSec(l.pace)}<span style={{ fontSize: 10 }}>/km</span></span> : null}
+                  </span>
                 )}
                 {l.hr > 0 && (
-                  <span style={{ fontSize: 11, color: "var(--ink-2)" }}>♥ {l.hr}{l.maxHR > 0 ? `/${l.maxHR}` : ""}</span>
+                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
+                    {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
+                  </span>
                 )}
-                {l.ascent > 0 && <span style={{ fontSize: 11, color: "var(--moss)" }}>▲ +{l.ascent}m</span>}
-                {l.cadence > 0 && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{l.cadence} spm</span>}
-                {l.aerobicTE > 0 && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>TE {l.aerobicTE}</span>}
-                {l.gap > 0 && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>GAP {formatPaceFromSec(l.gap)}</span>}
+                {l.ascent > 0 && (
+                  <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
+                    +{l.ascent}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
+                  </span>
+                )}
+                {l.cadence > 0 && (
+                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--ink-3)" }}><FootIcon size={13} /></span>
+                    {l.cadence}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>
+                  </span>
+                )}
+                {l.aerobicTE > 0 && (
+                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--warn)" }}><BoltIcon size={12} /></span>
+                    {l.aerobicTE}
+                  </span>
+                )}
+                {l.gap > 0 && (
+                  <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
+                    {formatPaceFromSec(l.gap)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/km</span>
+                  </span>
+                )}
               </div>
               {!selectMode && (
                 <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}

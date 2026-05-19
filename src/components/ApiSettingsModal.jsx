@@ -13,14 +13,12 @@ export function ApiSettingsModal({
   apiKey, setApiKey,
   apiEndpoint, setApiEndpoint,
   apiModel, setApiModel,
-  bochaApiKey, setBochaApiKey,
   onClose,
 }) {
   const t = useT();
   const [keyDraft, setKeyDraft] = useState("");
   const [endpointDraft, setEndpointDraft] = useState(apiEndpoint);
   const [modelDraft, setModelDraft] = useState(apiModel);
-  const [bochaDraft, setBochaDraft] = useState("");
 
   const isCustomEndpoint = apiEndpoint && apiEndpoint !== DEFAULT_API_ENDPOINT;
 
@@ -60,18 +58,8 @@ export function ApiSettingsModal({
     return apiEndpoint === preset.endpoint && apiModel === preset.model;
   }
 
-  function saveBocha() {
-    if (!bochaDraft.trim()) return;
-    setBochaApiKey(bochaDraft.trim());
-    setBochaDraft("");
-  }
-  function clearBocha() {
-    setBochaApiKey("");
-  }
-
-  // Section heading reused twice
+  // Section heading style
   const sectionH = { fontSize: 16, fontWeight: 600, color: "#111", margin: "0 0 4px", letterSpacing: "0.01em" };
-  const divider = { height: 1, background: "#eee", margin: "26px 0 20px" };
 
   return (
     <div onClick={onClose}
@@ -185,34 +173,6 @@ export function ApiSettingsModal({
             </button>
           ))}
         </div>
-
-        <div style={divider} />
-
-        {/* ===== Race Search API (Bocha) ===== */}
-        <h3 style={sectionH}>{t("api.section_search")}</h3>
-        <p style={{ ...s.muted, marginBottom: 12, lineHeight: 1.5 }}>{t("api.section_search_desc")}</p>
-
-        <div style={{ ...s.label, marginBottom: 6 }}>{t("api.bocha_key_label")}</div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input
-            type="password"
-            placeholder={bochaApiKey ? t("api.key_placeholder_set") : t("api.bocha_key_placeholder")}
-            value={bochaDraft}
-            onChange={e => setBochaDraft(e.target.value)}
-            style={{ ...s.input, flex: 1, fontFamily: "var(--font-mono)", fontSize: 12 }}
-          />
-          <button onClick={saveBocha} disabled={!bochaDraft.trim()}
-            style={{ ...s.btn, opacity: bochaDraft.trim() ? 1 : 0.5 }}>{t("api.save_key")}</button>
-        </div>
-        {bochaApiKey && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-            <span style={{ ...s.muted, fontFamily: "var(--font-mono)" }}>{t("api.current", { key: maskedKey(bochaApiKey) })}</span>
-            <button onClick={clearBocha} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", color: "#c0392b", borderColor: "#e8a89f" }}>
-              {t("api.clear_key")}
-            </button>
-          </div>
-        )}
-        <div style={{ fontSize: 11, color: "#666", fontFamily: "var(--font-mono)" }}>{t("api.bocha_endpoint_static")}</div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
           <button onClick={onClose} style={s.btn}>{t("common.done")}</button>

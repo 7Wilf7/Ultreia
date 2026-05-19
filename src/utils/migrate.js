@@ -5,6 +5,11 @@ import { parseDistanceKm } from "./format";
 
 const RUN_PACE_SET = new Set(["Easy Run", "Aerobic Run", "Tempo Run", "Interval Run", "Recovery Run"]);
 
+// Pace sub-types belong only to Running. Any other top-level type that still
+// has these in subTypes is stale (left over from old data or a type-change in
+// the form). Listed here so we can scrub them in migration.
+const STALE_PACE_TYPES = new Set(["Easy Run", "Aerobic Run", "Tempo Run", "Interval Run", "Recovery Run"]);
+
 export function migrateLog(log) {
   let out = { ...log };
 
@@ -13,11 +18,23 @@ export function migrateLog(log) {
     out.type = "Strength";
   }
 
+  // Stair Climbing → Floor Climbing (renamed for clearer terminology)
+  if (out.type === "Stair Climbing") {
+    out.type = "Floor Climbing";
+  }
+
   // Recovery Run → Easy Run (sub-type collapsed)
   if (Array.isArray(out.subTypes) && out.subTypes.includes("Recovery Run")) {
     out.subTypes = out.subTypes.map(s => s === "Recovery Run" ? "Easy Run" : s);
     // dedupe in case both existed
     out.subTypes = [...new Set(out.subTypes)];
+  }
+
+  // Strip stale pace sub-types from non-Running activities. Earlier versions
+  // could leave "Easy Run" on a Strength/Trail/etc entry when the user changed
+  // the type without clearing sub-types.
+  if (out.type !== "Running" && Array.isArray(out.subTypes) && out.subTypes.length > 0) {
+    out.subTypes = out.subTypes.filter(st => !STALE_PACE_TYPES.has(st));
   }
 
   // Backfill Garmin metrics (added later) — keep 0 = "not recorded" for clean display

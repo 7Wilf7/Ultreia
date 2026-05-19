@@ -10,10 +10,8 @@ import { RouteIcon, PeakIcon, ClockIcon } from "./Icons";
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
   distance: "", category: "", ascent: "", resultH: "", resultM: "", resultS: "",
-  itraScore: "", isTrailDetected: null,
+  itraScore: "",
 });
-
-const BOCHA_ENDPOINT = "https://api.bochaai.com/v1/web-search";
 
 // Decompose a stored race into the editable form shape. Inverse of how `commitRace` builds the race object.
 // Distance is normalized to a plain number string so the input shows just digits,
@@ -32,26 +30,20 @@ function raceToForm(race) {
     resultM: race.resultM || "",
     resultS: race.resultS || "",
     itraScore: race.itraScore || "",
-    isTrailDetected: race.isTrailDetected ?? null,
   };
 }
 
-export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEndpoint, apiModel, bochaApiKey }) {
+export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
   const t = useT();
   const [showRaceAdd, setShowRaceAdd] = useState(false);
   const [editingRaceId, setEditingRaceId] = useState(null);
   const [raceMode, setRaceMode] = useState("target");
   const [newRace, setNewRace] = useState(EMPTY_RACE(true));
-  const [raceLookupMsg, setRaceLookupMsg] = useState("");
-  const [raceLookupLoading, setRaceLookupLoading] = useState(false);
-  const [raceCategoryModal, setRaceCategoryModal] = useState(null);
   const [pastRaceWarning, setPastRaceWarning] = useState(null);
 
   useEffect(() => {
     setShowRaceAdd(false);
     setEditingRaceId(null);
-    setRaceLookupMsg("");
-    setRaceCategoryModal(null);
     setPastRaceWarning(null);
     setNewRace(EMPTY_RACE(raceMode === "target"));
   }, [raceMode]);
@@ -60,14 +52,11 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
     setEditingRaceId(race.id);
     setShowRaceAdd(false);
     setNewRace(raceToForm(race));
-    setRaceLookupMsg("");
-    setRaceCategoryModal(null);
   }
 
   function cancelEdit() {
     setEditingRaceId(null);
     setNewRace(EMPTY_RACE(raceMode === "target"));
-    setRaceLookupMsg("");
     setPastRaceWarning(null);
   }
 
@@ -90,176 +79,6 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete, apiKey, apiEn
 
   function updateRaceCategory(id, category) {
     setRaces(races.map(r => r.id === id ? { ...r, category } : r));
-  }
-
-  async function lookupRace(input) {
-    // Two-step lookup: Bocha web search → AI Coach LLM parses results into structured categories.
-    // Both keys are required; warn early if either is missing.
-    if (!bochaApiKey) {
-      setRaceLookupMsg(t("races.lookup_no_bocha"));
-      setTimeout(() => setRaceLookupMsg(""), 6000);
-      return;
-    }
-    if (!apiKey) {
-      setRaceLookupMsg(t("races.lookup_no_coach"));
-      setTimeout(() => setRaceLookupMsg(""), 6000);
-      return;
-    }
-    setRaceLookupLoading(true);
-    setRaceLookupMsg(t("races.lookup_searching_web"));
-
-    const currentDate = now.toISOString().slice(0, 10);
-    const searchHint = newRace.isTarget
-      ? `The user is adding a FUTURE target race. Today is ${currentDate}. Prefer the NEXT upcoming edition if you know its date; otherwise omit the date and let the user fill it in.`
-      : `The user is adding a HISTORICAL race result. Today is ${currentDate}. The edition is in the past.`;
-
-    // --- Step 1: Bocha web search ---
-    let searchResults;
-    try {
-      const bochaResp = await fetch(BOCHA_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${bochaApiKey}`,
-        },
-        body: JSON.stringify({
-          query: input,
-          freshness: "noLimit",
-          summary: true,
-          count: 8,
-        }),
-      });
-      const bochaData = await bochaResp.json();
-      if (!bochaResp.ok || (bochaData.code && bochaData.code !== 200)) {
-        const msg = bochaData.msg || bochaData.message || `HTTP ${bochaResp.status}`;
-        setRaceLookupMsg(t("races.lookup_bocha_error", { msg }));
-        setTimeout(() => setRaceLookupMsg(""), 6000);
-        setRaceLookupLoading(false);
-        return;
-      }
-      searchResults = bochaData?.data?.webPages?.value || [];
-      if (searchResults.length === 0) {
-        setRaceLookupMsg(t("races.lookup_no_results"));
-        setTimeout(() => setRaceLookupMsg(""), 5000);
-        setRaceLookupLoading(false);
-        return;
-      }
-    } catch (err) {
-      console.error("[Race Lookup] Bocha error:", err);
-      setRaceLookupMsg(t("races.lookup_bocha_error", { msg: err.message }));
-      setTimeout(() => setRaceLookupMsg(""), 5000);
-      setRaceLookupLoading(false);
-      return;
-    }
-
-    // --- Step 2: hand snippets to AI Coach LLM for structured extraction ---
-    setRaceLookupMsg(t("races.lookup_parsing"));
-    const snippets = searchResults.slice(0, 8).map((r, i) =>
-      `[${i + 1}] ${r.name || ""}\nURL: ${r.url || ""}\n${r.summary || r.snippet || ""}`
-    ).join("\n\n");
-
-    // max_tokens 8000: reasoning models (deepseek-v4-pro) burn most tokens in `thinking` blocks
-    // before producing text output. 1000 was too low and stopped the model mid-think (max_tokens stop_reason).
-    const parseBody = {
-      model: apiModel,
-      max_tokens: 8000,
-      messages: [{
-        role: "user",
-        content: `Today's date is ${currentDate}. The user entered race name: "${input}".
-
-${searchHint}
-
-Below are web search results about this race. Extract structured info from them.
-
-WEB RESULTS:
-${snippets}
-
-Return one JSON object only (no prose, no markdown):
-{"baseName": "Official base name without year", "year": "YYYY", "date": "YYYY-MM-DD or empty (event-level date when no per-category dates)", "isTrail": true/false, "raceFamily": "<one of: Half Marathon | Marathon | 10K | Trail | Spartan | Hyrox | Other>", "categories": [{"name": "Category", "distance": "Distance with km/miles", "category": "<one of the raceFamily values>", "ascent": "Number only or empty", "date": "YYYY-MM-DD or empty"}]}
-
-- raceFamily = overall classification of the race event.
-- For each category, same raceFamily applies (e.g. UTMB has Trail family, CCC/OCC/UTMB-main are all Trail).
-- isTrail: true if it's off-road/mountain.
-- For trail races: list all distance categories with typical ascent (numbers only, e.g. "1200").
-- For road races: list distance options, ascent empty.
-- Only output dates you can verify from the search snippets above. If unsure, leave date empty.
-- Top-level "date" should be the main event date when there are no per-category dates, or empty if unknown.
-- If the snippets don't cover this race: {"baseName": "${input}", "year": "", "date": "", "isTrail": false, "raceFamily": "Other", "categories": []}
-JSON ONLY.`,
-      }],
-    };
-
-    try {
-      const resp = await fetch(apiEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify(parseBody),
-      });
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        const msg = data.error?.message || `HTTP ${resp.status}`;
-        setRaceLookupMsg(t("races.lookup_api_error", { msg }));
-        setTimeout(() => setRaceLookupMsg(""), 6000);
-        setRaceLookupLoading(false);
-        return;
-      }
-      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      const match = text.match(/\{[\s\S]*\}/);
-      if (match) {
-        const parsed = JSON.parse(match[0]);
-        const family = RACE_CATEGORIES.includes(parsed.raceFamily) ? parsed.raceFamily : "";
-        setNewRace(prev => ({ ...prev, isTrailDetected: parsed.isTrail, category: family || prev.category }));
-        if (parsed.categories && parsed.categories.length > 0) {
-          setRaceCategoryModal(parsed);
-          setRaceLookupMsg(t("races.lookup_categories_web", { n: parsed.categories.length }));
-        } else {
-          // No sub-categories — fall back to event-level fields. Top-level date helps for events
-          // without per-category breakdown (single-distance road races, future editions).
-          setNewRace(prev => ({
-            ...prev,
-            name: parsed.baseName ? `${parsed.year} ${parsed.baseName}`.trim() : input,
-            date: parsed.date || prev.date,
-            isTrailDetected: parsed.isTrail,
-            category: family || prev.category,
-          }));
-          setRaceLookupMsg(parsed.date ? t("races.lookup_name_date_web") : t("races.lookup_name_web"));
-          setTimeout(() => setRaceLookupMsg(""), 5000);
-        }
-      } else {
-        setRaceLookupMsg(t("races.lookup_parse_fail"));
-        setTimeout(() => setRaceLookupMsg(""), 4000);
-      }
-    } catch (err) {
-      console.error("[Race Lookup] LLM parse error:", err);
-      setRaceLookupMsg(t("races.lookup_search_fail", { msg: err.message }));
-      setTimeout(() => setRaceLookupMsg(""), 5000);
-    }
-    setRaceLookupLoading(false);
-  }
-
-  function selectRaceCategory(cat) {
-    const category = RACE_CATEGORIES.includes(cat.category)
-      ? cat.category
-      : (RACE_CATEGORIES.includes(raceCategoryModal.raceFamily) ? raceCategoryModal.raceFamily : "");
-    // LLM returns distance as a string like "42.195km"; normalize for the form input.
-    const distNum = parseDistanceKm(cat.distance);
-    setNewRace(prev => ({
-      ...prev,
-      name: `${raceCategoryModal.year} ${raceCategoryModal.baseName} - ${cat.name}`,
-      distance: distNum > 0 ? String(distNum) : "",
-      ascent: cat.ascent || "",
-      date: cat.date || prev.date,
-      category: category || prev.category,
-      isTrailDetected: raceCategoryModal.isTrail,
-    }));
-    setRaceCategoryModal(null);
-    setRaceLookupMsg(t("races.lookup_filled"));
-    setTimeout(() => setRaceLookupMsg(""), 4000);
   }
 
   function tryAddRace() {
@@ -292,7 +111,6 @@ JSON ONLY.`,
     setNewRace(EMPTY_RACE(raceMode === "target"));
     setShowRaceAdd(false);
     setEditingRaceId(null);
-    setRaceLookupMsg("");
     setPastRaceWarning(null);
   }
 
@@ -343,24 +161,6 @@ JSON ONLY.`,
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => { setRaceMode("history"); commitRace(false); }} style={s.btn}>{t("races.past_warn_move")}</button>
             <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
-          </div>
-        </div>
-      )}
-
-      {raceCategoryModal && (
-        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #888" }}>
-          <div style={s.section}>{t("races.cat_modal_title", { name: raceCategoryModal.baseName })}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {raceCategoryModal.categories.map((cat, i) => (
-              <button key={i} onClick={() => selectRaceCategory(cat)}
-                style={{ ...s.btnGhost, justifyContent: "flex-start", textAlign: "left", padding: "10px 14px" }}>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>{cat.name}</div>
-                <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
-                  {cat.distance}{cat.ascent ? ` · +${cat.ascent}m` : ""}{cat.date ? ` · ${cat.date}` : ""}
-                </div>
-              </button>
-            ))}
-            <button onClick={() => setRaceCategoryModal(null)} style={{ ...s.btnGhost, fontSize: 12, marginTop: 6 }}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
@@ -468,44 +268,55 @@ JSON ONLY.`,
           </div>
         )}
 
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input placeholder={t("races.name_placeholder")} value={newRace.name}
-              onChange={e => setNewRace({ ...newRace, name: e.target.value })}
-              style={{ ...s.input, flex: 1 }} />
-            <button onClick={() => lookupRace(newRace.name)}
-              disabled={raceLookupLoading || !newRace.name.trim()}
-              title={t("races.lookup_web")}
-              style={{ ...s.btnGhost, padding: "9px 14px", opacity: raceLookupLoading ? 0.5 : 1 }}>
-              {raceLookupLoading ? "..." : "🔍"}
-            </button>
-          </div>
-          <div style={{ fontSize: 11, color: "#888", marginTop: 6, lineHeight: 1.5 }}>
-            {t("races.lookup_web_hint")}
-          </div>
-          {raceLookupMsg && <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>{raceLookupMsg}</div>}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>
+          <input placeholder={t("races.name_placeholder")} value={newRace.name}
+            onChange={e => setNewRace({ ...newRace, name: e.target.value })}
+            style={s.input} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-          <input type="date" value={newRace.date}
-            onChange={e => setNewRace({ ...newRace, date: e.target.value })}
-            onClick={e => e.currentTarget.showPicker?.()}
-            style={{ ...s.input, cursor: "pointer" }} />
-          <input type="number" step="0.001" placeholder={t("races.distance_placeholder")} value={newRace.distance} onChange={e => setNewRace({ ...newRace, distance: e.target.value })} style={s.input} />
-          <select value={newRace.category}
-            onChange={e => setNewRace({ ...newRace, category: e.target.value })}
-            style={s.input}>
-            <option value="">{t("races.category_placeholder")}</option>
-            {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-          </select>
+          <div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.date_label")}</div>
+            <input type="date" value={newRace.date}
+              onChange={e => setNewRace({ ...newRace, date: e.target.value })}
+              onClick={e => e.currentTarget.showPicker?.()}
+              style={{ ...s.input, cursor: "pointer" }} />
+          </div>
+          <div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.distance_label")}</div>
+            <input type="number" step="0.001" placeholder="0" value={newRace.distance}
+              onChange={e => setNewRace({ ...newRace, distance: e.target.value })}
+              style={s.input} />
+          </div>
+          <div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
+            <select value={newRace.category}
+              onChange={e => setNewRace({ ...newRace, category: e.target.value })}
+              style={s.input}>
+              <option value="">{t("races.category_placeholder")}</option>
+              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
+            </select>
+          </div>
         </div>
 
-        {newRace.isTrailDetected !== false && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <input placeholder={t("races.ascent_placeholder")} value={newRace.ascent} onChange={e => setNewRace({ ...newRace, ascent: e.target.value })} style={s.input} />
-            <input placeholder={t("races.itra_placeholder")} value={newRace.itraScore} onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })} style={s.input} />
+        {/* Ascent + ITRA — ITRA only shown for HISTORY races (target races have no result yet). */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+          <div>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.ascent_label")}</div>
+            <input type="number" placeholder="0" value={newRace.ascent}
+              onChange={e => setNewRace({ ...newRace, ascent: e.target.value })}
+              style={s.input} />
           </div>
-        )}
+          {!newRace.isTarget && (
+            <div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{t("races.itra_label")}</div>
+              <input type="number" placeholder="0" value={newRace.itraScore}
+                onChange={e => setNewRace({ ...newRace, itraScore: e.target.value })}
+                style={s.input} />
+            </div>
+          )}
+        </div>
 
         {/* Time fields only for history races — target races don't have a finish time yet */}
         {!newRace.isTarget && (
@@ -523,7 +334,7 @@ JSON ONLY.`,
           <button onClick={tryAddRace} style={s.btn}>{isEdit ? t("common.save_changes") : t("common.save")}</button>
           <button onClick={() => {
             if (isEdit) cancelEdit();
-            else { setShowRaceAdd(false); setRaceLookupMsg(""); }
+            else { setShowRaceAdd(false); }
           }} style={s.btnGhost}>{t("common.cancel")}</button>
         </div>
       </div>

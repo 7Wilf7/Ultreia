@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_FLAGS, SORT_OPTIONS, ACTIVITY_TYPES } from "../constants";
+import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import {
   autoClassifyRun, parseTimeToSeconds,
@@ -516,7 +516,13 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
               )}
               <div style={{ minWidth: 54, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums" }}>{formatDateShort(l.date)}</div>
               <div style={s.tag(l.type)}>{t(`enum.activity.${l.type}`)}</div>
-              {l.subTypes.map(st => {
+              {/* Pace sub-types only render for road Running. Flags (Race) render
+                  for any Run-group activity. Other types: nothing. */}
+              {l.subTypes.filter(st => {
+                if (RUN_FLAGS.includes(st)) return true;          // flag — keep for runs (filtered below by tag color)
+                if (RUN_PACE_TYPES.includes(st)) return l.type === "Running"; // pace — Running only
+                return l.type === "Strength";                     // strength body-parts only on Strength
+              }).map(st => {
                 const isFlag = RUN_FLAGS.includes(st);
                 return (
                   <div key={st} style={isFlag
@@ -559,7 +565,9 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
                     +{l.ascent}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
                   </span>
                 )}
-                {l.cadence > 0 && (
+                {/* Cadence is only meaningful for road Running — trail/hiking
+                    pace is terrain-driven and spm doesn't carry useful signal. */}
+                {l.cadence > 0 && l.type === "Running" && (
                   <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                     <span style={{ color: "var(--ink-3)" }}><FootIcon size={13} /></span>
                     {l.cadence}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>

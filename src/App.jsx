@@ -13,6 +13,7 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
+import { LoginScreen } from "./components/Auth/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
 
 function loadFromStorage(key, fallback) {
@@ -26,7 +27,32 @@ function loadFromStorage(key, fallback) {
   return fallback;
 }
 
+function LoadingScreen() {
+  return (
+    <div style={{
+      position: "fixed", inset: 0,
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      gap: 10, background: "var(--bg)",
+    }}>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--moss)", fontWeight: 600 }}>
+        ▲ Training Studio
+      </div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        Loading…
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  const { user, loading, signIn, signOut } = useAuth();
+
+  if (loading) return <LoadingScreen />;
+  if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} />;
+  return <AuthedApp user={user} signOut={signOut} />;
+}
+
+function AuthedApp({ user, signOut }) {
   const [logs, setLogs] = useState(() => migrateLogs(loadFromStorage("logs", sampleLogs)));
   const [races, setRaces] = useState(() => migrateRaces(loadFromStorage("races", sampleRaces)));
   const [chatMessages, setChatMessages] = useState(() => loadFromStorage("chatMessages", []));
@@ -50,6 +76,7 @@ export default function App() {
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppShell
+        user={user} signOut={signOut}
         logs={logs} setLogs={setLogs}
         races={races} setRaces={setRaces}
         chatMessages={chatMessages} setChatMessages={setChatMessages}
@@ -66,6 +93,7 @@ export default function App() {
 }
 
 function AppShell({
+  user, signOut,
   logs, setLogs, races, setRaces, chatMessages, setChatMessages,
   apiKey, setApiKey, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
@@ -82,7 +110,6 @@ function AppShell({
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
-  const { user, loading: authLoading, signIn, signOut } = useAuth();
 
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
@@ -190,7 +217,7 @@ function AppShell({
               style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, width: 38, fontSize: 15, color: "var(--ink-2)", borderRadius: 0 }}>
               ⚙
             </button>
-            <UserBadge user={user} loading={authLoading} signIn={signIn} signOut={signOut} />
+            <UserBadge user={user} signOut={signOut} />
           </div>
         </div>
       </div>

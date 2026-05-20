@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { LoginScreen } from "./LoginScreen";
 
 const cellBase = {
   border: "1px solid var(--rule)",
@@ -18,8 +17,7 @@ function emailPrefix(email) {
   return i > 0 ? email.slice(0, i) : email;
 }
 
-export function UserBadge({ user, loading, signIn, signOut }) {
-  const [showLogin, setShowLogin] = useState(false);
+export function UserBadge({ user, signOut }) {
   const [signingOut, setSigningOut] = useState(false);
 
   async function handleSignOut() {
@@ -33,35 +31,6 @@ export function UserBadge({ user, loading, signIn, signOut }) {
     } finally {
       setSigningOut(false);
     }
-  }
-
-  if (loading) {
-    return (
-      <button disabled
-        style={{ ...cellBase, color: "var(--ink-3)", cursor: "default", fontFamily: "var(--font-mono)", fontSize: 11 }}>
-        …
-      </button>
-    );
-  }
-
-  if (!user) {
-    return (
-      <>
-        <button
-          onClick={() => setShowLogin(true)}
-          title="Sign in to sync across devices"
-          style={cellBase}
-        >
-          Sign in
-        </button>
-        {showLogin && (
-          <LoginScreen
-            onClose={() => setShowLogin(false)}
-            signIn={signIn}
-          />
-        )}
-      </>
-    );
   }
 
   const prefix = emailPrefix(user.email);

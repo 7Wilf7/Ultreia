@@ -12,6 +12,8 @@ import { PersonalRecordsTab } from "./components/PersonalRecordsTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
+import { UserBadge } from "./components/Auth/UserBadge";
+import { useAuth } from "./hooks/useAuth";
 
 function loadFromStorage(key, fallback) {
   try {
@@ -80,6 +82,7 @@ function AppShell({
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const { user, loading: authLoading, signIn, signOut } = useAuth();
 
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
@@ -184,9 +187,10 @@ function AppShell({
               {t("header.api")}{!apiKey && " ⚠"}
             </button>
             <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
-              style={{ border: "1px solid var(--rule)", background: "var(--bg-elevated)", height: 32, width: 38, fontSize: 15, color: "var(--ink-2)", borderRadius: 0 }}>
+              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, width: 38, fontSize: 15, color: "var(--ink-2)", borderRadius: 0 }}>
               ⚙
             </button>
+            <UserBadge user={user} loading={authLoading} signIn={signIn} signOut={signOut} />
           </div>
         </div>
       </div>

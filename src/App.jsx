@@ -15,6 +15,7 @@ import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
+import * as db from "./lib/db";
 
 function loadFromStorage(key, fallback) {
   try {
@@ -53,25 +54,110 @@ export default function App() {
 }
 
 function AuthedApp({ user, signOut }) {
+  // ── localStorage-backed (not yet migrated — see 3.3c/d) ─────────────────
   const [logs, setLogs] = useState(() => migrateLogs(loadFromStorage("logs", sampleLogs)));
   const [races, setRaces] = useState(() => migrateRaces(loadFromStorage("races", sampleRaces)));
   const [chatMessages, setChatMessages] = useState(() => loadFromStorage("chatMessages", []));
-  const [apiKey, setApiKey] = useState(() => loadFromStorage("apiKey", ""));
-  const [apiModel, setApiModel] = useState(() => loadFromStorage("apiModel", DEFAULT_MODEL));
-  const [itraPI, setItraPI] = useState(() => loadFromStorage("itraPI", ""));
-  const [profile, setProfile] = useState(() => ({ ...DEFAULT_PROFILE, ...migrateProfile(loadFromStorage("profile", {})) }));
-  const [coachConfig, setCoachConfig] = useState(() => ({ ...DEFAULT_COACH_CONFIG, ...migrateCoachConfig(loadFromStorage("coachConfig", {})) }));
-  // Long-term coach memory — plain text the user or the model can update over time.
-  const [coachMemory, setCoachMemory] = useState(() => loadFromStorage("coachMemory", ""));
-  const [lang, setLang] = useState(() => loadFromStorage("lang", DEFAULT_LANG));
 
+  // ── Supabase-backed (loaded async on mount) ─────────────────────────────
+  const [profile, setProfileState] = useState(null);
+  const [itraPI, setItraPIState] = useState("");
+  const [apiKey, setApiKeyState] = useState("");
+  const [apiModel, setApiModelState] = useState(DEFAULT_MODEL);
+  const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
+  const [coachMemory, setCoachMemoryState] = useState("");
+  const [lang, setLangState] = useState(DEFAULT_LANG);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  // Fetch profile + user_settings once the auth'd user is known.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [profileData, settingsData] = await Promise.all([
+          db.profiles.getMyProfile(),
+          db.userSettings.getMySettings(),
+        ]);
+        if (cancelled) return;
+
+        // Profile — null means no row yet (handle_new_user trigger should
+        // prevent this, but defend against it). DEFAULT_PROFILE keeps shape
+        // consistent so AppShell can read profile.displayName safely; the
+        // setup wizard still fires because isProfileComplete() checks values.
+        const mergedProfile = { ...DEFAULT_PROFILE, ...migrateProfile(profileData || {}) };
+        setProfileState(mergedProfile);
+        setItraPIState(mergedProfile.itraPI ?? "");
+
+        // Settings — same defensive merge.
+        if (settingsData) {
+          setApiKeyState(settingsData.apiKey ?? "");
+          setApiModelState(settingsData.apiModel || DEFAULT_MODEL);
+          setCoachConfigState({
+            ...DEFAULT_COACH_CONFIG,
+            ...migrateCoachConfig(settingsData.coachConfig || {}),
+          });
+          setCoachMemoryState(settingsData.coachMemory ?? "");
+          setLangState(settingsData.lang || DEFAULT_LANG);
+        }
+      } catch (err) {
+        console.error("Failed to load user data:", err);
+        if (!cancelled) {
+          window.alert("Failed to load your data, please refresh.");
+        }
+      } finally {
+        if (!cancelled) setDataLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user.id]);
+
+  // localStorage still persists the not-yet-migrated fields. The 7 Supabase
+  // fields are intentionally dropped from this blob.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        logs, races, chatMessages, apiKey, apiModel, itraPI, profile, coachConfig, coachMemory, lang,
+        logs, races, chatMessages,
       }));
     } catch {}
-  }, [logs, races, chatMessages, apiKey, apiModel, itraPI, profile, coachConfig, coachMemory, lang]);
+  }, [logs, races, chatMessages]);
+
+  // ── Setter wrappers: optimistic local update + remote write ─────────────
+  async function updateProfile(patch) {
+    setProfileState(prev => ({ ...DEFAULT_PROFILE, ...(prev || {}), ...patch }));
+    if ("itraPI" in patch) setItraPIState(patch.itraPI ?? "");
+    try {
+      await db.profiles.updateMyProfile(patch);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      window.alert("Failed to save profile: " + err.message);
+    }
+  }
+
+  async function updateSettings(patch) {
+    if ("apiKey" in patch) setApiKeyState(patch.apiKey);
+    if ("apiModel" in patch) setApiModelState(patch.apiModel);
+    if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
+    if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
+    if ("lang" in patch) setLangState(patch.lang);
+    try {
+      await db.userSettings.updateMySettings(patch);
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+      window.alert("Failed to save settings: " + err.message);
+    }
+  }
+
+  // Shims to preserve existing child-component prop shapes (setProfile,
+  // setItraPI, setApiKey, ...) so nothing downstream has to change.
+  const setProfile = (next) => updateProfile(next);
+  const setItraPI = (v) => updateProfile({ itraPI: v });
+  const setApiKey = (v) => updateSettings({ apiKey: v });
+  const setApiModel = (v) => updateSettings({ apiModel: v });
+  const setCoachConfig = (v) => updateSettings({ coachConfig: v });
+  const setCoachMemory = (v) => updateSettings({ coachMemory: v });
+  const setLang = (v) => updateSettings({ lang: v });
+
+  if (dataLoading) return <LoadingScreen />;
 
   return (
     <LanguageProvider lang={lang} setLang={setLang}>

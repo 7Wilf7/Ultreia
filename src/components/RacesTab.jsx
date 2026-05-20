@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
-import { inferRaceCategory } from "../utils/migrate";
-import { parseDistanceKm } from "../utils/format";
+import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
 import { PeakIcon, ClockIcon } from "./Icons";
 

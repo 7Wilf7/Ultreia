@@ -57,17 +57,14 @@ fails for any other reason. The caller is responsible for catching and
 deciding how to surface the failure to the user (toast, inline message,
 silent retry, etc.). Don't swallow errors inside the DAL.
 
-## Stages
+## Status
 
-1. **Scaffold** — every function exists with the right signature but throws
-   `'… not implemented yet'`. Files carry an `eslint-disable no-unused-vars`
-   header that should be removed once the real implementation lands.
-2. **Implementation** — fill in real Supabase queries, table by table.
-3. **Migration** — switch call sites from `localStorage` to these functions.
-4. **Cleanup** — remove `src/utils/migrate.js` and other legacy
-   `localStorage`-only code paths.
-
-## Implementation status
+**Migration complete (3.4).** All 6 user-level data domains (profile,
+user_settings, workouts, races, coach_messages, plus the `itra_pi` field
+co-located on `profiles`) live on Supabase. `localStorage` is no longer used
+by any business code; the legacy `wilf_training_studio_v1` blob is removed
+one-time on first login post-migration. `src/utils/migrate.js` has been
+deleted.
 
 | Module | Status | Notes |
 |--------|--------|-------|

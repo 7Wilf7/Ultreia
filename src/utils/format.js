@@ -57,6 +57,20 @@ export function parseDistanceKm(input) {
   return isFinite(n) ? n : 0;
 }
 
+// Heuristic: infer a race category from its name + distance string. Used by
+// RacesTab when the user doesn't pick a category manually. Not a data
+// migration — this is live business logic.
+export function inferRaceCategory(race) {
+  const text = `${race.name || ""} ${race.distance || ""}`.toLowerCase();
+  if (/hyrox/.test(text)) return "Hyrox";
+  if (/spartan|spartrace|spartanraz/.test(text)) return "Spartan";
+  if (/(^|\W)(half\s*marathon|半马|半程马拉松|21\.1|21\.0975|13\.1\s*mi)/.test(text)) return "Half Marathon";
+  if (/(^|\W)(marathon|全马|马拉松|42\.195|42km|26\.2\s*mi)/.test(text)) return "Marathon";
+  if (/(trail|越野|skyrun|sky\s*race|utm|ultra)/.test(text)) return "Trail";
+  if (/(^|\W)(10\s*k|10km|10\.0\s*km)/.test(text)) return "10K";
+  return "";
+}
+
 export function isDuplicate(a, b) {
   if (a.date !== b.date) return false;
   if (a.type !== b.type) return false;

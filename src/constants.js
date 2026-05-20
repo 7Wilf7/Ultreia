@@ -1,5 +1,3 @@
-export const STORAGE_KEY = "wilf_training_studio_v1";
-
 // DeepSeek's Anthropic-compatible endpoint — fixed (no longer user-configurable).
 // We standardized on DeepSeek for cost/access; the URL stays hidden from the UI.
 export const DEFAULT_API_ENDPOINT = "https://api.deepseek.com/anthropic/v1/messages";

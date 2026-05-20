@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
-import { STORAGE_KEY, TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG } from "./constants";
+import { TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG } from "./constants";
 import { isProfileComplete } from "./utils/profile";
-import { migrateProfile, migrateCoachConfig } from "./utils/migrate";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
@@ -15,18 +14,6 @@ import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { useAuth } from "./hooks/useAuth";
 import * as db from "./lib/db";
-
-// eslint-disable-next-line no-unused-vars -- retained until 3.4 cleanup
-function loadFromStorage(key, fallback) {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed[key] !== undefined) return parsed[key];
-    }
-  } catch { /* corrupt blob — fall through to fallback */ }
-  return fallback;
-}
 
 function LoadingScreen() {
   return (
@@ -87,7 +74,7 @@ function AuthedApp({ user, signOut }) {
         // prevent this, but defend against it). DEFAULT_PROFILE keeps shape
         // consistent so AppShell can read profile.displayName safely; the
         // setup wizard still fires because isProfileComplete() checks values.
-        const mergedProfile = { ...DEFAULT_PROFILE, ...migrateProfile(profileData || {}) };
+        const mergedProfile = { ...DEFAULT_PROFILE, ...(profileData || {}) };
         setProfileState(mergedProfile);
         setItraPIState(mergedProfile.itraPI ?? "");
 
@@ -97,7 +84,7 @@ function AuthedApp({ user, signOut }) {
           setApiModelState(settingsData.apiModel || DEFAULT_MODEL);
           setCoachConfigState({
             ...DEFAULT_COACH_CONFIG,
-            ...migrateCoachConfig(settingsData.coachConfig || {}),
+            ...(settingsData.coachConfig || {}),
           });
           setCoachMemoryState(settingsData.coachMemory ?? "");
           setLangState(settingsData.lang || DEFAULT_LANG);
@@ -123,6 +110,21 @@ function AuthedApp({ user, signOut }) {
     })();
     return () => { cancelled = true; };
   }, [user.id]);
+
+  // One-time cleanup: remove the legacy localStorage blob now that every
+  // domain (profile / user_settings / workouts / races / chatMessages) lives
+  // on Supabase. After the first run on each device this becomes a no-op.
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      if (localStorage.getItem("wilf_training_studio_v1")) {
+        localStorage.removeItem("wilf_training_studio_v1");
+        console.info("[migration] removed legacy localStorage key");
+      }
+    } catch {
+      // localStorage may be unavailable (private mode, quotas, etc.) — fine to skip.
+    }
+  }, [user?.id]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────
   async function updateProfile(patch) {

@@ -24,7 +24,7 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
-export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete }) {
   const t = useT();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
@@ -83,14 +83,22 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
     setSelectedIds(new Set());
   }
 
-  function handleAddSubmit(logData) {
-    setLogs([{ id: Date.now(), ...logData }, ...logs]);
-    setShowAdd(false);
+  async function handleAddSubmit(logData) {
+    try {
+      await addLog(logData);
+      setShowAdd(false);
+    } catch {
+      // alert already shown by the wrapper; keep the form open so the user can retry
+    }
   }
 
-  function handleEditSubmit(id, logData) {
-    setLogs(logs.map(l => l.id === id ? { ...l, ...logData } : l));
-    setEditingId(null);
+  async function handleEditSubmit(id, logData) {
+    try {
+      await updateLog(id, logData);
+      setEditingId(null);
+    } catch {
+      // keep the edit form open on failure
+    }
   }
 
   function handleFileSelect(e) {
@@ -212,9 +220,10 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
         if (dup) {
           setDuplicateWarning({ existing: dup, incoming: [newRow], source: "fit" });
         } else {
-          setLogs([newRow, ...logs]);
-          setUploadMsg(t("activities.import_one", { dist: distance, dur: formatDuration(duration), hr: hr || "—" }));
-          setTimeout(() => setUploadMsg(""), 5000);
+          addLog(newRow, { source: "fit_file" }).then(() => {
+            setUploadMsg(t("activities.import_one", { dist: distance, dur: formatDuration(duration), hr: hr || "—" }));
+            setTimeout(() => setUploadMsg(""), 5000);
+          }).catch(() => {});
         }
       });
     } catch (err) {
@@ -324,9 +333,16 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
     setUnknownTypeRows(unknownTypeRows.map(r => r.id === id ? { ...r, type: newType, _unknown: false } : r));
   }
 
-  function confirmDuplicates(skipDups) {
+  async function confirmDuplicates(skipDups) {
     if (duplicateWarning.source === "fit") {
-      if (!skipDups) setLogs([...duplicateWarning.incoming, ...logs]);
+      if (!skipDups) {
+        try {
+          await bulkAddLogs(duplicateWarning.incoming, { source: "fit_file" });
+        } catch {
+          setDuplicateWarning(null);
+          return;
+        }
+      }
       setUploadMsg(skipDups ? t("activities.skipped_one") : t("activities.added_one"));
       setDuplicateWarning(null);
       setTimeout(() => setUploadMsg(""), 4000);
@@ -339,12 +355,25 @@ export function ActivitiesTab({ logs, setLogs, periodLogs, setConfirmDelete }) {
     }
   }
 
-  function importParsed() {
-    const toAdd = parsedRows.filter(r => r._selected).map(r => { const { _selected, ...rest } = r; return rest; });
-    setLogs([...toAdd, ...logs]);
-    setParsedRows(null);
-    setUploadMsg(t("activities.import_done", { n: toAdd.length }));
-    setTimeout(() => setUploadMsg(""), 4000);
+  async function importParsed() {
+    // Strip every staging-only key (anything prefixed with `_`) plus the
+    // client-side numeric id — Supabase generates a uuid for each new row.
+    const toAdd = parsedRows.filter(r => r._selected).map(r => {
+      const out = {};
+      for (const k of Object.keys(r)) {
+        if (k === "id" || k.startsWith("_")) continue;
+        out[k] = r[k];
+      }
+      return out;
+    });
+    try {
+      await bulkAddLogs(toAdd);
+      setParsedRows(null);
+      setUploadMsg(t("activities.import_done", { n: toAdd.length }));
+      setTimeout(() => setUploadMsg(""), 4000);
+    } catch {
+      // alert shown by wrapper; leave the review panel open so user can retry / cancel
+    }
   }
 
   return (

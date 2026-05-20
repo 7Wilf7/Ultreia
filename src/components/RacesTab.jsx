@@ -33,7 +33,7 @@ function raceToForm(race) {
   };
 }
 
-export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
+export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete }) {
   const t = useT();
   // addingMode: null = no add form; "target" or "history" = the new race kind being added.
   // No more target/history TAB switching — both lists render on the same page.
@@ -90,7 +90,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
   }
 
   function updateRaceCategory(id, category) {
-    setRaces(races.map(r => r.id === id ? { ...r, category } : r));
+    updateRace(id, { category }).catch(() => {});
   }
 
   function tryAddRace() {
@@ -104,7 +104,7 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
     commitRace(newRace.isTarget);
   }
 
-  function commitRace(asTarget) {
+  async function commitRace(asTarget) {
     const finalCategory = newRace.category || inferRaceCategory(newRace) || "";
     // Distance normalized to a plain number (km). UI always re-appends "km" on display.
     const distanceNum = parseDistanceKm(newRace.distance);
@@ -115,15 +115,19 @@ export function RacesTab({ races, setRaces, now, setConfirmDelete }) {
       isTarget: asTarget,
       priority: asTarget ? newRace.priority : null,
     };
-    if (editingRaceId) {
-      setRaces(races.map(r => r.id === editingRaceId ? { ...r, ...built } : r));
-    } else {
-      setRaces([{ id: Date.now(), ...built }, ...races]);
+    try {
+      if (editingRaceId) {
+        await updateRace(editingRaceId, built);
+      } else {
+        await addRace(built);
+      }
+      setNewRace(EMPTY_RACE(true));
+      setAddingMode(null);
+      setEditingRaceId(null);
+      setPastRaceWarning(null);
+    } catch {
+      // alert already shown by the wrapper; keep the form open so the user can retry
     }
-    setNewRace(EMPTY_RACE(true));
-    setAddingMode(null);
-    setEditingRaceId(null);
-    setPastRaceWarning(null);
   }
 
   // Sort: target races by date ASC (next race coming up first); history by date DESC (most recent first).

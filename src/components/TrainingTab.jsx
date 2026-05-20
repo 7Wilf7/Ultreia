@@ -9,7 +9,7 @@ import { ActivitiesTab } from "./ActivitiesTab";
 import { ChartsTab } from "./ChartsTab";
 
 export function TrainingTab({
-  logs, setLogs,
+  logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
   period, setPeriod, periodDropdown, setPeriodDropdown,
   setConfirmDelete, profile,
@@ -110,7 +110,9 @@ export function TrainingTab({
 
           <ActivitiesTab
             logs={logs}
-            setLogs={setLogs}
+            addLog={addLog}
+            updateLog={updateLog}
+            bulkAddLogs={bulkAddLogs}
             periodLogs={periodLogs}
             setConfirmDelete={setConfirmDelete}
           />

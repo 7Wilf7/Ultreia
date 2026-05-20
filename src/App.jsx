@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { STORAGE_KEY, TABS, DEFAULT_MODEL, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG } from "./constants";
 import { isProfileComplete } from "./utils/profile";
-import { sampleLogs, sampleRaces } from "./data/samples";
-import { migrateLogs, migrateRaces, migrateProfile, migrateCoachConfig } from "./utils/migrate";
+import { migrateProfile, migrateCoachConfig } from "./utils/migrate";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
@@ -54,10 +53,12 @@ export default function App() {
 }
 
 function AuthedApp({ user, signOut }) {
-  // ── localStorage-backed (not yet migrated — see 3.3c/d) ─────────────────
-  const [logs, setLogs] = useState(() => migrateLogs(loadFromStorage("logs", sampleLogs)));
-  const [races, setRaces] = useState(() => migrateRaces(loadFromStorage("races", sampleRaces)));
+  // ── localStorage-backed (not yet migrated — 3.3e for chatMessages) ──────
   const [chatMessages, setChatMessages] = useState(() => loadFromStorage("chatMessages", []));
+
+  // ── Supabase-backed: workouts (3.3c) + races (3.3d) ─────────────────────
+  const [logs, setLogs] = useState([]);
+  const [races, setRaces] = useState([]);
 
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
@@ -69,14 +70,16 @@ function AuthedApp({ user, signOut }) {
   const [lang, setLangState] = useState(DEFAULT_LANG);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Fetch profile + user_settings once the auth'd user is known.
+  // Fetch profile + user_settings + workouts once the auth'd user is known.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [profileData, settingsData] = await Promise.all([
+        const [profileData, settingsData, workoutsData, racesData] = await Promise.all([
           db.profiles.getMyProfile(),
           db.userSettings.getMySettings(),
+          db.workouts.listMyWorkouts(),
+          db.races.listMyRaces(),
         ]);
         if (cancelled) return;
 
@@ -99,6 +102,13 @@ function AuthedApp({ user, signOut }) {
           setCoachMemoryState(settingsData.coachMemory ?? "");
           setLangState(settingsData.lang || DEFAULT_LANG);
         }
+
+        // Workouts — list already sorted date desc, created_at desc by the DAL.
+        setLogs(workoutsData);
+
+        // Races — DAL returns created_at desc; RacesTab re-sorts internally
+        // (target by date asc, history by date desc).
+        setRaces(racesData);
       } catch (err) {
         console.error("Failed to load user data:", err);
         if (!cancelled) {
@@ -111,15 +121,16 @@ function AuthedApp({ user, signOut }) {
     return () => { cancelled = true; };
   }, [user.id]);
 
-  // localStorage still persists the not-yet-migrated fields. The 7 Supabase
-  // fields are intentionally dropped from this blob.
+  // localStorage still persists the not-yet-migrated fields. profile/user_settings
+  // (3.3b), workouts (3.3c) and races (3.3d) all live in Supabase now —
+  // chatMessages is the only blob field left until 3.3e lands.
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        logs, races, chatMessages,
+        chatMessages,
       }));
     } catch {}
-  }, [logs, races, chatMessages]);
+  }, [chatMessages]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────
   async function updateProfile(patch) {
@@ -157,14 +168,96 @@ function AuthedApp({ user, signOut }) {
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
   const setLang = (v) => updateSettings({ lang: v });
 
+  // ── Workout mutations (3.3c). Server-side write completes before local
+  // state updates so we pick up the server-generated id / created_at. ──────
+  async function addLog(workoutData, { source = "manual" } = {}) {
+    try {
+      const created = await db.workouts.createWorkout(workoutData, { source });
+      setLogs(prev => [created, ...prev]);
+      return created;
+    } catch (err) {
+      window.alert("Failed to add workout: " + err.message);
+      throw err;
+    }
+  }
+
+  async function updateLog(id, patch) {
+    try {
+      const updated = await db.workouts.updateWorkout(id, patch);
+      setLogs(prev => prev.map(l => l.id === id ? updated : l));
+      return updated;
+    } catch (err) {
+      window.alert("Failed to update workout: " + err.message);
+      throw err;
+    }
+  }
+
+  async function bulkAddLogs(workouts, { source = "garmin_csv" } = {}) {
+    try {
+      const created = await db.workouts.bulkInsertWorkouts(workouts, { source });
+      setLogs(prev => [...created, ...prev]);
+      return created;
+    } catch (err) {
+      window.alert(err.message);
+      throw err;
+    }
+  }
+
+  async function deleteLogs(ids) {
+    const idArr = Array.isArray(ids) ? ids : [ids];
+    try {
+      await db.workouts.deleteWorkouts(idArr);
+      setLogs(prev => prev.filter(l => !idArr.includes(l.id)));
+    } catch (err) {
+      window.alert("Failed to delete workout: " + err.message);
+      throw err;
+    }
+  }
+
+  // ── Race mutations (3.3d). Same shape as workouts: await server, then
+  // patch local state with the canonical row. ─────────────────────────────
+  async function addRace(raceData) {
+    try {
+      const created = await db.races.createRace(raceData);
+      setRaces(prev => [created, ...prev]);
+      return created;
+    } catch (err) {
+      window.alert("Failed to add race: " + err.message);
+      throw err;
+    }
+  }
+
+  async function updateRace(id, patch) {
+    try {
+      const updated = await db.races.updateRace(id, patch);
+      setRaces(prev => prev.map(r => r.id === id ? updated : r));
+      return updated;
+    } catch (err) {
+      window.alert("Failed to update race: " + err.message);
+      throw err;
+    }
+  }
+
+  async function deleteRace(id) {
+    try {
+      await db.races.deleteRace(id);
+      setRaces(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      window.alert("Failed to delete race: " + err.message);
+      throw err;
+    }
+  }
+
   if (dataLoading) return <LoadingScreen />;
 
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppShell
         user={user} signOut={signOut}
-        logs={logs} setLogs={setLogs}
-        races={races} setRaces={setRaces}
+        logs={logs}
+        addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
+        races={races}
+        addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
         chatMessages={chatMessages} setChatMessages={setChatMessages}
         apiKey={apiKey} setApiKey={setApiKey}
         apiModel={apiModel} setApiModel={setApiModel}
@@ -180,7 +273,9 @@ function AuthedApp({ user, signOut }) {
 
 function AppShell({
   user, signOut,
-  logs, setLogs, races, setRaces, chatMessages, setChatMessages,
+  logs, addLog, updateLog, bulkAddLogs, deleteLogs,
+  races, addRace, updateRace, deleteRace,
+  chatMessages, setChatMessages,
   apiKey, setApiKey, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -219,17 +314,16 @@ function AppShell({
     return () => document.removeEventListener("click", onClick);
   }, []);
 
-  function executeDelete() {
+  async function executeDelete() {
     if (!confirmDelete) return;
     if (confirmDelete.type === "log") {
-      setLogs(logs.filter(l => l.id !== confirmDelete.id));
+      await deleteLogs([confirmDelete.id]);
     }
     if (confirmDelete.type === "logs") {
-      const idSet = new Set(confirmDelete.ids);
-      setLogs(logs.filter(l => !idSet.has(l.id)));
+      await deleteLogs(confirmDelete.ids);
     }
     if (confirmDelete.type === "race") {
-      setRaces(races.filter(r => r.id !== confirmDelete.id));
+      await deleteRace(confirmDelete.id);
     }
     if (confirmDelete.type === "chat") {
       setChatMessages([]);
@@ -338,7 +432,9 @@ function AppShell({
       {tab === 0 && (
         <TrainingTab
           logs={logs}
-          setLogs={setLogs}
+          addLog={addLog}
+          updateLog={updateLog}
+          bulkAddLogs={bulkAddLogs}
           filter={globalFilter}
           setFilter={setGlobalFilter}
           filterDropdown={filterDropdown}
@@ -354,7 +450,8 @@ function AppShell({
       {tab === 1 && (
         <RacesTab
           races={races}
-          setRaces={setRaces}
+          addRace={addRace}
+          updateRace={updateRace}
           now={now}
           setConfirmDelete={setConfirmDelete}
         />

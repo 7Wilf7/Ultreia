@@ -3,10 +3,35 @@ import { s } from "../styles";
 import {
   DEFAULT_API_ENDPOINT,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
+  ACTIVITY_TYPES,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { buildSystemPrompt } from "../utils/profile";
+import { CoachPlanImportModal } from "./CoachPlanImportModal";
+
+// Tolerant JSON-array extraction from a coach reply. The LLM may wrap its
+// output in markdown fences, prefix it with commentary, or even return a
+// plain object — we try a few peelings before giving up.
+function parsePlansFromLLM(text) {
+  if (!text) return [];
+  let cleaned = text.trim();
+  // Strip ```json … ``` or ``` … ``` fences if present.
+  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "");
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed;
+  } catch { /* fall through */ }
+  // Last resort — find the FIRST `[ … ]` substring and try that.
+  const m = cleaned.match(/\[[\s\S]*\]/);
+  if (m) {
+    try {
+      const parsed = JSON.parse(m[0]);
+      if (Array.isArray(parsed)) return parsed;
+    } catch { /* give up */ }
+  }
+  return [];
+}
 
 // Locale-aware headers for the dynamic data block (current date / target races /
 // race history / recent activities). Numbers + race names stay as-is — only the
@@ -33,7 +58,9 @@ const DATA_LABELS = {
 export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
-  chatMessages, appendChatMessage, appendLocalChatMessage, now, setConfirmDelete,
+  chatMessages, appendChatMessage, appendLocalChatMessage,
+  bulkAddLogs,
+  now, setConfirmDelete,
   apiKey, apiModel, onEditProfile,
 }) {
   // DeepSeek is the only supported provider now; endpoint is hardcoded.
@@ -55,6 +82,11 @@ export function AICoachTab({
   // content the user has to delete.
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  // Plan-import state. `extractingForIdx` = msg index whose "→ Calendar"
+  // button is currently calling the LLM; `planProposal` opens the review
+  // modal once the structured array is parsed.
+  const [extractingForIdx, setExtractingForIdx] = useState(null);
+  const [planProposal, setPlanProposal] = useState(null);
 
   function clearChat() {
     setConfirmDelete({ type: "chat", id: null });
@@ -163,7 +195,10 @@ Output the memory text only, nothing else.`;
   // languages so the model receives consistent data.
   function buildDataBlock(useLang = "en") {
     const D = DATA_LABELS[useLang] || DATA_LABELS.en;
-    const recentLogs = logs.slice(0, 10).map(l =>
+    // Strip future-planned entries — the LLM should only see what actually
+    // happened. Planned rows would otherwise be misread as "recent activity"
+    // (e.g. "your last run was 10km" when the user hasn't run it yet).
+    const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
       `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
     ).join("\n");
     const targetRaces = races.filter(r => r.isTarget).map(r => {
@@ -194,6 +229,96 @@ ${recentLogs}`;
     dataBlock: buildDataBlock(previewLang),
     lang: previewLang,
   });
+
+  // Second-pass LLM call: take the last assistant reply and ask the model to
+  // re-emit any concrete training suggestions as a structured JSON array.
+  // We send this as a fresh single-turn request (no chat history needed) and
+  // do NOT persist either side — it's a one-shot extraction.
+  async function importToCalendar(assistantContent, msgIdx) {
+    if (!apiKey) {
+      alert(t("coach.no_key"));
+      return;
+    }
+    setExtractingForIdx(msgIdx);
+
+    // Anchor relative dates ("Wednesday", "明天") on today's date in GMT+8.
+    const todayStr = now.toISOString().slice(0, 10);
+    const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
+    const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
+
+    const extractPrompt = `You are a structured-data extractor. The user's AI running coach just produced the reply below. Extract any concrete training suggestions into a JSON array.
+
+Today is ${todayStr} (${dayOfWeek}, GMT+8).
+
+Coach's reply:
+---
+${assistantContent}
+---
+
+Output a JSON array. Each item:
+{
+  "date": "YYYY-MM-DD",
+  "type": ${typeUnion},
+  "distance": number (kilometres, optional — omit if not specified),
+  "duration": number (MINUTES, optional — omit if not specified),
+  "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
+  "notes": string (brief — optional)
+}
+
+Rules:
+- Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
+- Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
+- If the coach explicitly suggests a rest / recovery day with no activity, set type to "Recovery".
+- If you cannot find any concrete plan, output [].
+- Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
+
+    try {
+      const resp = await fetch(apiEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: apiModel,
+          max_tokens: 1500,
+          messages: [{ role: "user", content: extractPrompt }],
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
+        return;
+      }
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      const plans = parsePlansFromLLM(text);
+      if (plans.length === 0) {
+        alert(t("coach.import_no_plans"));
+        return;
+      }
+      setPlanProposal({ plans });
+    } catch (err) {
+      console.error("[AI Coach] Plan-extract error:", err);
+      alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
+    } finally {
+      setExtractingForIdx(null);
+    }
+  }
+
+  async function confirmImportPlans(workouts) {
+    try {
+      await bulkAddLogs(workouts, { source: "ai_coach_plan" });
+      setPlanProposal(null);
+      // Lightweight confirmation. The user will see the new pills on
+      // the Calendar view themselves — no need for a heavy banner.
+      alert(t("coach.import_success", { n: workouts.length }));
+    } catch {
+      // bulkAddLogs wrapper already showed an alert; leave the modal open so
+      // the user can adjust and retry without losing their edits.
+    }
+  }
 
   async function sendChat() {
     if (!chatInput.trim() || chatLoading) return;
@@ -414,15 +539,41 @@ ${recentLogs}`;
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {chatMessages.map((m, i) => (
-              <div key={i} style={{
-                alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                maxWidth: "85%",
-                background: m.role === "user" ? "#222" : "#f5f5f5",
-                color: m.role === "user" ? "#fff" : "#222",
-                borderRadius: 10, padding: "10px 14px", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
-              }}>{m.content}</div>
-            ))}
+            {chatMessages.map((m, i) => {
+              // Persistent assistant replies (i.e. not local error bubbles) get
+              // an "Import to Calendar" affordance — the button lives in its
+              // own row right under the bubble so the bubble itself stays clean.
+              const canImport = m.role === "assistant" && !m.isLocal && bulkAddLogs;
+              const extracting = extractingForIdx === i;
+              return (
+                <div key={i} style={{
+                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+                  maxWidth: "85%",
+                  display: "flex", flexDirection: "column",
+                }}>
+                  <div style={{
+                    background: m.role === "user" ? "#222" : "#f5f5f5",
+                    color: m.role === "user" ? "#fff" : "#222",
+                    borderRadius: 10, padding: "10px 14px",
+                    fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
+                  }}>{m.content}</div>
+                  {canImport && (
+                    <button
+                      onClick={() => importToCalendar(m.content, i)}
+                      disabled={extracting}
+                      style={{
+                        ...s.btnGhost,
+                        alignSelf: "flex-start",
+                        marginTop: 5,
+                        fontSize: 11, padding: "4px 10px",
+                        opacity: extracting ? 0.5 : 1,
+                      }}>
+                      {extracting ? t("coach.extracting") : t("coach.import_button")}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
             {chatLoading && <div style={{ alignSelf: "flex-start", color: "#888", fontSize: 13 }}>{t("coach.thinking")}</div>}
           </div>
         )}
@@ -436,6 +587,14 @@ ${recentLogs}`;
         <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()} style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>{t("coach.send")}</button>
       </div>
       <div style={{ ...s.muted, marginTop: 6, fontSize: 11 }}>{t("coach.tip")}</div>
+
+      {planProposal && (
+        <CoachPlanImportModal
+          plans={planProposal.plans}
+          onConfirm={confirmImportPlans}
+          onCancel={() => setPlanProposal(null)}
+        />
+      )}
     </div>
   );
 }

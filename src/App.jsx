@@ -509,6 +509,7 @@ function AppShell({
           chatMessages={chatMessages}
           appendChatMessage={appendChatMessage}
           appendLocalChatMessage={appendLocalChatMessage}
+          bulkAddLogs={bulkAddLogs}
           now={now}
           setConfirmDelete={setConfirmDelete}
           apiKey={apiKey}

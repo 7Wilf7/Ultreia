@@ -14,6 +14,8 @@ const FIELD_MAP = {
   cadence:    'cadence',
   aerobicTE:  'aerobic_te',
   gap:        'gap',
+  isPlanned:  'is_planned',    // boolean — future plan (true) vs completed (false)
+  tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
   createdAt:  'created_at',
   updatedAt:  'updated_at',
 };
@@ -21,9 +23,10 @@ const FIELD_MAP = {
 // id, user_id, source are not in FIELD_MAP:
 // - id        : server-generated uuid, copied straight through in fromRow
 // - user_id   : RLS-scoped; written by createWorkout / bulkInsertWorkouts only
-// - source    : provenance ('manual' / 'garmin_csv' / 'fit_file'); set by the
-//               write functions, not exposed to the form layer yet.
-const ARRAY_FIELDS = new Set(['subTypes']);
+// - source    : provenance ('manual' / 'garmin_csv' / 'fit_file' / 'calendar_plan');
+//               set by the write functions, not exposed to the form layer yet.
+const ARRAY_FIELDS = new Set(['subTypes', 'tags']);
+const BOOL_FIELDS  = new Set(['isPlanned']);
 const WRITE_SKIP = new Set(['createdAt', 'updatedAt']);  // server-managed
 
 // Columns the DB stores as INTEGER. Garmin CSV occasionally hands us floats
@@ -39,6 +42,9 @@ function fromRow(row) {
     const v = row[snake];
     if (ARRAY_FIELDS.has(camel)) {
       out[camel] = Array.isArray(v) ? v : [];
+    } else if (BOOL_FIELDS.has(camel)) {
+      // null → false (DEFAULT FALSE on the column, but defend anyway).
+      out[camel] = v === true;
     } else {
       out[camel] = v ?? (typeof v === 'number' ? 0 : '');
     }

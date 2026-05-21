@@ -125,6 +125,18 @@ const dict = {
   "enum.activity.Floor Climbing": { en: "Floor Climbing",   zh: "爬楼" },
   "enum.activity.Strength":       { en: "Strength",         zh: "力量" },
   "enum.activity.HIIT":           { en: "HIIT",             zh: "HIIT" },
+  "enum.activity.Recovery":       { en: "Recovery",         zh: "恢复" },
+
+  // Short labels for tight UIs (Calendar day cells). Same identity as
+  // enum.activity.* but trimmed to 2-4 chars so multiple pills can stack
+  // in one ~120px cell.
+  "enum.activity_short.Road Run":       { en: "Road",     zh: "公路" },
+  "enum.activity_short.Trail Run":      { en: "Trail",    zh: "越野" },
+  "enum.activity_short.Hiking":         { en: "Hike",     zh: "徒步" },
+  "enum.activity_short.Floor Climbing": { en: "Stair",    zh: "爬楼" },
+  "enum.activity_short.Strength":       { en: "Str",      zh: "力量" },
+  "enum.activity_short.HIIT":           { en: "HIIT",     zh: "HIIT" },
+  "enum.activity_short.Recovery":       { en: "Rec",      zh: "恢复" },
 
   "enum.subtype.Easy Run":        { en: "Easy Run",         zh: "轻松跑" },
   "enum.subtype.Aerobic Run":     { en: "Aerobic Run",      zh: "有氧跑" },
@@ -196,7 +208,31 @@ const dict = {
 
   // Training sub-views
   "training.view.activities": { en: "Activities",           zh: "活动" },
+  "training.view.calendar":   { en: "Calendar",             zh: "日历" },
   "training.view.charts":     { en: "Charts",               zh: "图表" },
+
+  // ===== Calendar tab =====
+  "calendar.today":            { en: "Today",                zh: "今天" },
+  "calendar.legend_hint":      { en: "● done · ▢ planned · click any day to edit", zh: "● 已完成 · ▢ 计划中 · 点击日期编辑" },
+  "calendar.rest":             { en: "rest",                 zh: "休息" },
+  "calendar.add_plan_hint":    { en: "+ plan",               zh: "+ 计划" },
+  "calendar.day_past":         { en: "Day",                  zh: "当日" },
+  "calendar.day_future":       { en: "Plan",                 zh: "计划" },
+  "calendar.day_logs_title":   { en: "Activities & plans",   zh: "活动与计划" },
+  "calendar.planned_badge":    { en: "planned",              zh: "计划" },
+  "calendar.edit_tags":        { en: "Tags",                 zh: "标签" },
+  "calendar.empty_past":       { en: "Rest day — no activity recorded.", zh: "休息日 —— 没有记录活动。" },
+  "calendar.empty_future":     { en: "No plan yet for this day.", zh: "尚未为这一天安排计划。" },
+  "calendar.add_recovery_title":  { en: "Mark active recovery", zh: "标记主动恢复" },
+  "calendar.add_recovery_button": { en: "+ Add active recovery", zh: "+ 添加主动恢复" },
+  "calendar.save_recovery":    { en: "Save Recovery",        zh: "保存恢复" },
+  "calendar.add_plan_title":   { en: "Plan a workout",       zh: "安排训练计划" },
+  "calendar.add_plan_button":  { en: "+ Add planned workout", zh: "+ 添加计划训练" },
+  "calendar.save_plan":        { en: "Save Plan",            zh: "保存计划" },
+  "calendar.plan_empty_warning":{ en: "Enter at least a distance or duration for the plan.", zh: "请至少填写距离或时长。" },
+  "calendar.tag.massage":      { en: "Massage",              zh: "按摩" },
+  "calendar.tag.stretching":   { en: "Stretching",           zh: "拉伸" },
+  "calendar.tag.foam_roll":    { en: "Foam Roll",            zh: "泡沫轴" },
 
   // ===== Global filter =====
   "filter.type_label":        { en: "Type:",                zh: "类型：" },
@@ -406,6 +442,19 @@ const dict = {
   "coach.input_placeholder":  { en: "Type your message — daily check-in, training question, or anything you want the coach to see.", zh: "输入你想和教练说的话 —— 今日打卡、训练疑问，或任何想让 ta 看到的内容。" },
   "coach.send":               { en: "Send",                 zh: "发送" },
   "coach.tip":                { en: "Tip: Ctrl/⌘+Enter to send · Chat history saved locally", zh: "提示：Ctrl/⌘+Enter 发送 · 聊天记录保存在本地" },
+
+  // ===== AI Coach → Calendar import =====
+  "coach.import_button":      { en: "📅 Import to Calendar",  zh: "📅 导入到日历" },
+  "coach.extracting":         { en: "Extracting…",            zh: "提取中……" },
+  "coach.import_no_plans":    { en: "No concrete training plans found in that reply. The coach may have only given analysis / advice without specific dates.", zh: "未在这条回复中识别到具体训练计划。教练可能只给了分析或建议，没有明确的日期与训练内容。" },
+  "coach.import_modal_eyebrow": { en: "Review before import",  zh: "导入前审核" },
+  "coach.import_modal_title":   { en: "Import {n} plan(s) into Calendar", zh: "导入 {n} 条计划到日历" },
+  "coach.import_modal_hint":    { en: "Adjust dates, types, distance, and duration before importing. Imported items show as dashed-line plans on the Calendar (is_planned=true) — they don't count toward distance totals, PR, or Charts until you mark them done.", zh: "导入前可调整日期、类型、距离、时长。导入后的项目在日历上以虚线计划形式显示（is_planned=true），在你标记完成之前不会计入总距离、PR 或图表统计。" },
+  "coach.import_all_removed":   { en: "All proposals removed. Click Cancel to dismiss.", zh: "所有计划都已移除。点击取消关闭此窗口。" },
+  "coach.import_confirm":       { en: "Import {n} selected",   zh: "导入选中的 {n} 条" },
+  "coach.importing":            { en: "Importing…",            zh: "导入中……" },
+  "coach.import_success":       { en: "✓ {n} planned workout(s) added to Calendar.", zh: "✓ 已将 {n} 条计划训练添加到日历。" },
+  "coach.import_invalid_date":  { en: "Date \"{date}\" is not valid (use YYYY-MM-DD).", zh: "日期「{date}」不合法（请使用 YYYY-MM-DD 格式）。" },
 };
 
 function interpolate(s, vars) {

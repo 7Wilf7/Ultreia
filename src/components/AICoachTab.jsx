@@ -3,7 +3,7 @@ import { s } from "../styles";
 import {
   DEFAULT_API_ENDPOINT,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
-  ACTIVITY_TYPES,
+  ACTIVITY_TYPES, SPARTAN_SUBTYPES,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow } from "../hooks/useMediaQuery";
@@ -15,6 +15,52 @@ import { CoachPlanImportModal } from "./CoachPlanImportModal";
 // distill Memory + clear the chat. Older turns start competing with the
 // system prompt for the model's attention past ~20 turns.
 const LONG_CHAT_HINT_THRESHOLD = 20;
+
+// Local time formatter — explicit per-component build, locale-independent.
+// `now.toISOString()` returns UTC, which mislabels as GMT+8 in the data
+// block; this returns the user's wall-clock time as "YYYY-MM-DD HH:MM".
+function formatLocalDateTime(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Difficulty rank for Spartan subtypes — higher = harder.
+const SPARTAN_RANK = SPARTAN_SUBTYPES.reduce((acc, name, i) => {
+  acc[name] = i + 1;
+  return acc;
+}, {});
+
+// Pick a representative subset of history races to send to the coach.
+// Per category:
+//   • 10K / HM / Marathon / Hyrox / Other / Uncategorized → latest 3 by date
+//   • Trail   → latest 3 + longest by distance (if not already in the 3)
+//   • Spartan → latest 3 + toughest by subtype rank (if not already in the 3)
+// Goal: keep the prompt focused on recent form, while always anchoring trail
+// and Spartan signal with the user's peak performance for each.
+function selectHistoryForPrompt(historyRaces) {
+  const groups = {};
+  for (const r of historyRaces) {
+    const cat = r.category || "Uncategorized";
+    (groups[cat] = groups[cat] || []).push(r);
+  }
+  const picked = new Set();
+  for (const [cat, group] of Object.entries(groups)) {
+    const byDate = [...group].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    byDate.slice(0, 3).forEach(r => picked.add(r.id));
+    if (cat === "Trail") {
+      const longest = [...group].filter(r => r.distance > 0)
+        .sort((a, b) => b.distance - a.distance)[0];
+      if (longest) picked.add(longest.id);
+    } else if (cat === "Spartan") {
+      const toughest = [...group].filter(r => SPARTAN_RANK[r.subtype])
+        .sort((a, b) => SPARTAN_RANK[b.subtype] - SPARTAN_RANK[a.subtype])[0];
+      if (toughest) picked.add(toughest.id);
+    }
+  }
+  return historyRaces
+    .filter(r => picked.has(r.id))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+}
 
 // Tolerant JSON-array extraction from a coach reply. The LLM may wrap its
 // output in markdown fences, prefix it with commentary, or even return a
@@ -41,7 +87,8 @@ function parsePlansFromLLM(text) {
 
 // Locale-aware headers for the dynamic data block (current date / target races /
 // race history / recent activities). Numbers + race names stay as-is — only the
-// section titles change. The "en" version is canonical (LLM-facing).
+// section titles + the priority label change. The "en" version is canonical
+// (LLM-facing); "zh" is for the in-app preview only.
 const DATA_LABELS = {
   en: {
     currentDate: "[Current Date]",
@@ -49,7 +96,7 @@ const DATA_LABELS = {
     history: "[Race History]",
     recent: "[Recent Activities (last 10)]",
     none: "None",
-    goal: "goal",
+    priorityTag: (p) => `[Priority ${p}]`,
   },
   zh: {
     currentDate: "[当前时间]",
@@ -57,9 +104,59 @@ const DATA_LABELS = {
     history: "[比赛历史]",
     recent: "[近期活动（最近 10 条）]",
     none: "无",
-    goal: "目标",
+    priorityTag: (p) => `[${p} 级目标]`,
   },
 };
+
+// Format a race finish time as H:MM:SS (h unpadded; m/s padded). Returns ""
+// when no time recorded so callers can omit the "→ time" suffix.
+function formatRaceTime(r) {
+  if (![r.resultH, r.resultM, r.resultS].some(Boolean)) return "";
+  return `${r.resultH || "0"}:${String(r.resultM || "0").padStart(2, "0")}:${String(r.resultS || "0").padStart(2, "0")}`;
+}
+
+// Build the category tag for a race entry. Spartan includes its tier
+// (Sprint/Super/Beast/Ultra) inline so the LLM doesn't have to guess.
+function categoryTagFor(r, brackets = "[]") {
+  if (!r.category) return "";
+  const inside = r.category === "Spartan" && r.subtype ? `${r.category} ${r.subtype}` : r.category;
+  return `${brackets[0]}${inside}${brackets[1]}`;
+}
+
+// Target race line — no more "goal: X" (targets don't capture a finish time).
+// Priority is spelled out ("Priority A" / "A 级目标") so the LLM doesn't have
+// to infer the meaning of a bare `[A]`. Distance + ascent carry units.
+function formatTargetRace(r, lang) {
+  const L_ = DATA_LABELS[lang] || DATA_LABELS.en;
+  const priority = r.priority ? L_.priorityTag(r.priority) : "";
+  const catTag = categoryTagFor(r, "()");
+  const dateStr = r.date ? `on ${r.date}` : "";
+  const metrics = [];
+  if (r.distance > 0) metrics.push(`${r.distance} km`);
+  if (r.ascent && parseInt(r.ascent) > 0) metrics.push(`+${r.ascent} m`);
+  const metricStr = metrics.length ? `(${metrics.join(", ")})` : "";
+  return [priority, r.name, catTag, dateStr, metricStr].filter(Boolean).join(" ");
+}
+
+// History race line — only emit metrics that are meaningful for the category:
+//   Trail   → distance + ascent (the defining metrics)
+//   Spartan → tier inline with category tag
+//   Road / Hyrox / Other → distance is implicit in the category, so just time
+// "→ time" appended only when a finish time was recorded.
+function formatHistoryRace(r) {
+  const parts = [r.date, r.name, categoryTagFor(r, "[]")].filter(Boolean);
+  if (r.category === "Trail") {
+    const metrics = [];
+    if (r.distance > 0) metrics.push(`${r.distance} km`);
+    if (r.ascent && parseInt(r.ascent) > 0) metrics.push(`+${r.ascent} m`);
+    if (metrics.length) parts.push(metrics.join(", "));
+  }
+  let line = parts.join(" ");
+  const t = formatRaceTime(r);
+  if (t) line += ` → ${t}`;
+  if (r.itraScore) line += ` ITRA ${r.itraScore}`;
+  return line;
+}
 
 export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
@@ -208,16 +305,12 @@ Output the memory text only, nothing else.`;
     const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
       `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}`
     ).join("\n");
-    const targetRaces = races.filter(r => r.isTarget).map(r => {
-      const goal = [r.resultH, r.resultM, r.resultS].some(Boolean) ? `${r.resultH || "0"}h${r.resultM || "0"}m${r.resultS || "0"}s` : "—";
-      return `[${r.priority}] ${r.name}${r.category ? ` (${r.category})` : ""} on ${r.date} (${r.distance}${r.ascent ? ", +" + r.ascent + "m" : ""}) - ${D.goal}: ${goal}`;
-    }).join("\n") || D.none;
-    const historyRaces = races.filter(r => !r.isTarget).map(r => {
-      const result = [r.resultH, r.resultM, r.resultS].some(Boolean) ? `${r.resultH || "0"}:${r.resultM || "0"}:${r.resultS || "0"}` : "—";
-      return `${r.date} ${r.name}${r.category ? ` [${r.category}]` : ""} ${r.distance} → ${result}${r.itraScore ? " ITRA " + r.itraScore : ""}`;
-    }).join("\n") || D.none;
+    const targetRaces = races.filter(r => r.isTarget)
+      .map(r => formatTargetRace(r, useLang)).join("\n") || D.none;
+    const historyRaces = selectHistoryForPrompt(races.filter(r => !r.isTarget))
+      .map(formatHistoryRace).join("\n") || D.none;
 
-    return `${D.currentDate} ${now.toISOString().slice(0, 16).replace("T", " ")} GMT+8
+    return `${D.currentDate} ${formatLocalDateTime(now)} GMT+8
 
 ${D.targets}
 ${targetRaces}

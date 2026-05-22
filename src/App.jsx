@@ -481,6 +481,12 @@ function AppShell({
             </div>
           </div>
           <div style={{ display: "flex", gap: 0 }}>
+            <a href="https://training-studio.gitbook.io/training-studio-docs"
+              target="_blank" rel="noreferrer"
+              title={t("header.guide_tooltip")}
+              style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, padding: "0 12px", fontSize: 13, color: "var(--ink-2)", fontFamily: "var(--font-sans)", borderRadius: 0, display: "inline-flex", alignItems: "center", textDecoration: "none" }}>
+              {t("header.guide")}
+            </a>
             <button onClick={toggleLang} title={t("header.lang_tooltip")}
               style={{ border: "1px solid var(--rule)", borderRight: "none", background: "var(--bg-elevated)", height: 32, padding: "0 12px", fontSize: 13, color: "var(--ink-2)", fontFamily: "var(--font-sans)", borderRadius: 0 }}>
               {lang === "en" ? "中" : "EN"}

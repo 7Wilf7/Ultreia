@@ -10,6 +10,8 @@ const dict = {
   "header.api_tooltip":   { en: "API settings",             zh: "API 设置" },
   "header.profile":       { en: "Edit personal profile",    zh: "编辑个人资料" },
   "header.lang_tooltip":  { en: "Switch to 中文",            zh: "Switch to English" },
+  "header.guide":         { en: "Guide",                    zh: "手册" },
+  "header.guide_tooltip": { en: "User guide (opens in a new tab)", zh: "用户手册（新标签页打开）" },
 
   // ===== Tabs =====
   "tabs.training":        { en: "Training",                 zh: "训练" },

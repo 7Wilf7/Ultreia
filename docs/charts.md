@@ -1,50 +1,50 @@
-# Charts
+# 图表
 
-The Charts sub-view (Training tab → **Charts**) renders three visualizations over a configurable time window. All three respect the **Global Filter** at the top of the Training tab.
+Charts 子视图（Training tab → **Charts**）按可调时间窗口渲染三张图。所有图都受 Training tab 顶部的 **Global Filter** 影响。
 
-## Period picker
+## 时间窗口
 
-Five presets above the charts:
+图表上方 5 个 preset：
 
-- Last **4 weeks** / Last **8 weeks**
-- Last **6 months** / Last **12 months**
-- Last **5 years**
+- 最近 **4 周** / 最近 **8 周**
+- 最近 **6 个月** / 最近 **12 个月**
+- 最近 **5 年**
 
-Picking a preset changes the window for **all three charts** at once. The window always ends at "now" — there's no custom range here (that's on the period selector for the Activities view, not Charts).
+选一个 preset 同时改**所有三张图**的窗口。窗口永远以「现在」结尾 —— 没有自定义范围（自定义在 Activities 视图的周期选择器，不在 Charts）。
 
-## 1. Running distance trend
+## 1. 跑步距离趋势
 
-Line chart of total **running distance** (km) per bucket, where a bucket is a week / month / year depending on the active preset. "Running" here means any of the `RUN_GROUP_TYPES` — Road Run, Trail Run, Hiking, Floor Climbing. Strength and HIIT are excluded; they have no meaningful distance.
+折线图，按桶汇总**跑步距离（km）**，桶大小随 preset 是周/月/年。「跑步」指 `RUN_GROUP_TYPES` 里的任一个 —— Road Run、Trail Run、Hiking、Floor Climbing。Strength 和 HIIT 不进，因为没有意义的距离。
 
-- Weeks bucket Mon → Sun (ISO-style); labels read e.g. `5-18~24` or `5-30~6-5` for cross-month weeks.
-- Month buckets are calendar months.
-- Year buckets are calendar years.
-- The filled area under the line is purely decorative — "elevation profile" feel.
+- 周桶按周一→周日（ISO 风格），标签形如 `5-18~24` 或跨月 `5-30~6-5`。
+- 月桶按自然月。
+- 年桶按自然年。
+- 线条下方的填充色纯装饰 —— 「等高线」视觉风格。
 
-## 2. Run-type distribution
+## 2. 路跑类型分布
 
-Horizontal bars showing how your Road Run time was split across the four pace sub-types (Easy / Aerobic / Tempo / Interval) over the current window.
+水平条形图，按当前窗口内 Road Run 的时间分布到 4 个配速子类（Easy / Aerobic / Tempo / Interval）。
 
-**Weighted by duration in seconds**, not session count. Rationale: a 90-minute tempo run carries more training load than three 20-minute easy runs, so duration-weighting reflects intensity allocation better than frequency.
+**按时长（秒）加权**，不是按次数。理由：一次 90 分钟 tempo 的训练负荷大于 3 次 20 分钟轻松跑，按时长加权更能反映强度分配。
 
-Trail Run / Hiking / Floor Climbing don't appear here — they have no pace sub-type. Strength and HIIT also excluded.
+Trail Run / Hiking / Floor Climbing 不进这个图 —— 它们没配速子类。Strength 和 HIIT 也不进。
 
-## 3. HR Zone distribution
+## 3. 心率区间分布
 
-Bars showing how your time was split across **your personal Karvonen zones** (Z1–Z5).
+按你**个人 Karvonen 区间**（Z1–Z5）的时间分布。
 
-**Requires Profile setup**: Resting HR + Max HR + an HR zone method (Karvonen strict or Standard 5-zone). Without these, the card shows a "set HR zones in your profile" message instead.
+**前置条件**：Profile 里必须填 Resting HR + Max HR + 选一种心率区间方法（Karvonen 严格分法 或 Standard 5-Zone）。没填的话卡片显示「请去 Profile 设置心率区间」的提示。
 
-**Approximation**: workouts only store avg HR per session (we don't have time-in-zone data from Garmin). Each session's **full duration** gets bucketed into the zone its avg HR falls into. For mixed-intensity sessions (e.g. an interval workout with warmup + cooldown) this under-represents zone diversity, but it's the right approximation given the data we capture.
+**近似处理**：训练记录只存每次的平均心率（Garmin CSV 不带 time-in-zone 数据）。每次训练的**完整时长**会被整个塞进它平均心率所属的那个 zone。对混合强度的训练（比如带热身+冷身的间歇课），这种处理会**低估**区间的多样性，但是基于现有数据能做到的最合理近似。
 
-Two extra rows surface only if non-zero:
+如果非零，下方还会显示两个补充行：
 
-- **Below Z1** — sessions whose avg HR was below your Z1 floor (warm-ups, very-easy recovery).
-- **Above Z5** — sessions whose avg HR exceeded your Z5 ceiling (rare).
+- **Below Z1** —— 平均心率低于你 Z1 下限的训练（热身、超低强度恢复）。
+- **Above Z5** —— 平均心率超过你 Z5 上限的训练（罕见）。
 
-## Notes
+## 注意
 
-- All three charts read from `filteredAllLogs` (the Global-Filtered set), so flipping filter chips on the Training tab immediately re-renders the charts.
-- The distance trend uses local-time date components — going through `toISOString()` would shift the date by your timezone offset and cause off-by-one bucket assignment for any user east of UTC. Same trap is in `CalendarTab.dateKey`.
-- Run-type chart bar colors ramp from ink (Easy) → moss (Interval) to mirror the intensity progression. HR zone bars ramp moss-light (Z1) → ink-1 (Z5) similarly.
-- There is no time-in-zone integration; integrating Garmin's per-second HR samples would require switching back to a `.fit` parser, which was removed.
+- 所有三张图都读 `filteredAllLogs`（过滤过的训练集），所以 Training tab 上切 Global Filter chips 时图会立即重渲染。
+- 距离趋势图用**本地时间**的日期组件 —— 用 `toISOString()` 会按时区偏移把日期推走（GMT+8 用户的 5 月 21 日会变成 UTC 5 月 20 日），导致桶分配差一天。`CalendarTab.dateKey` 里有同样的坑。
+- 路跑类型条形色从 ink（Easy）→ moss（Interval）渐变，呼应强度递增；心率区间条形从 moss-light（Z1）→ ink-1（Z5）。
+- 没有 time-in-zone 集成；要集成 Garmin 的每秒 HR 采样得切回 `.fit` 解析，那个功能已经移除。

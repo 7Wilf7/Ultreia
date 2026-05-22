@@ -1,12 +1,12 @@
-# Changelog
+# 更新日志
 
-## Initial release — 2026-05-22
+## 初始版本 —— 2026-05-22
 
-First published version of the Training Studio docs. Covers:
+Training Studio 文档首次发布。覆盖以下内容：
 
-- Activity logging (Run / Strength / HIIT) and the form-driven workflow
-- Pace sub-type rules and the HR-based auto-classification thresholds for Road Run
-- Garmin CSV import pipeline including the unknown-type and duplicate review steps
-- Race management (Target + History) with A/B/C priority and the auto-aggregated PR bar
-- AI Coach mechanics — prompt assembly, history filtering, Memory, plan-import, long-chat hint
-- Charts — running distance trend, run-type distribution by duration, HR zone distribution
+- 训练记录（Run / Strength / HIIT）和表单驱动的录入流程
+- 配速子类规则，以及 Road Run 基于心率的自动分类阈值
+- Garmin CSV 导入流程，包括未知类型审核和重复检测
+- 赛事管理（目标 + 历史），A/B/C 优先级，PR bar 自动聚合
+- AI 教练机制 —— prompt 拼装、历史筛选、Memory、计划导入、长对话提示
+- 图表 —— 跑步距离趋势、路跑类型分布、心率区间分布

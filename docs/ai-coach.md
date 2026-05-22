@@ -1,69 +1,69 @@
-# AI Coach
+# AI 教练
 
-A daily-check-in chat with an LLM that's grounded in your actual training data, target races, and a long-term memory blob you control. Powered by **DeepSeek's Anthropic-compatible endpoint** — the URL is hardcoded; you supply only your API key.
+每日打卡式的 AI 教练对话，基于你的真实训练数据、目标赛事，和一个你自己掌控的长期记忆 blob。后端是 **DeepSeek 的 Anthropic 兼容接口** —— URL 写死，你只需要提供 API Key。
 
-## Setup
+## 初次配置
 
-1. Click the **API** button in the top-right header.
-2. Paste your DeepSeek API key (get one at [platform.deepseek.com](https://platform.deepseek.com/)).
-3. Optionally pick a model preset. The key is stored in Supabase under `user_settings.api_key` (RLS-scoped to you).
-4. Open the **AI Coach** tab. The chat history is persisted in Supabase (`coach_messages` table), so it survives refreshes and follows you across devices.
+1. 点右上角 header 里的 **API** 按钮。
+2. 粘贴你的 DeepSeek API Key（[platform.deepseek.com](https://platform.deepseek.com/) 申请）。
+3. 可选择一个 model preset。Key 存在 Supabase 的 `user_settings.api_key` 字段，受 RLS 保护只有你能读。
+4. 打开 **AI Coach** tab。对话历史存在 Supabase（`coach_messages` 表），刷新和换设备都不会丢。
 
-## What each turn sends
+## 每次发消息时都发了什么
 
-Every message you send rebuilds the request from scratch — no caching. The payload has two parts:
+每条消息都会**重新拼装**整个请求 —— 没有缓存。Payload 分两部分：
 
-**1. `system` field** (rebuilt every turn):
+**1. `system` 字段**（每次重建）：
 
-- A **fixed prompt** that defines the coach's role and tone — see `FIXED_SYSTEM_PROMPT` in `src/constants.js`. Treats the user as the decision-maker; bans "must" / "禁止" language; tells the model to reply in the user's language.
-- **Profile block** — age, gender, city, occupation, experience, injury history, available equipment, HR zones (if both Resting and Max HR are set). See [Profile](../src/utils/profile.js).
-- **Coach Config block** — three axes (style, output length, intervention level), each with a 3-step soft-to-strict spectrum.
-- **Memory block** — durable facts about you (see Memory below).
-- **Data block** — current local time, all target races, a **subset of race history**, and the last 10 non-planned workouts.
+- **固定 prompt** —— 定义教练角色和语气。源码在 `src/constants.js` 的 `FIXED_SYSTEM_PROMPT`。把用户作为决策者；禁止「必须 / 禁止」式语言；要求模型用用户的语言回复。
+- **Profile 块** —— 年龄、性别、城市、职业、训练年限、伤病史、可用器材，以及（如果 Resting HR + Max HR 都填了）心率区间。源码在 [Profile](../src/utils/profile.js)。
+- **Coach Config 块** —— 三个轴（style、output length、intervention level），每个三档（从软到严）。
+- **Memory 块** —— 关于你的长期事实（见下文 Memory 章节）。
+- **数据块** —— 当前本地时间、全部目标赛事、**精选的历史赛事子集**、最近 10 条非计划训练。
 
-**2. `messages` array** — your entire chat history from Supabase, plus the new turn.
+**2. `messages` 数组** —— Supabase 里的全部历史对话 + 新这一轮 user 消息。
 
-## Race history is filtered
+## 历史赛事是被筛选过的
 
-Sending every race every turn quickly bloats the prompt and dilutes signal. The data block sends a **per-category subset** of your history:
+每次都发全部历史会迅速撑爆 prompt 并稀释关键信号。数据块里发的是**按类别精选**的子集：
 
-- **10K / HM / Marathon / Hyrox / Other** — latest 3 entries by date
-- **Trail** — latest 3 + longest by distance (deduped if the longest is already in the 3)
-- **Spartan** — latest 3 + toughest tier (deduped same way)
+- **10K / HM / Marathon / Hyrox / Other** —— 每类按日期取最近 3 条
+- **Trail** —— 最近 3 条 + 最长距离的一条（如果最长就在最近 3 里就只 3 条）
+- **Spartan** —— 最近 3 条 + 最难 tier 的一条（去重逻辑同上）
 
-See `selectHistoryForPrompt` in [AICoachTab.jsx](../src/components/AICoachTab.jsx).
+源码在 [AICoachTab.jsx](../src/components/AICoachTab.jsx) 的 `selectHistoryForPrompt`。
 
-## Memory
+## Memory（长期记忆）
 
-A free-text blob you (or the LLM) curate over time. It's the durable layer: things like "Easy days have to be actually easy or my Achilles flares up" or "Training for 2026 UTMB CCC, August".
+一段你（或 LLM）随时间维护的自由文本。这是「持久层」—— 比如「轻松日必须真的轻松，不然跟腱会犯」「备战 2026 UTMB CCC，8 月底 A 级比赛」这类。
 
-Two ways to update it:
+两种更新方式：
 
-- **Edit** — open Memory, click Edit, type, Save.
-- **Auto-update from chat** — sends the current memory + the recent chat to the LLM, which returns a proposed updated version. You review and Accept or Discard.
+- **Edit** —— 打开 Memory，点 Edit，自己写，Save。
+- **Auto-update from chat** —— 把当前 memory + 最近对话发给 LLM，让它产出一份建议更新版。你审核后选 Accept 或 Discard。
 
-The memory prompt explicitly asks the model to keep durable facts, drop session-specific noise, and stay under ~500 words.
+那条 memory prompt 里明确要求模型保留持久事实、丢掉一次性琐事、控制在 500 词以内。
 
-## Long-chat hint
+## 长对话软提示
 
-Once `coach_messages` hits **20 entries**, a soft amber banner appears above the chat suggesting you distill into Memory + Clear Chat. The chat history competes with the system prompt for the model's attention; periodically consolidating into Memory keeps responses sharp. Click the banner's button to jump to the Memory section.
+`coach_messages` 累计到 **20 条**时，对话上方会出一条琥珀色软提示，建议你把要点固化进 Memory + Clear Chat。历史对话越长，旧消息越跟 system prompt 抢模型的注意力；定期固化进 Memory 能保持回复质量。点提示上的按钮直接跳到 Memory section。
 
-## Import plan to Calendar
+## 把计划导入到 Calendar
 
-Below each assistant reply you'll see an **Import to Calendar** button. It makes a second LLM call that parses the reply into a structured JSON array of `{date, type, distance, duration, subTypes, notes}` plan items, with a review modal where you can adjust each item before importing. Imported items are written as `is_planned = true` workouts and show on the Calendar with dashed borders — they don't count toward stats or PRs until you mark them done.
+每条 assistant 回复下方都有一个 **Import to Calendar** 按钮。点它会发起**第二次** LLM 调用，让模型把回复解析成 `{date, type, distance, duration, subTypes, notes}` 的 JSON 数组，弹一个 review modal 让你逐条调整后再导入。导入的项目以 `is_planned = true` 写入，在 Calendar 上以虚线框显示 —— 不会计入统计或 PR，除非你手动标记完成。
 
-## Preview Prompt
+## Preview Prompt 预览
 
-Toggle **Preview Prompt** to see exactly what gets sent. The toggle has an EN / 中 switch — the **English version is what the LLM actually receives** (more stable instruction-following); Chinese is for your reading only.
+切 **Preview Prompt** 按钮可以看到具体发给 LLM 的内容。预览有 EN / 中 切换 —— **英文版才是真正发给 LLM 的**（指令执行更稳定），中文仅供你阅读。
 
-When both **Memory** and **Preview Prompt** are open on desktop, they render side-by-side so you can compare the durable layer against the assembled prompt.
+桌面端同时打开 **Memory** 和 **Preview Prompt** 时，两张卡片会左右并排，方便你对比持久层和拼装后的 prompt。
 
-## Token limits
+## Token 上限
 
-All three LLM calls (chat / memory auto-update / plan extract) cap at `max_tokens: 8000`, which is DeepSeek's hard output ceiling on the Anthropic-compat endpoint. Anthropic billing is per actual output token, so the cap is free headroom — it only prevents truncation mid-sentence or mid-JSON.
+三处 LLM 调用（对话 / Memory 自动更新 / 计划提取）都把 `max_tokens` 设到 **8000**，这是 DeepSeek 在 Anthropic 兼容接口上的硬上限。Anthropic 按**实际输出 token** 计费，所以这个上限是免费的天花板 —— 只是用来防止句子或 JSON 被截断。
 
-## Notes
+## 注意
 
-- DeepSeek is the only supported provider. The endpoint URL is in `DEFAULT_API_ENDPOINT` ([constants.js](../src/constants.js)) and not exposed in the UI.
-- If the API returns 200 OK with an empty `content` array, the chat shows "No response." and logs the full response to the browser console as `[AI Coach] Empty reply` — useful for diagnosing model-ID issues.
-- API errors (4xx/5xx) and network errors render as transient bubbles in the chat **without** persisting to Supabase. Refresh and they're gone.
+- 目前只支持 DeepSeek。Endpoint URL 在 `DEFAULT_API_ENDPOINT`（[constants.js](../src/constants.js)），UI 不暴露。
+- 如果 API 返回 200 OK 但 `content` 数组为空，对话里会显示 "No response."，同时浏览器控制台打 `[AI Coach] Empty reply` 把完整响应打出来 —— 方便排查模型 ID 错误之类的问题。
+- API 报错（4xx/5xx）和网络错误以临时气泡显示在对话里，**不**写入 Supabase。刷新页面就没了。

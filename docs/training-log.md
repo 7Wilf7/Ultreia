@@ -1,50 +1,50 @@
-# Training Log
+# 训练记录
 
-Every workout in Training Studio falls into one of three groups: **Run**, **Strength**, or **HIIT**. The log is your single source of truth — it feeds the stats bar, the charts, the AI coach data block, and the personal-records aggregation.
+Training Studio 里每条训练都归到三大类之一：**Run（跑步类）**、**Strength（力量）**、**HIIT**。这份记录是所有数据的源头 —— 顶部统计条、图表、AI 教练的数据块、个人最佳聚合，都从它读。
 
-## Activity types
+## Activity 类型
 
-| Group | Type | Tracks |
+| 大类 | 具体类型 | 记录字段 |
 |---|---|---|
-| Run | Road Run | distance, duration, pace, HR, ascent, cadence, GAP, aerobic TE |
-| Run | Trail Run | distance, duration, pace, HR, ascent, aerobic TE |
-| Run | Hiking | distance, duration, pace, HR, ascent, aerobic TE |
-| Run | Floor Climbing | duration, HR, ascent (no horizontal distance) |
-| Strength | Strength | duration, HR, optional body-part split |
-| HIIT | HIIT | duration, HR, aerobic TE |
+| Run | Road Run（路跑）| 距离、时长、配速、心率、累计爬升、步频、GAP、有氧 TE |
+| Run | Trail Run（越野跑）| 距离、时长、配速、心率、累计爬升、有氧 TE |
+| Run | Hiking（徒步）| 距离、时长、配速、心率、累计爬升、有氧 TE |
+| Run | Floor Climbing（爬楼/楼梯机）| 时长、心率、累计爬升（无水平距离）|
+| Strength | Strength（力量）| 时长、心率、可选择身体部位 |
+| HIIT | HIIT | 时长、心率、有氧 TE |
 
-Sub-types behave differently per group:
+子类规则因大类而异：
 
-- **Road Run** requires one pace sub-type (Easy / Aerobic / Tempo / Interval) and can carry a `Race` flag. See [Running](running.md) for the auto-classification rules.
-- **Other Run types** (Trail / Hiking / Floor Climbing) can carry the `Race` flag but skip pace classification — terrain dominates pace there.
-- **Strength** can pick any combination of Upper Body / Lower Body / Core.
-- **HIIT** has no sub-types.
+- **Road Run** 必须选一种配速子类（Easy / Aerobic / Tempo / Interval），可加 `Race` 标记。具体见 [Running 配速分类](running.md)。
+- **其他 Run 类型**（Trail / Hiking / Floor Climbing）可加 `Race` 标记，但不分配速 —— 地形主导配速，按心率分类会误导。
+- **Strength** 可勾选 Upper Body / Lower Body / Core 任意组合。
+- **HIIT** 没有子类。
 
-> Active recovery is **not** a workout type. It's a day-level tag (`massage`, etc.) toggled on the Calendar tab.
+> Active Recovery（积极恢复）**不是**一种 activity 类型。它是**日级标签**（比如 `massage`），在 Calendar 的某一天上勾选。
 
-## Adding a workout (manual)
+## 添加训练（手动）
 
-1. Open the **Training** tab → click **Add Activity**.
-2. Pick the date and type. Road Run defaults to Easy Run sub-type; everything else starts blank.
-3. Fill in what you have. Only date and duration are required. Distance, HR, ascent, cadence, GAP, and aerobic TE are all optional — leave blank what you didn't measure.
-4. Save. The row appears at the top of the Activities list and immediately feeds the period stats + charts.
+1. **Training** tab → 点 **Add Activity**。
+2. 选日期和类型。Road Run 默认子类 Easy Run，其他类型默认空。
+3. 按你测到的数据填。**日期和时长是必填**，距离/心率/爬升/步频/GAP/TE 都可选，没量到就留空。
+4. Save。新行会出现在 Activities 列表顶部，立刻反映到周期统计和图表里。
 
-## Editing a workout
+## 编辑训练
 
-Click any row on Training or Calendar to inline-edit. Clicking outside cancels — if you have unsaved changes, you'll get a confirmation prompt before discarding.
+Training 或 Calendar 上点任一行就进内联编辑模式。点外面会取消 —— 如果有未保存改动会弹确认框，避免误丢。
 
-## Bulk operations
+## 批量操作
 
-- **Select mode** (top-right of Activities) lets you tick multiple rows and bulk-delete.
-- **Upload .csv** opens the Garmin CSV importer — see [Data Import](data-import.md).
+- **Select mode**（Activities 右上角）：勾选多行批量删除。
+- **Upload .csv**：打开 Garmin CSV 导入流程，见 [数据导入](data-import.md)。
 
-## Filtering and periods
+## 筛选和周期
 
-- The **Global Filter** chips at the top of Training apply to both the Activities list and the Charts sub-view. Filter by run sub-group (Road, Trail, Hiking, Floor Climbing), Strength body-parts, or HIIT.
-- The **Period Selector** (Week / Month / Quarter / Year / Custom / All) controls the stats bar and the Activities list scope, but **not** the Charts time window — Charts has its own period chips.
+- Training tab 顶部的 **Global Filter** chips 同时作用于 Activities 列表和 Charts 子视图。可按跑步子类（Road / Trail / Hiking / Floor Climbing）、力量身体部位、HIIT 筛选。
+- **Period Selector**（Week / Month / Quarter / Year / Custom / All）控制统计条和 Activities 列表的时间范围，**不**控制 Charts —— 图表有自己的周期 chips。
 
-## Notes
+## 注意
 
-- Planned workouts (imported from AI Coach) are visible on the Calendar but **excluded** from the Training tab, the stats bar, the charts, and the personal-records bar. They only count once you mark them done.
-- The 8-column metric grid on each row (distance, ascent, duration, pace, GAP, HR, TE, cadence) renders only the cells you populated — empty fields disappear, but the columns stay aligned across rows.
-- Mobile (<1024 px wide) drops the grid and stacks metrics in a wrapping flex row.
+- 从 AI 教练导入的**计划训练**（planned workouts）只在 Calendar 上显示，**不**进 Training 列表、不进统计条、不进图表、不进 PR bar。只有你手动标记完成后才计入。
+- 每行右侧的 8 列指标网格（距离/爬升/时长/配速/GAP/心率/TE/步频）只渲染有值的格子，空字段不显示，但列对齐不丢。
+- 移动端（<1024px 宽）会去掉网格，改成 flex 自动换行布局。

@@ -1,10 +1,10 @@
-# Summary
+# 目录
 
-* [Training Studio Overview](README.md)
-* [Training Log](training-log.md)
-* [Running (Pace Classification)](running.md)
-* [Data Import (Garmin CSV)](data-import.md)
-* [Races](races.md)
-* [AI Coach](ai-coach.md)
-* [Charts](charts.md)
-* [Changelog](changelog.md)
+* [Training Studio 总览](README.md)
+* [训练记录](training-log.md)
+* [Running 配速分类](running.md)
+* [数据导入（Garmin CSV）](data-import.md)
+* [赛事管理](races.md)
+* [AI 教练](ai-coach.md)
+* [图表](charts.md)
+* [更新日志](changelog.md)

@@ -407,6 +407,8 @@ const dict = {
   // ===== AI Coach tab =====
   "coach.menu_open":          { en: "Settings",             zh: "设置" },
   "coach.menu_close":         { en: "Close",                zh: "收起" },
+  "coach.settings_title":     { en: "Coach Settings",       zh: "教练设置" },
+  "coach.back_to_chat":       { en: "Back to chat",         zh: "返回聊天" },
   "coach.edit_profile":       { en: "⚙ Edit Profile",       zh: "⚙ 编辑资料" },
   "coach.hide_config":        { en: "Hide Config",          zh: "隐藏配置" },
   "coach.show_config":        { en: "Coach Config",         zh: "教练配置" },

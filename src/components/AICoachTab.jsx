@@ -522,19 +522,57 @@ Rules:
     setChatLoading(false);
   }
 
+  // Mobile has two views inside this tab — chat (default) and a settings
+  // sub-page (opened via the ⚙ button in the input row). Desktop shows
+  // everything inline.
+  const inSettings = isMobile && showCoachMenu;
+  const inChat = !inSettings;
+
   return (
-    <div>
-      {/* ⚙ Settings button collapses the row of advanced controls. Tap to
-          expand; tap again to collapse. Keeps the top of the tab uncluttered
-          on mobile and de-clutters the desktop layout too. */}
-      <div style={{ marginBottom: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <button onClick={() => setShowCoachMenu(!showCoachMenu)}
-          style={{ ...s.btnGhost, fontWeight: 600 }}>
-          {showCoachMenu ? `▲ ${t("coach.menu_close")}` : `⚙ ${t("coach.menu_open")}`}
-          {(coachMemory || showCoachConfig || showMemory || showPromptPreview) && !showCoachMenu ? " ●" : ""}
-        </button>
-        {showCoachMenu && (
-          <>
+    <div style={isMobile ? {
+      display: "flex", flexDirection: "column",
+      height: "100%", minHeight: 0,
+    } : {}}>
+      {/* DESKTOP top button row: ⚙ Settings collapses the row of advanced
+          controls; tap to expand, tap again to collapse. */}
+      {!isMobile && (
+        <div style={{ marginBottom: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={() => setShowCoachMenu(!showCoachMenu)}
+            style={{ ...s.btnGhost, fontWeight: 600 }}>
+            {showCoachMenu ? `▲ ${t("coach.menu_close")}` : `⚙ ${t("coach.menu_open")}`}
+            {(coachMemory || showCoachConfig || showMemory || showPromptPreview) && !showCoachMenu ? " ●" : ""}
+          </button>
+          {showCoachMenu && (
+            <>
+              <button onClick={onEditProfile} style={s.btnGhost}>{t("coach.edit_profile")}</button>
+              <button onClick={() => setShowCoachConfig(!showCoachConfig)} style={s.btnGhost}>
+                {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
+              </button>
+              <button onClick={() => setShowMemory(!showMemory)} style={s.btnGhost}>
+                {showMemory ? t("coach.hide_memory") : t("coach.show_memory")}{coachMemory ? " ●" : ""}
+              </button>
+              <button onClick={() => setShowPromptPreview(!showPromptPreview)} style={s.btnGhost}>
+                {showPromptPreview ? t("coach.hide_prompt") : t("coach.show_prompt")}
+              </button>
+              {chatMessages.length > 0 && (
+                <button onClick={clearChat} style={s.btnGhost}>{t("coach.clear_chat")}</button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* MOBILE settings sub-page header: ← back to chat + title + button list */}
+      {inSettings && (
+        <div style={{ flexShrink: 0, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+            <button onClick={() => setShowCoachMenu(false)} aria-label={t("coach.back_to_chat")}
+              style={{ ...s.btnGhost, fontSize: 16, width: 44, height: 36, padding: 0, minHeight: 36 }}>
+              ←
+            </button>
+            <div style={{ ...s.section, margin: 0, flex: 1 }}>{t("coach.settings_title")}</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={onEditProfile} style={s.btnGhost}>{t("coach.edit_profile")}</button>
             <button onClick={() => setShowCoachConfig(!showCoachConfig)} style={s.btnGhost}>
               {showCoachConfig ? t("coach.hide_config") : t("coach.show_config")}
@@ -548,10 +586,14 @@ Rules:
             {chatMessages.length > 0 && (
               <button onClick={clearChat} style={s.btnGhost}>{t("coach.clear_chat")}</button>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
+      {/* Config / memory / prompt panels. Visible on desktop; on mobile,
+          only inside the settings sub-page (scrollable so panels can fit). */}
+      {(!isMobile || inSettings) && (
+      <div style={isMobile ? { flex: 1, overflowY: "auto", minHeight: 0 } : undefined}>
       {showCoachConfig && (
         <div style={{ ...s.cardDark, marginBottom: 14 }}>
           <div style={s.section}>{t("coach.behavior")}</div>
@@ -687,7 +729,11 @@ Rules:
         </div>
       )}
       </div>
+      </div>
+      )}
 
+      {/* CHAT VIEW (hidden on mobile when in the settings sub-page) ──────── */}
+      {inChat && (<>
       {/* Soft hint once chat history grows past the threshold — older turns
           start competing with the system prompt for the model's attention.
           One-tap to open Memory; not blocking. */}
@@ -711,12 +757,13 @@ Rules:
 
       <div ref={chatScrollRef} style={{
         ...s.card,
-        marginBottom: 12,
-        minHeight: isMobile ? 240 : 200,
-        // On mobile let the chat fill the viewport down to where the fixed
-        // input bar takes over (~120px from the bottom). The dvh keeps it
-        // honest against Chrome's collapsing URL bar.
-        maxHeight: isMobile ? "calc(100dvh - 320px)" : 500,
+        marginBottom: isMobile ? 0 : 12,
+        // Mobile: chat fills available vertical space inside the flex column;
+        // min-height: 0 lets it shrink (default min-content would prevent
+        // shrinking and break the layout). Desktop: capped between 200-500.
+        flex: isMobile ? 1 : undefined,
+        minHeight: isMobile ? 0 : 200,
+        maxHeight: isMobile ? undefined : 500,
         overflowY: "auto",
       }}>
         {chatMessages.length === 0 ? (
@@ -765,26 +812,17 @@ Rules:
         )}
       </div>
 
-      {/* Input row.
-          Desktop: in-flow row with a tall textarea (rows=9).
-          Mobile: position: fixed above the MobileShell bottom tab bar so
-          the user doesn't have to scroll the page to type. Textarea grows
-          to ~3 lines (resizable); Send shrinks to a square ⏎ icon button
-          so the textarea gets all the horizontal room.
-          --mobile-input-fs is a custom property the global mobile CSS rule
-          reads — letting us shrink this specific textarea below the default
-          16px without breaking the iOS-zoom-prevention rule elsewhere. */}
-      <div style={isMobile ? {
-        position: "fixed",
-        left: 0, right: 0,
-        bottom: "calc(64px + env(safe-area-inset-bottom))",
-        zIndex: 15,
+      {/* Input row. flex-shrink: 0 pins it to the bottom of the AICoachTab
+          flex column. Mobile: ⚙ stacked above ⏎ in a slim column on the
+          right (⚙ opens the settings sub-page). Desktop: plain Send button.
+          --mobile-input-fs is a CSS variable the global mobile rule reads —
+          lets this specific textarea drop below 16px without breaking the
+          iOS-zoom-prevention rule for every other input. */}
+      <div style={{
         display: "flex", gap: 8, alignItems: "flex-end",
-        padding: "10px 12px",
-        background: "var(--bg)",
-        borderTop: "1px solid var(--rule)",
-      } : {
-        display: "flex", gap: 8, alignItems: "flex-end",
+        paddingTop: isMobile ? 10 : 0,
+        borderTop: isMobile ? "1px solid var(--rule)" : "none",
+        flexShrink: 0,
       }}>
         <textarea
           rows={isMobile ? 3 : 9}
@@ -800,27 +838,37 @@ Rules:
             lineHeight: 1.45,
             "--mobile-input-fs": isMobile ? "14px" : undefined,
           }} />
-        <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
-          aria-label="Send"
-          style={isMobile ? {
-            ...s.btn,
-            width: 44, minWidth: 44, height: 44,
-            padding: 0,
-            fontSize: 20, lineHeight: 1,
-            flexShrink: 0,
-            opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
-          } : {
-            ...s.btn,
-            padding: "10px 20px",
-            opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
-          }}>
-          {isMobile ? "⏎" : t("coach.send")}
-        </button>
+        {isMobile ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+            <button onClick={() => setShowCoachMenu(true)} aria-label={t("coach.menu_open")}
+              style={{
+                ...s.btnGhost,
+                width: 44, minWidth: 44, height: 36,
+                padding: 0, fontSize: 14, lineHeight: 1,
+                minHeight: 36,
+              }}>
+              ⚙
+              {(coachMemory || showCoachConfig || showMemory || showPromptPreview) ? " ●" : ""}
+            </button>
+            <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+              aria-label={t("coach.send")}
+              style={{
+                ...s.btn,
+                width: 44, minWidth: 44, height: 44,
+                padding: 0, fontSize: 20, lineHeight: 1,
+                opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
+              }}>
+              ⏎
+            </button>
+          </div>
+        ) : (
+          <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+            style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>
+            {t("coach.send")}
+          </button>
+        )}
       </div>
-
-      {/* Mobile: sentinel to reserve scroll-space matching the fixed input
-          bar's height, so the last chat message isn't covered by it. */}
-      {isMobile && <div aria-hidden style={{ height: 110 }} />}
+      </>)}
 
       {planProposal && (
         <CoachPlanImportModal

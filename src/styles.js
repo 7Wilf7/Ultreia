@@ -157,7 +157,11 @@ export const s = {
     // any ancestor stacking context), z-index conflicts are avoided.
     zIndex: 9999,
     padding: isMobile ? 0 : 20,
-    overflowY: "auto",
+    // NB: no overflow here. The CARD scrolls internally (see modalCard).
+    // Previously the overlay scrolled, which on some Chromium builds caused
+    // the modal card to slide up and reveal the page underneath through
+    // the semi-transparent backdrop. Card-internal scroll keeps the backdrop
+    // anchored to the viewport at all times.
     overscrollBehavior: "contain",
   }),
   modalCard: (isMobile, { maxWidth = 600, bg = "var(--bg-elevated)" } = {}) => ({
@@ -168,7 +172,13 @@ export const s = {
     width: "100%",
     maxWidth: isMobile ? "none" : maxWidth,
     margin: isMobile ? 0 : "20px auto",
-    minHeight: isMobile ? "100dvh" : "auto",
+    // Mobile: card fills the viewport exactly and scrolls its own content.
+    // Desktop: card centers with a top margin and caps at viewport-minus-margins.
+    height: isMobile ? "100dvh" : "auto",
+    maxHeight: isMobile ? "100dvh" : "calc(100dvh - 40px)",
+    overflowY: "auto",
+    overscrollBehavior: "contain",
+    WebkitOverflowScrolling: "touch",
     padding: isMobile
       ? "calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)"
       : 24,

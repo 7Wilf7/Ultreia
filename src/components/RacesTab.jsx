@@ -4,7 +4,7 @@ import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES }
 import { useT } from "../i18n/LanguageContext";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
-import { useIsNarrow } from "../hooks/useMediaQuery";
+import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import { ClockIcon } from "./Icons";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
 
@@ -48,6 +48,7 @@ function raceToForm(race) {
 export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI }) {
   const t = useT();
   const isNarrow = useIsNarrow();
+  const isMobile = useIsMobile();
   // addingMode: null = no add form; "target" or "history" = the new race kind being added.
   // No more target/history TAB switching — both lists render on the same page.
   const [addingMode, setAddingMode] = useState(null);
@@ -172,6 +173,26 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     setFilter(filter.includes(cat) ? filter.filter(c => c !== cat) : [...filter, cat]);
   }
   function renderFilterChips(filter, setFilter) {
+    // Mobile: single-select native dropdown — one row, far less screen real
+    // estate than the chip grid. Trades multi-select for a cleaner layout
+    // (the chip grid wrapped to 2 rows on a 360-wide phone).
+    if (isMobile) {
+      const value = filter[0] || "";
+      return (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("races.filter_label")}</span>
+          <select
+            value={value}
+            onChange={e => setFilter(e.target.value ? [e.target.value] : [])}
+            style={{ ...s.input, flex: 1, padding: "6px 10px", fontSize: 13 }}>
+            <option value="">{t("races.filter_all")}</option>
+            {RACE_CATEGORIES.map(c => (
+              <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, alignItems: "center" }}>
         <span style={{ ...s.muted, fontSize: 11, marginRight: 2 }}>{t("races.filter_label")}</span>

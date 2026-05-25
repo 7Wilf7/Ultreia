@@ -24,18 +24,31 @@ export function MobileShell({ children, tab, setTab }) {
 
   return (
     <div style={{
-      minHeight: "100dvh",
+      // Lock the shell to exactly the viewport — no body-level scroll, no
+      // rubber-band overscroll on tabs whose content already fits.
+      height: "100dvh",
+      overflow: "hidden",
       display: "flex",
       flexDirection: "column",
       background: "var(--bg)",
     }}>
       {/* ── Content slot ───────────────────────────────────────────────────
-          Owns its own scroll. Bottom padding reserves room for the fixed
-          tab bar + safe-area for the iOS home indicator. */}
+          flex: 1 takes the space between safe-area-top and the bottom nav.
+          Tabs that overflow scroll INTERNALLY here (Training, Races);
+          tabs that fit (Calendar, AI Coach, Settings) use height: 100%
+          flex layouts and never overflow. overscroll-behavior: contain
+          keeps drag gestures from bouncing the page. */}
       <main style={{
         flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
         padding: "14px 14px 0",
         paddingTop: "max(env(safe-area-inset-top), 14px)",
+        // Reserve room for the position: fixed bottom nav (~56px content
+        // + safe-area). Tab content inside main lays out above this padding.
         paddingBottom: "calc(64px + env(safe-area-inset-bottom))",
       }}>
         {children}

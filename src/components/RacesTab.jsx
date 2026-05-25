@@ -61,6 +61,13 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
   // user picks a category via the inline picker on the card.
   const [targetFilter, setTargetFilter] = useState([]);
   const [historyFilter, setHistoryFilter] = useState([]);
+  // Mobile-only sub-navigation. Top tabs split PR (Personal Records bar)
+  // from Races (the two lists). Inside Races, sub-tabs split Target vs
+  // History — replacing the desktop's stacked sections. Defaults match the
+  // user's primary use case: opening the Races bottom-nav tab lands on
+  // upcoming target races.
+  const [mobileTopTab, setMobileTopTab] = useState("races"); // "pr" | "races"
+  const [mobileSubTab, setMobileSubTab] = useState("target"); // "target" | "history"
 
   function startAdd(mode) {
     if (editingRaceId) cancelEdit();
@@ -235,13 +242,138 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     return renderRaceCardInner(r, timeStr);
   }
 
+  // Render helpers for the two sections — kept here so both desktop (stacked)
+  // and mobile (sub-tab swap) can reuse them.
+  function renderTargetSection() {
+    return (
+      <>
+        <div style={{ ...s.section, marginTop: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span>{t("races.section_target")}</span>
+          <span style={{ ...s.muted, fontWeight: 400 }}>
+            {targetFilter.length > 0 ? `${targetRacesList.length} / ${targetRacesAll.length}` : targetRacesAll.length}
+          </span>
+        </div>
+        {targetRacesAll.length > 0 && renderFilterChips(targetFilter, setTargetFilter)}
+        {targetRacesList.length === 0 ? (
+          <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", marginBottom: 22, fontSize: 13 }}>
+            {targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target")}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
+            {targetRacesList.map(renderRaceCard)}
+          </div>
+        )}
+      </>
+    );
+  }
+  function renderHistorySection() {
+    return (
+      <>
+        <div style={{ ...s.section, display: "flex", alignItems: "baseline", gap: 8 }}>
+          <span>{t("races.section_history")}</span>
+          <span style={{ ...s.muted, fontWeight: 400 }}>
+            {historyFilter.length > 0 ? `${historyRacesList.length} / ${historyRacesAll.length}` : historyRacesAll.length}
+          </span>
+        </div>
+        {historyRacesAll.length > 0 && renderFilterChips(historyFilter, setHistoryFilter)}
+        {historyRacesList.length === 0 ? (
+          <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", fontSize: 13 }}>
+            {historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history")}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {historyRacesList.map(renderRaceCard)}
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // ── Mobile layout ──────────────────────────────────────────────────────
+  // Top tabs split PR vs Races. Inside Races, sub-tabs swap Target/History.
+  // Add buttons stay visible in Races tab; the PR tab is read-only (it's
+  // computed from history rows, so editing happens via History → race form).
+  if (isMobile) {
+    return (
+      <div>
+        {/* Top tab strip: PR | Races */}
+        <div style={{ display: "flex", borderBottom: "1px solid var(--rule)", marginBottom: 14 }}>
+          {[
+            { id: "pr",    label: t("races.tab_pr") },
+            { id: "races", label: t("races.tab_races") },
+          ].map(tab => {
+            const active = mobileTopTab === tab.id;
+            return (
+              <button key={tab.id} onClick={() => setMobileTopTab(tab.id)}
+                style={{
+                  flex: 1, background: "transparent", border: "none",
+                  padding: "12px 8px",
+                  fontSize: 14, fontWeight: active ? 600 : 500,
+                  color: active ? "var(--ink-1)" : "var(--ink-3)",
+                  borderBottom: active ? "2px solid var(--ink-1)" : "2px solid transparent",
+                  marginBottom: -1,
+                  borderRadius: 0,
+                }}>
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {mobileTopTab === "pr" && (
+          <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
+        )}
+
+        {mobileTopTab === "races" && (
+          <>
+            {/* Sub-tab strip: Target | History */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+              {[
+                { id: "target",  label: t("races.section_target") },
+                { id: "history", label: t("races.section_history") },
+              ].map(tab => (
+                <button key={tab.id} onClick={() => setMobileSubTab(tab.id)}
+                  style={s.chip(mobileSubTab === tab.id)}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Add buttons — kept compact; mode-specific Add is sticky to the
+                current sub-tab so the form opens with the right defaults. */}
+            <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={() => startAdd(mobileSubTab)} style={addingMode === mobileSubTab ? s.btn : s.btnGhost}>
+                {mobileSubTab === "target" ? t("races.add_target") : t("races.add_history")}
+              </button>
+              <span style={{ ...s.muted, fontSize: 11 }}>{t("races.edit_hint")}</span>
+            </div>
+
+            {pastRaceWarning && (
+              <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
+                <div style={{ ...s.section, color: "#7a5a00" }}>{t("races.past_warn_title")}</div>
+                <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
+                  <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+                </div>
+              </div>
+            )}
+
+            {addingMode && !editingRaceId && renderRaceForm("add")}
+
+            {mobileSubTab === "target" && renderTargetSection()}
+            {mobileSubTab === "history" && renderHistorySection()}
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // ── Desktop layout (unchanged): PR bar, both lists stacked ─────────────
   return (
     <div>
-      {/* PR bar — absorbs the former PR tab. ITRA editor lives as a small badge
-          on the Trail card here, not a separate large card. */}
       <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
 
-      {/* Two add buttons at the top. Click one to open the corresponding add form below. */}
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <button onClick={() => startAdd("target")} style={addingMode === "target" ? s.btn : s.btnGhost}>{t("races.add_target")}</button>
         <button onClick={() => startAdd("history")} style={addingMode === "history" ? s.btn : s.btnGhost}>{t("races.add_history")}</button>
@@ -259,45 +391,10 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
         </div>
       )}
 
-      {/* Add-mode form sits at the top (between the buttons and the lists).
-          Edit-mode form replaces the card in-place inside the list. */}
       {addingMode && !editingRaceId && renderRaceForm("add")}
 
-      {/* === Target Races section === */}
-      <div style={{ ...s.section, marginTop: 8, display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span>{t("races.section_target")}</span>
-        <span style={{ ...s.muted, fontWeight: 400 }}>
-          {targetFilter.length > 0 ? `${targetRacesList.length} / ${targetRacesAll.length}` : targetRacesAll.length}
-        </span>
-      </div>
-      {targetRacesAll.length > 0 && renderFilterChips(targetFilter, setTargetFilter)}
-      {targetRacesList.length === 0 ? (
-        <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", marginBottom: 22, fontSize: 13 }}>
-          {targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target")}
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 22 }}>
-          {targetRacesList.map(renderRaceCard)}
-        </div>
-      )}
-
-      {/* === History section === */}
-      <div style={{ ...s.section, display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span>{t("races.section_history")}</span>
-        <span style={{ ...s.muted, fontWeight: 400 }}>
-          {historyFilter.length > 0 ? `${historyRacesList.length} / ${historyRacesAll.length}` : historyRacesAll.length}
-        </span>
-      </div>
-      {historyRacesAll.length > 0 && renderFilterChips(historyFilter, setHistoryFilter)}
-      {historyRacesList.length === 0 ? (
-        <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", fontSize: 13 }}>
-          {historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history")}
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {historyRacesList.map(renderRaceCard)}
-        </div>
-      )}
+      {renderTargetSection()}
+      {renderHistorySection()}
     </div>
   );
 

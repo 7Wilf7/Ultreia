@@ -359,6 +359,8 @@ const dict = {
   "form.discard_confirm":     { en: "Discard unsaved changes?", zh: "放弃未保存的修改？" },
 
   // ===== Races tab =====
+  "races.tab_pr":             { en: "Personal Records",     zh: "个人纪录" },
+  "races.tab_races":          { en: "Races",                zh: "比赛" },
   "races.section_target":     { en: "Target Races",         zh: "目标比赛" },
   "races.section_history":    { en: "Race History",         zh: "历史比赛" },
   "races.filter_all":         { en: "All",                  zh: "全部" },

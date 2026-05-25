@@ -1,6 +1,7 @@
 import { s } from "../styles";
 import { FILTER_GROUPS, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 
 /**
  * Filter state shape (held in App):
@@ -47,8 +48,43 @@ function pillLabel(groupKey, group, state, t) {
   return labels.join("+");
 }
 
+// Translate the rich {all, groups:{run,strength,hiit}} filter into a single
+// dropdown value, and back. The dropdown represents only the common cases
+// (all / one parent group / one specific child); selecting any option from
+// the dropdown collapses the filter to those shapes — multi-select chips
+// on desktop are still the way to get arbitrary combinations.
+function filterToDropdownValue(filter) {
+  if (filter.all) return "all";
+  const g = filter.groups;
+  if (g.hiit.enabled) return "hiit";
+  if (g.run.enabled) {
+    if (g.run.subs.length === 1) return `run-${g.run.subs[0]}`;
+    return "run-all";
+  }
+  if (g.strength.enabled) {
+    if (g.strength.subs.length === 1) return `strength-${g.strength.subs[0]}`;
+    return "strength-all";
+  }
+  return "all";
+}
+function dropdownValueToFilter(value) {
+  const empty = {
+    run: { enabled: false, subs: [] },
+    strength: { enabled: false, subs: [] },
+    hiit: { enabled: false, subs: [] },
+  };
+  if (value === "all") return { all: true, groups: empty };
+  if (value === "hiit") return { all: false, groups: { ...empty, hiit: { enabled: true, subs: [] } } };
+  if (value === "run-all") return { all: false, groups: { ...empty, run: { enabled: true, subs: [] } } };
+  if (value.startsWith("run-")) return { all: false, groups: { ...empty, run: { enabled: true, subs: [value.slice(4)] } } };
+  if (value === "strength-all") return { all: false, groups: { ...empty, strength: { enabled: true, subs: [] } } };
+  if (value.startsWith("strength-")) return { all: false, groups: { ...empty, strength: { enabled: true, subs: [value.slice(9)] } } };
+  return { all: true, groups: empty };
+}
+
 export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown }) {
   const t = useT();
+  const isMobile = useIsMobile();
 
   function setAll() {
     setFilter({
@@ -195,6 +231,37 @@ export function GlobalFilter({ filter, setFilter, openDropdown, setOpenDropdown 
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // Mobile: collapse the chip+dropdown tangle into a single native select.
+  // Loses the ability to pick e.g. "Road Run + Trail Run" simultaneously,
+  // but the dropdown covers the 90%-common cases in one row.
+  if (isMobile) {
+    const value = filterToDropdownValue(filter);
+    return (
+      <div data-global-filter style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("filter.type_label")}</span>
+        <select value={value}
+          onChange={e => setFilter(dropdownValueToFilter(e.target.value))}
+          style={{ ...s.input, flex: 1, padding: "6px 10px", fontSize: 13 }}>
+          <option value="all">{t("filter.all_activities")}</option>
+          <optgroup label={t("filter.group.run")}>
+            <option value="run-all">{t("filter.run_all")}</option>
+            <option value="run-Road Run">{t("filter.child.Road Run")}</option>
+            <option value="run-Trail Run">{t("filter.child.Trail Run")}</option>
+            <option value="run-Hiking">{t("filter.child.Hiking")}</option>
+            <option value="run-Floor Climbing">{t("filter.child.Floor Climbing")}</option>
+          </optgroup>
+          <optgroup label={t("filter.group.strength")}>
+            <option value="strength-all">{t("filter.strength_all")}</option>
+            <option value="strength-Upper Body">{t("filter.child.Upper Body")}</option>
+            <option value="strength-Lower Body">{t("filter.child.Lower Body")}</option>
+            <option value="strength-Core">{t("filter.child.Core")}</option>
+          </optgroup>
+          <option value="hiit">{t("filter.group.hiit")}</option>
+        </select>
       </div>
     );
   }

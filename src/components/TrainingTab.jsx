@@ -3,6 +3,7 @@ import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
 import { PeriodSelector } from "./PeriodSelector";
 import { ActivitiesTab } from "./ActivitiesTab";
@@ -15,6 +16,7 @@ export function TrainingTab({
   setConfirmDelete, profile,
 }) {
   const t = useT();
+  const isMobile = useIsMobile();
   const [view, setView] = useState("activities"); // "activities" | "charts"
 
   // Activities / Charts must NOT include planned workouts (those live on the
@@ -76,9 +78,13 @@ export function TrainingTab({
               decoration on the bottom-right, position number in the corner. */}
           <div style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            // Mobile: force a single 4-col row so all stats fit above the
+            // fold; drop the contour decoration + position number to save
+            // every available pixel. Desktop keeps the original instrument
+            // panel feel.
+            gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 0,
-            marginBottom: 28,
+            marginBottom: isMobile ? 16 : 28,
             border: "1px solid var(--rule)",
             background: "var(--bg-elevated)",
           }}>
@@ -90,20 +96,40 @@ export function TrainingTab({
             ].map((c, i) => (
               <div key={c.label} style={{
                 position: "relative",
-                padding: "20px 22px 24px",
+                padding: isMobile ? "8px 6px 10px" : "20px 22px 24px",
                 borderRight: i < 3 ? "1px solid var(--rule)" : "none",
-                minHeight: 110,
-                ...CONTOUR_BG,
+                minHeight: isMobile ? undefined : 110,
+                ...(isMobile ? {} : CONTOUR_BG),
               }}>
-                {/* corner position number — keeps the instrument hint, stays tiny */}
-                <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
-                  {String(i + 1).padStart(2, "0")} / 04
-                </div>
-                <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-2)", marginBottom: 10, fontWeight: 500 }}>{c.label}</div>
-                <div style={{ ...s.metricVal, fontSize: 32, display: "flex", alignItems: "baseline", gap: 6 }}>
+                {/* Corner position number — desktop only (no room on mobile) */}
+                {!isMobile && (
+                  <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
+                    {String(i + 1).padStart(2, "0")} / 04
+                  </div>
+                )}
+                <div style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: isMobile ? 10 : 13,
+                  color: "var(--ink-2)",
+                  marginBottom: isMobile ? 3 : 10,
+                  fontWeight: 500,
+                  textTransform: isMobile ? "uppercase" : "none",
+                  letterSpacing: isMobile ? "0.04em" : "normal",
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>{c.label}</div>
+                <div style={{
+                  ...s.metricVal,
+                  fontSize: isMobile ? 17 : 32,
+                  marginTop: 0,
+                  display: "flex", alignItems: "baseline", gap: 3,
+                  lineHeight: 1.1,
+                }}>
                   <span>{c.val}</span>
                   {c.unit && (
-                    <span style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>
+                    <span style={{
+                      fontSize: isMobile ? 10 : 13,
+                      color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+                    }}>
                       {c.unit}
                     </span>
                   )}

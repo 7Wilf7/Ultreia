@@ -236,6 +236,9 @@ const dict = {
   // ===== Global filter =====
   "filter.type_label":        { en: "Type:",                zh: "类型：" },
   "filter.all":               { en: "All",                  zh: "全部" },
+  "filter.all_activities":    { en: "All activities",       zh: "全部活动" },
+  "filter.run_all":           { en: "All Run",              zh: "全部跑步" },
+  "filter.strength_all":      { en: "All Strength",         zh: "全部力量" },
   "filter.disable":           { en: "✕ Disable this filter",zh: "✕ 关闭此筛选" },
   "filter.group.run":         { en: "Run",                  zh: "跑步" },
   "filter.group.strength":    { en: "Strength",             zh: "力量" },

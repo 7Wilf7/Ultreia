@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_GROUP_TYPES, HR_ZONE_METHODS } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
 import { computeHRZones } from "../utils/profile";
 import { getPeriodLabel } from "../utils/period";
@@ -21,6 +22,7 @@ function weekRangeLabel(start, endExclusive) {
 
 export function ChartsTab({ filteredAllLogs, profile }) {
   const t = useT();
+  const isMobile = useIsMobile();
   const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 8 });
 
   const chartData = useMemo(() => {
@@ -155,16 +157,37 @@ export function ChartsTab({ filteredAllLogs, profile }) {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-        <span style={{ ...s.muted }}>{t("charts.show")}</span>
-        {presets.map(opt => {
-          const active = chartPeriod.type === opt.type && chartPeriod.count === opt.count;
-          return (
-            <button key={`${opt.type}-${opt.count}`} onClick={() => setChartPeriod({ type: opt.type, count: opt.count })}
-              style={s.chip(active)}>{opt.label}</button>
-          );
-        })}
-      </div>
+      {/* Period selector. Mobile: single native dropdown (less vertical space).
+          Desktop: chips for direct toggling. */}
+      {isMobile ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("charts.show")}</span>
+          <select
+            value={`${chartPeriod.type}-${chartPeriod.count}`}
+            onChange={e => {
+              const [type, count] = e.target.value.split("-");
+              setChartPeriod({ type, count: parseInt(count, 10) });
+            }}
+            style={{ ...s.input, flex: 1, padding: "6px 10px", fontSize: 13 }}>
+            {presets.map(opt => (
+              <option key={`${opt.type}-${opt.count}`} value={`${opt.type}-${opt.count}`}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ ...s.muted }}>{t("charts.show")}</span>
+          {presets.map(opt => {
+            const active = chartPeriod.type === opt.type && chartPeriod.count === opt.count;
+            return (
+              <button key={`${opt.type}-${opt.count}`} onClick={() => setChartPeriod({ type: opt.type, count: opt.count })}
+                style={s.chip(active)}>{opt.label}</button>
+            );
+          })}
+        </div>
+      )}
 
       <div style={s.section}>
         {t("charts.distance_trend")}
@@ -172,42 +195,43 @@ export function ChartsTab({ filteredAllLogs, profile }) {
           <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>{t("charts.week_note")}</span>
         )}
       </div>
-      <div style={{ ...s.card, marginBottom: 22 }}>
-        {/* Right padding bumped (chart spans 50→640 instead of 50→690) so the rightmost
-            week label (~9 chars) doesn't get clipped at the viewBox edge. */}
-        <svg viewBox="0 0 700 240" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
+      <div style={{ ...s.card, marginBottom: 22, padding: isMobile ? "10px 6px 12px" : undefined }}>
+        {/* viewBox font sizes bumped substantially — on a 360-wide phone the
+            SVG scales down ~0.5×, so fontSize 16 here renders as ~8 device-px
+            (legible) where the old 9 rendered as ~4.5 (unreadable). Markers
+            and dot offsets bumped to match the larger labels. */}
+        <svg viewBox="0 0 700 250" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
           {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
-            const y = 190 - p * 160;
+            const y = 195 - p * 160;
             const val = (chartMax * p).toFixed(0);
             return (
               <g key={i}>
-                <line x1="40" y1={y} x2="660" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
-                <text x="34" y={y + 3.5} fontSize="9" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.04em">{val}</text>
+                <line x1="50" y1={y} x2="680" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
+                <text x="44" y={y + 5} fontSize="14" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.02em">{val}</text>
               </g>
             );
           })}
-          <text x="20" y="14" fontSize="9" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.1em">{t("charts.km_axis")}</text>
+          <text x="22" y="18" fontSize="13" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">{t("charts.km_axis")}</text>
           {(() => {
-            const xStep = chartData.length > 1 ? 610 / (chartData.length - 1) : 0;
+            const xStep = chartData.length > 1 ? 620 / (chartData.length - 1) : 0;
             const points = chartData.map((w, i) => ({
-              x: 50 + i * xStep,
-              y: 190 - (w.km / chartMax) * 160,
+              x: 60 + i * xStep,
+              y: 195 - (w.km / chartMax) * 160,
               w,
             }));
             if (points.length === 0) return null;
             const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
             return (
               <>
-                {/* Filled area beneath the line = elevation-profile feel */}
-                <path d={`${path} L ${points[points.length - 1].x} 190 L ${points[0].x} 190 Z`} fill="var(--moss)" opacity="0.08" />
-                <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth="1.25" />
+                <path d={`${path} L ${points[points.length - 1].x} 195 L ${points[0].x} 195 Z`} fill="var(--moss)" opacity="0.08" />
+                <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth="1.5" />
                 {points.map((p, i) => (
                   <g key={i}>
-                    <rect x={p.x - 2} y={p.y - 2} width="4" height="4" fill="var(--ink-1)">
+                    <rect x={p.x - 3} y={p.y - 3} width="6" height="6" fill="var(--ink-1)">
                       <title>{p.w.rangeText}: {p.w.km} km</title>
                     </rect>
-                    {p.w.km > 0 && <text x={p.x} y={p.y - 9} fontSize="9" fill="var(--ink-1)" textAnchor="middle" letterSpacing="0.02em">{p.w.km}</text>}
-                    <text x={p.x} y="208" fontSize="8.5" fill="var(--ink-3)" textAnchor="middle" letterSpacing="0.04em">{p.w.label}</text>
+                    {p.w.km > 0 && <text x={p.x} y={p.y - 12} fontSize="15" fill="var(--ink-1)" textAnchor="middle" letterSpacing="0.02em" fontWeight="500">{p.w.km}</text>}
+                    <text x={p.x} y="218" fontSize="13" fill="var(--ink-3)" textAnchor="middle" letterSpacing="0.02em">{p.w.label}</text>
                   </g>
                 ))}
               </>

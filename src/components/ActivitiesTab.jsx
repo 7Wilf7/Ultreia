@@ -272,20 +272,36 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} style={s.btn}>{t("activities.add_manual")}</button>
-        <button onClick={() => fileRef.current.click()} style={s.btnGhost}>{t("activities.upload")}</button>
-        <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleFileSelect} />
-        <button onClick={toggleSelectMode} style={selectMode ? s.btn : s.btnGhost}>
-          {selectMode ? t("activities.select_on", { n: selectedIds.size }) : t("activities.select_off")}
+      {/* Compact single-row action bar — short labels so all four (Add /
+          Upload / Select / Sort) fit on a 360-wide phone without wrapping. */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
+        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }}
+          style={{ ...s.btn, padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
+          + {t("activities.add_short")}
         </button>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-          <span style={{ ...s.muted }}>{t("activities.sort")}</span>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-            style={{ ...s.input, width: "auto", padding: "5px 8px", fontSize: 12 }}>
-            {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{t(`activities.sort.${o.id}`)}</option>)}
-          </select>
-        </div>
+        <button onClick={() => fileRef.current.click()}
+          style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
+          {t("activities.upload_short")}
+        </button>
+        <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleFileSelect} />
+        <button onClick={toggleSelectMode}
+          style={{ ...(selectMode ? s.btn : s.btnGhost), padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
+          {selectMode ? `✓ ${selectedIds.size}` : t("activities.select_short")}
+        </button>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+          style={{
+            marginLeft: "auto",
+            border: "1px solid var(--rule)", borderRadius: 2,
+            padding: "5px 8px", fontSize: 12,
+            background: "var(--bg-elevated)", color: "var(--ink-2)",
+            fontFamily: "var(--font-sans)", minWidth: 0,
+          }}>
+          {SORT_OPTIONS.map(o => (
+            <option key={o.id} value={o.id}>
+              ⇅ {t(`activities.sort.${o.id}`)}
+            </option>
+          ))}
+        </select>
       </div>
 
       {selectMode && (

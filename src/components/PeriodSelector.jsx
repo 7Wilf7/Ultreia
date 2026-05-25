@@ -1,85 +1,143 @@
-import { s } from "../styles";
 import { getPeriodLabel, pastMonths, pastYears } from "../utils/period";
 import { useT } from "../i18n/LanguageContext";
 
+// Segmented 4-tab strip — Week / Month / Year / All — in a single row.
+// Each non-"All" tab carries its own ▾ caret that opens a popup for picking
+// past periods. Active cell gets a filled inverted background.
 export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown }) {
   const t = useT();
 
+  function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownContent }) {
+    return (
+      <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+        <button
+          onClick={onClick}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+            width: "100%", minHeight: 36,
+            padding: "8px 6px",
+            background: active ? "var(--ink-1)" : "transparent",
+            color: active ? "var(--ink-inv)" : "var(--ink-2)",
+            border: "none",
+            borderRight: kind !== "all" ? "1px solid var(--rule)" : "none",
+            fontFamily: "var(--font-sans)", fontSize: 12,
+            fontWeight: active ? 600 : 500,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            cursor: "pointer", borderRadius: 0,
+          }}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
+          {hasDropdown && <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>}
+        </button>
+        {isOpen && (
+          <div style={{
+            position: "absolute", top: "100%", left: 0, right: 0, marginTop: 2,
+            background: "var(--bg-elevated)",
+            border: "1px solid var(--rule)", borderRadius: 2,
+            maxHeight: 300, overflowY: "auto",
+            boxShadow: "0 8px 24px rgba(20,20,19,0.08)",
+            zIndex: 50, minWidth: 140,
+          }}>
+            {dropdownContent}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function popupItem(label, selected, onClick) {
+    return (
+      <button onClick={onClick}
+        style={{
+          display: "block", width: "100%", textAlign: "left",
+          background: selected ? "var(--bg-sunken)" : "transparent",
+          border: "none", padding: "8px 12px",
+          fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-1)",
+          fontWeight: selected ? 600 : 400,
+          cursor: "pointer", borderRadius: 0,
+        }}>
+        {label}
+      </button>
+    );
+  }
+
   return (
-    <div data-period-control style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap", position: "relative" }}>
-      <button onClick={() => { setPeriod({ type: "all" }); setPeriodDropdown(null); }}
-        style={s.chip(period.type === "all")}>{t("period.all_time")}</button>
-
-      <div style={{ position: "relative" }}>
-        <button onClick={(e) => {
+    <div data-period-control style={{
+      display: "flex",
+      marginBottom: 14,
+      border: "1px solid var(--rule)",
+      borderRadius: 2,
+      overflow: "visible",
+      background: "var(--bg-elevated)",
+    }}>
+      <Cell
+        kind="week"
+        active={period.type === "week"}
+        label={period.type === "week" ? getPeriodLabel(period, t) : t("period.this_week")}
+        onClick={(e) => {
           e.stopPropagation();
-          if (period.type === "week" && period.offset !== 0) { setPeriod({ type: "week", offset: 0 }); }
-          else if (period.type !== "week") { setPeriod({ type: "week", offset: 0 }); }
+          if (period.type === "week" && period.offset !== 0) setPeriod({ type: "week", offset: 0 });
+          else if (period.type !== "week") setPeriod({ type: "week", offset: 0 });
           setPeriodDropdown(periodDropdown === "week" ? null : "week");
-        }} style={{ ...s.chip(period.type === "week"), paddingRight: 8 }}>
-          {period.type === "week" ? getPeriodLabel(period, t) : t("period.this_week")} <span style={{ marginLeft: 4, fontSize: 9 }}>▾</span>
-        </button>
-        {periodDropdown === "week" && (
-          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 6, zIndex: 100, minWidth: 140, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-            {[0, -1, -2, -3, -4].map(off => (
-              <button key={off} onClick={() => { setPeriod({ type: "week", offset: off }); setPeriodDropdown(null); }}
-                style={{ display: "block", width: "100%", border: "none", background: period.type === "week" && period.offset === off ? "#f0f0f0" : "transparent", padding: "6px 10px", textAlign: "left", fontSize: 12, color: "#333", cursor: "pointer", borderRadius: 4 }}>
-                {off === 0 ? t("period.this_week") : off === -1 ? t("period.last_week") : t("period.weeks_ago", { n: Math.abs(off) })}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div style={{ position: "relative" }}>
-        <button onClick={(e) => {
+        }}
+        hasDropdown
+        isOpen={periodDropdown === "week"}
+        dropdownContent={[0, -1, -2, -3, -4].map(off => popupItem(
+          off === 0 ? t("period.this_week") : off === -1 ? t("period.last_week") : t("period.weeks_ago", { n: Math.abs(off) }),
+          period.type === "week" && period.offset === off,
+          () => { setPeriod({ type: "week", offset: off }); setPeriodDropdown(null); },
+        ))}
+      />
+      <Cell
+        kind="month"
+        active={period.type === "month"}
+        label={period.type === "month" ? getPeriodLabel(period, t) : t("period.this_month")}
+        onClick={(e) => {
           e.stopPropagation();
-          if (period.type !== "month" || (period.year != null)) { setPeriod({ type: "month" }); }
+          if (period.type !== "month" || period.year != null) setPeriod({ type: "month" });
           setPeriodDropdown(periodDropdown === "month" ? null : "month");
-        }} style={{ ...s.chip(period.type === "month"), paddingRight: 8 }}>
-          {period.type === "month" ? getPeriodLabel(period, t) : t("period.this_month")} <span style={{ marginLeft: 4, fontSize: 9 }}>▾</span>
-        </button>
-        {periodDropdown === "month" && (
-          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 6, zIndex: 100, minWidth: 140, maxHeight: 300, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-            {pastMonths(24).map((m, i) => {
-              const isCurrent = i === 0;
-              const isSelected = period.type === "month"
-                && ((period.year == null && isCurrent) || (period.year === m.year && period.month === m.month));
-              return (
-                <button key={i} onClick={() => { setPeriod(isCurrent ? { type: "month" } : { type: "month", year: m.year, month: m.month }); setPeriodDropdown(null); }}
-                  style={{ display: "block", width: "100%", border: "none", background: isSelected ? "#f0f0f0" : "transparent", padding: "6px 10px", textAlign: "left", fontSize: 12, color: "#333", cursor: "pointer", borderRadius: 4 }}>
-                  {isCurrent ? t("period.this_month") : getPeriodLabel({ type: "month", year: m.year, month: m.month }, t)}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div style={{ position: "relative" }}>
-        <button onClick={(e) => {
+        }}
+        hasDropdown
+        isOpen={periodDropdown === "month"}
+        dropdownContent={pastMonths(24).map((m, i) => {
+          const isCurrent = i === 0;
+          const isSelected = period.type === "month"
+            && ((period.year == null && isCurrent) || (period.year === m.year && period.month === m.month));
+          return popupItem(
+            isCurrent ? t("period.this_month") : getPeriodLabel({ type: "month", year: m.year, month: m.month }, t),
+            isSelected,
+            () => { setPeriod(isCurrent ? { type: "month" } : { type: "month", year: m.year, month: m.month }); setPeriodDropdown(null); },
+          );
+        })}
+      />
+      <Cell
+        kind="year"
+        active={period.type === "year"}
+        label={period.type === "year" ? getPeriodLabel(period, t) : t("period.this_year")}
+        onClick={(e) => {
           e.stopPropagation();
-          if (period.type !== "year" || (period.year != null)) { setPeriod({ type: "year" }); }
+          if (period.type !== "year" || period.year != null) setPeriod({ type: "year" });
           setPeriodDropdown(periodDropdown === "year" ? null : "year");
-        }} style={{ ...s.chip(period.type === "year"), paddingRight: 8 }}>
-          {period.type === "year" ? getPeriodLabel(period, t) : t("period.this_year")} <span style={{ marginLeft: 4, fontSize: 9 }}>▾</span>
-        </button>
-        {periodDropdown === "year" && (
-          <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: "#fff", border: "1px solid #ddd", borderRadius: 8, padding: 6, zIndex: 100, minWidth: 120, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
-            {pastYears(6).map((yy, i) => {
-              const isCurrent = i === 0;
-              const isSelected = period.type === "year"
-                && ((period.year == null && isCurrent) || (period.year === yy));
-              return (
-                <button key={yy} onClick={() => { setPeriod(isCurrent ? { type: "year" } : { type: "year", year: yy }); setPeriodDropdown(null); }}
-                  style={{ display: "block", width: "100%", border: "none", background: isSelected ? "#f0f0f0" : "transparent", padding: "6px 10px", textAlign: "left", fontSize: 12, color: "#333", cursor: "pointer", borderRadius: 4 }}>
-                  {isCurrent ? t("period.this_year") : String(yy)}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        }}
+        hasDropdown
+        isOpen={periodDropdown === "year"}
+        dropdownContent={pastYears(6).map((yy, i) => {
+          const isCurrent = i === 0;
+          const isSelected = period.type === "year"
+            && ((period.year == null && isCurrent) || (period.year === yy));
+          return popupItem(
+            isCurrent ? t("period.this_year") : String(yy),
+            isSelected,
+            () => { setPeriod(isCurrent ? { type: "year" } : { type: "year", year: yy }); setPeriodDropdown(null); },
+          );
+        })}
+      />
+      <Cell
+        kind="all"
+        active={period.type === "all"}
+        label={t("period.all_time")}
+        onClick={() => { setPeriod({ type: "all" }); setPeriodDropdown(null); }}
+        hasDropdown={false}
+      />
     </div>
   );
 }

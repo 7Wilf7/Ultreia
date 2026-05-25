@@ -47,32 +47,54 @@ export function TrainingTab({
 
   return (
     <div>
-      <GlobalFilter
-        filter={filter}
-        setFilter={setFilter}
-        openDropdown={filterDropdown}
-        setOpenDropdown={setFilterDropdown}
-      />
+      {/* Centered borderless filter dropdown — same on desktop and mobile.
+          Applies to both Activities and Charts views (the filter narrows
+          the dataset, not the visualization). */}
+      <GlobalFilter filter={filter} setFilter={setFilter} />
 
-      <PeriodSelector
-        period={period}
-        setPeriod={setPeriod}
-        periodDropdown={periodDropdown}
-        setPeriodDropdown={setPeriodDropdown}
-      />
-
-      {/* Sub-view toggle — Activities ↔ Charts (Calendar is a top-level tab now) */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        <button onClick={() => setView("activities")} style={s.chip(view === "activities")}>
-          {t("training.view.activities")}
-        </button>
-        <button onClick={() => setView("charts")} style={s.chip(view === "charts")}>
-          {t("training.view.charts")}
-        </button>
+      {/* Activities ↔ Charts sits ABOVE the period selector: the period only
+          governs Activities (Charts has its own period selector inside).
+          Wrapped as segmented tabs so the hierarchy reads correctly. */}
+      <div style={{
+        display: "flex",
+        marginBottom: 14,
+        border: "1px solid var(--rule)",
+        borderRadius: 2,
+        background: "var(--bg-elevated)",
+      }}>
+        {[
+          { id: "activities", label: t("training.view.activities") },
+          { id: "charts",     label: t("training.view.charts") },
+        ].map((tab, i) => {
+          const active = view === tab.id;
+          return (
+            <button key={tab.id} onClick={() => setView(tab.id)}
+              style={{
+                flex: 1, minHeight: 36,
+                background: active ? "var(--ink-1)" : "transparent",
+                color: active ? "var(--ink-inv)" : "var(--ink-2)",
+                border: "none",
+                borderRight: i === 0 ? "1px solid var(--rule)" : "none",
+                fontFamily: "var(--font-sans)", fontSize: 13,
+                fontWeight: active ? 600 : 500,
+                cursor: "pointer", borderRadius: 0,
+              }}>
+              {tab.label}
+            </button>
+          );
+        })}
       </div>
 
       {view === "activities" && (
         <>
+          {/* Period applies to the activity list + the four stats only. */}
+          <PeriodSelector
+            period={period}
+            setPeriod={setPeriod}
+            periodDropdown={periodDropdown}
+            setPeriodDropdown={setPeriodDropdown}
+          />
+
           {/* Instrument-readout stats — four cells in a single row, each like a
               meter on a control panel. Hairline rules between cells, contour
               decoration on the bottom-right, position number in the corner. */}

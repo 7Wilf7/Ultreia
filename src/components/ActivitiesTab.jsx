@@ -1,11 +1,11 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES } from "../constants";
-import { useT } from "../i18n/LanguageContext";
-import { useIsNarrow } from "../hooks/useMediaQuery";
+import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR } from "../constants";
+import { useT, useLanguage } from "../i18n/LanguageContext";
+import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import {
   autoClassifyRun, parseTimeToSeconds,
-  formatDuration, formatPaceFromSec, formatDateShort, isDuplicate,
+  formatDuration, formatPaceFromSec, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
 import { ActivityForm } from "./ActivityForm";
 import { ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon } from "./Icons";
@@ -27,13 +27,16 @@ function mapGarminActivityType(at) {
 
 export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete }) {
   const t = useT();
+  const { lang } = useLanguage();
   // < 1024px: phone OR small tablet. Both can't fit the 8-column metric
   // grid plus the 300px left identifier block — switch to a stacked flex
   // layout where the metric pills wrap naturally.
   const isNarrow = useIsNarrow();
+  const isMobile = useIsMobile();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null); // log.id currently being edited inline
+  const [expandedId, setExpandedId] = useState(null); // mobile only — tap to expand a card
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [uploadMsg, setUploadMsg] = useState("");
@@ -411,6 +414,106 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               />
             );
           }
+
+          // Mobile compact card — fixed-height two-row layout. Tap expands to
+          // reveal all metrics + an Edit button. Tap again to collapse.
+          if (isMobile) {
+            const isExpanded = expandedId === l.id;
+            const onMobileCardClick = () => {
+              if (selectMode) toggleSelected(l.id);
+              else setExpandedId(isExpanded ? null : l.id);
+            };
+            return (
+              <div key={l.id}
+                onClick={onMobileCardClick}
+                style={{
+                  background: isSelected ? "#eef5ff" : "var(--bg-elevated)",
+                  border: "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
+                  borderLeft: "4px solid " + (TYPE_COLOR[l.type] || "var(--rule)"),
+                  padding: "9px 12px 10px",
+                  display: "flex", flexDirection: "column", gap: 5,
+                  cursor: "pointer",
+                }}>
+                {/* Row 1: date + weekday + type tag + sub-types + delete */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  {selectMode && (
+                    <input type="checkbox" checked={isSelected} readOnly
+                      style={{ width: 16, height: 16, pointerEvents: "none", flexShrink: 0 }} />
+                  )}
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+                    fontVariantNumeric: "tabular-nums", flexShrink: 0,
+                  }}>{formatDateShort(l.date)}</span>
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", flexShrink: 0,
+                  }}>{formatWeekdayShort(l.date, lang)}</span>
+                  <span style={{ ...s.tag(l.type), fontSize: 10, padding: "2px 7px", flexShrink: 0 }}>
+                    {t(`enum.activity.${l.type}`)}
+                  </span>
+                  {/* Sub-types — inline joined text, no chips. Allows ellipsis
+                      if too long (e.g. "Lower Body · Core · Upper Body"). */}
+                  {l.subTypes.length > 0 && (() => {
+                    const visible = l.subTypes.filter(st => {
+                      if (RUN_FLAGS.includes(st)) return true;
+                      if (RUN_PACE_TYPES.includes(st)) return l.type === "Road Run";
+                      return l.type === "Strength";
+                    });
+                    if (visible.length === 0) return null;
+                    return (
+                      <span style={{
+                        fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-2)",
+                        textTransform: "uppercase", letterSpacing: "0.04em",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        minWidth: 0, flex: "0 1 auto",
+                      }}>
+                        {visible.map(st => (RUN_FLAGS.includes(st) ? "▲ " : "") + t(`enum.subtype.${st}`)).join(" · ")}
+                      </span>
+                    );
+                  })()}
+                  <div style={{ flex: 1 }} />
+                  {!selectMode && (
+                    <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
+                      aria-label="Delete"
+                      style={{
+                        border: "none", background: "none", color: "var(--ink-3)",
+                        cursor: "pointer", fontSize: 13, padding: "0 4px",
+                        minHeight: 28, flexShrink: 0,
+                      }}>✕</button>
+                  )}
+                </div>
+
+                {/* Row 2: type-specific compact metrics */}
+                <div style={{
+                  display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap",
+                  fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+                  fontSize: 13, color: "var(--ink-1)",
+                }}>
+                  <CompactMetrics log={l} t={t} />
+                </div>
+
+                {/* Expanded: extra metrics + Edit button */}
+                {isExpanded && (
+                  <div style={{
+                    borderTop: "1px solid var(--rule-soft)", paddingTop: 8, marginTop: 2,
+                    display: "flex", flexDirection: "column", gap: 8,
+                  }}>
+                    <ExpandedMetrics log={l} t={t} />
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedId(null);
+                        setEditingId(l.id);
+                        setShowAdd(false);
+                      }}
+                      style={{ ...s.btn, alignSelf: "flex-start", fontSize: 12, padding: "6px 14px", minHeight: 36 }}>
+                      {t("activities.edit")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
           const onCardClick = () => {
             if (selectMode) {
               toggleSelected(l.id);
@@ -564,9 +667,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   )}
                 </div>
               </div>
-              {/* Spacer pushes the delete button to the far right edge */}
+              {/* Spacer pushes the delete button to the far right edge. The
+                  delete is duplicated in the header row on narrow widths,
+                  so render this one only on desktop to avoid the two-✕ bug. */}
               <div style={{ flex: 1 }} />
-              {!selectMode && (
+              {!selectMode && !isNarrow && (
                 <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
                   style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: "0 4px", flexShrink: 0 }}
                   title={t("activities.delete_tooltip")}>✕</button>
@@ -575,6 +680,137 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ─── Mobile metric helpers ────────────────────────────────────────────────
+// Per-activity-type compact summary shown in row 2 of every card; the
+// remaining numbers are deferred to ExpandedMetrics below (tap to reveal).
+//   Road Run               → distance · duration · pace
+//   Trail / Hiking / Floor → distance · ascent · duration
+//   Strength / HIIT        → duration · HR
+// ──────────────────────────────────────────────────────────────────────────
+
+function MetricDistance({ km }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={12} /></span>
+      {km}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>km</span>
+    </span>
+  );
+}
+function MetricDuration({ sec }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><ClockIcon size={12} /></span>
+      {formatDuration(sec)}
+    </span>
+  );
+}
+function MetricPace({ p }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={12} /></span>
+      {formatPaceFromSec(p)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/km</span>
+    </span>
+  );
+}
+function MetricAscent({ m }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--moss-deep)" }}>
+      <span style={{ color: "var(--moss)" }}><PeakIcon size={12} /></span>
+      +{m}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
+    </span>
+  );
+}
+function MetricHR({ hr, maxHR }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--danger)" }}><HeartIcon size={11} /></span>
+      {hr}{maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{maxHR}</span> : null}
+    </span>
+  );
+}
+function MetricGAP({ p }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={12} /></span>
+      {formatPaceFromSec(p)}
+    </span>
+  );
+}
+function MetricTE({ te }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--warn)" }}><BoltIcon size={11} /></span>
+      {te}
+    </span>
+  );
+}
+function MetricCadence({ spm }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><FootIcon size={12} /></span>
+      {spm}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>spm</span>
+    </span>
+  );
+}
+
+function CompactMetrics({ log: l }) {
+  if (l.type === "Road Run") {
+    return (
+      <>
+        {l.distance > 0 && <MetricDistance km={l.distance} />}
+        {l.duration > 0 && <MetricDuration sec={l.duration} />}
+        {l.pace > 0 && <MetricPace p={l.pace} />}
+      </>
+    );
+  }
+  if (l.type === "Trail Run" || l.type === "Hiking" || l.type === "Floor Climbing") {
+    return (
+      <>
+        {l.distance > 0 && <MetricDistance km={l.distance} />}
+        {l.ascent > 0 && <MetricAscent m={l.ascent} />}
+        {l.duration > 0 && <MetricDuration sec={l.duration} />}
+      </>
+    );
+  }
+  // Strength + HIIT
+  return (
+    <>
+      {l.duration > 0 && <MetricDuration sec={l.duration} />}
+      {l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+    </>
+  );
+}
+
+function ExpandedMetrics({ log: l }) {
+  // Everything that's NOT already in the CompactMetrics summary, rendered
+  // as a wrap-flex below the divider. Items with no value (0/missing) skip.
+  const isRoad = l.type === "Road Run";
+  const isTrailLike = l.type === "Trail Run" || l.type === "Hiking" || l.type === "Floor Climbing";
+  const isStrengthLike = l.type === "Strength" || l.type === "HIIT";
+
+  return (
+    <div style={{
+      display: "flex", gap: 14, flexWrap: "wrap",
+      fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+      fontSize: 12, color: "var(--ink-2)",
+    }}>
+      {/* Road Run extras */}
+      {isRoad && l.ascent > 0 && <MetricAscent m={l.ascent} />}
+      {isRoad && l.gap > 0 && <MetricGAP p={l.gap} />}
+      {isRoad && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+      {isRoad && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
+      {/* Trail-like extras */}
+      {isTrailLike && l.pace > 0 && <MetricPace p={l.pace} />}
+      {isTrailLike && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+      {isTrailLike && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
+      {/* Strength / HIIT extras */}
+      {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
+      {/* Universal: TE if present */}
+      {l.aerobicTE > 0 && <MetricTE te={l.aerobicTE} />}
     </div>
   );
 }

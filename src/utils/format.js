@@ -45,6 +45,19 @@ export function formatDateShort(dateStr) {
   return `${String(d.getFullYear()).slice(2)}-${m}-${day}`;
 }
 
+// Short weekday label for a YYYY-MM-DD date. Returns "周X" in Chinese,
+// 3-letter English (Mon/Tue/…) otherwise. Used in mobile activity cards
+// where a date + weekday fits on a single line.
+const WEEKDAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAY_ZH = ["日", "一", "二", "三", "四", "五", "六"];
+export function formatWeekdayShort(dateStr, lang) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const idx = d.getDay();
+  if (lang === "zh") return `周${WEEKDAY_ZH[idx]}`;
+  return WEEKDAY_EN[idx];
+}
+
 // Pull a distance-in-km number from anything the user/LLM may have typed:
 // "42.195", "42.195 km", "42.195km", "Marathon (42.195 km)", "21.1KM" — all → 42.195/21.1.
 // Returns 0 if no number found.

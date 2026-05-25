@@ -269,22 +269,23 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
           marginBottom: 4,
         }}>{date.getDate()}</span>
 
-        {/* Activity dots — up to 4, one per workout. Color encodes type;
-            dashed border = planned. If >4, last dot becomes a "+N" indicator. */}
+        {/* Activity bars — short horizontal pills, one per workout, stacked
+            vertically. Bigger and more legible than the old 7×7 dots when
+            you've got mixed activities on the same day. Up to 4; >4 collapses
+            to a "+N" indicator under the stack. */}
         {hasContent && (
           <div style={{
-            display: "flex", gap: 3, alignItems: "center",
-            flexWrap: "wrap", justifyContent: "center",
-            maxWidth: "100%",
+            display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
+            width: "100%",
           }}>
             {logs.slice(0, 4).map(l => {
               const c = TYPE_COLOR[l.type] || "#57564f";
               return (
                 <span key={l.id} style={{
-                  width: 7, height: 7,
-                  borderRadius: "50%",
+                  width: "78%", maxWidth: 28, height: 5,
+                  borderRadius: 1,
                   background: l.isPlanned ? "transparent" : c,
-                  border: l.isPlanned ? `1.5px dashed ${c}` : "none",
+                  border: l.isPlanned ? `1px dashed ${c}` : "none",
                   display: "inline-block",
                   flexShrink: 0,
                 }} title={t(`enum.activity.${l.type}`)} />
@@ -293,7 +294,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
             {logs.length > 4 && (
               <span style={{
                 fontSize: 9, color: "var(--ink-3)",
-                fontFamily: "var(--font-mono)", marginLeft: 1,
+                fontFamily: "var(--font-mono)", marginTop: 1,
               }}>+{logs.length - 4}</span>
             )}
           </div>

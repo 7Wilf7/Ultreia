@@ -37,15 +37,16 @@ export const RUN_SUBTYPES = [...RUN_PACE_TYPES, ...RUN_FLAGS]; // full list, use
 // Strength sub-types (formerly "Aerobic" — migrated)
 export const STRENGTH_SUBS = ["Upper Body", "Lower Body", "Core"];
 
-// Color tag per top-level type — palette matches the moss/stone/earth theme.
-// All saturated low; uses var()-equivalent hex so styles.tag() still works inline.
+// Color tag per top-level type — low-sat earthy palette but spread across
+// distinct hues so any two are clearly distinguishable on tags / chips /
+// chart bars. Six hues: ink / moss / ochre / plum / slate / burnt-orange.
 export const TYPE_COLOR = {
-  "Road Run":        "#141413",   /* ink-1: default black, road-running is "baseline" */
-  "Trail Run":  "#4a5e3a",   /* moss: green for trail */
-  "Hiking":         "#7a8d6a",   /* moss-light: lighter green */
-  "Floor Climbing": "#8b6a3e",   /* earth: stair / indoor climb */
-  "Strength":       "#57564f",   /* ink-2: stone gray */
-  "HIIT":           "#b54e1a",   /* burnt orange: alert/intensity */
+  "Road Run":        "#141413",   /* ink-1 black — baseline, most common */
+  "Trail Run":       "#4a5e3a",   /* moss green */
+  "Hiking":          "#b07a3e",   /* ochre / warm clay — split from Trail */
+  "Floor Climbing":  "#5d4a78",   /* muted plum — split from Hiking ochre */
+  "Strength":        "#3a5566",   /* slate blue — split from black */
+  "HIIT":            "#b54e1a",   /* burnt orange — alert/intensity */
 };
 
 // Global-filter parent → child mapping (used by GlobalFilter UI + filter logic).

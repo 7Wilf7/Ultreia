@@ -6,7 +6,7 @@ import {
   ACTIVITY_TYPES, SPARTAN_SUBTYPES,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
-import { useIsNarrow } from "../hooks/useMediaQuery";
+import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { buildSystemPrompt } from "../utils/profile";
 import { CoachPlanImportModal } from "./CoachPlanImportModal";
@@ -171,6 +171,7 @@ export function AICoachTab({
   const t = useT();
   const { lang } = useLanguage();
   const isNarrow = useIsNarrow();
+  const isMobile = useIsMobile();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   // Preview language is independent of UI language — defaults to UI language
@@ -680,7 +681,16 @@ Rules:
         </div>
       )}
 
-      <div style={{ ...s.card, marginBottom: 12, minHeight: 200, maxHeight: 500, overflowY: "auto" }}>
+      <div style={{
+        ...s.card,
+        marginBottom: 12,
+        minHeight: isMobile ? 240 : 200,
+        // On mobile let the chat fill the viewport down to where the fixed
+        // input bar takes over (~120px from the bottom). The dvh keeps it
+        // honest against Chrome's collapsing URL bar.
+        maxHeight: isMobile ? "calc(100dvh - 320px)" : 500,
+        overflowY: "auto",
+      }}>
         {chatMessages.length === 0 ? (
           <div style={{ color: "#888", textAlign: "center", padding: 30, fontSize: 13, whiteSpace: "pre-line" }}>
             {t("coach.empty")}
@@ -727,14 +737,43 @@ Rules:
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
-        <textarea rows={9} placeholder={t("coach.input_placeholder")} value={chatInput}
+      {/* Tip stays in document flow (under the message list) on both layouts;
+          on mobile, the input row floats over it via position: fixed below. */}
+      <div style={{ ...s.muted, marginTop: 6, fontSize: 11 }}>{t("coach.tip")}</div>
+
+      {/* Input row.
+          Desktop: in-flow row with a tall textarea (rows=9).
+          Mobile: position: fixed above the MobileShell bottom tab bar so
+          the user doesn't have to scroll the page to type. Reduced rows
+          (=2) to keep the bar slim; user can drag to resize if they want. */}
+      <div style={isMobile ? {
+        position: "fixed",
+        left: 0, right: 0,
+        bottom: "calc(64px + env(safe-area-inset-bottom))",
+        zIndex: 15,
+        display: "flex", gap: 8, alignItems: "flex-end",
+        padding: "10px 12px",
+        background: "var(--bg)",
+        borderTop: "1px solid var(--rule)",
+      } : {
+        display: "flex", gap: 8, alignItems: "flex-end",
+      }}>
+        <textarea
+          rows={isMobile ? 2 : 9}
+          placeholder={t("coach.input_placeholder")}
+          value={chatInput}
           onChange={e => setChatInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) sendChat(); }}
           style={{ ...s.input, resize: "vertical", fontFamily: "var(--font-sans)", flex: 1, lineHeight: 1.5 }} />
-        <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()} style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>{t("coach.send")}</button>
+        <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+          style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>
+          {t("coach.send")}
+        </button>
       </div>
-      <div style={{ ...s.muted, marginTop: 6, fontSize: 11 }}>{t("coach.tip")}</div>
+
+      {/* Mobile: sentinel to reserve scroll-space matching the fixed input
+          bar's height, so the last chat message + tip aren't covered by it. */}
+      {isMobile && <div aria-hidden style={{ height: 100 }} />}
 
       {planProposal && (
         <CoachPlanImportModal

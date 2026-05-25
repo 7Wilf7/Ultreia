@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect, useState } from "react";
 import { s } from "../styles";
 import { RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
+import { useIsMobile } from "../hooks/useMediaQuery";
 
 // ─────────────────────────────────────────────────────────────────────────
 // PersonalRecordsBar — the compact PR row that lives at the top of the
@@ -40,6 +41,7 @@ function formatHMS(sec) {
 
 export function PersonalRecordsBar({ races, itraPI, setItraPI }) {
   const t = useT();
+  const isMobile = useIsMobile();
 
   const records = useMemo(() => {
     const history = races.filter(r => !r.isTarget);
@@ -98,21 +100,27 @@ export function PersonalRecordsBar({ races, itraPI, setItraPI }) {
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{ ...s.section, marginBottom: 8 }}>{t("pr.title")}</div>
+      {/* gap:1px + container bg = --rule draws clean divider lines between
+          every cell, no matter the wrap count. Each cell paints its own
+          bg-elevated so the gap shows through as a 1px rule. Works for the
+          desktop auto-fit grid AND the mobile fixed-2-col grid. */}
       <div style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-        gap: 0,
+        gridTemplateColumns: isMobile
+          ? "repeat(2, minmax(0, 1fr))"
+          : "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: 1,
         border: "1px solid var(--rule)",
-        background: "var(--bg-elevated)",
+        background: "var(--rule)",
       }}>
-        {records.map((rec, i) => (
+        {records.map((rec) => (
           <PRCell
             key={rec.category}
             rec={rec}
-            isFirst={i === 0}
             itraPI={itraPI}
             setItraPI={setItraPI}
             t={t}
+            isMobile={isMobile}
           />
         ))}
       </div>
@@ -122,7 +130,7 @@ export function PersonalRecordsBar({ races, itraPI, setItraPI }) {
 
 // One PR cell. Self-contained so the Trail card can host its own inline
 // ITRA editor without leaking state up.
-function PRCell({ rec, isFirst, itraPI, setItraPI, t }) {
+function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
   const isTrail = rec.category === "Trail";
   const [itraEditing, setItraEditing] = useState(false);
   const [itraDraft, setItraDraft] = useState(itraPI ?? "");
@@ -149,8 +157,8 @@ function PRCell({ rec, isFirst, itraPI, setItraPI, t }) {
   return (
     <div style={{
       position: "relative",
-      padding: "18px 22px 20px",
-      borderLeft: isFirst ? "none" : "1px solid var(--rule)",
+      padding: isMobile ? "12px 14px 14px" : "18px 22px 20px",
+      background: "var(--bg-elevated)",
       borderTop: "3px solid " + (RACE_CATEGORY_COLOR[rec.category] || "var(--rule)"),
     }}>
       {/* ITRA badge — Trail card only. Tiny chip in the top-right corner. */}
@@ -190,14 +198,16 @@ function PRCell({ rec, isFirst, itraPI, setItraPI, t }) {
       )}
 
       <div style={{
-        fontSize: 13, color: "var(--ink-2)", marginBottom: 6, fontWeight: 500,
-        display: "flex", alignItems: "baseline", gap: 8,
-        paddingRight: isTrail ? 70 : 0,
+        fontSize: isMobile ? 12 : 13, color: "var(--ink-2)",
+        marginBottom: isMobile ? 4 : 6, fontWeight: 500,
+        display: "flex", alignItems: "baseline", gap: 6,
+        flexWrap: "wrap",
+        paddingRight: isTrail ? (isMobile ? 52 : 70) : 0,
       }}>
         <span>{t(`enum.race_cat.${rec.category}`)}</span>
         {(rec.metric === "distance" || rec.metric === "difficulty") && (
           <span style={{
-            fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)",
+            fontSize: isMobile ? 9 : 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)",
             textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 400,
           }}>
             {rec.metric === "distance" ? t("pr.longest") : t("pr.toughest")}
@@ -206,11 +216,11 @@ function PRCell({ rec, isFirst, itraPI, setItraPI, t }) {
       </div>
       {rec.best ? (
         <>
-          <div style={{ ...s.metricVal, fontSize: 24, display: "flex", alignItems: "baseline", gap: 6 }}>
+          <div style={{ ...s.metricVal, fontSize: isMobile ? 18 : 24, display: "flex", alignItems: "baseline", gap: 6 }}>
             {rec.metric === "distance" ? (
               <>
                 <span>{rec.best.distance}</span>
-                <span style={{ fontSize: 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>km</span>
+                <span style={{ fontSize: isMobile ? 11 : 13, color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)" }}>km</span>
               </>
             ) : rec.metric === "difficulty" ? (
               <span>{rec.best.subtype}</span>
@@ -218,22 +228,29 @@ function PRCell({ rec, isFirst, itraPI, setItraPI, t }) {
               <span>{formatHMS(rec.bestSeconds)}</span>
             )}
           </div>
-          <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 10, lineHeight: 1.45 }}>
+          <div style={{
+            fontSize: isMobile ? 12 : 13, color: "var(--ink-2)",
+            marginTop: isMobile ? 6 : 10, lineHeight: 1.4,
+            overflow: "hidden", textOverflow: "ellipsis",
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+          }}>
             {rec.best.name}
-            <div style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>{rec.best.date}</div>
+          </div>
+          <div style={{ ...s.dataNum, fontSize: isMobile ? 11 : 12, color: "var(--ink-3)", marginTop: 3 }}>
+            {rec.best.date}
           </div>
         </>
       ) : (
-        <div style={{ ...s.muted, marginTop: 4 }}>{t("pr.no_times", { n: rec.all.length })}</div>
+        <div style={{ ...s.muted, marginTop: 4, fontSize: isMobile ? 12 : 13 }}>{t("pr.no_times", { n: rec.all.length })}</div>
       )}
       {rec.all.length > 1 && (
-        <details style={{ marginTop: 10 }}>
-          <summary style={{ ...s.muted, cursor: "pointer", fontSize: 12 }}>
+        <details style={{ marginTop: isMobile ? 6 : 10 }}>
+          <summary style={{ ...s.muted, cursor: "pointer", fontSize: isMobile ? 11 : 12 }}>
             + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
           </summary>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
             {rec.all.slice(1).map(r => (
-              <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)" }}>
+              <div key={r.id} style={{ ...s.dataNum, fontSize: isMobile ? 11 : 12, color: "var(--ink-2)" }}>
                 {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
                   : rec.metric === "difficulty" ? (r.subtype || "—")
                   : formatHMS(resultSeconds(r))}

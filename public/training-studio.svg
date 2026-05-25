@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Square app icon. Parchment bg + moss triangle. Topographic contour
+       hints in the background nod to the in-app "instrument on a map"
+       aesthetic without crowding the icon. Safe zone: inner 80% (margin 51px
+       per side) so the triangle survives a circular maskable crop. -->
+  <rect width="512" height="512" fill="#f2f1ec"/>
+  <g stroke="#141413" stroke-width="2.5" fill="none" opacity="0.05">
+    <path d="M -20 380 Q 80 320, 256 340 T 532 320"/>
+    <path d="M -20 430 Q 100 365, 256 390 T 532 370"/>
+    <path d="M -20 470 Q 120 410, 256 440 T 532 420"/>
+  </g>
+  <path d="M256 160 L378 372 L134 372 Z" fill="#4a5e3a"/>
+</svg>

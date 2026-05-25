@@ -2,7 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Branded SVG favicon for desktop tabs; PNG fallback for browsers
+         that don't render SVG favicons (mostly older mobile Chrome). -->
+    <link rel="icon" type="image/svg+xml" href="/training-studio.svg" />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- iOS standalone (Add to Home Screen): apple-touch-icon must be PNG.
+         Pre-PWA-install fallback; the manifest's SVG takes over on Android. -->
+    <link rel="apple-touch-icon" href="/favicon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Training Studio" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f2f1ec" />
     <title>Training Studio</title>

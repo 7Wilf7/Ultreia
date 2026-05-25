@@ -370,6 +370,8 @@ const dict = {
   "races.filter_label":       { en: "Filter:",              zh: "筛选：" },
   "races.filter_empty":       { en: "No races match the current filter.", zh: "没有符合筛选条件的比赛。" },
   "races.add_target":         { en: "+ Add Target Race",    zh: "+ 添加目标比赛" },
+  "races.add_target_short":   { en: "Add Target",           zh: "目标" },
+  "races.add_history_short":  { en: "Add History",          zh: "历史" },
   "races.add_history":        { en: "+ Add Race Result",    zh: "+ 添加比赛成绩" },
   "races.new_target":         { en: "New Target Race",      zh: "新目标比赛" },
   "races.new_history":        { en: "New Race Result",      zh: "新比赛成绩" },

@@ -242,8 +242,9 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     return renderRaceCardInner(r, timeStr);
   }
 
-  // Render helpers for the two sections — kept here so both desktop (stacked)
-  // and mobile (sub-tab swap) can reuse them.
+  // Section renderers — desktop still uses these stacked. Mobile uses a
+  // sub-tab version that omits the section header (the count moves into
+  // the sub-tab label) and stacks Filter on the left + Add on the right.
   function renderTargetSection() {
     return (
       <>
@@ -289,18 +290,50 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     );
   }
 
+  // Mobile section — drops the "Target Races (N)" header (count is now in
+  // the sub-tab label) and puts Filter on the left + Add on the right in
+  // a single row. The race list reuses renderRaceCard so cards stay
+  // consistent with the desktop layout.
+  function renderMobileSection({ kind, list, all, filter, setFilter, emptyMessage }) {
+    return (
+      <>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, marginTop: 4 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {all.length > 0 && renderFilterChips(filter, setFilter)}
+          </div>
+          <button onClick={() => startAdd(kind)}
+            style={{
+              ...(addingMode === kind ? s.btn : s.btnGhost),
+              padding: "6px 12px", fontSize: 12, flexShrink: 0,
+            }}>
+            + {kind === "target" ? t("races.add_target_short") : t("races.add_history_short")}
+          </button>
+        </div>
+        {list.length === 0 ? (
+          <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", fontSize: 13 }}>
+            {emptyMessage}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {list.map(renderRaceCard)}
+          </div>
+        )}
+      </>
+    );
+  }
+
   // ── Mobile layout ──────────────────────────────────────────────────────
-  // Top tabs split PR vs Races. Inside Races, sub-tabs swap Target/History.
-  // Add buttons stay visible in Races tab; the PR tab is read-only (it's
-  // computed from history rows, so editing happens via History → race form).
+  // Top tabs: Races (left, default) | PR (right). Inside Races, full-width
+  // sub-tabs Target / History; the count lives in the sub-tab label so the
+  // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
     return (
       <div>
-        {/* Top tab strip: PR | Races */}
+        {/* Top tab strip: Races (left) | PR (right) */}
         <div style={{ display: "flex", borderBottom: "1px solid var(--rule)", marginBottom: 14 }}>
           {[
-            { id: "pr",    label: t("races.tab_pr") },
             { id: "races", label: t("races.tab_races") },
+            { id: "pr",    label: t("races.tab_pr") },
           ].map(tab => {
             const active = mobileTopTab === tab.id;
             return (
@@ -326,26 +359,36 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
 
         {mobileTopTab === "races" && (
           <>
-            {/* Sub-tab strip: Target | History */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            {/* Sub-tab strip — full-width segmented, count baked into label */}
+            <div style={{
+              display: "flex",
+              marginBottom: 12,
+              border: "1px solid var(--rule)",
+              borderRadius: 2,
+              background: "var(--bg-elevated)",
+            }}>
               {[
-                { id: "target",  label: t("races.section_target") },
-                { id: "history", label: t("races.section_history") },
-              ].map(tab => (
-                <button key={tab.id} onClick={() => setMobileSubTab(tab.id)}
-                  style={s.chip(mobileSubTab === tab.id)}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Add buttons — kept compact; mode-specific Add is sticky to the
-                current sub-tab so the form opens with the right defaults. */}
-            <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={() => startAdd(mobileSubTab)} style={addingMode === mobileSubTab ? s.btn : s.btnGhost}>
-                {mobileSubTab === "target" ? t("races.add_target") : t("races.add_history")}
-              </button>
-              <span style={{ ...s.muted, fontSize: 11 }}>{t("races.edit_hint")}</span>
+                { id: "target",  label: t("races.section_target"),  count: targetRacesAll.length },
+                { id: "history", label: t("races.section_history"), count: historyRacesAll.length },
+              ].map((tab, i) => {
+                const active = mobileSubTab === tab.id;
+                return (
+                  <button key={tab.id} onClick={() => setMobileSubTab(tab.id)}
+                    style={{
+                      flex: 1, minHeight: 36, padding: "8px 10px",
+                      background: active ? "var(--ink-1)" : "transparent",
+                      color: active ? "var(--ink-inv)" : "var(--ink-2)",
+                      border: "none",
+                      borderRight: i === 0 ? "1px solid var(--rule)" : "none",
+                      fontFamily: "var(--font-sans)", fontSize: 13,
+                      fontWeight: active ? 600 : 500,
+                      textAlign: "center",
+                      cursor: "pointer", borderRadius: 0,
+                    }}>
+                    {tab.label} ({tab.count})
+                  </button>
+                );
+              })}
             </div>
 
             {pastRaceWarning && (
@@ -361,8 +404,22 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
 
             {addingMode && !editingRaceId && renderRaceForm("add")}
 
-            {mobileSubTab === "target" && renderTargetSection()}
-            {mobileSubTab === "history" && renderHistorySection()}
+            {mobileSubTab === "target" && renderMobileSection({
+              kind: "target",
+              list: targetRacesList,
+              all: targetRacesAll,
+              filter: targetFilter,
+              setFilter: setTargetFilter,
+              emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
+            })}
+            {mobileSubTab === "history" && renderMobileSection({
+              kind: "history",
+              list: historyRacesList,
+              all: historyRacesAll,
+              filter: historyFilter,
+              setFilter: setHistoryFilter,
+              emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
+            })}
           </>
         )}
       </div>
@@ -408,54 +465,62 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     const distStr = r.distance > 0 ? `${r.distance} km` : "";
     const ascStr  = r.ascent && parseInt(r.ascent) > 0 ? `+${r.ascent} m` : "";
 
-    // Mobile: stacked layout, name + suffix gets its own breathing room.
+    // Mobile: strict 2-row card. Row 1 = date + priority + category tag.
+    // Row 2 = race name (ellipsised if too long) + ascent/time suffix.
+    // Both rows are nowrap so the card height is consistent across all
+    // rows in the list. Tap the card to open the edit form (which shows
+    // the full name).
     if (isNarrow) {
-      const inlineSuffix = [];
-      if (r.category === "Trail" && distStr) inlineSuffix.push(distStr);
-      if (ascStr) inlineSuffix.push(ascStr);
+      const suffixParts = [];
+      if (r.category === "Trail" && distStr) suffixParts.push(distStr);
+      if (ascStr) suffixParts.push(ascStr);
+      if (timeStr) suffixParts.push(timeStr);
+      const suffix = suffixParts.join(" · ");
       return (
         <div key={r.id} onClick={() => startEdit(r)}
           style={{
             ...s.card, cursor: "pointer",
             display: "flex", flexDirection: "column",
-            gap: 6, padding: "10px 14px",
+            gap: 5, padding: "10px 14px",
           }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          {/* Row 1: date · priority · category · subtype · delete (no wrap) */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
             <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
-              fontVariantNumeric: "tabular-nums",
+              fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+              fontVariantNumeric: "tabular-nums", flexShrink: 0,
             }}>{r.date || "—"}</span>
             {r.isTarget && r.priority && (
               <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
+                fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
                 color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
                 background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
                 border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
-                padding: "2px 8px",
+                padding: "2px 7px", flexShrink: 0,
               }}>▲ {r.priority}</span>
             )}
             {renderCategoryTag(r.category)}
-            {r.subtype && <span style={s.subTag}>{r.subtype}</span>}
+            {r.subtype && <span style={{ ...s.subTag, flexShrink: 0 }}>{r.subtype}</span>}
+            <div style={{ flex: 1 }} />
             <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
-              style={{ marginLeft: "auto", border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1 }}>✕</button>
+              aria-label="Delete"
+              style={{ border: "none", background: "none", color: "var(--ink-3)", cursor: "pointer", fontSize: 13, padding: "0 4px", minHeight: 24, flexShrink: 0 }}>✕</button>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
-            <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)" }}>{r.name}</span>
-            {inlineSuffix.length > 0 && (
+          {/* Row 2: name (truncate) + suffix (ascent/time, right-aligned) */}
+          <div style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
+            <span
+              title={r.name}
+              style={{
+                fontWeight: 500, fontSize: 14, color: "var(--ink-1)",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                minWidth: 0, flex: 1,
+              }}>
+              {r.name}
+            </span>
+            {suffix && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
-                fontVariantNumeric: "tabular-nums",
-              }}>{inlineSuffix.join(" · ")}</span>
-            )}
-            {timeStr && (
-              <span style={{
-                fontFamily: "var(--font-mono)", fontSize: 13, fontWeight: 500,
-                color: "var(--ink-1)", marginLeft: "auto",
-                display: "inline-flex", alignItems: "center", gap: 5,
-              }}>
-                <span style={{ color: "var(--ink-3)" }}><ClockIcon size={13} /></span>
-                {timeStr}
-              </span>
+                fontVariantNumeric: "tabular-nums", flexShrink: 0,
+              }}>{suffix}</span>
             )}
           </div>
           {!r.category && (

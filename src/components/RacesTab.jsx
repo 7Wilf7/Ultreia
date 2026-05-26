@@ -334,11 +334,15 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
     return (
       <div>
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
-            Side margins bleed past main's 14px gutters; negative top margin
-            extends the background up through main's top padding so the sticky
-            doesn't leave a thin visible gap when scrolled. */}
+            Side margins bleed past main's 14px gutters. Negative `top`
+            (matching main's padding) lifts the sticky's pinned position up
+            past main's padding edge so when scrolled there's no gap above —
+            position:sticky measures `top` from the padding edge, so a
+            positive top:0 leaves a visible 14px slit; negative kills it. */}
         <div style={{
-          position: "sticky", top: 0, zIndex: 10,
+          position: "sticky",
+          top: "calc(-1 * max(env(safe-area-inset-top), 14px))",
+          zIndex: 10,
           background: "var(--bg)",
           marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
           marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",

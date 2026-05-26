@@ -47,13 +47,19 @@ export function TrainingTab({
 
   // Sticky header for the three navigation rows: All activities ▼ /
   // Activities-Charts toggle / period selector (when in activities view).
-  // Mobile: glues to the top of MobileShell's scrolling main; side+top
-  // bleed covers main's gutter+safe-area padding so scrolled content
-  // doesn't show through above the sticky.
+  // Mobile: glues to the top of MobileShell's scrolling main; covers main's
+  // top padding (safe-area + 14px gutter) so when scrolled, no scrolled
+  // content shows through above the sticky. The trick is `top` set to
+  // negative paddingTop — position:sticky measures `top` from the
+  // scrolling ancestor's padding edge, so a positive top:0 pins it
+  // INSIDE the padding (leaves a visible gap above). A negative top equal
+  // to the padding lifts the sticky's top edge up to main's outer edge.
   // Desktop: pins to the viewport top while the user scrolls a long list,
   // so the global filter + tab toggle + period selector stay reachable.
   const stickyHeaderStyle = isMobile ? {
-    position: "sticky", top: 0, zIndex: 10,
+    position: "sticky",
+    top: "calc(-1 * max(env(safe-area-inset-top), 14px))",
+    zIndex: 10,
     background: "var(--bg)",
     marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
     marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",

@@ -553,39 +553,56 @@ function AppShell({
   return (
     <div style={{
       maxWidth: 1280, margin: "0 auto",
-      padding: isMobile ? "1rem 1rem 1.5rem" : "1.5rem 1.75rem 2rem",
+      padding: isMobile ? "1rem 1rem 1.5rem" : "1.1rem 1.75rem 2rem",
       fontFamily: "var(--font-sans)", color: "var(--ink-1)", position: "relative",
     }}>
 
       {/* Top instrument bar — desktop runs a 3-column grid; narrow stacks the
           three sections vertically with the title on top (the most important
-          identifier on a phone) and the brand + controls flanking it. */}
+          identifier on a phone) and the brand + controls flanking it.
+          Desktop revamp: left column now carries icon + GMT+8 + date + time
+          inline; right column is just the controls strip (no separate clock
+          block). Whole bar compresses vertically. */}
       <div style={{
         display: "grid",
         gridTemplateColumns: isNarrow ? "1fr" : "1fr auto 1fr",
-        alignItems: isNarrow ? "stretch" : "flex-start",
+        alignItems: isNarrow ? "stretch" : "center",
         gap: isNarrow ? 12 : 16,
-        paddingBottom: isMobile ? 14 : 18,
+        paddingBottom: isMobile ? 14 : 12,
         borderBottom: "1px solid var(--rule)",
-        marginBottom: isMobile ? 16 : 24,
+        marginBottom: isMobile ? 16 : 14,
       }}>
 
-        {/* Left: brand mark — coordinate-style identifier.
-            Narrow: horizontal row (compact); desktop: 3-line block. */}
+        {/* Left: product icon + GMT+8 + date + live time, all inline.
+            Replaces the older 3-line "▲ Training Studio / GMT+8 / date" block. */}
         <div style={{
+          display: "flex", flexWrap: "wrap",
+          alignItems: "center", gap: 10,
           fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
-          lineHeight: 1.6,
-          display: isNarrow ? "flex" : "block",
-          flexWrap: "wrap", gap: isNarrow ? 10 : 0,
-          alignItems: "baseline",
+          lineHeight: 1.2,
         }}>
-          <div style={{ color: "var(--moss)", fontWeight: 600 }}>▲ Training Studio</div>
+          <img src="/favicon.jpg" alt="Training Studio"
+            style={{
+              width: 28, height: 28,
+              borderRadius: 4,
+              flexShrink: 0,
+              objectFit: "cover",
+              border: "1px solid var(--rule)",
+            }} />
           <div>GMT+8</div>
           <div>{now.toLocaleDateString("en-CA")}</div>
+          <div style={{
+            color: "var(--ink-1)",
+            fontVariantNumeric: "tabular-nums",
+            fontWeight: 500,
+          }}>
+            {now.toLocaleTimeString("en-GB", { hour12: false })}
+          </div>
         </div>
 
         {/* Center: title — display weight, generous space.
-            Narrow: smaller font, drops subtitle to save vertical space. */}
+            Narrow: smaller font, drops subtitle to save vertical space.
+            Desktop: subtitle dropped too as part of the compress pass. */}
         <div style={{
           textAlign: "center",
           maxWidth: 520,
@@ -594,37 +611,22 @@ function AppShell({
         }}>
           <h2 style={{
             fontFamily: "var(--font-sans)",
-            fontSize: isMobile ? 22 : 30,
+            fontSize: isMobile ? 22 : 26,
             fontWeight: 500, margin: 0, color: "var(--ink-1)",
             letterSpacing: "-0.02em", lineHeight: 1.15,
           }}>
             {titleText}
           </h2>
-          {!isMobile && (
-            <p style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--ink-3)", margin: "8px 0 0" }}>
-              {t("header.subtitle")}
-            </p>
-          )}
         </div>
 
-        {/* Right: clock + controls. Clock as instrument readout (big mono), buttons as ruled cells.
-            Narrow: row-flex (clock left, buttons right) to keep the bar compact. */}
+        {/* Right: controls strip only — the old clock+"local time" block was
+            removed; the time now sits in the left column instead. */}
         <div style={{
           display: "flex",
-          flexDirection: isNarrow ? "row" : "column",
-          alignItems: isNarrow ? "center" : "flex-end",
-          justifyContent: isNarrow ? "space-between" : "flex-start",
+          alignItems: "center",
+          justifyContent: isNarrow ? "space-between" : "flex-end",
           gap: 10,
-          flexWrap: "wrap",
         }}>
-          <div style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)", textAlign: "right", lineHeight: 1.1 }}>
-            <div style={{ fontSize: 24, fontWeight: 500, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-              {now.toLocaleTimeString("en-GB", { hour12: false })}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
-              local time
-            </div>
-          </div>
           <div style={{ display: "flex", gap: 0 }}>
             <a href="https://training-studio.gitbook.io/training-studio-docs"
               target="_blank" rel="noreferrer"
@@ -651,10 +653,12 @@ function AppShell({
 
       {/* Tabs — full-width segmented ruler. Position number stays small + mono
           to keep the instrument feel; the label is sentence case + readable.
-          Mobile: trim padding, hide the 01/02/03/04 prefix to save room. */}
+          Mobile: trim padding, hide the 01/02/03/04 prefix to save room.
+          Desktop revamp: drop the 01/02/03/04 prefix here too, bump label
+          font, trim vertical padding — taller-feeling tabs in less space. */}
       <div style={{
         display: "flex",
-        marginBottom: isMobile ? 20 : 28,
+        marginBottom: isMobile ? 20 : 18,
         borderBottom: "1px solid var(--rule)",
         overflowX: "auto", WebkitOverflowScrolling: "touch",
       }}>
@@ -665,8 +669,8 @@ function AppShell({
             <button key={label} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
               background: "transparent", border: "none",
-              padding: isMobile ? "10px 8px 12px" : "14px 18px 18px",
-              fontSize: isMobile ? 13 : 15,
+              padding: isMobile ? "10px 8px 12px" : "9px 18px 11px",
+              fontSize: isMobile ? 13 : 17,
               fontFamily: "var(--font-sans)",
               fontWeight: active ? 600 : 500,
               color: active ? "var(--ink-1)" : "var(--ink-3)",
@@ -676,11 +680,6 @@ function AppShell({
               marginBottom: -1,
               transition: "color 120ms",
             }}>
-              {!isMobile && (
-                <span style={{ color: "var(--ink-3)", marginRight: 8, fontWeight: 400, fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-              )}
               {t(key)}
             </button>
           );

@@ -108,7 +108,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   return (
-    <div style={isMobile ? { paddingTop: 14 } : undefined}>
+    <div>
       {/* Month navigation bar */}
       <div style={{
         display: "flex", alignItems: "center", gap: 10,

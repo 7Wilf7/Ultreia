@@ -33,6 +33,8 @@ const dict = {
   "settings.guide":          { en: "User guide",            zh: "使用手册" },
   "settings.guide_desc":     { en: "Opens in a new tab",    zh: "新标签页打开" },
   "settings.change_password": { en: "Change password",      zh: "修改密码" },
+  "coach.profile_hub_hint":  { en: "Edit your runner profile — age, training history, HR zones, injury notes. These feed into every coach reply.", zh: "编辑你的跑者资料 —— 年龄、训练履历、心率区间、伤病备注。这些都会进入教练的每次回复。" },
+  "coach.clear_hub_hint":    { en: "Permanently delete the entire chat history. Distill anything worth keeping into Memory first.", zh: "永久删除整个对话历史。先把值得留下的内容固化进长期记忆。" },
   "settings.sign_out":       { en: "Sign out",              zh: "退出登录" },
 
   // ===== Password change modal =====
@@ -300,8 +302,12 @@ const dict = {
   "charts.last_months":       { en: "Last {n} Months",      zh: "近 {n} 个月" },
   "charts.last_years":        { en: "Last {n} Years",       zh: "近 {n} 年" },
   "charts.distance_trend":    { en: "Distance Trend",       zh: "距离趋势" },
+  "charts.ascent_trend":      { en: "Ascent Trend",         zh: "爬升趋势" },
+  "charts.duration_trend":    { en: "Duration Trend",       zh: "时长趋势" },
   "charts.week_note":         { en: "· week starts on Monday", zh: "· 周一为每周起点" },
   "charts.km_axis":           { en: "km",                   zh: "公里" },
+  "charts.m_axis":            { en: "m",                    zh: "米" },
+  "charts.min_axis":          { en: "min",                  zh: "分钟" },
   "charts.run_type_title":    { en: "Run Type Distribution — {label}", zh: "跑步类型分布 —— {label}" },
   "charts.no_classified":     { en: "No classified runs in this period", zh: "本时段内无已分类跑步记录" },
   "charts.hr_zone_title":     { en: "Heart Rate Zone Distribution — {label}", zh: "心率区间分布 —— {label}" },
@@ -432,8 +438,8 @@ const dict = {
   "pr.itra_placeholder":      { en: "e.g. 580",             zh: "例如 580" },
   "pr.itra_saved":            { en: "Saved: {v}",           zh: "已保存：{v}" },
   "pr.itra_edit_hint":        { en: "click to edit",        zh: "点击编辑" },
-  "pr.longest":               { en: "Longest distance",     zh: "最长距离" },
-  "pr.toughest":              { en: "Toughest tier",        zh: "最高难度" },
+  "pr.longest":               { en: "Longest",              zh: "最长" },
+  "pr.toughest":              { en: "Toughest",             zh: "最难" },
 
   // ===== AI Coach tab =====
   "coach.menu_open":          { en: "Settings",             zh: "设置" },

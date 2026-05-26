@@ -20,14 +20,67 @@ function weekRangeLabel(start, endExclusive) {
   return `${sm}-${sd}~${em}-${ed}`;
 }
 
-export function ChartsTab({ filteredAllLogs, profile }) {
+// Decide which charts to render based on the current Global Filter. Each
+// activity type cares about different metrics, so we tailor:
+//   - what the trend chart measures (distance / ascent / duration)
+//   - whether to show Run Type breakdown (Road Run only)
+//   - whether to show HR zones (most types; skipped for Hiking)
+// "all" and any multi-group selection falls back to the original layout
+// (distance + run type + HR).
+function getChartConfig(filter) {
+  const def = { trend: "distance", showRunType: true, showHR: true };
+  if (!filter || filter.all) return def;
+  const g = filter.groups;
+  if (g.run.enabled && !g.strength.enabled && !g.hiit.enabled) {
+    if (g.run.subs.length !== 1) return def;
+    const sub = g.run.subs[0];
+    if (sub === "Road Run")      return { trend: "distance", showRunType: true,  showHR: true  };
+    if (sub === "Trail Run")     return { trend: "distance", showAscent: true,   showHR: true  };
+    if (sub === "Hiking")        return { trend: "distance", showAscent: true,   showHR: false };
+    if (sub === "Floor Climbing")return { trend: "ascent",                       showHR: true  };
+    return def;
+  }
+  if ((g.strength.enabled || g.hiit.enabled) && !g.run.enabled) {
+    return { trend: "duration", showHR: true };
+  }
+  return def;
+}
+
+export function ChartsTab({ filteredAllLogs, profile, filter }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 8 });
 
+  const config = useMemo(() => getChartConfig(filter), [filter]);
+
+  // Generic bucketer: for each period bucket, sum a metric across the logs
+  // that fall inside. The picker callback returns the per-log number to add
+  // (distance / ascent / duration / 0 if not eligible).
   const chartData = useMemo(() => {
     const nowD = new Date();
     const buckets = [];
+
+    const pickValue = (l) => {
+      if (config.trend === "distance") {
+        return RUN_GROUP_TYPES.includes(l.type) ? (l.distance || 0) : 0;
+      }
+      if (config.trend === "ascent") {
+        return (l.ascent || 0);
+      }
+      if (config.trend === "duration") {
+        // minutes — duration is stored in seconds
+        return l.duration ? l.duration / 60 : 0;
+      }
+      return 0;
+    };
+
+    const finishBucket = (rangeLabel, label, sum) => {
+      let val;
+      if (config.trend === "distance")      val = +sum.toFixed(1);
+      else if (config.trend === "ascent")   val = Math.round(sum);
+      else /* duration */                   val = Math.round(sum);
+      return { label, rangeText: rangeLabel, value: val };
+    };
 
     if (chartPeriod.type === "week") {
       for (let i = chartPeriod.count - 1; i >= 0; i--) {
@@ -36,45 +89,41 @@ export function ChartsTab({ filteredAllLogs, profile }) {
         start.setDate(nowD.getDate() - dayOfWeek - i * 7);
         start.setHours(0, 0, 0, 0);
         const end = new Date(start); end.setDate(start.getDate() + 7);
-        const km = filteredAllLogs.filter(l => {
+        const sum = filteredAllLogs.filter(l => {
           const d = new Date(l.date);
-          return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
-        }).reduce((sum, l) => sum + l.distance, 0);
+          return d >= start && d < end;
+        }).reduce((acc, l) => acc + pickValue(l), 0);
         const rangeLabel = weekRangeLabel(start, end);
-        buckets.push({
-          label: rangeLabel,
-          rangeText: rangeLabel,
-          km: +km.toFixed(1),
-        });
+        buckets.push(finishBucket(rangeLabel, rangeLabel, sum));
       }
     } else if (chartPeriod.type === "month") {
       for (let i = chartPeriod.count - 1; i >= 0; i--) {
         const start = new Date(nowD.getFullYear(), nowD.getMonth() - i, 1);
         const end = new Date(nowD.getFullYear(), nowD.getMonth() - i + 1, 1);
-        const km = filteredAllLogs.filter(l => {
+        const sum = filteredAllLogs.filter(l => {
           const d = new Date(l.date);
-          return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
-        }).reduce((sum, l) => sum + l.distance, 0);
-        buckets.push({
-          label: `${start.getFullYear()}-${start.getMonth() + 1}`,
-          rangeText: getPeriodLabel({ type: "month", year: start.getFullYear(), month: start.getMonth() }, t),
-          km: +km.toFixed(1),
-        });
+          return d >= start && d < end;
+        }).reduce((acc, l) => acc + pickValue(l), 0);
+        buckets.push(finishBucket(
+          getPeriodLabel({ type: "month", year: start.getFullYear(), month: start.getMonth() }, t),
+          `${start.getFullYear()}-${start.getMonth() + 1}`,
+          sum,
+        ));
       }
     } else if (chartPeriod.type === "year") {
       for (let i = chartPeriod.count - 1; i >= 0; i--) {
         const yy = nowD.getFullYear() - i;
         const start = new Date(yy, 0, 1);
         const end = new Date(yy + 1, 0, 1);
-        const km = filteredAllLogs.filter(l => {
+        const sum = filteredAllLogs.filter(l => {
           const d = new Date(l.date);
-          return d >= start && d < end && RUN_GROUP_TYPES.includes(l.type);
-        }).reduce((sum, l) => sum + l.distance, 0);
-        buckets.push({ label: String(yy), rangeText: String(yy), km: +km.toFixed(1) });
+          return d >= start && d < end;
+        }).reduce((acc, l) => acc + pickValue(l), 0);
+        buckets.push(finishBucket(String(yy), String(yy), sum));
       }
     }
     return buckets;
-  }, [filteredAllLogs, chartPeriod, t]);
+  }, [filteredAllLogs, chartPeriod, config.trend, t]);
 
   const chartRangeLogs = useMemo(() => {
     const nowD = new Date();
@@ -106,6 +155,49 @@ export function ChartsTab({ filteredAllLogs, profile }) {
     return Object.entries(durations);
   }, [chartRangeLogs]);
 
+  // Optional secondary trend — ascent buckets, mirrors `chartData` shape but
+  // sums `ascent` per period. Only computed (and rendered) when config.showAscent.
+  const ascentData = useMemo(() => {
+    if (!config.showAscent) return null;
+    const nowD = new Date();
+    const buckets = [];
+    const sumIn = (from, to) =>
+      filteredAllLogs.filter(l => {
+        const d = new Date(l.date);
+        return d >= from && d < to;
+      }).reduce((acc, l) => acc + (l.ascent || 0), 0);
+
+    if (chartPeriod.type === "week") {
+      for (let i = chartPeriod.count - 1; i >= 0; i--) {
+        const dayOfWeek = (nowD.getDay() + 6) % 7;
+        const start = new Date(nowD);
+        start.setDate(nowD.getDate() - dayOfWeek - i * 7);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start); end.setDate(start.getDate() + 7);
+        const rangeLabel = weekRangeLabel(start, end);
+        buckets.push({ label: rangeLabel, rangeText: rangeLabel, value: Math.round(sumIn(start, end)) });
+      }
+    } else if (chartPeriod.type === "month") {
+      for (let i = chartPeriod.count - 1; i >= 0; i--) {
+        const start = new Date(nowD.getFullYear(), nowD.getMonth() - i, 1);
+        const end = new Date(nowD.getFullYear(), nowD.getMonth() - i + 1, 1);
+        buckets.push({
+          label: `${start.getFullYear()}-${start.getMonth() + 1}`,
+          rangeText: getPeriodLabel({ type: "month", year: start.getFullYear(), month: start.getMonth() }, t),
+          value: Math.round(sumIn(start, end)),
+        });
+      }
+    } else if (chartPeriod.type === "year") {
+      for (let i = chartPeriod.count - 1; i >= 0; i--) {
+        const yy = nowD.getFullYear() - i;
+        const start = new Date(yy, 0, 1);
+        const end = new Date(yy + 1, 0, 1);
+        buckets.push({ label: String(yy), rangeText: String(yy), value: Math.round(sumIn(start, end)) });
+      }
+    }
+    return buckets;
+  }, [filteredAllLogs, chartPeriod, config.showAscent, t]);
+
   function chartPeriodLabel() {
     if (chartPeriod.type === "week")  return t("charts.last_weeks",  { n: chartPeriod.count });
     if (chartPeriod.type === "month") return t("charts.last_months", { n: chartPeriod.count });
@@ -113,7 +205,16 @@ export function ChartsTab({ filteredAllLogs, profile }) {
     return "";
   }
 
-  const chartMax = Math.max(...chartData.map(w => w.km), 1);
+  // Trend chart axis label + section title depend on which metric is active.
+  const trendMeta = (() => {
+    if (config.trend === "distance") return { title: t("charts.distance_trend"), axis: t("charts.km_axis") };
+    if (config.trend === "ascent")   return { title: t("charts.ascent_trend"),   axis: t("charts.m_axis")  };
+    if (config.trend === "duration") return { title: t("charts.duration_trend"), axis: t("charts.min_axis") };
+    return { title: "", axis: "" };
+  })();
+
+  const chartMax = Math.max(...chartData.map(w => w.value), 1);
+  const ascentMax = ascentData ? Math.max(...ascentData.map(w => w.value), 1) : 1;
   // totalRunsForPie now holds total DURATION in seconds (not session count).
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
 
@@ -155,6 +256,53 @@ export function ChartsTab({ filteredAllLogs, profile }) {
     { type: "year",  count: 5,  label: t("charts.years",  { n: 5 }) },
   ];
 
+  // Shared SVG trend renderer — used for the primary trend chart (distance /
+  // ascent / duration) and for the optional ascent secondary chart on Trail
+  // and Hiking. `data` is the bucket list shaped as { label, rangeText, value },
+  // `axisLabel` is the unit shown in the top-left corner.
+  function renderTrendSvg(data, max, axisLabel) {
+    return (
+      <svg viewBox="0 0 700 250" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
+        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+          const y = 195 - p * 160;
+          const val = (max * p).toFixed(0);
+          return (
+            <g key={i}>
+              <line x1="50" y1={y} x2="680" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
+              <text x="44" y={y + 5} fontSize="14" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.02em">{val}</text>
+            </g>
+          );
+        })}
+        <text x="22" y="18" fontSize="13" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">{axisLabel}</text>
+        {(() => {
+          const xStep = data.length > 1 ? 620 / (data.length - 1) : 0;
+          const points = data.map((w, i) => ({
+            x: 60 + i * xStep,
+            y: 195 - (w.value / max) * 160,
+            w,
+          }));
+          if (points.length === 0) return null;
+          const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+          return (
+            <>
+              <path d={`${path} L ${points[points.length - 1].x} 195 L ${points[0].x} 195 Z`} fill="var(--moss)" opacity="0.08" />
+              <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth="1.5" />
+              {points.map((p, i) => (
+                <g key={i}>
+                  <rect x={p.x - 3} y={p.y - 3} width="6" height="6" fill="var(--ink-1)">
+                    <title>{p.w.rangeText}: {p.w.value} {axisLabel}</title>
+                  </rect>
+                  {p.w.value > 0 && <text x={p.x} y={p.y - 12} fontSize="15" fill="var(--ink-1)" textAnchor="middle" letterSpacing="0.02em" fontWeight="500">{p.w.value}</text>}
+                  <text x={p.x} y="218" fontSize="13" fill="var(--ink-3)" textAnchor="middle" letterSpacing="0.02em">{p.w.label}</text>
+                </g>
+              ))}
+            </>
+          );
+        })()}
+      </svg>
+    );
+  }
+
   return (
     <div>
       {/* Period selector. Mobile: single native dropdown (less vertical space).
@@ -189,135 +337,112 @@ export function ChartsTab({ filteredAllLogs, profile }) {
         </div>
       )}
 
+      {/* Primary trend chart — metric varies by filter (distance / ascent / duration) */}
       <div style={s.section}>
-        {t("charts.distance_trend")}
+        {trendMeta.title}
         {chartPeriod.type === "week" && (
           <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>{t("charts.week_note")}</span>
         )}
       </div>
       <div style={{ ...s.card, marginBottom: 22, padding: isMobile ? "10px 6px 12px" : undefined }}>
-        {/* viewBox font sizes bumped substantially — on a 360-wide phone the
-            SVG scales down ~0.5×, so fontSize 16 here renders as ~8 device-px
-            (legible) where the old 9 rendered as ~4.5 (unreadable). Markers
-            and dot offsets bumped to match the larger labels. */}
-        <svg viewBox="0 0 700 250" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
-          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
-            const y = 195 - p * 160;
-            const val = (chartMax * p).toFixed(0);
-            return (
-              <g key={i}>
-                <line x1="50" y1={y} x2="680" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
-                <text x="44" y={y + 5} fontSize="14" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.02em">{val}</text>
-              </g>
-            );
-          })}
-          <text x="22" y="18" fontSize="13" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">{t("charts.km_axis")}</text>
-          {(() => {
-            const xStep = chartData.length > 1 ? 620 / (chartData.length - 1) : 0;
-            const points = chartData.map((w, i) => ({
-              x: 60 + i * xStep,
-              y: 195 - (w.km / chartMax) * 160,
-              w,
-            }));
-            if (points.length === 0) return null;
-            const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-            return (
-              <>
-                <path d={`${path} L ${points[points.length - 1].x} 195 L ${points[0].x} 195 Z`} fill="var(--moss)" opacity="0.08" />
-                <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth="1.5" />
-                {points.map((p, i) => (
-                  <g key={i}>
-                    <rect x={p.x - 3} y={p.y - 3} width="6" height="6" fill="var(--ink-1)">
-                      <title>{p.w.rangeText}: {p.w.km} km</title>
-                    </rect>
-                    {p.w.km > 0 && <text x={p.x} y={p.y - 12} fontSize="15" fill="var(--ink-1)" textAnchor="middle" letterSpacing="0.02em" fontWeight="500">{p.w.km}</text>}
-                    <text x={p.x} y="218" fontSize="13" fill="var(--ink-3)" textAnchor="middle" letterSpacing="0.02em">{p.w.label}</text>
-                  </g>
-                ))}
-              </>
-            );
-          })()}
-        </svg>
+        {renderTrendSvg(chartData, chartMax, trendMeta.axis)}
       </div>
 
-      <div style={s.section}>{t("charts.run_type_title", { label: chartPeriodLabel() })}</div>
-      <div style={s.card}>
-        {totalRunsForPie === 0 ? (
-          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.no_classified")}</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {runTypeDist.map(([name, durSec], i) => {
-              const pct = totalRunsForPie ? (durSec / totalRunsForPie) * 100 : 0;
-              // Bar shade ramp from ink → moss tints, intensity-keyed
-              const shade = ["var(--ink-1)", "var(--ink-2)", "var(--moss-deep)", "var(--moss)", "var(--moss-light)"][i] || "var(--ink-2)";
-              return (
-                <div key={name}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
-                    <span style={{ color: "var(--ink-1)" }}>{t(`enum.subtype.${name}`)}</span>
-                    <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                      {durSec > 0 ? formatDuration(durSec) : "—"} · {pct.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
-                    <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
-                  </div>
-                </div>
-              );
-            })}
+      {/* Secondary ascent trend — only on Trail Run / Hiking filters */}
+      {config.showAscent && ascentData && (
+        <>
+          <div style={s.section}>{t("charts.ascent_trend")}</div>
+          <div style={{ ...s.card, marginBottom: 22, padding: isMobile ? "10px 6px 12px" : undefined }}>
+            {renderTrendSvg(ascentData, ascentMax, t("charts.m_axis"))}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
-      {/* HR Zone Distribution — only when Karvonen zones are configured in profile.
-          Zone time is approximated by bucketing each activity's full duration
-          into the zone that its avg HR falls into. */}
-      <div style={{ ...s.section, marginTop: 22 }}>
-        {t("charts.hr_zone_title", { label: chartPeriodLabel() })}
-        {hrZoneMethod && <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>· {hrZoneMethod.label}</span>}
-      </div>
-      <div style={s.card}>
-        {!hrZones ? (
-          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13, lineHeight: 1.6 }}>
-            {t("charts.hr_zone_need_profile")}
-          </div>
-        ) : !hrZoneDist || hrZoneDist.total === 0 ? (
-          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>
-            {t("charts.hr_zone_no_data")}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {hrZones.map((z, i) => {
-              const dur = hrZoneDist.buckets[z.id] || 0;
-              const pct = hrZoneDist.total ? (dur / hrZoneDist.total) * 100 : 0;
-              // Bar shade: Z1 lightest moss → Z5 deepest ink (intensity ramp).
-              const shade = ["var(--moss-light)", "var(--moss)", "var(--moss-deep)", "var(--ink-2)", "var(--ink-1)"][i] || "var(--ink-2)";
-              return (
-                <div key={z.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
-                    <span style={{ color: "var(--ink-1)" }}>
-                      {z.id}
-                      <span style={{ ...s.muted, fontFamily: "var(--font-mono)", marginLeft: 8 }}>{z.low}–{z.high} bpm</span>
-                    </span>
-                    <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                      {dur > 0 ? formatDuration(dur) : "—"} · {pct.toFixed(0)}%
-                    </span>
-                  </div>
-                  <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
-                    <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
-                  </div>
-                </div>
-              );
-            })}
-            {/* Below Z1 / Above Z5 — informational, shown only when non-zero */}
-            {(hrZoneDist.belowZ1 > 0 || hrZoneDist.aboveZ5 > 0) && (
-              <div style={{ ...s.muted, fontSize: 11, marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--rule-soft)" }}>
-                {hrZoneDist.belowZ1 > 0 && <span style={{ marginRight: 14 }}>{t("charts.hr_zone_below")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.belowZ1)}</span></span>}
-                {hrZoneDist.aboveZ5 > 0 && <span>{t("charts.hr_zone_above")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.aboveZ5)}</span></span>}
+      {/* Run type distribution — Road Run / "all runs" / "all" only */}
+      {config.showRunType && (
+        <>
+          <div style={s.section}>{t("charts.run_type_title", { label: chartPeriodLabel() })}</div>
+          <div style={{ ...s.card, marginBottom: config.showHR ? 22 : 0 }}>
+            {totalRunsForPie === 0 ? (
+              <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.no_classified")}</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {runTypeDist.map(([name, durSec], i) => {
+                  const pct = totalRunsForPie ? (durSec / totalRunsForPie) * 100 : 0;
+                  // Bar shade ramp from ink → moss tints, intensity-keyed
+                  const shade = ["var(--ink-1)", "var(--ink-2)", "var(--moss-deep)", "var(--moss)", "var(--moss-light)"][i] || "var(--ink-2)";
+                  return (
+                    <div key={name}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
+                        <span style={{ color: "var(--ink-1)" }}>{t(`enum.subtype.${name}`)}</span>
+                        <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                          {durSec > 0 ? formatDuration(durSec) : "—"} · {pct.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
+                        <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
+
+      {/* HR Zone Distribution — gated by config.showHR (and by Karvonen zones being configured) */}
+      {config.showHR && (
+        <>
+          <div style={{ ...s.section, marginTop: config.showRunType ? 22 : 0 }}>
+            {t("charts.hr_zone_title", { label: chartPeriodLabel() })}
+            {hrZoneMethod && <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>· {hrZoneMethod.label}</span>}
+          </div>
+          <div style={s.card}>
+            {!hrZones ? (
+              <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13, lineHeight: 1.6 }}>
+                {t("charts.hr_zone_need_profile")}
+              </div>
+            ) : !hrZoneDist || hrZoneDist.total === 0 ? (
+              <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>
+                {t("charts.hr_zone_no_data")}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {hrZones.map((z, i) => {
+                  const dur = hrZoneDist.buckets[z.id] || 0;
+                  const pct = hrZoneDist.total ? (dur / hrZoneDist.total) * 100 : 0;
+                  // Bar shade: Z1 lightest moss → Z5 deepest ink (intensity ramp).
+                  const shade = ["var(--moss-light)", "var(--moss)", "var(--moss-deep)", "var(--ink-2)", "var(--ink-1)"][i] || "var(--ink-2)";
+                  return (
+                    <div key={z.id}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
+                        <span style={{ color: "var(--ink-1)" }}>
+                          {z.id}
+                          <span style={{ ...s.muted, fontFamily: "var(--font-mono)", marginLeft: 8 }}>{z.low}–{z.high} bpm</span>
+                        </span>
+                        <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                          {dur > 0 ? formatDuration(dur) : "—"} · {pct.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
+                        <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* Below Z1 / Above Z5 — informational, shown only when non-zero */}
+                {(hrZoneDist.belowZ1 > 0 || hrZoneDist.aboveZ5 > 0) && (
+                  <div style={{ ...s.muted, fontSize: 11, marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--rule-soft)" }}>
+                    {hrZoneDist.belowZ1 > 0 && <span style={{ marginRight: 14 }}>{t("charts.hr_zone_below")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.belowZ1)}</span></span>}
+                    {hrZoneDist.aboveZ5 > 0 && <span>{t("charts.hr_zone_above")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.aboveZ5)}</span></span>}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

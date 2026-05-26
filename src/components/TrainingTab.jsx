@@ -45,19 +45,27 @@ export function TrainingTab({
     ? Math.round(hrLogs.reduce((sum, l) => sum + l.hr, 0) / hrLogs.length)
     : 0;
 
-  // Mobile-only sticky header. Glues the three navigation rows to the top
-  // of MobileShell's scrolling main: All activities ▼ / Activities-Charts
-  // toggle / period selector (when in activities view). Negative side
-  // margins bleed past main's 14px horizontal gutters. The top safe-area
-  // lives OUTSIDE main as a separate spacer in MobileShell, so this sticky
-  // truly pins at top:0 of the scrollport — no bleed-up gymnastics needed.
+  // Sticky header for the three navigation rows: All activities ▼ /
+  // Activities-Charts toggle / period selector (when in activities view).
+  // Mobile: glues to the top of MobileShell's scrolling main; side+top
+  // bleed covers main's gutter+safe-area padding so scrolled content
+  // doesn't show through above the sticky.
+  // Desktop: pins to the viewport top while the user scrolls a long list,
+  // so the global filter + tab toggle + period selector stay reachable.
   const stickyHeaderStyle = isMobile ? {
     position: "sticky", top: 0, zIndex: 10,
     background: "var(--bg)",
     marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
-    paddingTop: 14, paddingBottom: 4,
+    marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",
+    paddingTop: "calc(max(env(safe-area-inset-top), 14px) + 4px)",
+    paddingBottom: 4,
     marginBottom: 6,
-  } : undefined;
+  } : {
+    position: "sticky", top: 0, zIndex: 10,
+    background: "var(--bg)",
+    paddingTop: 8, paddingBottom: 8,
+    marginBottom: 8,
+  };
 
   return (
     <div>
@@ -191,7 +199,7 @@ export function TrainingTab({
       )}
 
       {view === "charts" && (
-        <ChartsTab filteredAllLogs={filteredAllLogs} profile={profile} />
+        <ChartsTab filteredAllLogs={filteredAllLogs} profile={profile} filter={filter} />
       )}
     </div>
   );

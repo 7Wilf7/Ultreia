@@ -38,17 +38,6 @@ export function MobileShell({ children, tab, setTab }) {
           tabs that fit (Calendar, AI Coach, Settings) use height: 100%
           flex layouts and never overflow. overscroll-behavior: contain
           keeps drag gestures from bouncing the page. */}
-      {/* Safe-area + 14px gutter spacer ABOVE the scrollport. Pulled out of
-          main's padding-top so position: sticky inside main can truly pin to
-          the viewport top (top: 0 on sticky = top of main = below this
-          spacer). When the spacer is inside main as padding-top, scrolled
-          content bleeds through it, leaving a visible gap above sticky
-          headers on Training / Races. */}
-      <div style={{
-        flexShrink: 0,
-        height: "max(env(safe-area-inset-top), 14px)",
-        background: "var(--bg)",
-      }} />
       <main style={{
         flex: 1,
         minHeight: 0,
@@ -56,8 +45,12 @@ export function MobileShell({ children, tab, setTab }) {
         overflowX: "hidden",
         overscrollBehavior: "contain",
         WebkitOverflowScrolling: "touch",
+        // Explicit background — without it the padding-top area is transparent
+        // and on some mobile Chromium builds scrolled content can be seen
+        // through it (the "thin gap above sticky" complaint).
         background: "var(--bg)",
-        padding: "0 14px",
+        padding: "14px 14px 0",
+        paddingTop: "max(env(safe-area-inset-top), 14px)",
         // Reserve room for the position: fixed bottom nav (~56px content
         // + safe-area). Tab content inside main lays out above this padding.
         paddingBottom: "calc(64px + env(safe-area-inset-bottom))",

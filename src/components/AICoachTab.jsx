@@ -192,7 +192,13 @@ export function AICoachTab({
   // Single ⚙ toggle replaces the row of toggle buttons (config / memory /
   // prompt preview / edit profile / clear chat). Open the menu to access
   // any of those — keeps the top of the tab uncluttered.
+  // Mobile: opens an in-place settings sub-page (kept for the touch flow).
+  // Desktop: opens a unified hub modal with vertical tabs on the left + the
+  // selected tab's content rendered on the right — see CoachSettingsHub
+  // below. coachHubTab tracks which tab is active in that modal.
   const [showCoachMenu, setShowCoachMenu] = useState(false);
+  const [showCoachHub, setShowCoachHub] = useState(false);
+  const [coachHubTab, setCoachHubTab] = useState("config");
 
   // Auto-scroll the chat container to the latest message whenever the
   // message list grows (new send/receive) or whenever the tab is mounted
@@ -552,36 +558,10 @@ Rules:
       display: "flex", flexDirection: "column",
       height: "100%", minHeight: 0,
     } : {}}>
-      {/* Top gutter — MobileShell's main has no top padding (sticky tabs own
-          their own); non-sticky tabs add a flex-shrink:0 spacer instead of
-          paddingTop on the wrapper, because paddingTop + height:100% + flex
-          column inside a scroll-auto parent makes the chat container collapse
-          to zero on some browsers (rendering the tab blank). */}
-      {isMobile && <div style={{ height: 14, flexShrink: 0 }} />}
-      {/* DESKTOP top button row: ⚙ Settings collapses the row of advanced
-          controls; tap to expand, tap again to collapse. */}
-      {!isMobile && (
-        <div style={{ marginBottom: 14, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <button onClick={() => setShowCoachMenu(!showCoachMenu)}
-            style={{ ...s.btnGhost, fontWeight: 600 }}>
-            {showCoachMenu ? `▲ ${t("coach.menu_close")}` : `⚙ ${t("coach.menu_open")}`}
-            {coachMemory && !showCoachMenu ? " ●" : ""}
-          </button>
-          {showCoachMenu && (
-            <>
-              <button onClick={onEditProfile} style={s.btnGhost}>{t("coach.edit_profile")}</button>
-              <button onClick={() => setShowCoachConfig(true)} style={s.btnGhost}>{t("coach.show_config")}</button>
-              <button onClick={() => setShowMemory(true)} style={s.btnGhost}>
-                {t("coach.show_memory")}{coachMemory ? " ●" : ""}
-              </button>
-              <button onClick={() => setShowPromptPreview(true)} style={s.btnGhost}>{t("coach.show_prompt")}</button>
-              {chatMessages.length > 0 && (
-                <button onClick={clearChat} style={s.btnGhost}>{t("coach.clear_chat")}</button>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      {/* DESKTOP top button row was here — removed in the May-26 desktop
+          revamp. The ⚙ moved into the input row on the right (mirroring
+          mobile), and clicking it now opens the unified CoachSettingsHub
+          modal rendered near the bottom of this component. */}
 
       {/* MOBILE settings sub-page header: ← back + title + vertical button
           list (one per row, centered). The mobile sub-page has plenty of
@@ -917,13 +897,233 @@ Rules:
             </button>
           </div>
         ) : (
-          <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
-            style={{ ...s.btn, padding: "10px 20px", opacity: chatLoading || !chatInput.trim() ? 0.5 : 1 }}>
-            {t("coach.send")}
-          </button>
+          // Desktop: ⚙ stacked above Send in a slim column, mirroring mobile.
+          // ⚙ opens the unified hub modal (vertical tabs on left, content on right).
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 84 }}>
+            <button onClick={() => setShowCoachHub(true)} aria-label={t("coach.menu_open")}
+              style={{ ...s.btnGhost, padding: "8px 10px", fontSize: 13, lineHeight: 1.2 }}>
+              ⚙{coachMemory ? " ●" : ""}
+            </button>
+            <button onClick={sendChat} disabled={chatLoading || !chatInput.trim()}
+              style={{
+                ...s.btn, padding: "10px 20px",
+                opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
+                flex: 1,
+              }}>
+              {t("coach.send")}
+            </button>
+          </div>
         )}
       </div>
       </>)}
+
+      {/* Desktop unified settings hub. Left vertical tabs route the right
+          pane to one of the existing config / memory / prompt-preview blocks,
+          plus shortcuts to Edit Profile and Clear Chat. Mobile keeps its
+          in-place settings sub-page (rendered above when inSettings). */}
+      {showCoachHub && !isMobile && (
+        <ModalRoot>
+          <div style={s.modalOverlay(false)} onClick={() => setShowCoachHub(false)}>
+            <div onClick={(e) => e.stopPropagation()}
+              style={{
+                ...s.modalCard(false, { maxWidth: 880 }),
+                padding: 0,
+                display: "flex", flexDirection: "column",
+                maxHeight: "85vh",
+              }}>
+              {/* Header */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: "14px 18px", borderBottom: "1px solid var(--rule)",
+              }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.settings_title")}</h2>
+                <button onClick={() => setShowCoachHub(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+
+              {/* Body: left tabs + right content */}
+              <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+                {/* Left vertical tab strip */}
+                <div style={{
+                  width: 180, flexShrink: 0,
+                  borderRight: "1px solid var(--rule)",
+                  background: "var(--bg-sunken)",
+                  display: "flex", flexDirection: "column",
+                  padding: "10px 0",
+                }}>
+                  {[
+                    { id: "profile", label: t("coach.edit_profile") },
+                    { id: "config",  label: t("coach.show_config") },
+                    { id: "memory",  label: t("coach.show_memory") + (coachMemory ? " ●" : "") },
+                    { id: "prompt",  label: t("coach.show_prompt") },
+                    { id: "clear",   label: t("coach.clear_chat") },
+                  ].map(tab => {
+                    const active = coachHubTab === tab.id;
+                    return (
+                      <button key={tab.id}
+                        onClick={() => setCoachHubTab(tab.id)}
+                        style={{
+                          textAlign: "left",
+                          background: active ? "var(--bg-elevated)" : "transparent",
+                          border: "none",
+                          borderLeft: active ? "3px solid var(--ink-1)" : "3px solid transparent",
+                          padding: "10px 14px",
+                          fontFamily: "var(--font-sans)",
+                          fontSize: 13,
+                          fontWeight: active ? 600 : 500,
+                          color: active ? "var(--ink-1)" : "var(--ink-2)",
+                          cursor: "pointer", borderRadius: 0,
+                        }}>
+                        {tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Right content pane */}
+                <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "18px 22px" }}>
+                  {coachHubTab === "profile" && (
+                    <div>
+                      <p style={{ ...s.muted, lineHeight: 1.6, marginTop: 0 }}>
+                        {t("coach.profile_hub_hint")}
+                      </p>
+                      <button onClick={() => { setShowCoachHub(false); onEditProfile(); }} style={s.btn}>
+                        {t("coach.edit_profile")}
+                      </button>
+                    </div>
+                  )}
+
+                  {coachHubTab === "config" && (
+                    <div>
+                      <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
+                      <div style={{ marginBottom: 18 }}>
+                        <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {COACH_STYLES.map(o => (
+                            <button key={o.id} onClick={() => setStyle(o.id)}
+                              style={s.chip(coachConfig.style === o.id)}>
+                              {t(`enum.coach.${o.id}`)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 18 }}>
+                        <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {OUTPUT_LENGTHS.map(o => (
+                            <button key={o.id} onClick={() => setOutputLength(o.id)}
+                              style={s.chip(coachConfig.outputLength === o.id)}>
+                              {t(`enum.length.${o.id}`)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {INTERVENTION_LEVELS.map(o => (
+                            <button key={o.id} onClick={() => setIntervention(o.id)}
+                              style={s.chip(coachConfig.intervention === o.id)}>
+                              {t(`enum.intervention.${o.id}`)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {coachHubTab === "memory" && (
+                    <div>
+                      <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+                      {!memoryEditing && !memoryProposal && (
+                        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                          <button onClick={proposeMemoryUpdate}
+                            disabled={memoryUpdating || chatMessages.length === 0}
+                            style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
+                            {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
+                          </button>
+                          <button onClick={startEditMemory} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
+                            {t("coach.memory_edit")}
+                          </button>
+                        </div>
+                      )}
+                      {memoryProposal ? (
+                        <>
+                          <div style={{ ...s.label, marginBottom: 6, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
+                          <pre style={{
+                            ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                            whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 360, overflowY: "auto",
+                            color: "var(--ink-1)", background: "var(--moss-bg)", borderColor: "var(--moss)",
+                          }}>{memoryProposal.text}</pre>
+                          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                            <button onClick={acceptMemoryProposal} style={s.btn}>{t("coach.memory_accept")}</button>
+                            <button onClick={rejectMemoryProposal} style={s.btnGhost}>{t("coach.memory_reject")}</button>
+                          </div>
+                        </>
+                      ) : memoryEditing ? (
+                        <>
+                          <textarea rows={12} value={memoryDraft}
+                            onChange={e => setMemoryDraft(e.target.value)}
+                            placeholder={t("coach.memory_placeholder")}
+                            style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, resize: "vertical" }} />
+                          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                            <button onClick={saveMemory} style={s.btn}>{t("common.save")}</button>
+                            <button onClick={cancelEditMemory} style={s.btnGhost}>{t("common.cancel")}</button>
+                          </div>
+                        </>
+                      ) : (
+                        <pre style={{
+                          ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                          whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 420, overflowY: "auto",
+                          color: coachMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
+                          minHeight: 80,
+                        }}>{coachMemory || t("coach.memory_empty")}</pre>
+                      )}
+                    </div>
+                  )}
+
+                  {coachHubTab === "prompt" && (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+                        <div style={{ display: "flex", gap: 0 }}>
+                          <button onClick={() => setPreviewLang("en")}
+                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px", borderRight: "none",
+                              background: previewLang === "en" ? "var(--ink-1)" : "transparent",
+                              color: previewLang === "en" ? "var(--ink-inv)" : "var(--ink-2)" }}>EN</button>
+                          <button onClick={() => setPreviewLang("zh")}
+                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
+                              background: previewLang === "zh" ? "var(--ink-1)" : "transparent",
+                              color: previewLang === "zh" ? "var(--ink-inv)" : "var(--ink-2)" }}>中</button>
+                        </div>
+                      </div>
+                      <pre style={{
+                        ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                        whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: "55vh", overflowY: "auto",
+                        color: "var(--ink-1)", background: "var(--bg-elevated)",
+                      }}>{previewPrompt}</pre>
+                      <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>
+                        {t("coach.prompt_hint")}{previewLang === "zh" ? ` ${t("coach.prompt_zh_note")}` : ""}
+                      </div>
+                    </div>
+                  )}
+
+                  {coachHubTab === "clear" && (
+                    <div>
+                      <p style={{ ...s.muted, lineHeight: 1.6, marginTop: 0 }}>
+                        {t("coach.clear_hub_hint")}
+                      </p>
+                      <button onClick={() => { setShowCoachHub(false); clearChat(); }}
+                        disabled={chatMessages.length === 0}
+                        style={{ ...s.btn, background: "#c0392b", borderColor: "#c0392b", opacity: chatMessages.length === 0 ? 0.4 : 1 }}>
+                        {t("coach.clear_chat")} ({chatMessages.length})
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
+      )}
 
       {planProposal && (
         <CoachPlanImportModal

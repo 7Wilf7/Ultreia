@@ -551,10 +551,13 @@ Rules:
     <div style={isMobile ? {
       display: "flex", flexDirection: "column",
       height: "100%", minHeight: 0,
-      // Top gutter — MobileShell's main has no top padding (sticky tabs own
-      // their own); non-sticky tabs like this one add it themselves.
-      paddingTop: 14,
     } : {}}>
+      {/* Top gutter — MobileShell's main has no top padding (sticky tabs own
+          their own); non-sticky tabs add a flex-shrink:0 spacer instead of
+          paddingTop on the wrapper, because paddingTop + height:100% + flex
+          column inside a scroll-auto parent makes the chat container collapse
+          to zero on some browsers (rendering the tab blank). */}
+      {isMobile && <div style={{ height: 14, flexShrink: 0 }} />}
       {/* DESKTOP top button row: ⚙ Settings collapses the row of advanced
           controls; tap to expand, tap again to collapse. */}
       {!isMobile && (

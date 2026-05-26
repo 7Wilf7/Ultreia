@@ -24,20 +24,21 @@ export function SettingsMobileTab({
   return (
     <div style={{ paddingBottom: 8 }}>
       <SectionHeader label={t("settings.account")} />
+      {/* Top cell = account identity. Tap → change password (matches the
+          desktop UserBadge: clicking the account name reveals a password
+          menu, not the profile editor). The display-name + email here is
+          purely identity readout; the editable profile lives in the cell
+          below. */}
       <Cell
         primary={displayName}
         secondary={email}
-        onClick={onOpenProfile}
-        ariaLabel={t("settings.profile")}
+        onClick={onChangePassword}
+        ariaLabel={t("settings.change_password")}
       />
       <Cell
         primary={t("settings.profile")}
         secondary={t("settings.profile_desc")}
         onClick={onOpenProfile}
-      />
-      <Cell
-        primary={t("settings.change_password")}
-        onClick={onChangePassword}
       />
 
       <SectionHeader label={t("settings.preferences")} />

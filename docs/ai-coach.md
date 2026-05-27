@@ -5,13 +5,15 @@
 ## 初次配置
 
 1. 打开 API 设置（**电脑**：顶部右侧 **API key** 按钮；**手机**：Settings tab → API key）。
-2. 选一个 **Provider**（DeepSeek 或 Claude），粘贴对应的 API Key：
-   - **DeepSeek** —— 在 [platform.deepseek.com](https://platform.deepseek.com/) 注册申请。便宜、速度快。
-   - **Claude** —— 在 [console.anthropic.com](https://console.anthropic.com/) 注册申请。质量更高但单价贵。
-3. 两个 Key 可以同时存着，**随时切换 Provider** 不需要重新粘。模型预设会跟着 Provider 变。
-4. 打开 **AI Coach** tab。对话历史会自动保存，刷新和换设备都不会丢。
+2. 选一个 **Provider**：
+   - **DeepSeek** —— 在 [platform.deepseek.com](https://platform.deepseek.com/) 注册申请 Key。便宜、速度快。
+   - **Claude API（第三方）** —— 在 [console.claudeapi.com](https://console.claudeapi.com/) 注册申请 Key。**不是** Anthropic 官方，是第三方中转服务，但接口和模型保持同步。质量比 DeepSeek 高一些，价格也高一些。
+3. 设置弹窗下方只会显示**当前 provider** 的设置；切到另一个 provider 时另一组 Key + 模型仍然保留在后台，切回来还在。可以两边都填好做横评。
+4. **接入线路（仅 Claude API）**：第三方服务提供多条线路（默认 / 香港 / 日本 / 新加坡），按当前网络延迟选一条。这个选择按设备保存 —— 手机和电脑可以走不同线路。
+5. **模型**：每个 provider 都列出推荐模型作为 chips，点一下自动填入。**也可以在下方输入框里输入任意模型 ID 保存**，这样新模型上线不用等 app 更新就能直接用。
+6. 打开 **AI Coach** tab。对话历史会自动保存，刷新和换设备都不会丢。
 
-> 切换 Provider 只影响下一条消息发给谁；过往的对话历史保留不动。想横评两家的回复质量，就同一个问题用两个 Provider 各发一次比较。
+> 切换 Provider 只影响下一条消息发给谁；过往的对话历史保留不动。
 
 ## 教练每次能看到什么
 

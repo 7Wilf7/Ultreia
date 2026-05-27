@@ -1,33 +1,63 @@
 // Provider catalog — each entry covers everything the chat client needs:
-// endpoint URL, default model + alternatives shown as chips, signup URL for
-// users without a key, and (where applicable) the auth-header style. Both
-// providers expose an Anthropic-compatible API surface, so the request body
-// shape stays identical and only the URL + key change at the fetch site.
+// the active endpoint URL, alternative endpoints (Claude has region-routed
+// mirrors), recommended model presets (the user can OVERRIDE these with any
+// custom model name), and the signup URL for new users without a key.
+//
+// `endpoints` is a list — the first entry is the default. Selection is per-
+// device (localStorage), not per-account, so a phone on 4G can pick a
+// different mirror than a desktop on home wifi.
+//
+// `models` is RECOMMENDED only — the UI always offers a free-text input so
+// the user can paste any custom model ID without waiting for a code change.
 export const API_PROVIDERS = {
   deepseek: {
     id: "deepseek",
     label: "DeepSeek",
-    endpoint: "https://api.deepseek.com/anthropic/v1/messages",
+    isThirdParty: false,
+    consoleUrl: "https://platform.deepseek.com/",
     signupUrl: "https://platform.deepseek.com/",
+    endpoints: [
+      { id: "default", label: "默认线路", url: "https://api.deepseek.com/anthropic/v1/messages" },
+    ],
     defaultModel: "deepseek-v4-pro",
     models: ["deepseek-v4-pro", "deepseek-v4-flash"],
   },
   claude: {
     id: "claude",
-    label: "Claude (Anthropic)",
-    endpoint: "https://api.anthropic.com/v1/messages",
-    signupUrl: "https://console.anthropic.com/",
+    // The "Claude" surface in this app talks to a THIRD-PARTY relay at
+    // claudeapi.com — not Anthropic directly. The label and console URL
+    // reflect that so the user doesn't confuse it with an official Anthropic
+    // account.
+    label: "Claude API (第三方)",
+    isThirdParty: true,
+    consoleUrl: "https://console.claudeapi.com/",
+    signupUrl: "https://console.claudeapi.com/",
+    endpoints: [
+      { id: "default", label: "默认线路",  url: "https://gw.claudeapi.com/messages" },
+      { id: "hk",      label: "香港线路",  url: "https://hk.claudeapi.com/messages" },
+      { id: "jp",      label: "日本线路",  url: "https://jp.claudeapi.com/messages" },
+      { id: "sg",      label: "新加坡线路", url: "https://sg.claudeapi.com/messages" },
+    ],
     defaultModel: "claude-sonnet-4-6",
-    models: ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
   },
 };
 
 export const DEFAULT_API_PROVIDER = "deepseek";
 
+// Resolve the endpoint URL to use for a given provider. `endpointId` comes
+// from localStorage (per-device pick); falls back to the first entry when
+// the saved id no longer matches a known endpoint.
+export function getEndpointUrl(providerId, endpointId) {
+  const p = API_PROVIDERS[providerId] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+  const match = p.endpoints.find(e => e.id === endpointId);
+  return (match || p.endpoints[0]).url;
+}
+
 // Legacy exports kept for any imports that still reference them — sourced
 // from the DeepSeek entry so behavior is unchanged for callers that haven't
 // migrated to the provider-aware shape yet.
-export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoint;
+export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoints[0].url;
 export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
 export const MODEL_PRESETS = API_PROVIDERS.deepseek.models;

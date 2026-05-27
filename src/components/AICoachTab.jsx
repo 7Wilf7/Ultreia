@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import {
-  API_PROVIDERS, DEFAULT_API_PROVIDER,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -21,7 +21,7 @@ export function AICoachTab({
   coachMemory, setCoachMemory,
   chatMessages,
   now, setConfirmDelete,
-  apiProvider, apiKey, claudeApiKey, apiModel, onEditProfile,
+  apiProvider, apiKey, claudeApiKey, claudeEndpointId, apiModel, onEditProfile,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
@@ -30,7 +30,9 @@ export function AICoachTab({
   // Provider-aware endpoint + key for the memory-proposal call, which still
   // lives in this tab (only triggered from the Memory modal opened inside it).
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
-  const apiEndpoint = provider.endpoint;
+  const apiEndpoint = apiProvider === "claude"
+    ? getEndpointUrl("claude", claudeEndpointId)
+    : provider.endpoints[0].url;
   const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
   const t = useT();
   const { lang } = useLanguage();

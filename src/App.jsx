@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  API_PROVIDERS, DEFAULT_API_PROVIDER, ACTIVITY_TYPES,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl, ACTIVITY_TYPES,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -66,8 +66,21 @@ function AuthedApp({ user, signOut, changePassword }) {
   // which key + endpoint + model preset list the chat client uses.
   const [apiProvider, setApiProviderState] = useState(DEFAULT_API_PROVIDER);
   const [apiKey, setApiKeyState] = useState("");          // DeepSeek key
-  const [claudeApiKey, setClaudeApiKeyState] = useState(""); // Claude key
+  const [claudeApiKey, setClaudeApiKeyState] = useState(""); // Claude key (third-party relay)
   const [apiModel, setApiModelState] = useState(API_PROVIDERS[DEFAULT_API_PROVIDER].defaultModel);
+  // Claude endpoint pick lives in localStorage (per device, not per account)
+  // because the right mirror depends on the current network — a phone on
+  // mobile data may want the Tokyo/Singapore route, the home laptop may not.
+  // Per-account sync would force one choice across devices, which is worse.
+  const [claudeEndpointId, setClaudeEndpointIdState] = useState(() => {
+    try {
+      return localStorage.getItem("ts.claudeEndpointId") || "default";
+    } catch { return "default"; }
+  });
+  function setClaudeEndpointId(id) {
+    setClaudeEndpointIdState(id);
+    try { localStorage.setItem("ts.claudeEndpointId", id); } catch { /* private mode, etc. */ }
+  }
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [coachMemory, setCoachMemoryState] = useState("");
   const [lang, setLangState] = useState(DEFAULT_LANG);
@@ -357,6 +370,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         apiProvider={apiProvider} setApiProvider={setApiProvider}
         apiKey={apiKey} setApiKey={setApiKey}
         claudeApiKey={claudeApiKey} setClaudeApiKey={setClaudeApiKey}
+        claudeEndpointId={claudeEndpointId} setClaudeEndpointId={setClaudeEndpointId}
         apiModel={apiModel} setApiModel={setApiModel}
         itraPI={itraPI} setItraPI={setItraPI}
         profile={profile} setProfile={setProfile}
@@ -377,6 +391,7 @@ function AppShell({
   apiProvider, setApiProvider,
   apiKey, setApiKey,
   claudeApiKey, setClaudeApiKey,
+  claudeEndpointId, setClaudeEndpointId,
   apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -420,6 +435,9 @@ function AppShell({
   async function sendChat(userMsg) {
     if (!userMsg || chatLoading) return false;
     const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+    const endpointUrl = apiProvider === "claude"
+      ? getEndpointUrl("claude", claudeEndpointId)
+      : provider.endpoints[0].url;
     const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
     if (!activeKey) {
       appendLocalChatMessage("assistant", t("coach.no_key"));
@@ -462,7 +480,7 @@ function AppShell({
     }
 
     try {
-      const resp = await fetch(provider.endpoint, {
+      const resp = await fetch(endpointUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -490,7 +508,7 @@ function AppShell({
       }
     } catch (err) {
       console.error("[AI Coach] Network error:", err);
-      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: provider.endpoint }));
+      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: endpointUrl }));
     }
     setChatLoading(false);
     return true;
@@ -503,6 +521,9 @@ function AppShell({
   //    show per-message extraction state.
   async function importToCalendar(assistantContent, msgId) {
     const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+    const endpointUrl = apiProvider === "claude"
+      ? getEndpointUrl("claude", claudeEndpointId)
+      : provider.endpoints[0].url;
     const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
     if (!activeKey) {
       alert(t("coach.no_key"));
@@ -539,7 +560,7 @@ Rules:
 - Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
 
     try {
-      const resp = await fetch(provider.endpoint, {
+      const resp = await fetch(endpointUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -567,7 +588,7 @@ Rules:
       setPlanProposal({ plans });
     } catch (err) {
       console.error("[AI Coach] Plan-extract error:", err);
-      alert(t("coach.network_error", { msg: err.message, url: provider.endpoint }));
+      alert(t("coach.network_error", { msg: err.message, url: endpointUrl }));
     } finally {
       setExtractingForMsgId(null);
     }
@@ -698,6 +719,7 @@ Rules:
           apiProvider={apiProvider}
           apiKey={apiKey}
           claudeApiKey={claudeApiKey}
+          claudeEndpointId={claudeEndpointId}
           apiModel={apiModel}
           onEditProfile={() => setProfileEditorMode("edit")}
           /* Lifted state + handlers — see AppShell top for definitions. */
@@ -735,6 +757,8 @@ Rules:
           setApiKey={setApiKey}
           claudeApiKey={claudeApiKey}
           setClaudeApiKey={setClaudeApiKey}
+          claudeEndpointId={claudeEndpointId}
+          setClaudeEndpointId={setClaudeEndpointId}
           apiModel={apiModel}
           setApiModel={setApiModel}
           onClose={() => setShowApiSettings(false)}

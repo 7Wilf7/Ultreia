@@ -12,11 +12,12 @@
 - **移动端聊天气泡变宽**（85% → 94%），长消息不再挤在窄柱里。
 - **日历导入按钮可隐藏** —— 在 AI Coach 设置里新增独立「Calendar Import Button」开关（默认显示），不想用就关掉，所有回复下面就不再出现这个按钮。开启时按钮以文字形式显示在每条教练回复下方。
 
-**Claude API 回来了**
+**Claude API 回来了（第三方中转）**
 
-- API 设置加了 **Provider 切换器**：DeepSeek 和 Claude 都能用，两个 Key 同时存着，随时切换不需要重新粘。
-- 模型预设跟着 Provider 走。Claude 提供 Opus 4.7 / Sonnet 4.6 / Haiku 4.5 三档；DeepSeek 仍是 Pro / Flash。
-- 切换 Provider 只影响下一条消息发给谁，过去的对话历史保留。可以拿同一个问题让两家各回一次做横评。
+- API 设置加了 **Provider 切换器**：DeepSeek 和 Claude 都能用，两个 Key 同时存着，随时切换不需要重新粘。设置弹窗只显示当前 provider 的设置，UI 不再混在一起。
+- Claude API 走的是**第三方中转服务**（console.claudeapi.com），不是 Anthropic 官方。提供 4 条接入线路（默认 / 香港 / 日本 / 新加坡），按当前网络选一条，按设备保存。
+- **模型可自定义** —— 推荐 chips 点一下填入，下方输入框可以输入任意模型 ID。新模型上线不需要等代码更新。DeepSeek 也一样。
+- 切换 Provider 只影响下一条消息发给谁，过去的对话历史保留。
 
 **跑步类型推荐：从固定阈值 → 个性化心率区间**
 

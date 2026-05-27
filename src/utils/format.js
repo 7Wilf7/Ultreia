@@ -28,6 +28,18 @@ export function formatDuration(sec) {
   return `${s}s`;
 }
 
+// Compact duration for tight cells (mobile stat tiles). Drops seconds + minutes
+// once it spans an hour so a weekly total stays one line: "12h", "45m". Below
+// 1 minute we still surface seconds so the readout isn't an unhelpful "0m".
+export function formatDurationShort(sec) {
+  if (!sec) return "—";
+  const h = Math.floor(sec / 3600);
+  if (h > 0) return `${h}h`;
+  const m = Math.floor(sec / 60);
+  if (m > 0) return `${m}m`;
+  return `${Math.round(sec)}s`;
+}
+
 export function formatPaceFromSec(secPerKm) {
   if (!secPerKm || !isFinite(secPerKm)) return "—";
   const m = Math.floor(secPerKm / 60);

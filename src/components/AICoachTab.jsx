@@ -35,6 +35,7 @@ export function AICoachTab({
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   const [showCoachConfig, setShowCoachConfig] = useState(false);
+  const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   // Preview language is independent of UI language — defaults to UI language
   // but the user can flip it to read the prompt in the other language.
@@ -174,6 +175,7 @@ Output the memory text only, nothing else.`;
   function setStyle(id)        { setCoachConfig({ ...coachConfig, style: id }); }
   function setOutputLength(id) { setCoachConfig({ ...coachConfig, outputLength: id }); }
   function setIntervention(id) { setCoachConfig({ ...coachConfig, intervention: id }); }
+  function setShowCalendarButton(v) { setCoachConfig({ ...coachConfig, showCalendarButton: v }); }
 
   // Dynamic data block injected into the system prompt. Only the section titles
   // are localized; values (dates, race names, numbers) stay verbatim across
@@ -237,6 +239,10 @@ Output the memory text only, nothing else.`;
             <button onClick={() => setShowCoachConfig(true)}
               style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
               {t("coach.show_config")}
+            </button>
+            <button onClick={() => setShowCalendarSettings(true)}
+              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
+              {t("coach.calendar_btn_label")}
             </button>
             <button onClick={() => setShowMemory(true)}
               style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
@@ -306,6 +312,33 @@ Output the memory text only, nothing else.`;
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
+      {/* Calendar button toggle — separate modal opened from the mobile settings
+          sub-page. Pulled out of the Coach Config modal because it's a display
+          preference, not a behavior knob about the coach itself. */}
+      {showCalendarSettings && (
+        <ModalRoot>
+          <div style={s.modalOverlay(isMobile)} onClick={() => setShowCalendarSettings(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.calendar_btn_label")}</h2>
+                <button onClick={() => setShowCalendarSettings(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.calendar_btn_hint")}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <button onClick={() => setShowCalendarButton(true)}
+                  style={{ ...s.chip(coachConfig.showCalendarButton !== false), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                  {t("coach.calendar_btn_on")}
+                </button>
+                <button onClick={() => setShowCalendarButton(false)}
+                  style={{ ...s.chip(coachConfig.showCalendarButton === false), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                  {t("coach.calendar_btn_off")}
+                </button>
               </div>
             </div>
           </div>
@@ -448,48 +481,87 @@ Output the memory text only, nothing else.`;
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {chatMessages.map((m, i) => {
-              // Persistent assistant replies (i.e. not local error bubbles) get
-              // an "Import to Calendar" affordance — a tiny 📅 icon button sitting
-              // to the right of the bubble. Avoids the extra row the old wide
-              // button took up under every assistant message.
-              const canImport = m.role === "assistant" && !m.isLocal && importToCalendar;
-              const extracting = extractingForMsgId === m.id;
-              return (
-                <div key={i} style={{
-                  alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-                  maxWidth: "85%",
-                  display: "flex", flexDirection: "row", alignItems: "flex-end", gap: 6,
-                }}>
-                  <div style={{
-                    background: m.role === "user" ? "#222" : "#f5f5f5",
-                    color: m.role === "user" ? "#fff" : "#222",
-                    borderRadius: 10, padding: "10px 14px",
-                    fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
-                    minWidth: 0,
-                  }}>{m.content}</div>
-                  {canImport && (
-                    <button
-                      onClick={() => importToCalendar(m.content, m.id)}
-                      disabled={extracting}
-                      aria-label={t("coach.import_button")}
-                      title={extracting ? t("coach.extracting") : t("coach.import_button")}
-                      style={{
-                        background: "var(--bg-elevated)",
-                        border: "1px solid var(--rule)",
-                        borderRadius: 4,
-                        width: 32, height: 32, minHeight: 32,
-                        padding: 0, fontSize: 15, lineHeight: 1,
-                        cursor: extracting ? "default" : "pointer",
-                        flexShrink: 0,
-                        display: "inline-flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                      {extracting ? <Spinner size={14} thickness={1.5} color="var(--moss)" /> : "📅"}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+            {(() => {
+              // The "resend" affordance only shows on the most-recent user message
+              // (an older send is rarely what the user wants to retry — usually they
+              // hit a network error on the last one).
+              let lastUserIdx = -1;
+              for (let k = chatMessages.length - 1; k >= 0; k--) {
+                if (chatMessages[k].role === "user") { lastUserIdx = k; break; }
+              }
+              return chatMessages.map((m, i) => {
+                const isUser = m.role === "user";
+                const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton;
+                const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
+                const extracting = extractingForMsgId === m.id;
+                return (
+                  <div key={i} style={{
+                    alignSelf: isUser ? "flex-end" : "flex-start",
+                    // Mobile bubbles get wider so long messages don't squeeze into
+                    // a narrow column the user has to keep scrolling to read.
+                    // Color already differentiates user vs coach so the visual
+                    // "tail" of leftover horizontal space isn't needed.
+                    maxWidth: isMobile ? "94%" : "85%",
+                    display: "flex", flexDirection: "column",
+                    alignItems: isUser ? "flex-end" : "flex-start",
+                    gap: 6, minWidth: 0,
+                  }}>
+                    <div style={{
+                      background: isUser ? "#222" : "#f5f5f5",
+                      color: isUser ? "#fff" : "#222",
+                      borderRadius: 10, padding: "10px 14px",
+                      fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap",
+                      minWidth: 0,
+                    }}>{m.content}</div>
+
+                    {/* Calendar import affordance — text button below the bubble.
+                        Gated by the showCalendarButton coach setting (default ON).
+                        Shows on persistent assistant replies only. */}
+                    {canImport && (
+                      <button
+                        onClick={() => importToCalendar(m.content, m.id)}
+                        disabled={extracting}
+                        style={{
+                          background: "var(--bg-elevated)",
+                          border: "1px solid var(--rule)",
+                          borderRadius: 4,
+                          padding: "5px 10px",
+                          fontSize: 12, lineHeight: 1.2,
+                          color: "var(--ink-2)",
+                          fontFamily: "var(--font-sans)",
+                          cursor: extracting ? "default" : "pointer",
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                        }}>
+                        {extracting ? <Spinner size={12} thickness={1.5} color="var(--moss)" /> : "📅"}
+                        {extracting ? t("coach.extracting") : t("coach.import_button")}
+                      </button>
+                    )}
+
+                    {/* Resend affordance — only on the latest user msg, only when
+                        not currently waiting on a reply. Fixes the "tab away → come
+                        back → network error" case where the user wants one-tap retry
+                        without having to copy/paste their text. */}
+                    {canResend && (
+                      <button
+                        onClick={() => sendChat(m.content)}
+                        style={{
+                          background: "var(--bg-elevated)",
+                          border: "1px solid var(--rule)",
+                          borderRadius: 4,
+                          padding: "4px 10px",
+                          fontSize: 11, lineHeight: 1.2,
+                          color: "var(--ink-3)",
+                          fontFamily: "var(--font-sans)",
+                          cursor: "pointer",
+                          display: "inline-flex", alignItems: "center", gap: 5,
+                        }}>
+                        ↻ {t("coach.resend")}
+                      </button>
+                    )}
+                  </div>
+                );
+              });
+            })()}
             {chatLoading && (
               <div style={{
                 alignSelf: "flex-start", color: "#888", fontSize: 13,
@@ -613,11 +685,12 @@ Output the memory text only, nothing else.`;
                   padding: "10px 0",
                 }}>
                   {[
-                    { id: "profile", label: t("coach.edit_profile") },
-                    { id: "config",  label: t("coach.show_config") },
-                    { id: "memory",  label: t("coach.show_memory") + (coachMemory ? " ●" : "") },
-                    { id: "prompt",  label: t("coach.show_prompt") },
-                    { id: "clear",   label: t("coach.clear_chat") },
+                    { id: "profile",  label: t("coach.edit_profile") },
+                    { id: "config",   label: t("coach.show_config") },
+                    { id: "calendar", label: t("coach.calendar_btn_label") },
+                    { id: "memory",   label: t("coach.show_memory") + (coachMemory ? " ●" : "") },
+                    { id: "prompt",   label: t("coach.show_prompt") },
+                    { id: "clear",    label: t("coach.clear_chat") },
                   ].map(tab => {
                     const active = coachHubTab === tab.id;
                     return (
@@ -689,6 +762,23 @@ Output the memory text only, nothing else.`;
                             </button>
                           ))}
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {coachHubTab === "calendar" && (
+                    <div>
+                      <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>{t("coach.calendar_btn_hint")}</div>
+                      <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.calendar_btn_label")}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button onClick={() => setShowCalendarButton(true)}
+                          style={s.chip(coachConfig.showCalendarButton !== false)}>
+                          {t("coach.calendar_btn_on")}
+                        </button>
+                        <button onClick={() => setShowCalendarButton(false)}
+                          style={s.chip(coachConfig.showCalendarButton === false)}>
+                          {t("coach.calendar_btn_off")}
+                        </button>
                       </div>
                     </div>
                   )}

@@ -228,6 +228,7 @@ const dict = {
   // doesn't lose information.
   "training.total_distance":  { en: "Distance",             zh: "总距离" },
   "training.total_ascent":    { en: "Ascent",               zh: "总爬升" },
+  "training.total_time":      { en: "Time",                 zh: "总时长" },
   "training.avg_hr":          { en: "Avg HR",               zh: "平均心率" },
 
   // Training sub-views (Calendar promoted to a top-level tab — no sub-chip)
@@ -479,7 +480,7 @@ const dict = {
   "coach.no_key":             { en: "⚠ No Anthropic API key configured. Click the 🔑 API button in the top-right and set one.", zh: "⚠ 未配置 API Key。请点右上角的 🔑 API 按钮设置。" },
   "coach.api_error":          { en: "API error: {msg}",     zh: "API 错误：{msg}" },
   "coach.no_response":        { en: "No response.",         zh: "无响应。" },
-  "coach.network_error":      { en: "Network error: {msg}\nURL used: {url}\n\nOpen DevTools (F12) → Network tab → try Send again to see the failing request.", zh: "网络错误：{msg}\n请求 URL：{url}\n\n打开开发者工具 (F12) → Network 标签 → 再次点击发送以查看失败请求。" },
+  "coach.network_error":      { en: "Network request failed ({msg}). If you switched apps while waiting, the browser may have paused the connection — tap Resend below your message to try again.", zh: "网络请求失败（{msg}）。如果在等待回复时切换了 app，浏览器可能暂停了连接 —— 点击消息下方的「重新发送」再试一次。" },
   "coach.input_placeholder":  { en: "Type your message — daily check-in, training question, or anything you want the coach to see.", zh: "输入你想和教练说的话 —— 今日打卡、训练疑问，或任何想让 ta 看到的内容。" },
   "coach.send":               { en: "Send",                 zh: "发送" },
   "coach.tip":                { en: "",                     zh: "" },
@@ -487,8 +488,13 @@ const dict = {
   "coach.long_chat_action":   { en: "Open Memory",          zh: "打开 Memory" },
 
   // ===== AI Coach → Calendar import =====
-  "coach.import_button":      { en: "📅 Import to Calendar",  zh: "📅 导入到日历" },
+  "coach.import_button":      { en: "Import to Calendar",     zh: "导入到日历" },
   "coach.extracting":         { en: "Extracting…",            zh: "提取中……" },
+  "coach.resend":             { en: "Resend",                 zh: "重新发送" },
+  "coach.calendar_btn_label": { en: "Calendar Import Button", zh: "日历导入按钮" },
+  "coach.calendar_btn_hint":  { en: "When on, an \"Import to Calendar\" button appears below each coach reply. Tap it to ask the AI to extract concrete plans from that reply (dates, types, distance) and review them before adding to your Calendar.", zh: "开启时，每条教练回复下方会出现「导入到日历」按钮。点击会让 AI 从该回复中提取具体的训练计划（日期、类型、距离），你审核确认后加入日历。" },
+  "coach.calendar_btn_on":    { en: "Show",                   zh: "显示" },
+  "coach.calendar_btn_off":   { en: "Hide",                   zh: "隐藏" },
   "coach.import_no_plans":    { en: "No concrete training plans found in that reply. The coach may have only given analysis / advice without specific dates.", zh: "未在这条回复中识别到具体训练计划。教练可能只给了分析或建议，没有明确的日期与训练内容。" },
   "coach.import_modal_eyebrow": { en: "Review before import",  zh: "导入前审核" },
   "coach.import_modal_title":   { en: "Import {n} plan(s) into Calendar", zh: "导入 {n} 条计划到日历" },

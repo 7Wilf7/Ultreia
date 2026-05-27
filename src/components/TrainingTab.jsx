@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
+import { formatDuration, formatDurationShort } from "../utils/format";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
@@ -13,7 +14,7 @@ export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
   period, setPeriod, periodDropdown, setPeriodDropdown,
-  setConfirmDelete, profile,
+  setConfirmDelete,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -40,10 +41,7 @@ export function TrainingTab({
   const periodKm = periodLogs.filter(l => RUN_GROUP_TYPES.includes(l.type))
     .reduce((sum, l) => sum + (l.distance || 0), 0);
   const periodAscent = periodLogs.reduce((sum, l) => sum + (l.ascent || 0), 0);
-  const hrLogs = periodLogs.filter(l => l.hr);
-  const periodAvgHR = hrLogs.length > 0
-    ? Math.round(hrLogs.reduce((sum, l) => sum + l.hr, 0) / hrLogs.length)
-    : 0;
+  const periodDurationSec = periodLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
 
   // Sticky header for the three navigation rows: All activities ▼ /
   // Activities-Charts toggle / period selector (when in activities view).
@@ -145,9 +143,9 @@ export function TrainingTab({
           }}>
             {[
               { label: t("training.sessions"),       val: String(periodSessions),                                    unit: "" },
+              { label: t("training.total_time"),     val: periodDurationSec ? (isMobile ? formatDurationShort(periodDurationSec) : formatDuration(periodDurationSec)) : t("common.no_data"), unit: "" },
               { label: t("training.total_distance"), val: periodKm.toFixed(1),                                       unit: "km" },
               { label: t("training.total_ascent"),   val: periodAscent.toLocaleString(),                             unit: "m" },
-              { label: t("training.avg_hr"),         val: periodAvgHR ? String(periodAvgHR) : t("common.no_data"),   unit: periodAvgHR ? "bpm" : "" },
             ].map((c, i) => (
               <div key={c.label} style={{
                 position: "relative",
@@ -205,7 +203,7 @@ export function TrainingTab({
       )}
 
       {view === "charts" && (
-        <ChartsTab filteredAllLogs={filteredAllLogs} profile={profile} filter={filter} />
+        <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} />
       )}
     </div>
   );

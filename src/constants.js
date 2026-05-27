@@ -290,6 +290,7 @@ export const DEFAULT_COACH_CONFIG = {
   style: "balanced",
   outputLength: "standard",
   intervention: "standard",
+  showCalendarButton: true,
 };
 
 export const COACH_STYLES = [

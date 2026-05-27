@@ -1,10 +1,9 @@
 import { useState, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_GROUP_TYPES, HR_ZONE_METHODS } from "../constants";
+import { RUN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
-import { computeHRZones } from "../utils/profile";
 import { getPeriodLabel } from "../utils/period";
 
 // Compact week-bucket label like "5-18~24" (same month) or "5-30~6-5" (cross-month).
@@ -28,28 +27,28 @@ function weekRangeLabel(start, endExclusive) {
 // "all" and any multi-group selection falls back to the original layout
 // (distance + run type + HR).
 function getChartConfig(filter) {
-  const def = { trend: "distance", showRunType: true, showHR: true };
+  const def = { trend: "distance", showRunType: true };
   if (!filter || filter.all) return def;
   const g = filter.groups;
   if (g.run.enabled && !g.strength.enabled && !g.hiit.enabled) {
     if (g.run.subs.length !== 1) return def;
     const sub = g.run.subs[0];
-    if (sub === "Road Run")      return { trend: "distance", showRunType: true,  showHR: true  };
-    if (sub === "Trail Run")     return { trend: "distance", showAscent: true,   showHR: true  };
-    if (sub === "Hiking")        return { trend: "distance", showAscent: true,   showHR: false };
-    if (sub === "Floor Climbing")return { trend: "ascent",                       showHR: true  };
+    if (sub === "Road Run")      return { trend: "distance", showRunType: true };
+    if (sub === "Trail Run")     return { trend: "distance", showAscent: true  };
+    if (sub === "Hiking")        return { trend: "distance", showAscent: true  };
+    if (sub === "Floor Climbing")return { trend: "ascent" };
     return def;
   }
   if ((g.strength.enabled || g.hiit.enabled) && !g.run.enabled) {
-    return { trend: "duration", showHR: true };
+    return { trend: "duration" };
   }
   return def;
 }
 
-export function ChartsTab({ filteredAllLogs, profile, filter }) {
+export function ChartsTab({ filteredAllLogs, filter }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 8 });
+  const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 4 });
 
   const config = useMemo(() => getChartConfig(filter), [filter]);
 
@@ -60,6 +59,12 @@ export function ChartsTab({ filteredAllLogs, profile, filter }) {
     const nowD = new Date();
     const buckets = [];
 
+    // Strength sessions covering multiple body parts get their duration
+    // attributed proportionally to the filter's body-part scope. A 30-min
+    // "Upper + Lower" log counts as 30 min under "all strength", 15 min
+    // under "Upper Body only", and 30 min again under "Upper + Lower".
+    const strengthSubsFilter = filter?.groups?.strength?.subs || [];
+
     const pickValue = (l) => {
       if (config.trend === "distance") {
         return RUN_GROUP_TYPES.includes(l.type) ? (l.distance || 0) : 0;
@@ -68,8 +73,14 @@ export function ChartsTab({ filteredAllLogs, profile, filter }) {
         return (l.ascent || 0);
       }
       if (config.trend === "duration") {
-        // minutes — duration is stored in seconds
-        return l.duration ? l.duration / 60 : 0;
+        let minutes = l.duration ? l.duration / 60 : 0;
+        if (l.type === "Strength" && Array.isArray(l.subTypes) && l.subTypes.length > 1) {
+          const matched = strengthSubsFilter.length > 0
+            ? l.subTypes.filter(st => strengthSubsFilter.includes(st)).length
+            : l.subTypes.length;
+          minutes = minutes * (matched / l.subTypes.length);
+        }
+        return minutes;
       }
       return 0;
     };
@@ -123,7 +134,7 @@ export function ChartsTab({ filteredAllLogs, profile, filter }) {
       }
     }
     return buckets;
-  }, [filteredAllLogs, chartPeriod, config.trend, t]);
+  }, [filteredAllLogs, chartPeriod, config.trend, filter?.groups?.strength?.subs, t]);
 
   const chartRangeLogs = useMemo(() => {
     const nowD = new Date();
@@ -217,36 +228,6 @@ export function ChartsTab({ filteredAllLogs, profile, filter }) {
   const ascentMax = ascentData ? Math.max(...ascentData.map(w => w.value), 1) : 1;
   // totalRunsForPie now holds total DURATION in seconds (not session count).
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
-
-  // Heart-rate-zone distribution by duration. Uses the user's Karvonen zones
-  // from profile (Resting HR + Max HR + chosen method).
-  //
-  // APPROXIMATION: we only store avg HR per activity (not time-in-zone), so
-  // each activity's full duration is bucketed into the zone its avg HR falls into.
-  // For mixed-intensity sessions this under-represents the zone diversity, but
-  // it's the right approximation given the data we capture.
-  const hrZones = useMemo(() => {
-    return computeHRZones(profile?.restingHR, profile?.maxHR, profile?.hrZoneMethod);
-  }, [profile?.restingHR, profile?.maxHR, profile?.hrZoneMethod]);
-
-  const hrZoneDist = useMemo(() => {
-    if (!hrZones) return null;
-    const buckets = {};
-    hrZones.forEach(z => buckets[z.id] = 0);
-    let belowZ1 = 0;  // avg HR lower than Z1 low (very easy / warm-up only)
-    let aboveZ5 = 0;  // avg HR above Z5 high (rare but possible)
-    chartRangeLogs.forEach(l => {
-      if (!l.hr || l.duration <= 0) return;
-      const z = hrZones.find(zz => l.hr >= zz.low && l.hr <= zz.high);
-      if (z) buckets[z.id] += l.duration;
-      else if (l.hr < hrZones[0].low) belowZ1 += l.duration;
-      else aboveZ5 += l.duration;
-    });
-    const total = hrZones.reduce((sum, z) => sum + buckets[z.id], 0) + belowZ1 + aboveZ5;
-    return { buckets, belowZ1, aboveZ5, total };
-  }, [chartRangeLogs, hrZones]);
-
-  const hrZoneMethod = profile && HR_ZONE_METHODS.find(m => m.id === profile.hrZoneMethod);
 
   const presets = [
     { type: "week",  count: 4,  label: t("charts.weeks",  { n: 4 }) },
@@ -362,7 +343,7 @@ export function ChartsTab({ filteredAllLogs, profile, filter }) {
       {config.showRunType && (
         <>
           <div style={s.section}>{t("charts.run_type_title", { label: chartPeriodLabel() })}</div>
-          <div style={{ ...s.card, marginBottom: config.showHR ? 22 : 0 }}>
+          <div style={s.card}>
             {totalRunsForPie === 0 ? (
               <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.no_classified")}</div>
             ) : (
@@ -385,59 +366,6 @@ export function ChartsTab({ filteredAllLogs, profile, filter }) {
                     </div>
                   );
                 })}
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* HR Zone Distribution — gated by config.showHR (and by Karvonen zones being configured) */}
-      {config.showHR && (
-        <>
-          <div style={{ ...s.section, marginTop: config.showRunType ? 22 : 0 }}>
-            {t("charts.hr_zone_title", { label: chartPeriodLabel() })}
-            {hrZoneMethod && <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>· {hrZoneMethod.label}</span>}
-          </div>
-          <div style={s.card}>
-            {!hrZones ? (
-              <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13, lineHeight: 1.6 }}>
-                {t("charts.hr_zone_need_profile")}
-              </div>
-            ) : !hrZoneDist || hrZoneDist.total === 0 ? (
-              <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>
-                {t("charts.hr_zone_no_data")}
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {hrZones.map((z, i) => {
-                  const dur = hrZoneDist.buckets[z.id] || 0;
-                  const pct = hrZoneDist.total ? (dur / hrZoneDist.total) * 100 : 0;
-                  // Bar shade: Z1 lightest moss → Z5 deepest ink (intensity ramp).
-                  const shade = ["var(--moss-light)", "var(--moss)", "var(--moss-deep)", "var(--ink-2)", "var(--ink-1)"][i] || "var(--ink-2)";
-                  return (
-                    <div key={z.id}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
-                        <span style={{ color: "var(--ink-1)" }}>
-                          {z.id}
-                          <span style={{ ...s.muted, fontFamily: "var(--font-mono)", marginLeft: 8 }}>{z.low}–{z.high} bpm</span>
-                        </span>
-                        <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                          {dur > 0 ? formatDuration(dur) : "—"} · {pct.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
-                        <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* Below Z1 / Above Z5 — informational, shown only when non-zero */}
-                {(hrZoneDist.belowZ1 > 0 || hrZoneDist.aboveZ5 > 0) && (
-                  <div style={{ ...s.muted, fontSize: 11, marginTop: 4, paddingTop: 8, borderTop: "1px solid var(--rule-soft)" }}>
-                    {hrZoneDist.belowZ1 > 0 && <span style={{ marginRight: 14 }}>{t("charts.hr_zone_below")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.belowZ1)}</span></span>}
-                    {hrZoneDist.aboveZ5 > 0 && <span>{t("charts.hr_zone_above")}: <span style={{ fontFamily: "var(--font-mono)" }}>{formatDuration(hrZoneDist.aboveZ5)}</span></span>}
-                  </div>
-                )}
               </div>
             )}
           </div>

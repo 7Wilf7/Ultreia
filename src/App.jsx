@@ -335,6 +335,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         races={races}
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
         chatMessages={chatMessages}
+        setChatMessages={setChatMessages}
         appendChatMessage={appendChatMessage}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
@@ -355,7 +356,7 @@ function AppShell({
   user, signOut, changePassword,
   logs, refreshLogs, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
+  chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags,
   apiKey, setApiKey, apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
@@ -403,11 +404,16 @@ function AppShell({
       appendLocalChatMessage("assistant", t("coach.no_key"));
       return false;
     }
+
+    // Optimistic UI: drop the user's bubble into the chat IMMEDIATELY, before
+    // any awaits, so the user sees their message land the moment they hit
+    // send. The persisted row replaces this placeholder once the DB write
+    // returns; on failure we surface an error bubble and bail.
+    const optimisticId = `pending-${Date.now()}`;
+    const messagesToSend = [...chatMessages, { role: "user", content: userMsg }];
+    setChatMessages(prev => [...prev, { id: optimisticId, role: "user", content: userMsg, isLocal: true }]);
     setChatLoading(true);
 
-    // Refresh logs first so the prompt reflects cross-tab/device writes
-    // since this React tree mounted. Single-tab adds are already covered
-    // by addLog's optimistic setLogs.
     let freshLogs = logs;
     try {
       freshLogs = await refreshLogs();
@@ -420,11 +426,16 @@ function AppShell({
       dataBlock: buildDataBlock({ logs: freshLogs, races, now, lang: "en" }),
       lang: "en",
     });
-    const messagesToSend = [...chatMessages, { role: "user", content: userMsg }];
 
     try {
-      await appendChatMessage("user", userMsg);
-    } catch {
+      const saved = await db.coachMessages.appendMessage("user", userMsg);
+      // Swap the optimistic bubble for the persisted row (real id, no isLocal).
+      setChatMessages(prev => prev.map(m => m.id === optimisticId ? saved : m));
+    } catch (err) {
+      // Drop the optimistic bubble and surface the failure so the user knows
+      // the message wasn't saved.
+      setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
+      window.alert("Failed to save message: " + err.message);
       setChatLoading(false);
       return false;
     }
@@ -624,7 +635,6 @@ Rules:
           periodDropdown={periodDropdown}
           setPeriodDropdown={setPeriodDropdown}
           setConfirmDelete={setConfirmDelete}
-          profile={profile}
         />
       )}
       {tab === 1 && (

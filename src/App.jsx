@@ -495,6 +495,18 @@ function AppShell({
           messages: messagesToSend,
         }),
       });
+      // Detect "server returned HTML instead of JSON" up-front — that's the
+      // classic symptom of a wrong endpoint URL (path 404'd, response is a
+      // generic error page). Mapping it to a clearer error beats the JSON
+      // parser blowing up with "Unexpected token '<'".
+      const contentType = resp.headers.get("content-type") || "";
+      if (!contentType.includes("json")) {
+        const body = await resp.text().catch(() => "");
+        const snippet = body.slice(0, 120).replace(/\s+/g, " ");
+        appendLocalChatMessage("assistant", t("coach.endpoint_error", { status: resp.status, url: endpointUrl, snippet }));
+        setChatLoading(false);
+        return true;
+      }
       const data = await resp.json();
       if (!resp.ok || data.error) {
         const msg = data.error?.message || `HTTP ${resp.status}`;

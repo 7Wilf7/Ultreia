@@ -33,10 +33,14 @@ export const API_PROVIDERS = {
     consoleUrl: "https://console.claudeapi.com/",
     signupUrl: "https://console.claudeapi.com/",
     endpoints: [
-      { id: "default", label: "默认线路",  url: "https://gw.claudeapi.com/messages" },
-      { id: "hk",      label: "香港线路",  url: "https://hk.claudeapi.com/messages" },
-      { id: "jp",      label: "日本线路",  url: "https://jp.claudeapi.com/messages" },
-      { id: "sg",      label: "新加坡线路", url: "https://sg.claudeapi.com/messages" },
+      // Path is /v1/messages — the Anthropic-compatible standard. The relay
+      // docs page sometimes shows it as "/messages" but the actual route is
+      // /v1/messages, same as the official Anthropic API and DeepSeek's
+      // compat surface.
+      { id: "default", label: "默认线路",  url: "https://gw.claudeapi.com/v1/messages" },
+      { id: "hk",      label: "香港线路",  url: "https://hk.claudeapi.com/v1/messages" },
+      { id: "jp",      label: "日本线路",  url: "https://jp.claudeapi.com/v1/messages" },
+      { id: "sg",      label: "新加坡线路", url: "https://sg.claudeapi.com/v1/messages" },
     ],
     defaultModel: "claude-sonnet-4-6",
     models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],

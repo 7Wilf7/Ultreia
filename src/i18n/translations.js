@@ -36,6 +36,15 @@ const dict = {
   "coach.profile_hub_hint":  { en: "Edit your runner profile — age, training history, HR zones, injury notes. These feed into every coach reply.", zh: "编辑你的跑者资料 —— 年龄、训练履历、心率区间、伤病备注。这些都会进入教练的每次回复。" },
   "coach.clear_hub_hint":    { en: "Permanently delete the entire chat history. Distill anything worth keeping into Memory first.", zh: "永久删除整个对话历史。先把值得留下的内容固化进长期记忆。" },
   "settings.sign_out":       { en: "Sign out",              zh: "退出登录" },
+  "settings.app_section":    { en: "App",                   zh: "应用" },
+  "settings.version":        { en: "Version",               zh: "版本" },
+  "settings.check_update":   { en: "Check for updates",     zh: "检查更新" },
+  "settings.update_checking": { en: "Checking…",            zh: "检查中…" },
+  "settings.update_latest":  { en: "You're on the latest version", zh: "已是最新版本" },
+  "settings.update_available": { en: "New version available", zh: "有新版本" },
+  "settings.update_download": { en: "Download APK",         zh: "下载 APK" },
+  "settings.update_view":    { en: "View release notes",    zh: "查看更新说明" },
+  "settings.update_error":   { en: "Could not check for updates", zh: "无法检查更新" },
 
   // ===== Password change modal =====
   "pwd.title":               { en: "Change password",       zh: "修改密码" },

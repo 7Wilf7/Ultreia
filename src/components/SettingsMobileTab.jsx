@@ -1,4 +1,5 @@
 import { useT } from "../i18n/LanguageContext";
+import { UpdateChecker } from "./UpdateChecker";
 
 /**
  * Mobile-only settings page — rendered when MobileShell tab=4. Hosts what
@@ -59,6 +60,9 @@ export function SettingsMobileTab({
         href="https://training-studio.gitbook.io/training-studio-docs"
         external
       />
+
+      <SectionHeader label={t("settings.app_section")} />
+      <UpdateChecker />
 
       <SectionHeader label="" />
       <Cell

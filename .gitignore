@@ -36,3 +36,21 @@ dist-ssr
 
 # Local launch script
 启动.bat
+
+# Capacitor / Android build outputs (the android/ Gradle project itself
+# IS committed — only the build products are ignored)
+android/.gradle/
+android/build/
+android/app/build/
+android/app/release/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor.settings.gradle
+android/local.properties
+android/*.iml
+android/.idea/
+*.apk
+*.aab
+*.keystore
+*.jks

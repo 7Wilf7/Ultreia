@@ -7,13 +7,24 @@
 1. 打开 API 设置（**电脑**：顶部右侧 **API key** 按钮；**手机**：Settings tab → API key）。
 2. 选一个 **Provider**：
    - **DeepSeek** —— 在 [platform.deepseek.com](https://platform.deepseek.com/) 注册申请 Key。便宜、速度快。
-   - **Claude API（第三方）** —— 在 [console.claudeapi.com](https://console.claudeapi.com/) 注册申请 Key。**不是** Anthropic 官方，是第三方中转服务，但接口和模型保持同步。质量比 DeepSeek 高一些，价格也高一些。
-3. 设置弹窗下方只会显示**当前 provider** 的设置；切到另一个 provider 时另一组 Key + 模型仍然保留在后台，切回来还在。可以两边都填好做横评。
+   - **Claude API（第三方）** —— 在 [console.claudeapi.com](https://console.claudeapi.com/) 注册申请 Key。**不是** Anthropic 官方，是第三方中转服务，但接口和模型保持同步。质量更高、价格也更高。
+3. 设置弹窗下方只会显示**当前 provider** 的设置；切到另一个 provider 时另一组 Key 仍然保留在后台，切回来还在。可以两边都填好做横评。
 4. **接入线路（仅 Claude API）**：第三方服务提供多条线路（默认 / 香港 / 日本 / 新加坡），按当前网络延迟选一条。这个选择按设备保存 —— 手机和电脑可以走不同线路。
-5. **模型**：每个 provider 都列出推荐模型作为 chips，点一下自动填入。**也可以在下方输入框里输入任意模型 ID 保存**，这样新模型上线不用等 app 更新就能直接用。
+5. **模型**：每个 provider 都**锁定为该家当前最强模型**（DeepSeek = V4 Pro，Claude = Opus 4.7），用户不需要选。厂商有新旗舰发布，应用下次启动会自动跟进。
 6. 打开 **AI Coach** tab。对话历史会自动保存，刷新和换设备都不会丢。
 
 > 切换 Provider 只影响下一条消息发给谁；过往的对话历史保留不动。
+
+## 价格对比（按单条典型消息估算）
+
+| Provider | 模型 | 输入 / 1M tokens | 输出 / 1M tokens | 单条消息约 |
+|---|---|---|---|---|
+| DeepSeek | deepseek-v4-pro | $0.435 | $0.87 | **≈ $0.002** |
+| Claude API（第三方） | claude-opus-4-7 | $4.00 | $20.00 | **≈ $0.028** |
+
+> 估算基于一次典型的 AI Coach 对话：约 **3000 输入 tokens**（系统提示 + 个人资料 + 最近训练 + 赛事 + 历史对话）+ 约 **800 输出 tokens**（一条回复）。
+>
+> **Claude 单条消息成本约为 DeepSeek 的 14 倍。** 如果你只是日常打卡、问问训练安排，DeepSeek 完全够用；如果遇到复杂的训练规划、伤病分析这种需要更深推理的场景，再切到 Claude 走一次。两条 Key 都填好就能随时切。
 
 ## 教练每次能看到什么
 

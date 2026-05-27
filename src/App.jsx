@@ -117,7 +117,11 @@ function AuthedApp({ user, signOut, changePassword }) {
           setApiProviderState(provider);
           setApiKeyState(settingsData.apiKey ?? "");
           setClaudeApiKeyState(settingsData.claudeApiKey ?? "");
-          setApiModelState(settingsData.apiModel || API_PROVIDERS[provider].defaultModel);
+          // Model is now LOCKED to each provider's flagship (defaultModel).
+          // Ignore any stale apiModel in the DB row — when we bump the
+          // flagship in constants, everyone picks it up on next load without
+          // a per-user migration.
+          setApiModelState(API_PROVIDERS[provider].defaultModel);
           setCoachConfigState({
             ...DEFAULT_COACH_CONFIG,
             ...(settingsData.coachConfig || {}),

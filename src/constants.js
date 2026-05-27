@@ -19,8 +19,12 @@ export const API_PROVIDERS = {
     endpoints: [
       { id: "default", label: "默认线路", url: "https://api.deepseek.com/anthropic/v1/messages" },
     ],
+    // Locked to the top model per provider. No UI to change. When a vendor
+    // ships a new flagship, bump this here — single source of truth.
     defaultModel: "deepseek-v4-pro",
-    models: ["deepseek-v4-pro", "deepseek-v4-flash"],
+    // USD per 1 million tokens. Drives the cost-comparison line in the API
+    // settings dialog and the Guide.
+    pricing: { inputPerM: 0.435, outputPerM: 0.87 },
   },
   claude: {
     id: "claude",
@@ -42,10 +46,26 @@ export const API_PROVIDERS = {
       { id: "jp",      label: "日本线路",  url: "https://jp.claudeapi.com/v1/messages" },
       { id: "sg",      label: "新加坡线路", url: "https://sg.claudeapi.com/v1/messages" },
     ],
-    defaultModel: "claude-sonnet-4-6",
-    models: ["claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    defaultModel: "claude-opus-4-7",
+    pricing: { inputPerM: 4, outputPerM: 20 },
   },
 };
+
+// Typical AI Coach turn (rough — used only for the relative-cost example):
+//   - system prompt + profile + recent workouts + races + memory ≈ 3000 input tokens
+//   - one assistant reply ≈ 800 output tokens
+export const TYPICAL_INPUT_TOKENS = 3000;
+export const TYPICAL_OUTPUT_TOKENS = 800;
+
+// Per-message cost estimate for a provider, in USD. Returns
+// { input, output, total }. Null if the provider has no pricing data.
+export function estimateMessageCost(providerId) {
+  const p = API_PROVIDERS[providerId];
+  if (!p || !p.pricing) return null;
+  const input  = (TYPICAL_INPUT_TOKENS  / 1_000_000) * p.pricing.inputPerM;
+  const output = (TYPICAL_OUTPUT_TOKENS / 1_000_000) * p.pricing.outputPerM;
+  return { input, output, total: input + output };
+}
 
 export const DEFAULT_API_PROVIDER = "deepseek";
 
@@ -64,7 +84,6 @@ export function getEndpointUrl(providerId, endpointId) {
 export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoints[0].url;
 export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
-export const MODEL_PRESETS = API_PROVIDERS.deepseek.models;
 
 // Top-level tabs. PR is absorbed into Races (PersonalRecordsBar sits at the
 // top of the Races view). Calendar is a peer tab — its own month grid +

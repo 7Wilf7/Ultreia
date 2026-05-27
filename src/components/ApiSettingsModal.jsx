@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { API_PROVIDERS } from "../constants";
+import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPUT_TOKENS } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
@@ -11,20 +11,30 @@ function maskedKey(k) {
   return k.slice(0, 7) + "…" + k.slice(-4);
 }
 
+// "$0.028 / msg" formatting — keep 3 sig figs so DeepSeek's much-smaller
+// number stays meaningful next to Claude's.
+function fmtCost(usd) {
+  if (usd == null) return "—";
+  if (usd >= 0.01)  return `$${usd.toFixed(3)}`;
+  return `$${usd.toFixed(4)}`;
+}
+
 /**
  * API settings — one Provider active at a time. Only the active provider's
  * inputs render so the user isn't confused by a second provider's fields
- * sitting open. Both providers' keys + model picks persist independently, so
- * flipping the provider switch doesn't lose anything.
+ * sitting open. Both providers' keys + endpoint picks persist independently,
+ * so flipping the provider switch doesn't lose anything.
+ *
+ * Model is LOCKED to each provider's flagship (deepseek-v4-pro and
+ * claude-opus-4-7 as of this build). There's no UI to change it; when a
+ * vendor ships a new top model, bump it in constants.js and every user
+ * picks it up on next load. The Active Model line below is informational
+ * only.
  *
  * Claude here is a THIRD-PARTY relay (claudeapi.com), not Anthropic. That's
  * called out inline so the user doesn't paste an official Anthropic key by
  * mistake. The relay offers region-routed mirrors — the user picks which
  * one (stored per-device in localStorage; passed in / out by the parent).
- *
- * Models for both providers are RECOMMENDED-only: chip taps fill the field,
- * but the input below lets the user type any model ID. This way new model
- * releases don't require a code change.
  */
 export function ApiSettingsModal({
   apiProvider, setApiProvider,
@@ -37,7 +47,6 @@ export function ApiSettingsModal({
   const t = useT();
   const isMobile = useIsMobile();
   const [keyDraft, setKeyDraft] = useState("");
-  const [modelDraft, setModelDraft] = useState("");
 
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS.deepseek;
   const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
@@ -49,23 +58,20 @@ export function ApiSettingsModal({
     setKeyDraft("");
   }
 
-  // Provider switch resets the model preset to that provider's default —
-  // otherwise the picker would show a stale model name from the other side.
+  // Provider switch also resets the locked model to that provider's flagship.
   function switchProvider(next) {
     if (next === apiProvider) return;
     setApiProvider(next);
     setApiModel(API_PROVIDERS[next].defaultModel);
     setKeyDraft("");
-    setModelDraft("");
-  }
-
-  function applyCustomModel() {
-    if (!modelDraft.trim()) return;
-    setApiModel(modelDraft.trim());
-    setModelDraft("");
   }
 
   const sectionH = { fontSize: 16, fontWeight: 600, color: "var(--ink-1)", margin: "0 0 4px" };
+
+  // Side-by-side estimated cost for a typical AI Coach turn.
+  const dsCost = estimateMessageCost("deepseek");
+  const clCost = estimateMessageCost("claude");
+  const ratio = (dsCost && clCost && dsCost.total > 0) ? (clCost.total / dsCost.total) : null;
 
   return (
     <ModalRoot>
@@ -79,6 +85,49 @@ export function ApiSettingsModal({
         </div>
         <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6 }}>{t("api.desc_pick_provider")}</p>
 
+        {/* Pricing comparison — same content shows in the Guide. Kept inline
+            here so the user sees the cost difference at the moment they're
+            about to pick a provider, not buried in docs. */}
+        <div style={{
+          border: "1px solid var(--rule)", borderRadius: 6,
+          padding: "12px 14px", marginBottom: 22,
+          background: "var(--bg-elevated)",
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("api.pricing_title")}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {Object.values(API_PROVIDERS).map(p => {
+              const cost = estimateMessageCost(p.id);
+              return (
+                <div key={p.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>
+                    {p.label} <span style={{ ...s.muted, fontFamily: "var(--font-mono)", fontWeight: 400 }}>· {p.defaultModel}</span>
+                  </div>
+                  <div style={{ ...s.muted, fontSize: 12, lineHeight: 1.55 }}>
+                    {t("api.pricing_line", {
+                      input:  p.pricing.inputPerM.toString(),
+                      output: p.pricing.outputPerM.toString(),
+                    })}
+                  </div>
+                  {cost && (
+                    <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--ink-1)" }}>
+                      ≈ {fmtCost(cost.total)} / msg
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ ...s.muted, fontSize: 11, marginTop: 10, lineHeight: 1.55 }}>
+            {t("api.pricing_example_note", {
+              input: String(TYPICAL_INPUT_TOKENS),
+              output: String(TYPICAL_OUTPUT_TOKENS),
+            })}
+            {ratio && ratio > 1.5 && (
+              <> {t("api.pricing_ratio", { ratio: ratio.toFixed(0) })}</>
+            )}
+          </div>
+        </div>
+
         {/* Provider switch */}
         <div style={{ ...s.label, marginBottom: 6 }}>{t("api.provider_label")}</div>
         <div style={{ display: "flex", gap: 6, marginBottom: 22, flexWrap: "wrap" }}>
@@ -90,9 +139,6 @@ export function ApiSettingsModal({
           ))}
         </div>
 
-        {/* Active-provider section header. For the third-party relay we surface
-            its console URL inline so the user knows where the relay actually
-            lives (not on api.anthropic.com). */}
         <h3 style={sectionH}>{provider.label}</h3>
         {provider.isThirdParty ? (
           <p style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>
@@ -167,35 +213,18 @@ export function ApiSettingsModal({
           </>
         )}
 
-        {/* Model: chip presets fill the input, but the free-text save lets the
-            user paste any model name the provider supports without waiting on
-            a code change. Active model echoed below in mono so it's obvious
-            what's actually live. */}
+        {/* Active model — informational only, locked per provider. */}
         <div style={{ ...s.label, marginBottom: 6, marginTop: 4 }}>{t("api.model_label")}</div>
-        <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.5 }}>{t("api.model_hint_editable")}</div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-          {provider.models.map(m => (
-            <button key={m}
-              onClick={() => { setApiModel(m); setModelDraft(""); }}
-              style={{ ...s.chip(apiModel === m), fontFamily: "var(--font-mono)" }}>
-              {m}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input
-            type="text"
-            placeholder={t("api.model_custom_placeholder")}
-            value={modelDraft}
-            onChange={e => setModelDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") applyCustomModel(); }}
-            style={{ ...s.input, flex: 1, fontFamily: "var(--font-mono)", fontSize: 13 }}
-          />
-          <button onClick={applyCustomModel} disabled={!modelDraft.trim()}
-            style={{ ...s.btn, opacity: modelDraft.trim() ? 1 : 0.5 }}>{t("api.save_model")}</button>
-        </div>
-        <div style={{ ...s.muted, fontFamily: "var(--font-mono)", fontSize: 12, marginBottom: 4 }}>
-          {t("api.active", { model: apiModel || "—" })}
+        <div style={{ ...s.muted, marginBottom: 6, lineHeight: 1.5 }}>{t("api.model_locked_hint")}</div>
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 13,
+          padding: "8px 12px",
+          background: "var(--bg-sunken)",
+          border: "1px solid var(--rule)",
+          borderRadius: 4,
+          color: "var(--ink-1)",
+        }}>
+          {apiModel || provider.defaultModel}
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>

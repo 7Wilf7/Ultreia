@@ -611,7 +611,10 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               </div>
               {/* Metrics container — on desktop, an 8-column fixed grid so
                   values align vertically across rows. On narrow, a wrapping
-                  flex row that flows naturally on phone widths. */}
+                  flex row that flows naturally on phone widths. Column order
+                  is duration-first (then HR, then distance/ascent/pace/...)
+                  so the most universally-present metric anchors column 1
+                  across every activity type. */}
               <div style={isNarrow ? {
                 display: "flex", flexWrap: "wrap",
                 gap: "6px 14px",
@@ -620,32 +623,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                 fontVariantNumeric: "tabular-nums",
               } : {
                 display: "grid",
-                gridTemplateColumns: "90px 80px 110px 80px 80px 80px 55px 75px",
+                gridTemplateColumns: "110px 80px 90px 80px 80px 80px 55px 75px",
                 gap: 8,
                 alignItems: "center",
                 fontFamily: "var(--font-mono)",
                 fontVariantNumeric: "tabular-nums",
                 flexShrink: 0,
               }}>
-                {/* 1. Distance */}
-                <div>
-                  {l.distance > 0 && (
-                    <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
-                      {l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span>
-                    </span>
-                  )}
-                </div>
-                {/* 2. Ascent — right after distance */}
-                <div>
-                  {l.ascent > 0 && (
-                    <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
-                      +{l.ascent}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
-                    </span>
-                  )}
-                </div>
-                {/* 3. Duration */}
+                {/* 1. Duration */}
                 <div>
                   {l.duration > 0 && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -654,7 +639,34 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </span>
                   )}
                 </div>
-                {/* 4. Pace — separated from duration so it gets its own icon and column */}
+                {/* 2. HR */}
+                <div>
+                  {l.hr > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
+                      {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
+                    </span>
+                  )}
+                </div>
+                {/* 3. Distance */}
+                <div>
+                  {l.distance > 0 && (
+                    <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
+                      {l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span>
+                    </span>
+                  )}
+                </div>
+                {/* 4. Ascent */}
+                <div>
+                  {l.ascent > 0 && (
+                    <span style={{ fontSize: 13, color: "var(--moss-deep)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--moss)" }}><PeakIcon size={13} /></span>
+                      +{l.ascent}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
+                    </span>
+                  )}
+                </div>
+                {/* 5. Pace */}
                 <div>
                   {l.pace > 0 && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -663,21 +675,12 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </span>
                   )}
                 </div>
-                {/* 5. GAP — grade-adjusted pace, sits right after the regular pace */}
+                {/* 6. GAP — grade-adjusted pace, sits right after the regular pace */}
                 <div>
                   {l.gap > 0 && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
                       {formatPaceFromSec(l.gap)}
-                    </span>
-                  )}
-                </div>
-                {/* 6. HR */}
-                <div>
-                  {l.hr > 0 && (
-                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--danger)" }}><HeartIcon size={12} /></span>
-                      {l.hr}{l.maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{l.maxHR}</span> : null}
                     </span>
                   )}
                 </div>
@@ -690,7 +693,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </span>
                   )}
                 </div>
-                {/* 8. Cadence (SPM) — Road Run only, last column per user request */}
+                {/* 8. Cadence (SPM) — Road Run only */}
                 <div>
                   {l.cadence > 0 && l.type === "Road Run" && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>

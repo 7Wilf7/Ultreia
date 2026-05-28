@@ -43,6 +43,13 @@ jobs:
         run: npm ci
 
       - name: Build Vite bundle
+        # VITE_* env vars are inlined into the bundle at build time. The
+        # Supabase URL + publishable key are designed to be client-visible
+        # (RLS protects actual data) — they live in .env.local locally and
+        # in GitHub Secrets for CI builds.
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
       - name: Diagnose dist/ output

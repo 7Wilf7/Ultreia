@@ -15,41 +15,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- TEMP DEBUG: surface boot-time JS errors directly on screen. The
-         release APK was white-screening with no way to see WebView console.
-         Remove this block once we've identified the root cause. -->
-    <script>
-      (function () {
-        function show(label, payload) {
-          try {
-            var root = document.getElementById('root') || document.body;
-            root.innerHTML =
-              '<pre style="margin:0;padding:14px;font:11px/1.4 monospace;color:#900;background:#fee;white-space:pre-wrap;overflow:auto;min-height:100vh">' +
-              '[' + label + ']\n' + payload + '\n\n' +
-              '--- env ---\n' +
-              'UA: ' + navigator.userAgent + '\n' +
-              'location: ' + window.location.href + '\n' +
-              'Capacitor: ' + (typeof window.Capacitor) + '\n' +
-              'isNative: ' + (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) +
-              '</pre>';
-          } catch (_) {}
-        }
-        window.addEventListener('error', function (e) {
-          show('ERROR',
-            (e.error && e.error.stack) || e.message + '\nat ' + (e.filename || '?') + ':' + (e.lineno || '?') + ':' + (e.colno || '?'));
-        }, true);
-        window.addEventListener('unhandledrejection', function (e) {
-          show('PROMISE REJECTION',
-            (e.reason && (e.reason.stack || e.reason.message)) || String(e.reason));
-        });
-        // Heartbeat: if nothing rendered after 4s, dump env so we at least
-        // see whether the bundle ran at all.
-        setTimeout(function () {
-          var root = document.getElementById('root');
-          if (root && root.children.length === 0) show('TIMEOUT (no render after 4s)', 'main.jsx may not have executed');
-        }, 4000);
-      })();
-    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

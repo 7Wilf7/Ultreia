@@ -45,6 +45,26 @@ jobs:
       - name: Build Vite bundle
         run: npm run build
 
+      - name: Diagnose dist/ output
+        # v0.1.0 produced a half-size bundle missing most app code; suspected
+        # Rolldown/Vite Linux tree-shaking bug. This step prints the bundle
+        # inventory + grep-checks for key strings so we can confirm.
+        run: |
+          echo "=== dist/assets/ ==="
+          ls -la dist/assets/
+          echo "=== bundle key string presence ==="
+          for s in "Training Studio" "Check for updates" "无法" "登录" "Easy Run" "0.1.0"; do
+            n=$(grep -ac "$s" dist/assets/index-*.js || echo 0)
+            echo "  '$s': $n"
+          done
+
+      - name: Upload dist/ as artifact for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
       - name: Sync Capacitor → android/
         run: npx cap sync android
 

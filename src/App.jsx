@@ -28,7 +28,7 @@ import {
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
-import { getCurrentLocation, captureSnapshotForWorkout, fetchRealtimeSnapshot, fetchDailyForecasts } from "./lib/weather";
+import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext } from "./lib/weather";
 
 function LoadingScreen() {
   return (
@@ -493,6 +493,17 @@ function AppShell({
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
 
+  // Shared weather context — populated once on mount (or when default
+  // location changes). Consumed by sendChat (for the prompt), AICoachTab
+  // (for the status pill + prompt preview), and the calendar can read
+  // the same forecastByDate if we lift that later. Status field lets the
+  // UI tell the user *why* weather isn't showing up instead of silently
+  // dropping it.
+  const weatherCtx = useWeatherContext({
+    defaultLng: defaultLocation?.lng,
+    defaultLat: defaultLocation?.lat,
+  });
+
   // ── Lifted sendChat — talks to DeepSeek's Anthropic-compat endpoint.
   //    Takes the user's typed message; reads everything else from props/
   //    state in this scope. Persists user + assistant turns via the
@@ -527,31 +538,14 @@ function AppShell({
       console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
     }
 
-    // Best-effort weather fetch for the prompt — silently skipped if location
-    // permission is denied / proxy is down / quota is exhausted. Adds zero
-    // latency in the failure path because both calls run in parallel with
-    // each other (and the fetch as a whole runs after the logs refresh so it
-    // doesn't slow down the chat turn when location isn't available).
-    let currentWeather = null;
-    let forecastByDate = null;
-    try {
-      const loc = await getCurrentLocation({
-        defaultLng: defaultLocation.lng,
-        defaultLat: defaultLocation.lat,
-      });
-      const [rt, daily] = await Promise.all([
-        fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat }).catch(() => null),
-        fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }).catch(() => null),
-      ]);
-      currentWeather = rt;
-      if (daily) {
-        const m = new Map();
-        for (const f of daily) m.set(f.date, f);
-        forecastByDate = m;
-      }
-    } catch {
-      // No location → no weather context, that's fine.
-    }
+    // Reuse the AppShell-level weather state (populated by useWeatherContext
+    // once on mount). On the first send right after page load this *may*
+    // still be 'loading' — that's fine; the prompt just won't include
+    // weather for that turn. Subsequent sends get the data.
+    const { currentWeather, forecastByDate, status: weatherStatus } = weatherCtx;
+    console.info('[weather] sendChat status:', weatherStatus,
+      currentWeather ? `currentTemp=${currentWeather.tempC}°C apparent=${currentWeather.apparentC}°C` : 'no realtime',
+      forecastByDate ? `${forecastByDate.size}-day forecast` : 'no forecast');
 
     const systemPrompt = buildSystemPrompt({
       profile, coachConfig, coachMemory,
@@ -858,6 +852,9 @@ Rules:
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}
+          /* Shared weather context — preview + status pill consume this. */
+          weatherCtx={weatherCtx}
+          onOpenLocationSettings={() => setShowLocationSettings(true)}
         />
       )}
     </>

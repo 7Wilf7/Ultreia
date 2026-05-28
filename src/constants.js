@@ -97,6 +97,13 @@ export const ACTIVITY_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbin
 // Types that aggregate into the Run filter group (kept here so it's the single source of truth)
 export const RUN_GROUP_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing"];
 
+// Types where weather actually matters — outdoor sessions where temp /
+// humidity / AQI influence pace / HR / hydration. Indoor types (Strength
+// gym workouts, Floor Climbing on a stair machine) get no weather chip;
+// weather data still gets captured if you happen to be outside, but we
+// don't surface it in the UI for those types.
+export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "HIIT"];
+
 // Day-level tags stored in daily_notes.tags[]. Surfaced on Calendar day
 // cells and toggled via the day modal. Currently a single value ("massage")
 // but kept as an array for future expansion without another schema change.

@@ -207,6 +207,10 @@ export function AICoachTab({
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
   chatLoading, extractingForMsgId, sendChat, importToCalendar,
+  // Shared weather context — { currentWeather, forecastByDate, status,
+  // error, refetch }. Drives the Weather status pill below + the prompt
+  // preview's [Current Weather] / [Upcoming Forecast] sections.
+  weatherCtx, onOpenLocationSettings,
 }) {
   // Provider-aware endpoint + key for the memory-proposal call, which still
   // lives in this tab (only triggered from the Memory modal opened inside it).
@@ -375,9 +379,18 @@ Output the memory text only, nothing else.`;
   // sendChat (in AppShell) always uses English for stable instruction-
   // following; this preview is read-only and respects whichever language
   // toggle the user picked above.
+  // Preview shows EXACTLY what sendChat would send, including the live
+  // [Current Weather] + [Upcoming Forecast] sections from the shared
+  // weatherCtx. This makes "why doesn't the coach know the weather?"
+  // diagnosable from the preview alone — if it's missing here, it's
+  // missing from the real send too.
   const previewPrompt = buildSystemPrompt({
     profile, coachConfig, coachMemory,
-    dataBlock: buildDataBlock({ logs, races, now, lang: previewLang }),
+    dataBlock: buildDataBlock({
+      logs, races, now, lang: previewLang,
+      currentWeather: weatherCtx?.currentWeather,
+      forecastByDate: weatherCtx?.forecastByDate,
+    }),
     lang: previewLang,
   });
 
@@ -408,6 +421,23 @@ Output the memory text only, nothing else.`;
   const calendarLabel = lang === "zh"
     ? (calendarImportOn ? "显示" : "隐藏")
     : (calendarImportOn ? "shown" : "hidden");
+  // Weather pill value + state. The pill is clickable when location is
+  // missing → opens the Settings → Default location modal so the user can
+  // fix it without hunting through menus.
+  const wStatus = weatherCtx?.status || 'idle';
+  const wTemp = weatherCtx?.currentWeather?.apparentC ?? weatherCtx?.currentWeather?.tempC;
+  const weatherLabel = lang === "zh"
+    ? (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
+      : wStatus === 'loading' ? '加载中'
+      : wStatus === 'no_location' ? '需要位置'
+      : wStatus === 'error' ? '出错'
+      : '—')
+    : (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
+      : wStatus === 'loading' ? 'loading'
+      : wStatus === 'no_location' ? 'need location'
+      : wStatus === 'error' ? 'error'
+      : '—');
+  const weatherActive = wStatus === 'ready';
   const statusPill = (icon, label, value, active = true) => (
     <span style={{
       display: "inline-flex",
@@ -676,6 +706,25 @@ Output the memory text only, nothing else.`;
         {statusPill(<SettingsIcon size={12} />, "Mode", `${coachStyleLabel} / ${outputLabel} / ${interventionLabel}`)}
         {statusPill(<CoachIcon size={12} />, "Memory", memoryLabel, memoryReady)}
         {statusPill(<CalendarIcon size={12} />, "Import", calendarLabel, calendarImportOn)}
+        {/* Weather pill — clickable when status is 'no_location' so the
+            user can jump straight to the default-location modal. Otherwise
+            informational. */}
+        {wStatus === 'no_location' && onOpenLocationSettings ? (
+          <button onClick={onOpenLocationSettings}
+            title={lang === 'zh' ? '点击设置默认位置' : 'Click to set a default location'}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              minHeight: 26, padding: "4px 9px",
+              border: "1px solid var(--warn)", borderRadius: 2,
+              background: "rgba(181,78,26,0.08)", color: "var(--warn)",
+              fontSize: 11, fontFamily: "var(--font-sans)",
+              cursor: "pointer", whiteSpace: "nowrap",
+            }}>
+            <span>☁</span>
+            <span>Weather</span>
+            <span style={{ fontWeight: 600 }}>{weatherLabel}</span>
+          </button>
+        ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive)}
       </div>
       {/* Soft hint once chat history grows past the threshold — older turns
           start competing with the system prompt for the model's attention.

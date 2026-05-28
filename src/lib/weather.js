@@ -6,6 +6,7 @@
 //      and normalize Caiyun's verbose JSON into a flat shape the rest of
 //      the app can store + render without re-learning the API.
 
+import { useCallback, useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 
@@ -278,6 +279,73 @@ export async function captureSnapshotForWorkout({ date, startedAt, lng, lat }) {
     }
   }
   return await fetchRealtimeSnapshot({ lng, lat });
+}
+
+// React hook — fetches realtime + 7-day forecast once on mount, exposes
+// { currentWeather, forecastByDate, status, error, refetch }. Both
+// AICoachTab preview and AppShell.sendChat consume this so the prompt
+// preview matches what's actually sent, and the AI Coach status pill can
+// surface "Weather: ready / no-location / error" without callers having
+// to re-implement the fetch logic.
+//
+// status values:
+//   'idle'        — never fetched (initial mount, before effect runs)
+//   'loading'     — fetch in flight
+//   'ready'       — currentWeather populated
+//   'no_location' — geolocation denied + no default; UI prompts user to set one
+//   'error'       — fetch attempted, proxy/Caiyun failed
+export function useWeatherContext({ defaultLng, defaultLat } = {}) {
+  const [state, setState] = useState({
+    currentWeather: null,
+    forecastByDate: null,
+    status: 'idle',
+    error: null,
+  });
+
+  const run = useCallback(async () => {
+    setState((s) => ({ ...s, status: 'loading' }));
+    let loc;
+    try {
+      loc = await getCurrentLocation({ defaultLng, defaultLat });
+    } catch {
+      setState({
+        currentWeather: null,
+        forecastByDate: null,
+        status: 'no_location',
+        error: null,
+      });
+      return;
+    }
+    try {
+      const [rt, daily] = await Promise.all([
+        fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat }),
+        fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }).catch(() => null),
+      ]);
+      const m = new Map();
+      if (Array.isArray(daily)) for (const f of daily) m.set(f.date, f);
+      setState({
+        currentWeather: rt,
+        forecastByDate: m,
+        status: 'ready',
+        error: null,
+      });
+    } catch (e) {
+      setState({
+        currentWeather: null,
+        forecastByDate: null,
+        status: 'error',
+        error: e.message || String(e),
+      });
+    }
+  }, [defaultLng, defaultLat]);
+
+  // run() is async — the setState calls inside happen on later ticks, not
+  // synchronously inside the effect body. The lint rule still flags this
+  // (it can't see across the await), so silence it explicitly.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void run(); }, [run]);
+
+  return { ...state, refetch: run };
 }
 
 // One-line summary string used inside the AI Coach prompt + activity rows.

@@ -297,10 +297,13 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, weather, colIdx, rowIdx, onClick, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
-  // Pre-compute the bits we need for the chip — the temperature varies by
-  // source (realtime/historical → tempC, daily forecast → tempAvgC), and
-  // the skycon icon falls back gracefully when unmapped.
-  const wTemp = weather ? (weather.tempC ?? weather.tempAvgC) : null;
+  // Source-aware temp lookup. Apparent ("feels like") is what matters for
+  // outdoor training so it's preferred when present; falls back to raw
+  // temp when not (some forecast/historical paths skip it). Daily
+  // forecasts also expose max/min — used for the desktop max/min badge.
+  const wTemp = weather
+    ? (weather.apparentC ?? weather.apparentAvgC ?? weather.tempC ?? weather.tempAvgC)
+    : null;
   const wTempMax = weather?.tempMaxC;
   const wTempMin = weather?.tempMinC;
   const wIcon = weather?.skycon ? skyconMeta(weather.skycon).icon : "";
@@ -379,29 +382,33 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, weat
           </div>
         )}
 
-        {/* Day-level tag indicator — small moss dot in the corner instead of
-            the desktop chip. Visually distinct from activity dots above. */}
-        {dayTags.length > 0 && (
-          <span style={{
-            position: "absolute", bottom: 4, right: 4,
-            width: 5, height: 5, borderRadius: "50%",
-            background: "var(--moss-deep)",
-          }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")} />
-        )}
-
-        {/* Weather chip — top-right of the cell, tiny because mobile cells
-            are ~50px wide. Shows just the icon + temp; full numbers live
-            in the day modal. */}
+        {/* Weather chip — bottom of the cell, centered, so it stays clear
+            of both the day number (top) and the day-tag dot (bottom-right).
+            Apparent temp ("feels like") is the headline because that's
+            what matters for outdoor training. Tiny icon + temp; full
+            numbers live in the day modal. */}
         {weather && Number.isFinite(wTemp) && (
           <span style={{
-            position: "absolute", top: 3, right: 3,
+            position: "absolute", bottom: 2, left: 0, right: 0,
             fontFamily: "var(--font-mono)", fontSize: 9,
             color: "var(--ink-3)", lineHeight: 1,
-            display: "inline-flex", alignItems: "center", gap: 1,
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 1,
           }}>
             {wIcon && <span style={{ fontSize: 9 }}>{wIcon}</span>}
             <span>{Math.round(wTemp)}°</span>
           </span>
+        )}
+
+        {/* Day-level tag indicator — small moss dot in the corner instead of
+            the desktop chip. Visually distinct from activity dots above.
+            Sits in the top-right now (was bottom-right) because weather
+            took over the bottom strip. */}
+        {dayTags.length > 0 && (
+          <span style={{
+            position: "absolute", top: 4, right: 4,
+            width: 5, height: 5, borderRadius: "50%",
+            background: "var(--moss-deep)",
+          }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")} />
         )}
       </div>
     );

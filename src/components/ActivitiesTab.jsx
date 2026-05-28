@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR } from "../constants";
+import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR, WEATHER_RELEVANT_TYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import {
@@ -320,28 +320,34 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           marginLeft: "auto",
           display: "inline-flex",
           alignItems: "center",
-          gap: 6,
+          // Mobile: drop the leading SortIcon → tighter padding → leaves room
+          // for the longest label ("Duration ↓" / "Distance ↓") + the native
+          // <select> dropdown chevron without truncation. Desktop keeps the
+          // icon since horizontal space isn't an issue.
+          gap: isMobile ? 0 : 6,
           border: "1px solid var(--rule)",
           borderRadius: 2,
-          padding: isMobile ? "0 8px" : "0 10px",
+          padding: isMobile ? "0 6px" : "0 10px",
           minHeight: isMobile ? 36 : 32,
           background: "var(--bg-elevated)",
           color: "var(--ink-2)",
-          flexShrink: 1,
+          flexShrink: 0,
           minWidth: 0,
         }}>
-          <SortIcon size={13} />
+          {!isMobile && <SortIcon size={13} />}
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             aria-label="Sort activities"
             style={{
               border: "none",
-              padding: 0,
+              // Right padding reserves room for the native <select>'s built-in
+              // dropdown arrow so it doesn't overlap the label text.
+              padding: isMobile ? "0 4px 0 0" : 0,
               fontSize: 12,
               background: "transparent",
               color: "var(--ink-2)",
               fontFamily: "var(--font-sans)",
               minWidth: 0,
-              maxWidth: isMobile ? 82 : 160,
+              maxWidth: isMobile ? 120 : 160,
               outline: "none",
             }}>
             {SORT_OPTIONS.map(o => (
@@ -555,6 +561,19 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })()}
                   <div style={{ flex: 1 }} />
+                  {/* Weather chip at the END of row 1 — outdoor types only.
+                      Apparent ("feels like") temp is the headline because
+                      that's what actually drives pace + HR in heat. Full
+                      breakdown (raw temp + humidity + wind + AQI) is in
+                      the expanded view below. */}
+                  {showWeather(l) && (
+                    <span style={{
+                      fontFamily: "var(--font-mono)", fontSize: 11,
+                      color: "var(--ink-2)", flexShrink: 0,
+                    }}>
+                      <MetricWeather w={l.weather} />
+                    </span>
+                  )}
                   {!selectMode && (
                     <button onClick={(e) => { e.stopPropagation(); deleteLog(l.id); }}
                       aria-label="Delete"
@@ -652,6 +671,17 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     );
                   })}
                 </div>
+                {/* Weather chip at the right end of the identifier block —
+                    apparent temp + icon, outdoor types only. Mirrors the
+                    mobile row-1 placement. */}
+                {showWeather(l) && (
+                  <span style={{
+                    fontFamily: "var(--font-mono)", fontSize: 12,
+                    color: "var(--ink-2)", flexShrink: 0,
+                  }}>
+                    <MetricWeather w={l.weather} />
+                  </span>
+                )}
                 {/* Delete button on narrow lives at the right end of the header line;
                     desktop puts it at the very end of the row (later in this JSX). */}
                 {isNarrow && !selectMode && (
@@ -846,16 +876,22 @@ function MetricCadence({ spm }) {
     </span>
   );
 }
-// Weather chip — compact (icon + temp + feels-like when meaningfully
-// different) for the main card, OR full (adds humidity / wind / AQI) for
-// the expanded view. The snapshot lives on log.weather; absent on rows
-// recorded before weather support landed or when geolocation was denied.
+// Weather chip — two variants:
+//   • compact (default) → icon + APPARENT TEMP only. Apparent ("feels like")
+//     is what actually drives pace + HR in heat, so it's the headline
+//     number. Falls back to raw temp when apparent is missing.
+//   • full → raw air temp (only when meaningfully different from apparent)
+//     + humidity + wind + AQI. No duplicate of the apparent number —
+//     compact owns that, expanded just adds the rest.
+// log.weather is absent on indoor-type rows by design (Strength, Floor
+// Climbing) and on rows recorded before weather support landed.
 function MetricWeather({ w, full = false }) {
   if (!w) return null;
-  // Realtime + historical use tempC; forecast uses tempAvgC. Same for apparent.
+  // Realtime + historical: tempC / apparentC. Daily forecast: tempAvgC / apparentAvgC.
   const temp = w.tempC ?? w.tempAvgC;
   const apparent = w.apparentC ?? w.apparentAvgC;
-  const showApparent = Number.isFinite(apparent) && Number.isFinite(temp) && Math.abs(apparent - temp) >= 2;
+  // Headline number — prefer apparent, fall back to raw temp if missing.
+  const headline = Number.isFinite(apparent) ? apparent : temp;
   const meta = w.skycon ? skyconShort(w.skycon) : null;
   return (
     <span style={{
@@ -863,12 +899,14 @@ function MetricWeather({ w, full = false }) {
       color: "var(--ink-2)",
     }}>
       {meta && <span aria-hidden="true">{meta.icon}</span>}
-      {Number.isFinite(temp) && (
-        <span>{temp}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
+      {Number.isFinite(headline) && (
+        <span>{headline}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
       )}
-      {showApparent && (
+      {/* Full view appends raw air temp when it differs from apparent by
+          ≥ 1°C — that's the useful "feels 38°C, actual 32°C" signal. */}
+      {full && Number.isFinite(temp) && Number.isFinite(apparent) && Math.abs(apparent - temp) >= 1 && (
         <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
-          ({apparent}°)
+          (实测 {temp}°)
         </span>
       )}
       {full && Number.isFinite(w.humidity) && (
@@ -889,6 +927,13 @@ function MetricWeather({ w, full = false }) {
     </span>
   );
 }
+// Outdoor-only filter — weather is irrelevant for indoor gym sessions
+// (Strength) and stair-machine workouts (Floor Climbing). The capture
+// still happens silently (no harm in storing the data), we just don't
+// show it for these types.
+function showWeather(log) {
+  return !!log.weather && WEATHER_RELEVANT_TYPES.includes(log.type);
+}
 // Tiny inline lookup avoiding a circular import — duplicates the SKYCON_MAP
 // names/icons from src/lib/weather.js. Keep this small list in sync if you
 // add new entries there; adding a Caiyun skycon enum on this side is cheap
@@ -908,6 +953,9 @@ function skyconShort(name) {
   return { icon: _SKYCON_ICON[name] || '☁️' };
 }
 
+// Compact metric strip — duration + the 1-2 most useful per-type numbers.
+// Weather chip is rendered separately at the END of row 1 (header line)
+// for outdoor-relevant types, so it doesn't appear here.
 function CompactMetrics({ log: l }) {
   if (l.type === "Road Run") {
     return (
@@ -915,7 +963,6 @@ function CompactMetrics({ log: l }) {
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.pace > 0 && <MetricPace p={l.pace} />}
-        <MetricWeather w={l.weather} />
       </>
     );
   }
@@ -925,7 +972,6 @@ function CompactMetrics({ log: l }) {
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.distance > 0 && <MetricDistance km={l.distance} />}
         {l.ascent > 0 && <MetricAscent m={l.ascent} />}
-        <MetricWeather w={l.weather} />
       </>
     );
   }
@@ -936,7 +982,6 @@ function CompactMetrics({ log: l }) {
       <>
         {l.duration > 0 && <MetricDuration sec={l.duration} />}
         {l.ascent > 0 && <MetricAscent m={l.ascent} />}
-        <MetricWeather w={l.weather} />
       </>
     );
   }
@@ -945,7 +990,6 @@ function CompactMetrics({ log: l }) {
     <>
       {l.duration > 0 && <MetricDuration sec={l.duration} />}
       {l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
-      <MetricWeather w={l.weather} />
     </>
   );
 }
@@ -981,11 +1025,11 @@ function ExpandedMetrics({ log: l }) {
       {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
       {/* Universal: TE if present */}
       {l.aerobicTE > 0 && <MetricTE te={l.aerobicTE} />}
-      {/* Weather details — full chip with humidity / wind / AQI. The compact
-          chip with just temp+icon already shows in CompactMetrics; this one
-          adds the rest so a user can see the full picture without leaving
-          the row. */}
-      {l.weather && <MetricWeather w={l.weather} full />}
+      {/* Full weather chip — raw air temp + humidity / wind / AQI. The
+          compact chip on row 1 shows only the apparent ("feels like")
+          temp; this gives the rest of the picture without duplicating
+          the headline number. Outdoor types only. */}
+      {showWeather(l) && <MetricWeather w={l.weather} full />}
     </div>
   );
 }

@@ -4,12 +4,12 @@ import { useT } from "../i18n/LanguageContext";
 // Segmented 4-tab strip — Week / Month / Year / All — in a single row.
 // Each non-"All" tab carries its own ▾ caret that opens a popup for picking
 // past periods. Active cell gets a filled inverted background.
-export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown }) {
+export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown, compact = false }) {
   const t = useT();
 
   function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownContent }) {
     return (
-      <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+      <div style={{ position: "relative", flex: compact ? "0 0 auto" : 1, minWidth: 0 }}>
         <button
           onClick={onClick}
           style={{
@@ -63,8 +63,8 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
 
   return (
     <div data-period-control style={{
-      display: "flex",
-      marginBottom: 14,
+      display: compact ? "inline-flex" : "flex",
+      marginBottom: compact ? 0 : 14,
       border: "1px solid var(--rule)",
       borderRadius: 2,
       overflow: "visible",

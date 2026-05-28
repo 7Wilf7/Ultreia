@@ -10,6 +10,42 @@ import { PeriodSelector } from "./PeriodSelector";
 import { ActivitiesTab } from "./ActivitiesTab";
 import { ChartsTab } from "./ChartsTab";
 
+// Activities ↔ Charts segmented toggle. Module-level (not defined inside
+// TrainingTab's render) so it keeps a stable identity across renders.
+function ViewToggle({ view, setView, t, style }) {
+  return (
+    <div style={{
+      display: "flex",
+      border: "1px solid var(--rule)",
+      borderRadius: 2,
+      background: "var(--bg-elevated)",
+      ...style,
+    }}>
+      {[
+        { id: "activities", label: t("training.view.activities") },
+        { id: "charts",     label: t("training.view.charts") },
+      ].map((tab, i) => {
+        const active = view === tab.id;
+        return (
+          <button key={tab.id} onClick={() => setView(tab.id)}
+            style={{
+              flex: 1, minHeight: 36, padding: "0 14px",
+              background: active ? "var(--ink-1)" : "transparent",
+              color: active ? "var(--ink-inv)" : "var(--ink-2)",
+              border: "none",
+              borderRight: i === 0 ? "1px solid var(--rule)" : "none",
+              fontFamily: "var(--font-sans)", fontSize: 13,
+              fontWeight: active ? 600 : 500,
+              cursor: "pointer", borderRadius: 0, whiteSpace: "nowrap",
+            }}>
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter, filterDropdown, setFilterDropdown,
@@ -74,52 +110,42 @@ export function TrainingTab({
   return (
     <div>
       <div style={stickyHeaderStyle}>
-        {/* Centered borderless filter dropdown — same on desktop and mobile.
-            Applies to both Activities and Charts views (the filter narrows
-            the dataset, not the visualization). */}
-        <GlobalFilter filter={filter} setFilter={setFilter} />
-
-        {/* Activities ↔ Charts sits ABOVE the period selector: the period only
-            governs Activities (Charts has its own period selector inside).
-            Wrapped as segmented tabs so the hierarchy reads correctly. */}
-        <div style={{
-          display: "flex",
-          marginBottom: 14,
-          border: "1px solid var(--rule)",
-          borderRadius: 2,
-          background: "var(--bg-elevated)",
-        }}>
-          {[
-            { id: "activities", label: t("training.view.activities") },
-            { id: "charts",     label: t("training.view.charts") },
-          ].map((tab, i) => {
-            const active = view === tab.id;
-            return (
-              <button key={tab.id} onClick={() => setView(tab.id)}
-                style={{
-                  flex: 1, minHeight: 36,
-                  background: active ? "var(--ink-1)" : "transparent",
-                  color: active ? "var(--ink-inv)" : "var(--ink-2)",
-                  border: "none",
-                  borderRight: i === 0 ? "1px solid var(--rule)" : "none",
-                  fontFamily: "var(--font-sans)", fontSize: 13,
-                  fontWeight: active ? 600 : 500,
-                  cursor: "pointer", borderRadius: 0,
-                }}>
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {view === "activities" && (
-          /* Period applies to the activity list + the four stats only. */
-          <PeriodSelector
-            period={period}
-            setPeriod={setPeriod}
-            periodDropdown={periodDropdown}
-            setPeriodDropdown={setPeriodDropdown}
-          />
+        {isMobile ? (
+          /* Mobile: stacked full-width rows — the screen is too narrow for a
+             single row. Filter, then the Activities/Charts toggle, then the
+             period bar (activities view only). */
+          <>
+            <GlobalFilter filter={filter} setFilter={setFilter} />
+            <ViewToggle view={view} setView={setView} t={t} style={{ marginBottom: 14 }} />
+            {view === "activities" && (
+              <PeriodSelector
+                period={period} setPeriod={setPeriod}
+                periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+              />
+            )}
+          </>
+        ) : (
+          /* Desktop: one row — filter pinned left, the Activities/Charts toggle
+             + period bar grouped on the right. Halves the header height and
+             uses the full width (no empty flanks). The period bar only shows in
+             Activities view (Charts has its own period control inside). */
+          <div style={{
+            display: "flex", alignItems: "center", gap: 14,
+            marginBottom: 12, minHeight: 38,
+          }}>
+            <GlobalFilter filter={filter} setFilter={setFilter} compact />
+            <div style={{ flex: 1 }} />
+            <div style={{ width: 200, flexShrink: 0 }}>
+              <ViewToggle view={view} setView={setView} t={t} />
+            </div>
+            {view === "activities" && (
+              <PeriodSelector
+                period={period} setPeriod={setPeriod}
+                periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+                compact
+              />
+            )}
+          </div>
         )}
       </div>
 

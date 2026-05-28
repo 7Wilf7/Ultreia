@@ -54,15 +54,18 @@ export const s = {
   },
 
   // --- Typography roles ---
-  // Field label — small caps marker for control panels and form inputs.
-  // Kept slightly uppercase but smaller letterspacing for legibility.
+  // Field label — used for form-field captions, many of which are full
+  // phrases ("Race Types You've Done (multi-select)"). UPPERCASE made those
+  // long phrases hard to read, so labels now render in their source case.
+  // Short categorical markers (activity-type tags, weekday headers, section
+  // headers) keep their uppercase via their own styles (s.tag / s.subTag /
+  // inline) — this only relaxes the field-label captions.
   label: {
     fontFamily: "var(--font-mono)",
-    fontSize: 11,
+    fontSize: 11.5,
     color: "var(--ink-3)",
     marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
+    letterSpacing: "0.01em",
   },
   // Section header — sentence case, weight contrast. No longer uppercase.
   section: {

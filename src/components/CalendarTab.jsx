@@ -70,14 +70,22 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
       for (const [date, f] of ctxForecast.entries()) m.set(date, f);
     }
     if (ctxRealtime) {
+      // Merge realtime over today's daily forecast (if any): keep the day's
+      // max/min range from the forecast, but overlay the live current temp +
+      // feels-like so today's card reads "now". Same realtime snapshot the AI
+      // Coach header uses. Without this overlay, today's card had only the
+      // daily-forecast fields (max/min) OR nothing — and the realtime card
+      // path read tempC/apparentC which weren't present, so today showed "—".
+      const base = m.get(todayKey) || {};
       m.set(todayKey, {
+        ...base,
         date: todayKey,
         tempC: ctxRealtime.tempC,
         apparentC: ctxRealtime.apparentC,
-        humidity: ctxRealtime.humidity,
-        skycon: ctxRealtime.skycon,
-        windSpeed: ctxRealtime.windSpeed,
-        aqi: ctxRealtime.aqi,
+        humidity: ctxRealtime.humidity ?? base.humidity,
+        skycon: ctxRealtime.skycon ?? base.skycon,
+        windSpeed: ctxRealtime.windSpeed ?? base.windSpeed,
+        aqi: ctxRealtime.aqi ?? base.aqi,
         _source: 'realtime',
       });
     }
@@ -425,7 +433,12 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
   const tMax = forecast?.tempMaxC;
   const tMin = forecast?.tempMinC;
   const tAvg = forecast?.tempAvgC;
-  const apparent = forecast?.apparentAvgC;
+  // Realtime current temp (today's card, from the live snapshot). Future days
+  // don't have it — they fall back to the max/min range below.
+  const tCur = forecast?.tempC;
+  // Feels-like: realtime snapshots carry apparentC, daily forecasts carry
+  // apparentAvgC. Prefer whichever is present.
+  const apparent = forecast?.apparentC ?? forecast?.apparentAvgC;
   const humidity = Number.isFinite(forecast?.humidity)
     ? (forecast.humidity > 1 ? Math.round(forecast.humidity) : Math.round(forecast.humidity * 100))
     : null;
@@ -463,11 +476,14 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
     );
   }
 
-  const tempReadout = Number.isFinite(tMax) && Number.isFinite(tMin)
-    ? `${Math.round(tMax)}°/${Math.round(tMin)}°`
-    : Number.isFinite(tAvg)
-      ? `${Math.round(tAvg)}°`
-      : "—";
+  // Today (realtime) → single live temp; future → max/min range; fallback avg.
+  const tempReadout = Number.isFinite(tCur)
+    ? `${Math.round(tCur)}°`
+    : Number.isFinite(tMax) && Number.isFinite(tMin)
+      ? `${Math.round(tMax)}°/${Math.round(tMin)}°`
+      : Number.isFinite(tAvg)
+        ? `${Math.round(tAvg)}°`
+        : "—";
 
   return (
     <div style={cardStyle}>

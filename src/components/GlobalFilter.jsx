@@ -88,7 +88,7 @@ function filterToLabel(filter, t) {
   return t("filter.all_activities");
 }
 
-export function GlobalFilter({ filter, setFilter }) {
+export function GlobalFilter({ filter, setFilter, compact = false }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -136,24 +136,32 @@ export function GlobalFilter({ filter, setFilter }) {
 
   return (
     <div data-global-filter ref={wrapRef}
-      style={{ position: "relative", textAlign: "center", marginBottom: 14 }}>
-      {/* Borderless centered trigger. Plain text + ▼ — no chip frame. Tapping
-          opens the dropdown panel below. */}
+      style={{
+        position: "relative",
+        textAlign: compact ? "left" : "center",
+        marginBottom: compact ? 0 : 14,
+      }}>
+      {/* Borderless trigger. Plain text + ▼ — no chip frame. Tapping opens the
+          dropdown panel below. Compact (single-row desktop header) left-aligns
+          and trims the font so it sits inline with the toggle + period bar. */}
       <button onClick={() => setOpen(o => !o)}
         style={{
           background: "transparent", border: "none", cursor: "pointer",
-          padding: "8px 14px",
+          padding: compact ? "6px 8px 6px 0" : "8px 14px",
           fontFamily: "var(--font-sans)",
-          fontSize: 17, fontWeight: 500, color: "var(--ink-1)",
+          fontSize: compact ? 15 : 17, fontWeight: 500, color: "var(--ink-1)",
           letterSpacing: "-0.01em",
           display: "inline-flex", alignItems: "center", gap: 8,
+          whiteSpace: "nowrap",
         }}>
         {filterToLabel(filter, t)}
         <span style={{ fontSize: 10, color: "var(--ink-3)" }}>▼</span>
       </button>
       {open && (
         <div style={{
-          position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
+          position: "absolute", top: "100%",
+          left: compact ? 0 : "50%",
+          transform: compact ? "none" : "translateX(-50%)",
           marginTop: 2, minWidth: 220,
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)", borderRadius: 4,

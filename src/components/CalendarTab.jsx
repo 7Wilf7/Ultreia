@@ -258,6 +258,9 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         lang={lang}
         t={t}
         isMobile={isMobile}
+        lastUpdatedAt={weatherCtx?.lastUpdatedAt}
+        onRefresh={() => weatherCtx?.refetch?.({ force: true })}
+        refreshing={weatherCtx?.status === "loading"}
       />
 
       {openDay && (() => {
@@ -294,7 +297,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 // visible. Cards are read-only — clicking a day still opens the day modal
 // from the grid above.
 // ─────────────────────────────────────────────────────────────────────────
-function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile }) {
+function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile, lastUpdatedAt, onRefresh, refreshing }) {
   // Build the 7-day window starting from today (local time). Even when a
   // particular date has no forecast (e.g. Caiyun returned fewer than 7), we
   // still render the slot as a muted placeholder so the layout stays even.
@@ -327,15 +330,59 @@ function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile }) {
     );
   }
 
+  // Header row: title on the left + "updated HH:MM · ↻" on the right.
+  // The timestamp shows the user when realtime data was last fetched (the
+  // forecast piggybacks on the same refetch). The refresh button calls
+  // onRefresh({force:true}) to bust the cache and pull fresh data.
+  const updatedLabel = lastUpdatedAt ? formatTimeShort(lastUpdatedAt) : null;
+
   return (
     <div style={{ marginTop: 18 }}>
-      <div style={{ ...s.label, marginBottom: 8 }}>
-        {t("calendar.weather_strip_title")}
+      <div style={{
+        display: "flex", alignItems: "baseline", justifyContent: "space-between",
+        marginBottom: 8, gap: 8,
+      }}>
+        <div style={s.label}>{t("calendar.weather_strip_title")}</div>
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 8,
+          fontFamily: "var(--font-mono)", fontSize: 11,
+          color: "var(--ink-3)",
+        }}>
+          {updatedLabel && (
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>
+              {t("calendar.weather_updated_at", { time: updatedLabel })}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            title={t("calendar.weather_refresh_tooltip")}
+            aria-label={t("calendar.weather_refresh_tooltip")}
+            style={{
+              border: "1px solid var(--rule)",
+              background: "var(--bg-elevated)",
+              color: refreshing ? "var(--ink-3)" : "var(--ink-1)",
+              padding: "2px 8px",
+              minHeight: 24,
+              borderRadius: 2,
+              cursor: refreshing ? "default" : "pointer",
+              fontFamily: "var(--font-mono)", fontSize: 12,
+              lineHeight: 1,
+              display: "inline-flex", alignItems: "center", gap: 4,
+            }}>
+            <span style={{
+              display: "inline-block",
+              transition: "transform 600ms linear",
+              transform: refreshing ? "rotate(360deg)" : "rotate(0deg)",
+            }}>↻</span>
+          </button>
+        </div>
       </div>
       <div style={{
         display: "grid",
         gridTemplateColumns: isMobile ? "1fr" : "repeat(7, minmax(0, 1fr))",
-        gap: isMobile ? 8 : 6,
+        gap: isMobile ? 6 : 6,
       }}>
         {days.map(({ date, key, forecast }) => (
           <WeatherCard
@@ -353,6 +400,23 @@ function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile }) {
   );
 }
 
+// Format an ISO timestamp as "HH:MM" in local time. Used by the "updated at"
+// label so the user can tell at a glance how stale the data is.
+function formatTimeShort(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Compact two-line forecast card. Fixed-height (so the strip stays even
+// when some days lack secondary data) and laid out the same on desktop
+// + mobile — only the grid orientation changes upstream.
+//
+//   Row 1: weekday · date · [today tag] · icon · temp range
+//   Row 2: feels · RH · wind · AQI   (small mono, single line)
+const WEATHER_CARD_HEIGHT = 68;
 function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
   const weekdays = lang === "zh" ? WEEKDAY_SHORT_ZH : WEEKDAY_SHORT_EN;
   const wkLabel = weekdays[date.getDay()];
@@ -369,24 +433,21 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
   const aqi = forecast?.aqi;
   const todayTag = isToday ? t("calendar.weather_today_tag") : null;
 
-  // Card chrome: today gets the moss highlight so it stands out from the
-  // other six. Mobile cards are slightly taller to give the readouts more
-  // room when stacked.
   const cardStyle = {
     border: "1px solid " + (isToday ? "var(--moss)" : "var(--rule)"),
     background: isToday ? "var(--moss-bg)" : "var(--bg-elevated)",
-    padding: isMobile ? "10px 12px" : "10px 10px 12px",
+    padding: "8px 10px",
     borderRadius: 2,
+    height: WEATHER_CARD_HEIGHT,
+    boxSizing: "border-box",
     display: "flex",
-    flexDirection: isMobile ? "row" : "column",
-    alignItems: isMobile ? "center" : "stretch",
-    gap: isMobile ? 12 : 6,
+    flexDirection: "column",
+    justifyContent: "space-between",
     minWidth: 0,
+    overflow: "hidden",
   };
 
   if (!forecast) {
-    // Missing forecast for this day — keep the slot but mute it. Reads
-    // "no data" so the user can tell the strip didn't silently shrink.
     return (
       <div style={cardStyle}>
         <div style={{
@@ -397,94 +458,73 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
           <span style={{ textTransform: "uppercase" }}>{wkLabel}</span>
           <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateLabel}</span>
         </div>
-        <div style={{ ...s.muted, fontSize: 12, flex: 1 }}>—</div>
+        <div style={{ ...s.muted, fontSize: 11 }}>—</div>
       </div>
     );
   }
 
+  const tempReadout = Number.isFinite(tMax) && Number.isFinite(tMin)
+    ? `${Math.round(tMax)}°/${Math.round(tMin)}°`
+    : Number.isFinite(tAvg)
+      ? `${Math.round(tAvg)}°`
+      : "—";
+
   return (
     <div style={cardStyle}>
-      {/* Header row: weekday + date (+ today tag). */}
+      {/* Row 1: weekday · date · today tag · icon · temp range. Single line. */}
       <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 11,
-        color: "var(--ink-2)", letterSpacing: "0.04em",
-        display: "flex", gap: 6, alignItems: "baseline",
-        flexShrink: 0,
-        minWidth: isMobile ? 70 : "auto",
+        display: "flex", alignItems: "center", gap: 6,
+        minWidth: 0, whiteSpace: "nowrap",
       }}>
-        <span style={{ textTransform: "uppercase", fontWeight: isToday ? 600 : 500 }}>{wkLabel}</span>
-        <span style={{ fontVariantNumeric: "tabular-nums" }}>{dateLabel}</span>
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 11,
+          color: "var(--ink-2)", textTransform: "uppercase",
+          letterSpacing: "0.04em",
+          fontWeight: isToday ? 600 : 500,
+          flexShrink: 0,
+        }}>{wkLabel}</span>
+        <span style={{
+          fontFamily: "var(--font-mono)", fontSize: 11,
+          color: "var(--ink-3)", fontVariantNumeric: "tabular-nums",
+          flexShrink: 0,
+        }}>{dateLabel}</span>
         {todayTag && (
           <span style={{
             fontSize: 9, color: "var(--moss-deep)",
             textTransform: "uppercase", letterSpacing: "0.06em",
+            flexShrink: 0,
           }}>{todayTag}</span>
         )}
-      </div>
-
-      {/* Icon + temp range — headline weather signal. */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        flex: isMobile ? "0 0 auto" : "0 0 auto",
-      }}>
-        {skyMeta && <span style={{ fontSize: isMobile ? 24 : 22 }} aria-hidden="true">{skyMeta.icon}</span>}
-        <div style={{
-          fontFamily: "var(--font-mono)",
-          fontVariantNumeric: "tabular-nums",
-          fontSize: isMobile ? 17 : 15,
-          fontWeight: 600, color: "var(--ink-1)",
-          lineHeight: 1.1, whiteSpace: "nowrap",
-        }}>
-          {Number.isFinite(tMax) && Number.isFinite(tMin)
-            ? `${Math.round(tMax)}° / ${Math.round(tMin)}°`
-            : Number.isFinite(tAvg)
-              ? `${Math.round(tAvg)}°`
-              : "—"}
-        </div>
-      </div>
-
-      {/* Detail readouts: skycon label, humidity, wind, AQI, apparent
-          temp. Layout splits when card grows wider (desktop = vertical
-          stack underneath; mobile = right-edge column). */}
-      <div style={{
-        display: "flex", flexDirection: "column",
-        gap: 2, flex: 1, minWidth: 0,
-        textAlign: isMobile ? "right" : "left",
-      }}>
+        <span style={{ flex: 1 }} />
         {skyMeta && (
-          <div style={{
-            fontSize: 12, color: "var(--ink-2)",
-            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {skyMeta.label}
-          </div>
+          <span style={{ fontSize: isMobile ? 18 : 16, flexShrink: 0, lineHeight: 1 }} aria-hidden="true">
+            {skyMeta.icon}
+          </span>
         )}
-        <div style={{
+        <span style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 11, color: "var(--ink-3)",
           fontVariantNumeric: "tabular-nums",
-          display: "flex", gap: 6, flexWrap: "wrap",
-          justifyContent: isMobile ? "flex-end" : "flex-start",
-        }}>
-          {Number.isFinite(apparent) && (
-            <span title={lang === "zh" ? "体感温度" : "Apparent"}>
-              {lang === "zh" ? "体感" : "feels"} {Math.round(apparent)}°
-            </span>
-          )}
-          {humidity !== null && (
-            <span title={lang === "zh" ? "湿度" : "Humidity"}>
-              {lang === "zh" ? "湿" : "RH"} {humidity}%
-            </span>
-          )}
-          {Number.isFinite(wind) && wind >= 1 && (
-            <span title={lang === "zh" ? "风速" : "Wind"}>
-              {lang === "zh" ? "风" : "wind"} {Math.round(wind)}km/h
-            </span>
-          )}
-          {Number.isFinite(aqi) && aqi > 0 && (
-            <span>AQI {aqi}</span>
-          )}
-        </div>
+          fontSize: isMobile ? 14 : 13,
+          fontWeight: 600, color: "var(--ink-1)",
+          flexShrink: 0,
+        }}>{tempReadout}</span>
+      </div>
+
+      {/* Row 2: feels · RH · wind · AQI. Small mono, one line, ellipsised
+          if it overflows (rare — usually 2–3 short tokens). */}
+      <div style={{
+        fontFamily: "var(--font-mono)", fontSize: 10,
+        color: "var(--ink-3)",
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap",
+        overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        {[
+          Number.isFinite(apparent) ? `${lang === "zh" ? "体感" : "feels"} ${Math.round(apparent)}°` : null,
+          humidity !== null ? `${lang === "zh" ? "湿" : "RH"}${humidity}%` : null,
+          Number.isFinite(wind) && wind >= 1 ? `${lang === "zh" ? "风" : "wind"} ${Math.round(wind)}km/h` : null,
+          Number.isFinite(aqi) && aqi > 0 ? `AQI ${aqi}` : null,
+        ].filter(Boolean).join(" · ") || (skyMeta?.label || "")}
       </div>
     </div>
   );
@@ -519,8 +559,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
         onClick={onClick}
         style={{
           position: "relative",
-          minHeight: 64,
-          padding: "5px 4px 6px",
+          minHeight: 48,
+          padding: "3px 3px 4px",
           borderRight: colIdx < 6 ? "1px solid var(--rule)" : "none",
           borderBottom: rowIdx < 5 ? "1px solid var(--rule)" : "none",
           background: cellBg,
@@ -534,33 +574,32 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
         {/* Day number — centered on mobile, smaller box for "today" */}
         <span style={{
           fontFamily: "var(--font-mono)",
-          fontSize: 13,
+          fontSize: 12,
           fontWeight: isToday ? 600 : 500,
           color: isToday ? "var(--ink-1)"
                 : isWeekend ? "var(--ink-3)"
                 : "var(--ink-2)",
           fontVariantNumeric: "tabular-nums",
-          padding: isToday ? "1px 5px" : "0",
+          padding: isToday ? "0 4px" : "0",
           border: isToday ? "1px solid var(--ink-1)" : "none",
           borderRadius: isToday ? 3 : 0,
           lineHeight: 1,
-          marginBottom: 4,
+          marginBottom: 2,
         }}>{date.getDate()}</span>
 
         {/* Activity bars — short horizontal pills, one per workout, stacked
-            vertically. Bigger and more legible than the old 7×7 dots when
-            you've got mixed activities on the same day. Up to 4; >4 collapses
-            to a "+N" indicator under the stack. */}
+            vertically. With the new shorter cell we cap at 3 bars before
+            collapsing to "+N" so the day number stays readable. */}
         {hasContent && (
           <div style={{
-            display: "flex", flexDirection: "column", gap: 2, alignItems: "center",
+            display: "flex", flexDirection: "column", gap: 1, alignItems: "center",
             width: "100%",
           }}>
-            {logs.slice(0, 4).map(l => {
+            {logs.slice(0, 3).map(l => {
               const c = TYPE_COLOR[l.type] || "#57564f";
               return (
                 <span key={l.id} style={{
-                  width: "78%", maxWidth: 28, height: 5,
+                  width: "76%", maxWidth: 26, height: 4,
                   borderRadius: 1,
                   background: l.isPlanned ? "transparent" : c,
                   border: l.isPlanned ? `1px dashed ${c}` : "none",
@@ -569,11 +608,11 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
                 }} title={t(`enum.activity.${l.type}`)} />
               );
             })}
-            {logs.length > 4 && (
+            {logs.length > 3 && (
               <span style={{
-                fontSize: 9, color: "var(--ink-3)",
-                fontFamily: "var(--font-mono)", marginTop: 1,
-              }}>+{logs.length - 4}</span>
+                fontSize: 8, color: "var(--ink-3)",
+                fontFamily: "var(--font-mono)", lineHeight: 1,
+              }}>+{logs.length - 3}</span>
             )}
           </div>
         )}
@@ -582,8 +621,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
             the desktop chip. Visually distinct from activity dots above. */}
         {dayTags.length > 0 && (
           <span style={{
-            position: "absolute", top: 4, right: 4,
-            width: 5, height: 5, borderRadius: "50%",
+            position: "absolute", top: 2, right: 2,
+            width: 4, height: 4, borderRadius: "50%",
             background: "var(--moss-deep)",
           }} title={dayTags.map(tag => t(`calendar.tag.${tag}`)).join(", ")} />
         )}

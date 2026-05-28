@@ -330,6 +330,8 @@ const dict = {
   "calendar.weather_strip_title": { en: "7-day weather",      zh: "未来 7 天天气" },
   "calendar.weather_strip_empty": { en: "No weather data — set a default location to enable forecasts.", zh: "暂无天气数据 —— 在设置里填写默认位置后会自动获取预报。" },
   "calendar.weather_today_tag":   { en: "Today",              zh: "今天" },
+  "calendar.weather_updated_at":  { en: "updated {time}",     zh: "更新于 {time}" },
+  "calendar.weather_refresh_tooltip": { en: "Refresh weather now", zh: "立即刷新天气" },
 
   // ===== Global filter =====
   "filter.type_label":        { en: "Type:",                zh: "类型：" },

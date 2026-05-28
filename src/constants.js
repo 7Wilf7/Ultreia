@@ -182,7 +182,7 @@ export const SPARTAN_TIER_COLOR = {
   Sprint: "#c1272d",   /* spartan red    */
   Super:  "#1a5bb8",   /* spartan blue   */
   Beast:  "#2e7d32",   /* spartan green  */
-  Ultra:  "#141413",   /* spartan black  */
+  Ultra:  "#6b3fa0",   /* spartan purple */
 };
 
 // Race categories — used for PR auto-aggregation and as a list-view tag.

@@ -5,6 +5,7 @@
 * [Running 配速分类](running.md)
 * [数据导入（Garmin CSV）](data-import.md)
 * [赛事管理](races.md)
+* [天气](weather.md)
 * [AI 教练](ai-coach.md)
 * [图表](charts.md)
 * [更新日志](changelog.md)

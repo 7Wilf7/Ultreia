@@ -338,16 +338,19 @@ function coordsMatch(cache, lng, lat) {
 //   'ready'       — currentWeather populated (from cache or live)
 //   'no_location' — geolocation denied + no default; UI prompts user to set one
 //   'error'       — fetch attempted, proxy/Caiyun failed
+// `lastUpdatedAt` is the ISO timestamp of the most recent successful
+//   realtime fetch — surfaced so the UI can render "updated HH:MM" labels
+//   and decide when a manual refresh is meaningful.
 export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) {
   // Hydrate from cache synchronously on mount so the AI Coach status pill
   // doesn't flash 'idle' on every page load. The freshness check below
   // decides whether to actually refetch.
   const [state, setState] = useState(() => {
     const c = readCache();
-    if (!c || !c.realtime) return { currentWeather: null, forecastByDate: null, status: 'idle', error: null };
+    if (!c || !c.realtime) return { currentWeather: null, forecastByDate: null, status: 'idle', error: null, lastUpdatedAt: null };
     const m = new Map();
     if (Array.isArray(c.forecasts)) for (const f of c.forecasts) m.set(f.date, f);
-    return { currentWeather: c.realtime, forecastByDate: m, status: 'ready', error: null };
+    return { currentWeather: c.realtime, forecastByDate: m, status: 'ready', error: null, lastUpdatedAt: c.realtimeAt || null };
   });
 
   const run = useCallback(async (opts = {}) => {
@@ -356,7 +359,7 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
     try {
       loc = await getCurrentLocation({ defaultLng, defaultLat });
     } catch {
-      setState({ currentWeather: null, forecastByDate: null, status: 'no_location', error: null });
+      setState({ currentWeather: null, forecastByDate: null, status: 'no_location', error: null, lastUpdatedAt: null });
       return;
     }
     // Cache check — when the user opened the app inside the TTL window, we
@@ -370,7 +373,7 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
       // between renders.
       const m = new Map();
       if (Array.isArray(cache.forecasts)) for (const f of cache.forecasts) m.set(f.date, f);
-      setState({ currentWeather: cache.realtime, forecastByDate: m, status: 'ready', error: null });
+      setState({ currentWeather: cache.realtime, forecastByDate: m, status: 'ready', error: null, lastUpdatedAt: cache.realtimeAt || null });
       return;
     }
 
@@ -397,9 +400,15 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
       writeCache(nextCache);
       const m = new Map();
       if (Array.isArray(daily)) for (const f of daily) m.set(f.date, f);
-      setState({ currentWeather: rt || null, forecastByDate: m, status: 'ready', error: null });
+      setState({
+        currentWeather: rt || null,
+        forecastByDate: m,
+        status: 'ready',
+        error: null,
+        lastUpdatedAt: nextCache.realtimeAt,
+      });
     } catch (e) {
-      setState({ currentWeather: null, forecastByDate: null, status: 'error', error: e.message || String(e) });
+      setState({ currentWeather: null, forecastByDate: null, status: 'error', error: e.message || String(e), lastUpdatedAt: null });
     }
   }, [defaultLng, defaultLat, caiyunToken]);
 

@@ -19,6 +19,16 @@
 
 const CAIYUN_BASE = 'https://api.caiyunapp.com/v2.6';
 
+function setCors(req, res) {
+  const origin = req.headers?.origin;
+  if (origin === 'https://localhost' || origin === 'capacitor://localhost') {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
 function isValidCoord(v, min, max) {
   const n = Number(v);
   return Number.isFinite(n) && n >= min && n <= max;
@@ -48,6 +58,11 @@ function buildCaiyunUrl({ token, lng, lat, type, begin }) {
 }
 
 export default async function handler(req, res) {
+  setCors(req, res);
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return;
+  }
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'method_not_allowed' });
     return;

@@ -34,6 +34,7 @@
 
 - Training 列表右上角的排序菜单在手机上更紧凑，Distance / Duration 这类选项不会再把下拉框挤出屏幕。
 - 准备 v0.2.0 更新包，手机端可通过 APP 内"检查更新"获取新版。
+- 修复 Android APP 内天气加载失败：Training 添加记录、日历天气和 AI Coach 顶部天气会正常使用线上天气服务。
 
 > 数据源是**彩云天气** REST API。Token 放在 Vercel 服务端，浏览器看不到。
 

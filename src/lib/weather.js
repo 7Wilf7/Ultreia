@@ -11,6 +11,7 @@ import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
 
 const isNative = () => Capacitor.isNativePlatform?.() === true;
+const WEATHER_PROXY_ORIGIN = 'https://www.aitrainstudio.com';
 
 // Round to 4 decimals so coords are stable across calls — the Vercel edge
 // cache (and any future client-side cache) can then dedupe.
@@ -75,7 +76,8 @@ async function fetchProxy({ lng, lat, type, begin }) {
     type,
   });
   if (begin) params.set('begin', String(Math.floor(begin)));
-  const resp = await fetch(`/api/weather?${params.toString()}`);
+  const base = isNative() ? WEATHER_PROXY_ORIGIN : '';
+  const resp = await fetch(`${base}/api/weather?${params.toString()}`);
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
     throw new Error(`weather_proxy_${resp.status}: ${text.slice(0, 200)}`);

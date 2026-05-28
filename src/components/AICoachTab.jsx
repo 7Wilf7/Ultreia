@@ -251,7 +251,8 @@ export function AICoachTab({
   // below. coachHubTab tracks which tab is active in that modal.
   const [showCoachMenu, setShowCoachMenu] = useState(false);
   const [showCoachHub, setShowCoachHub] = useState(false);
-  const [coachHubTab, setCoachHubTab] = useState("config");
+  // Default to the Prompt preview — it's the "result" the other tabs feed.
+  const [coachHubTab, setCoachHubTab] = useState("prompt");
   // Long-chat hint is dismissible. Once dismissed it collapses to a
   // single-line tappable chip that sits between provider pills and the
   // chat scroll area — no longer occupies a full banner, but still
@@ -426,8 +427,11 @@ Output the memory text only, nothing else.`;
   // Mobile has two views inside this tab — chat (default) and a settings
   // sub-page (opened via the ⚙ button in the input row). Desktop shows
   // everything inline.
-  const inSettings = isMobile && showCoachMenu;
-  const inChat = !inSettings;
+  // Mobile settings is now a bottom-sheet overlay (CoachMobileMenu, rendered
+  // near the modals) instead of a full-page swap, so the chat always renders
+  // underneath. Kept `inChat` as a constant to avoid churning the big JSX
+  // block guard below.
+  const inChat = true;
   const memoryReady = !!coachMemory?.trim();
   const calendarImportOn = coachConfig.showCalendarButton !== false;
   const providerLabel = provider.label || apiProvider;
@@ -488,48 +492,8 @@ Output the memory text only, nothing else.`;
           mobile), and clicking it now opens the unified CoachSettingsHub
           modal rendered near the bottom of this component. */}
 
-      {/* MOBILE settings sub-page header: ← back + title + vertical button
-          list (one per row, centered). The mobile sub-page has plenty of
-          vertical room so we stop cramming the toggle buttons into a wrap. */}
-      {inSettings && (
-        <div style={{ flexShrink: 0, marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <button onClick={() => setShowCoachMenu(false)} aria-label={t("coach.back_to_chat")}
-              style={{ ...s.btnGhost, fontSize: 16, width: 44, height: 36, padding: 0, minHeight: 36 }}>
-              ←
-            </button>
-            <div style={{ ...s.section, margin: 0, flex: 1 }}>{t("coach.settings_title")}</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <button onClick={onEditProfile}
-              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {t("coach.edit_profile")}
-            </button>
-            <button onClick={() => setShowCoachConfig(true)}
-              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {t("coach.show_config")}
-            </button>
-            <button onClick={() => setShowCalendarSettings(true)}
-              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {t("coach.calendar_btn_label")}
-            </button>
-            <button onClick={() => setShowMemory(true)}
-              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {t("coach.show_memory")}{coachMemory ? " ●" : ""}
-            </button>
-            <button onClick={() => setShowPromptPreview(true)}
-              style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-              {t("coach.show_prompt")}
-            </button>
-            {chatMessages.length > 0 && (
-              <button onClick={clearChat}
-                style={{ ...s.btnGhost, textAlign: "center", padding: "10px 14px" }}>
-                {t("coach.clear_chat")}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Mobile settings moved to a bottom-sheet overlay (CoachMobileMenu),
+          rendered alongside the other modals below. */}
 
       {/* Config / Memory / Prompt Preview — now MODALS instead of inline
           panels. The toggle buttons set the show* state which opens the
@@ -997,10 +961,97 @@ Output the memory text only, nothing else.`;
       </div>
       </>)}
 
+      {/* MOBILE settings — bottom sheet (slides up from the bottom for
+          one-handed reach). Grouped: a "Prompt" parent (opens the assembled-
+          prompt preview) with Edit Profile / Coach Config / Memory nested
+          beneath it (they shape the prompt), then a "Chat" group with the
+          calendar-button toggle + clear chat. Tapping any item closes the
+          sheet and opens the matching modal. */}
+      {showCoachMenu && isMobile && (() => {
+        const pick = (fn) => { setShowCoachMenu(false); fn(); };
+        const sub = (label, onClick, badge) => (
+          <button onClick={onClick} style={{
+            display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+            background: "transparent", border: "none",
+            borderTop: "1px solid var(--rule-soft)",
+            padding: "13px 16px 13px 28px", minHeight: 50,
+            fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--ink-1)",
+            cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
+          }}>
+            <span style={{ flex: 1 }}>{label}{badge ? <span style={{ color: "var(--moss)", marginLeft: 6 }}>●</span> : null}</span>
+            <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
+          </button>
+        );
+        const groupHeader = (label, hint) => (
+          <div style={{ padding: "14px 16px 6px" }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+            {hint && <div style={{ fontSize: 11.5, color: "var(--ink-3)", marginTop: 3 }}>{hint}</div>}
+          </div>
+        );
+        return (
+          <ModalRoot onClose={() => setShowCoachMenu(false)}>
+            <div onClick={() => setShowCoachMenu(false)} style={{
+              position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
+              display: "flex", flexDirection: "column", justifyContent: "flex-end",
+              zIndex: 9999, overscrollBehavior: "contain",
+            }}>
+              <div onClick={e => e.stopPropagation()} style={{
+                background: "var(--bg-elevated)",
+                borderTopLeftRadius: 14, borderTopRightRadius: 14,
+                boxShadow: "0 -8px 30px rgba(0,0,0,0.2)",
+                paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)",
+                maxHeight: "80dvh", overflowY: "auto",
+              }}>
+                {/* grab handle + title */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0 4px" }}>
+                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--rule)" }} />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 16px 6px" }}>
+                  <div style={{ ...s.section, margin: 0 }}>{t("coach.settings_title")}</div>
+                  <button onClick={() => setShowCoachMenu(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                </div>
+
+                {/* Prompt group — parent row opens preview, sub-items nested */}
+                {groupHeader(t("coach.group_prompt"), t("coach.group_prompt_hint"))}
+                <button onClick={() => pick(() => setShowPromptPreview(true))} style={{
+                  display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+                  background: "transparent", border: "none",
+                  borderTop: "1px solid var(--rule-soft)",
+                  padding: "13px 16px", minHeight: 50,
+                  fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--ink-1)",
+                  cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
+                }}>
+                  <span style={{ flex: 1 }}>{t("coach.preview_prompt")}</span>
+                  <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
+                </button>
+                {sub(t("coach.edit_profile"), () => pick(onEditProfile))}
+                {sub(t("coach.show_config"), () => pick(() => setShowCoachConfig(true)))}
+                {sub(t("coach.show_memory"), () => pick(() => setShowMemory(true)), !!coachMemory)}
+
+                {/* Chat group */}
+                {groupHeader(t("coach.group_chat"))}
+                {sub(t("coach.calendar_btn_label"), () => pick(() => setShowCalendarSettings(true)))}
+                {chatMessages.length > 0 && (
+                  <button onClick={() => pick(clearChat)} style={{
+                    display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+                    background: "transparent", border: "none",
+                    borderTop: "1px solid var(--rule-soft)",
+                    padding: "13px 16px 13px 28px", minHeight: 50,
+                    fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--danger)",
+                    cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
+                  }}>
+                    <span style={{ flex: 1 }}>{t("coach.clear_chat")}</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </ModalRoot>
+        );
+      })()}
+
       {/* Desktop unified settings hub. Left vertical tabs route the right
           pane to one of the existing config / memory / prompt-preview blocks,
-          plus shortcuts to Edit Profile and Clear Chat. Mobile keeps its
-          in-place settings sub-page (rendered above when inSettings). */}
+          plus shortcuts to Edit Profile and Clear Chat. */}
       {showCoachHub && !isMobile && (
         <ModalRoot onClose={() => setShowCoachHub(false)}>
           <div style={s.modalOverlay(false)} onClick={() => setShowCoachHub(false)}>
@@ -1030,34 +1081,49 @@ Output the memory text only, nothing else.`;
                   display: "flex", flexDirection: "column",
                   padding: "10px 0",
                 }}>
+                  {/* Grouped: "Prompt" (preview parent + the three inputs that
+                      shape it) then "Chat" (calendar toggle + clear). */}
                   {[
-                    { id: "profile",  label: t("coach.edit_profile") },
-                    { id: "config",   label: t("coach.show_config") },
-                    { id: "calendar", label: t("coach.calendar_btn_label") },
-                    { id: "memory",   label: t("coach.show_memory") + (coachMemory ? " ●" : "") },
-                    { id: "prompt",   label: t("coach.show_prompt") },
-                    { id: "clear",    label: t("coach.clear_chat") },
-                  ].map(tab => {
-                    const active = coachHubTab === tab.id;
-                    return (
-                      <button key={tab.id}
-                        onClick={() => setCoachHubTab(tab.id)}
-                        style={{
-                          textAlign: "left",
-                          background: active ? "var(--bg-elevated)" : "transparent",
-                          border: "none",
-                          borderLeft: active ? "3px solid var(--ink-1)" : "3px solid transparent",
-                          padding: "10px 14px",
-                          fontFamily: "var(--font-sans)",
-                          fontSize: 13,
-                          fontWeight: active ? 600 : 500,
-                          color: active ? "var(--ink-1)" : "var(--ink-2)",
-                          cursor: "pointer", borderRadius: 0,
-                        }}>
-                        {tab.label}
-                      </button>
-                    );
-                  })}
+                    { header: t("coach.group_prompt"), items: [
+                      { id: "prompt",  label: t("coach.preview_prompt"), parent: true },
+                      { id: "profile", label: t("coach.edit_profile"), indent: true },
+                      { id: "config",  label: t("coach.show_config"), indent: true },
+                      { id: "memory",  label: t("coach.show_memory") + (coachMemory ? " ●" : ""), indent: true },
+                    ] },
+                    { header: t("coach.group_chat"), items: [
+                      { id: "calendar", label: t("coach.calendar_btn_label") },
+                      { id: "clear",    label: t("coach.clear_chat") },
+                    ] },
+                  ].map((group, gi) => (
+                    <div key={group.header}>
+                      <div style={{
+                        padding: gi === 0 ? "2px 14px 6px" : "16px 14px 6px",
+                        fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)",
+                        textTransform: "uppercase", letterSpacing: "0.06em",
+                      }}>{group.header}</div>
+                      {group.items.map(tab => {
+                        const active = coachHubTab === tab.id;
+                        return (
+                          <button key={tab.id}
+                            onClick={() => setCoachHubTab(tab.id)}
+                            style={{
+                              textAlign: "left", width: "100%",
+                              background: active ? "var(--bg-elevated)" : "transparent",
+                              border: "none",
+                              borderLeft: active ? "3px solid var(--ink-1)" : "3px solid transparent",
+                              padding: tab.indent ? "9px 14px 9px 26px" : "9px 14px",
+                              fontFamily: "var(--font-sans)",
+                              fontSize: 13,
+                              fontWeight: active ? 600 : (tab.parent ? 600 : 500),
+                              color: active ? "var(--ink-1)" : "var(--ink-2)",
+                              cursor: "pointer", borderRadius: 0,
+                            }}>
+                            {tab.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
                 </div>
 
                 {/* Right content pane */}

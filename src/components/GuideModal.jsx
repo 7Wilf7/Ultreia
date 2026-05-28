@@ -75,6 +75,45 @@ function extractTable(tableNode) {
   return { headers, rows };
 }
 
+// Narrow (≤2 col) tables on mobile: render a real table that WRAPS to fit the
+// width instead of forcing horizontal scroll (min-width: max-content was the
+// culprit — long cells overflowed and the pan fought the vertical scroll).
+function MobileWrapTable({ headers, rows }) {
+  const hasHeaders = headers.some(h => h);
+  return (
+    <table style={{
+      width: "100%", borderCollapse: "collapse", tableLayout: "fixed",
+      fontSize: 13, margin: "8px 0 14px",
+    }}>
+      {hasHeaders && (
+        <thead>
+          <tr>
+            {headers.map((h, i) => (
+              <th key={i} style={{
+                border: "1px solid var(--rule)", padding: "6px 8px", textAlign: "left",
+                fontWeight: 600, background: "var(--bg-sunken)",
+                whiteSpace: "normal", wordBreak: "break-word", color: "var(--ink-1)",
+              }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+      )}
+      <tbody>
+        {rows.map((cells, ri) => (
+          <tr key={ri}>
+            {cells.map((c, ci) => (
+              <td key={ci} style={{
+                border: "1px solid var(--rule)", padding: "6px 8px", verticalAlign: "top",
+                whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.55, color: "var(--ink-1)",
+              }}>{c}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function MobileTableCards({ headers, rows }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "8px 0 14px" }}>
@@ -144,10 +183,13 @@ function makeGuideComponents(onNavigate, isMobile) {
         style={{ color: "var(--moss-deep)", textDecoration: "underline", wordBreak: "break-word" }} />;
     },
     table: (p) => {
+      // Mobile never horizontally scrolls a table: wide (>=3 col) tables become
+      // stacked cards; narrow (<=2 col) tables wrap to fit the width.
       if (isMobile && p.node) {
         const { headers, rows } = extractTable(p.node);
         const colCount = Math.max(headers.length, ...rows.map(r => r.length), 0);
         if (colCount >= 3) return <MobileTableCards headers={headers} rows={rows} />;
+        return <MobileWrapTable headers={headers} rows={rows} />;
       }
       return (
         <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", maxWidth: "100%", margin: "8px 0 14px" }}>

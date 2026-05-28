@@ -26,6 +26,7 @@ export function SettingsMobileTab({
   onOpenApiSettings,
   onOpenWeatherApiSettings,
   onOpenLocationSettings,
+  onOpenGuide,
   onToggleLang,
   onChangePassword,
   signOut,
@@ -119,8 +120,7 @@ export function SettingsMobileTab({
       <Cell
         primary={t("settings.guide")}
         secondary={t("settings.guide_desc")}
-        href="https://training-studio.gitbook.io/training-studio-docs"
-        external
+        onClick={onOpenGuide}
       />
       <UpdateChecker />
     </div>

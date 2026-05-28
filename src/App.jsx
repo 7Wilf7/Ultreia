@@ -21,6 +21,7 @@ import { LocationSettingsModal } from "./components/LocationSettingsModal";
 import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
+import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
@@ -664,6 +665,7 @@ function AppShell({
   const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
   const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   // ── AI Coach in-flight state, lifted from AICoachTab so it SURVIVES tab
   //    switches. Previously the fetch and chatLoading both lived in
@@ -1141,6 +1143,8 @@ Rules:
         />
       )}
 
+      {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
+
       {/* Plan-import review modal — rendered at AppShell level (not inside
           AICoachTab) so the user sees it pop up even if they walked away
           from the AI Coach tab while the extraction was running. */}
@@ -1169,6 +1173,7 @@ Rules:
         onOpenApiSettings={() => setShowApiSettings(true)}
         onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
         onOpenLocationSettings={() => setShowLocationSettings(true)}
+        onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
         signOut={signOut}
@@ -1262,13 +1267,12 @@ Rules:
           gap: 10,
         }}>
           <div style={{ display: "flex", gap: 0 }}>
-            <a href="https://training-studio.gitbook.io/training-studio-docs"
-              target="_blank" rel="noreferrer"
+            <button onClick={() => setShowGuide(true)}
               title={t("header.guide_tooltip")}
               style={headerCell}>
               <BookIcon size={13} />
               {t("header.guide")}
-            </a>
+            </button>
             <button onClick={toggleLang} title={t("header.lang_tooltip")}
               style={headerCell}>
               <GlobeIcon size={13} />

@@ -69,6 +69,10 @@ const dict = {
   "settings.update_latest":  { en: "You're on the latest version", zh: "已是最新版本" },
   "settings.update_available": { en: "New version available", zh: "有新版本" },
   "settings.update_download": { en: "Download APK",         zh: "下载 APK" },
+  "settings.update_install":  { en: "Update now",           zh: "立即更新" },
+  "settings.update_downloading": { en: "Downloading…",      zh: "下载中…" },
+  "settings.update_installing":  { en: "Opening installer…", zh: "正在打开安装…" },
+  "settings.update_install_failed": { en: "In-app install failed — opening download in browser instead.", zh: "应用内安装失败 —— 已改用浏览器下载。" },
   "settings.update_view":    { en: "View release notes",    zh: "查看更新说明" },
   "settings.update_error":   { en: "Could not check for updates", zh: "无法检查更新" },
 

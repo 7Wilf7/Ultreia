@@ -1,5 +1,13 @@
 import { useState } from "react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import { useT } from "../i18n/LanguageContext";
+
+// Native bridge declared in android/.../ApkInstallerPlugin.java. On web this
+// is a no-op stub (we never call it off-native).
+const ApkInstaller = registerPlugin("ApkInstaller");
+
+const isNative = () => Capacitor.isNativePlatform?.() === true;
 
 const GITHUB_RELEASES_API =
   "https://api.github.com/repos/7Wilf7/training-studio/releases/latest";
@@ -34,6 +42,9 @@ export function UpdateChecker() {
   const currentVersion = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0";
   const [status, setStatus] = useState("idle"); // idle | checking | latest | newer | error
   const [release, setRelease] = useState(null);
+  // Native in-app download/install progress: idle | downloading | installing
+  const [installState, setInstallState] = useState("idle");
+  const [installMsg, setInstallMsg] = useState("");
 
   async function check() {
     setStatus("checking");
@@ -55,6 +66,38 @@ export function UpdateChecker() {
     } catch {
       setStatus("error");
       setRelease(null);
+    }
+  }
+
+  // Native path: download the APK into the app cache, then hand it to the
+  // system installer via the ApkInstaller plugin. Any failure (download
+  // error, plugin missing, installer refused) falls back to opening the
+  // APK URL in the browser — the always-works path — so the button never
+  // dead-ends.
+  async function downloadAndInstall(apkUrl) {
+    if (!isNative()) {
+      window.open(apkUrl, "_blank", "noreferrer");
+      return;
+    }
+    setInstallMsg("");
+    try {
+      setInstallState("downloading");
+      const res = await Filesystem.downloadFile({
+        url: apkUrl,
+        path: "ts-update.apk",
+        directory: Directory.Cache,
+      });
+      const path = res?.path;
+      if (!path) throw new Error("download returned no path");
+      setInstallState("installing");
+      await ApkInstaller.install({ path });
+      // Installer launched in a separate task; reset our button state.
+      setInstallState("idle");
+    } catch (err) {
+      console.error("[update] in-app install failed:", err);
+      setInstallState("idle");
+      setInstallMsg(t("settings.update_install_failed"));
+      window.open(apkUrl, "_blank", "noreferrer");
     }
   }
 
@@ -92,14 +135,34 @@ export function UpdateChecker() {
           )}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {release.apkUrl && (
-              <a href={release.apkUrl} target="_blank" rel="noreferrer" style={downloadBtnStyle}>
-                ↓ {t("settings.update_download")}
-              </a>
+              isNative() ? (
+                // Native: download + launch the installer in-app, no browser hop.
+                <button
+                  onClick={() => downloadAndInstall(release.apkUrl)}
+                  disabled={installState !== "idle"}
+                  style={{ ...downloadBtnStyle, border: "none", cursor: installState !== "idle" ? "default" : "pointer", opacity: installState !== "idle" ? 0.7 : 1 }}>
+                  {installState === "downloading"
+                    ? t("settings.update_downloading")
+                    : installState === "installing"
+                      ? t("settings.update_installing")
+                      : `↓ ${t("settings.update_install")}`}
+                </button>
+              ) : (
+                // Web: plain download link.
+                <a href={release.apkUrl} target="_blank" rel="noreferrer" style={downloadBtnStyle}>
+                  ↓ {t("settings.update_download")}
+                </a>
+              )
             )}
             <a href={release.url} target="_blank" rel="noreferrer" style={viewBtnStyle}>
               ↗ {t("settings.update_view")}
             </a>
           </div>
+          {installMsg && (
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--warn)", lineHeight: 1.5 }}>
+              {installMsg}
+            </div>
+          )}
         </div>
       )}
     </div>

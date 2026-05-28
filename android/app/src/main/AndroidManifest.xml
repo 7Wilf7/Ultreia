@@ -40,4 +40,9 @@
          in Settings → Default location. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- In-app self-update: download the release APK and launch the system
+         package installer on it (see ApkInstallerPlugin). The OS still gates
+         the install behind the user's per-source "allow unknown apps" toggle. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

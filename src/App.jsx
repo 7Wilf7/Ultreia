@@ -814,7 +814,10 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
           setDailyTags={setDailyTags}
-          defaultLocation={defaultLocation}
+          /* Shared weather context — same cache as AI Coach. Per-tab-mount
+             fetch was wasteful; cache + visibility-change refresh in the
+             hook is enough. */
+          weatherCtx={weatherCtx}
         />
       )}
       {tab === 2 && (

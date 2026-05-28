@@ -533,6 +533,8 @@ const dict = {
   "coach.tip":                { en: "",                     zh: "" },
   "coach.long_chat_hint":     { en: "Chat is getting long ({n} messages). Older turns start competing with the system prompt for the model's attention — consider distilling the takeaways into Memory, then clearing the chat for a clean slate.", zh: "对话已有 {n} 条，开始变长。旧消息会与系统提示词争夺模型注意力 —— 建议把要点固化到 Memory，再清空对话从新开始。" },
   "coach.long_chat_action":   { en: "Open Memory",          zh: "打开 Memory" },
+  "coach.long_chat_chip":     { en: "{n} messages — distill to Memory?", zh: "{n} 条对话 · 固化到 Memory？" },
+  "coach.long_chat_dismiss":  { en: "Collapse",             zh: "收起" },
 
   // ===== AI Coach → Calendar import =====
   "coach.import_button":      { en: "Import to Calendar",     zh: "导入到日历" },

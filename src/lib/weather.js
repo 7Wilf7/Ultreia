@@ -281,61 +281,119 @@ export async function captureSnapshotForWorkout({ date, startedAt, lng, lat }) {
   return await fetchRealtimeSnapshot({ lng, lat });
 }
 
-// React hook — fetches realtime + 7-day forecast once on mount, exposes
-// { currentWeather, forecastByDate, status, error, refetch }. Both
-// AICoachTab preview and AppShell.sendChat consume this so the prompt
-// preview matches what's actually sent, and the AI Coach status pill can
-// surface "Weather: ready / no-location / error" without callers having
-// to re-implement the fetch logic.
+// localStorage-backed cache for weather data. Two freshness rules:
+//   • realtime → 1 hour TTL. AI Coach status pill + prompt context want
+//     "roughly now" — a stale hour is fine, more than that and a runner
+//     deciding pace mid-afternoon shouldn't trust this morning's temp.
+//   • forecasts → cached until the next local midnight. The daily forecast
+//     for today + 6 future days only changes meaningfully day-over-day, so
+//     once-per-day matches actual freshness. Refetches when the user opens
+//     the app on a new calendar day.
+// Cache invalidates wholesale when coords change (user updates default
+// location) — old data is for the wrong city.
+const CACHE_KEY = 'ts.weather.v1';
+const REALTIME_TTL_MS = 60 * 60 * 1000;
+
+function readCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+function writeCache(next) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch { /* quota / private mode */ }
+}
+function localDateKey(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function realtimeFresh(cache, now = Date.now()) {
+  if (!cache?.realtime || !cache?.realtimeAt) return false;
+  return now - new Date(cache.realtimeAt).getTime() < REALTIME_TTL_MS;
+}
+function forecastFresh(cache, today = localDateKey()) {
+  return !!cache?.forecasts && cache?.forecastDay === today;
+}
+function coordsMatch(cache, lng, lat) {
+  if (!cache) return false;
+  return Number(cache.lng) === Number(lng) && Number(cache.lat) === Number(lat);
+}
+
+// React hook — fetches realtime + 7-day forecast with localStorage caching,
+// exposes { currentWeather, forecastByDate, status, error, refetch }. Both
+// AICoachTab and AppShell.sendChat consume this so the prompt preview
+// matches what's actually sent. Pass `force: true` to refetch() to bypass
+// the cache (used by the "refresh" affordance + the hourly timer).
 //
 // status values:
 //   'idle'        — never fetched (initial mount, before effect runs)
 //   'loading'     — fetch in flight
-//   'ready'       — currentWeather populated
+//   'ready'       — currentWeather populated (from cache or live)
 //   'no_location' — geolocation denied + no default; UI prompts user to set one
 //   'error'       — fetch attempted, proxy/Caiyun failed
 export function useWeatherContext({ defaultLng, defaultLat } = {}) {
-  const [state, setState] = useState({
-    currentWeather: null,
-    forecastByDate: null,
-    status: 'idle',
-    error: null,
+  // Hydrate from cache synchronously on mount so the AI Coach status pill
+  // doesn't flash 'idle' on every page load. The freshness check below
+  // decides whether to actually refetch.
+  const [state, setState] = useState(() => {
+    const c = readCache();
+    if (!c || !c.realtime) return { currentWeather: null, forecastByDate: null, status: 'idle', error: null };
+    const m = new Map();
+    if (Array.isArray(c.forecasts)) for (const f of c.forecasts) m.set(f.date, f);
+    return { currentWeather: c.realtime, forecastByDate: m, status: 'ready', error: null };
   });
 
-  const run = useCallback(async () => {
-    setState((s) => ({ ...s, status: 'loading' }));
+  const run = useCallback(async (opts = {}) => {
+    const force = !!opts.force;
     let loc;
     try {
       loc = await getCurrentLocation({ defaultLng, defaultLat });
     } catch {
-      setState({
-        currentWeather: null,
-        forecastByDate: null,
-        status: 'no_location',
-        error: null,
-      });
+      setState({ currentWeather: null, forecastByDate: null, status: 'no_location', error: null });
       return;
     }
+    // Cache check — when the user opened the app inside the TTL window, we
+    // serve straight from localStorage without hitting the proxy.
+    const cache = readCache();
+    const needRealtime = force || !coordsMatch(cache, loc.lng, loc.lat) || !realtimeFresh(cache);
+    const needForecast = force || !coordsMatch(cache, loc.lng, loc.lat) || !forecastFresh(cache);
+    if (!needRealtime && !needForecast && cache) {
+      // Pure cache hit — already hydrated in initial state, but re-set to
+      // make sure 'ready' is reflected when the user changes default loc
+      // between renders.
+      const m = new Map();
+      if (Array.isArray(cache.forecasts)) for (const f of cache.forecasts) m.set(f.date, f);
+      setState({ currentWeather: cache.realtime, forecastByDate: m, status: 'ready', error: null });
+      return;
+    }
+
+    setState((s) => ({ ...s, status: s.currentWeather ? 'ready' : 'loading' }));
+
     try {
       const [rt, daily] = await Promise.all([
-        fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat }),
-        fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }).catch(() => null),
+        needRealtime
+          ? fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat })
+          : Promise.resolve(cache?.realtime || null),
+        needForecast
+          ? fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }).catch(() => null)
+          : Promise.resolve(cache?.forecasts || null),
       ]);
+      const today = localDateKey();
+      const nextCache = {
+        lng: loc.lng,
+        lat: loc.lat,
+        realtime: rt || null,
+        realtimeAt: needRealtime ? new Date().toISOString() : cache?.realtimeAt || null,
+        forecasts: daily || null,
+        forecastDay: needForecast ? today : cache?.forecastDay || null,
+      };
+      writeCache(nextCache);
       const m = new Map();
       if (Array.isArray(daily)) for (const f of daily) m.set(f.date, f);
-      setState({
-        currentWeather: rt,
-        forecastByDate: m,
-        status: 'ready',
-        error: null,
-      });
+      setState({ currentWeather: rt || null, forecastByDate: m, status: 'ready', error: null });
     } catch (e) {
-      setState({
-        currentWeather: null,
-        forecastByDate: null,
-        status: 'error',
-        error: e.message || String(e),
-      });
+      setState({ currentWeather: null, forecastByDate: null, status: 'error', error: e.message || String(e) });
     }
   }, [defaultLng, defaultLat]);
 
@@ -344,6 +402,18 @@ export function useWeatherContext({ defaultLng, defaultLat } = {}) {
   // (it can't see across the await), so silence it explicitly.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void run(); }, [run]);
+
+  // Refresh whenever the tab comes back into focus — covers the "left the
+  // tab open all day, returned in the morning" case where the daily
+  // forecast is stale. The cache check inside run() means this is cheap
+  // when nothing's actually expired.
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === 'visible') void run();
+    }
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [run]);
 
   return { ...state, refetch: run };
 }

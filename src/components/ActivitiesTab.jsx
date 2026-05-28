@@ -877,21 +877,24 @@ function MetricCadence({ spm }) {
   );
 }
 // Weather chip — two variants:
-//   • compact (default) → icon + APPARENT TEMP only. Apparent ("feels like")
-//     is what actually drives pace + HR in heat, so it's the headline
-//     number. Falls back to raw temp when apparent is missing.
-//   • full → raw air temp (only when meaningfully different from apparent)
-//     + humidity + wind + AQI. No duplicate of the apparent number —
-//     compact owns that, expanded just adds the rest.
-// log.weather is absent on indoor-type rows by design (Strength, Floor
+//   • compact (default) → icon + APPARENT TEMP. "Feels like" is what
+//     drives pace + HR in heat, so it's the headline on row 1. Falls
+//     back to raw temp when apparent missing.
+//   • full → icon + RAW AIR TEMP + humidity + wind + AQI. Apparent is
+//     already on row 1, so expanded skips it entirely and surfaces the
+//     air temperature — the "实测 32°C, RH75%, wind 4km/h, AQI 50"
+//     breakdown a runner uses to decide hydration and hard-effort risk.
+// log.weather is absent on indoor types by design (Strength, Floor
 // Climbing) and on rows recorded before weather support landed.
 function MetricWeather({ w, full = false }) {
   if (!w) return null;
   // Realtime + historical: tempC / apparentC. Daily forecast: tempAvgC / apparentAvgC.
   const temp = w.tempC ?? w.tempAvgC;
   const apparent = w.apparentC ?? w.apparentAvgC;
-  // Headline number — prefer apparent, fall back to raw temp if missing.
-  const headline = Number.isFinite(apparent) ? apparent : temp;
+  // Compact: apparent (fall back to raw). Expanded: raw (fall back to apparent).
+  const headline = full
+    ? (Number.isFinite(temp) ? temp : apparent)
+    : (Number.isFinite(apparent) ? apparent : temp);
   const meta = w.skycon ? skyconShort(w.skycon) : null;
   return (
     <span style={{
@@ -901,13 +904,6 @@ function MetricWeather({ w, full = false }) {
       {meta && <span aria-hidden="true">{meta.icon}</span>}
       {Number.isFinite(headline) && (
         <span>{headline}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
-      )}
-      {/* Full view appends raw air temp when it differs from apparent by
-          ≥ 1°C — that's the useful "feels 38°C, actual 32°C" signal. */}
-      {full && Number.isFinite(temp) && Number.isFinite(apparent) && Math.abs(apparent - temp) >= 1 && (
-        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
-          (实测 {temp}°)
-        </span>
       )}
       {full && Number.isFinite(w.humidity) && (
         <span style={{ color: "var(--ink-3)", fontSize: 11 }}>

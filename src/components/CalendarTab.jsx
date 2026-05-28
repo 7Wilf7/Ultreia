@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
-import {
-  getCurrentLocation, fetchDailyForecasts, fetchRealtimeSnapshot, skyconMeta,
-} from "../lib/weather";
+import { skyconMeta } from "../lib/weather";
 
 // YYYY-MM-DD in LOCAL time. workouts.date is stored as 'YYYY-MM-DD' (no time
 // component). Using toISOString() would shift the date by the timezone offset
@@ -46,57 +44,42 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, defaultLocation }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, weatherCtx }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   const today = new Date();
   const todayKey = dateKey(today);
 
-  // Daily forecast (next 7 days) + today's realtime — both keyed by
-  // YYYY-MM-DD so DayCell can do a single Map.get(key). Fetched once on
-  // mount; refetched only when the user navigates between viewed months
-  // is unnecessary (forecast doesn't extend past 7 days). Failures are
-  // silent — the calendar stays usable, weather chips just don't render.
-  const [forecastByDate, setForecastByDate] = useState(new Map());
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const loc = await getCurrentLocation({
-          defaultLng: defaultLocation?.lng,
-          defaultLat: defaultLocation?.lat,
-        });
-        const [forecasts, realtime] = await Promise.all([
-          fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }),
-          fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat }).catch(() => null),
-        ]);
-        if (cancelled) return;
-        const m = new Map();
-        for (const f of forecasts) m.set(f.date, f);
-        // Realtime supersedes the today-forecast entry — we have actual
-        // observed weather, not a prediction. Keep the same shape so
-        // DayCell doesn't care which source it came from.
-        if (realtime) {
-          m.set(todayKey, {
-            date: todayKey,
-            tempC: realtime.tempC,
-            apparentC: realtime.apparentC,
-            humidity: realtime.humidity,
-            skycon: realtime.skycon,
-            windSpeed: realtime.windSpeed,
-            aqi: realtime.aqi,
-            _source: 'realtime',
-          });
-        }
-        setForecastByDate(m);
-      } catch {
-        // Location unavailable / proxy down / quota — leave forecastByDate
-        // empty, calendar renders without weather chips.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [defaultLocation?.lng, defaultLocation?.lat, todayKey]);
+  // Day-keyed weather Map. Built from the shared weatherCtx so we hit the
+  // localStorage cache (no per-tab-mount API call) and stay in sync with
+  // the AI Coach pill. Today's cell uses realtime (actual observed),
+  // future cells use the 7-day forecast.
+  // Read ctx fields into locals first — the React Compiler lint rule
+  // wants the useMemo deps to match the actual reads exactly, and
+  // chained-optional `weatherCtx?.foo` shows up as `weatherCtx` in its
+  // inference.
+  const ctxForecast = weatherCtx?.forecastByDate;
+  const ctxRealtime = weatherCtx?.currentWeather;
+  const forecastByDate = useMemo(() => {
+    const m = new Map();
+    if (ctxForecast) {
+      for (const [date, f] of ctxForecast.entries()) m.set(date, f);
+    }
+    if (ctxRealtime) {
+      m.set(todayKey, {
+        date: todayKey,
+        tempC: ctxRealtime.tempC,
+        apparentC: ctxRealtime.apparentC,
+        humidity: ctxRealtime.humidity,
+        skycon: ctxRealtime.skycon,
+        windSpeed: ctxRealtime.windSpeed,
+        aqi: ctxRealtime.aqi,
+        _source: 'realtime',
+      });
+    }
+    return m;
+  }, [ctxForecast, ctxRealtime, todayKey]);
 
   // Default view = current month. < > buttons step by ±1 month; "Today" resets.
   const [view, setViewMonth] = useState(() => ({
@@ -382,20 +365,27 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, weat
           </div>
         )}
 
-        {/* Weather chip — bottom of the cell, centered, so it stays clear
-            of both the day number (top) and the day-tag dot (bottom-right).
-            Apparent temp ("feels like") is the headline because that's
-            what matters for outdoor training. Tiny icon + temp; full
-            numbers live in the day modal. */}
-        {weather && Number.isFinite(wTemp) && (
+        {/* Weather chip — two-line stack at the bottom of the cell:
+              row 1: skycon icon (tiny)
+              row 2: temperature — max/min range for forecast days,
+                     single apparent temp for today (realtime).
+            Two lines makes the "this is high / low" reading instant;
+            one number alone was ambiguous between "current" and "today's
+            high". Cells are ~50px wide on mobile so we keep the type
+            sizes very small. */}
+        {weather && (Number.isFinite(wTemp) || Number.isFinite(wTempMax)) && (
           <span style={{
             position: "absolute", bottom: 2, left: 0, right: 0,
-            fontFamily: "var(--font-mono)", fontSize: 9,
-            color: "var(--ink-3)", lineHeight: 1,
-            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 1,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 0,
+            fontFamily: "var(--font-mono)", color: "var(--ink-3)", lineHeight: 1.05,
+            pointerEvents: "none",
           }}>
-            {wIcon && <span style={{ fontSize: 9 }}>{wIcon}</span>}
-            <span>{Math.round(wTemp)}°</span>
+            {wIcon && <span style={{ fontSize: 11 }}>{wIcon}</span>}
+            <span style={{ fontSize: 9, fontVariantNumeric: "tabular-nums" }}>
+              {Number.isFinite(wTempMax) && Number.isFinite(wTempMin)
+                ? `${Math.round(wTempMax)}/${Math.round(wTempMin)}°`
+                : `${Math.round(wTemp)}°`}
+            </span>
           </span>
         )}
 

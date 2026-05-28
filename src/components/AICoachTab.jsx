@@ -252,6 +252,25 @@ export function AICoachTab({
   const [showCoachMenu, setShowCoachMenu] = useState(false);
   const [showCoachHub, setShowCoachHub] = useState(false);
   const [coachHubTab, setCoachHubTab] = useState("config");
+  // Long-chat hint is dismissible. Once dismissed it collapses to a
+  // single-line tappable chip that sits between provider pills and the
+  // chat scroll area — no longer occupies a full banner, but still
+  // reachable so the user can act when they want to. Per-session state
+  // (resets on page reload, which is the point — fresh page → fresh
+  // reminder if conversation is still long).
+  const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
+
+  // Mobile-only: refresh the shared weather every hour while the AI Coach
+  // tab is mounted, so a runner sitting on this tab through the day sees
+  // realtime that tracks the actual weather. The hook's cache TTL is also
+  // 1h, so this effectively just kicks the refetch when the timer fires.
+  // Desktop relies on visibility-change in the hook (less aggressive
+  // because desktop sessions are usually short).
+  useEffect(() => {
+    if (!isMobile || !weatherCtx?.refetch) return;
+    const id = setInterval(() => { void weatherCtx.refetch(); }, 60 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [isMobile, weatherCtx]);
 
   // Auto-scroll the chat container to the latest message whenever the
   // message list grows (new send/receive) or whenever the tab is mounted
@@ -703,12 +722,16 @@ Output the memory text only, nothing else.`;
         paddingBottom: isMobile ? 8 : 0,
       }}>
         {statusPill(<CoachIcon size={12} />, "Provider", providerLabel)}
-        {statusPill(<SettingsIcon size={12} />, "Mode", `${coachStyleLabel} / ${outputLabel} / ${interventionLabel}`)}
-        {statusPill(<CoachIcon size={12} />, "Memory", memoryLabel, memoryReady)}
-        {statusPill(<CalendarIcon size={12} />, "Import", calendarLabel, calendarImportOn)}
-        {/* Weather pill — clickable when status is 'no_location' so the
-            user can jump straight to the default-location modal. Otherwise
-            informational. */}
+        {/* Mode / Memory / Import pills crowd the mobile header — the same
+            info is reachable via ⚙ → settings hub on mobile. Desktop has
+            room so it keeps all four. */}
+        {!isMobile && statusPill(<SettingsIcon size={12} />, "Mode", `${coachStyleLabel} / ${outputLabel} / ${interventionLabel}`)}
+        {!isMobile && statusPill(<CoachIcon size={12} />, "Memory", memoryLabel, memoryReady)}
+        {!isMobile && statusPill(<CalendarIcon size={12} />, "Import", calendarLabel, calendarImportOn)}
+        {/* Weather pill — kept on mobile because the whole point of weather
+            integration is the runner glancing at it before their session.
+            Clickable when status is 'no_location' so the user can jump
+            straight to the default-location modal. */}
         {wStatus === 'no_location' && onOpenLocationSettings ? (
           <button onClick={onOpenLocationSettings}
             title={lang === 'zh' ? '点击设置默认位置' : 'Click to set a default location'}
@@ -726,25 +749,55 @@ Output the memory text only, nothing else.`;
           </button>
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive)}
       </div>
-      {/* Soft hint once chat history grows past the threshold — older turns
-          start competing with the system prompt for the model's attention.
-          One-tap to open Memory; not blocking. */}
+      {/* Soft hint once chat history grows past the threshold. Two states:
+          • EXPANDED (default) — full banner with the "consider distilling
+            to memory" explanation + Open Memory button + ✕ dismiss
+          • COLLAPSED — single-line chip that still nudges the user but
+            doesn't take vertical real estate; tap to re-expand.
+          Per-session state so the chip reappears full-size on next page
+          load when chat is still long. */}
       {chatMessages.length >= LONG_CHAT_HINT_THRESHOLD && !showMemory && (
-        <div style={{
-          marginBottom: 14, padding: "10px 14px",
-          border: "1px solid var(--rule)",
-          background: "rgba(181,78,26,0.06)",
-          display: "flex", gap: 12, alignItems: "flex-start",
-          flexWrap: "wrap",
-        }}>
-          <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, flex: 1, minWidth: 220 }}>
-            {t("coach.long_chat_hint", { n: chatMessages.length })}
-          </div>
-          <button onClick={() => setShowMemory(true)}
-            style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0 }}>
-            {t("coach.long_chat_action")}
+        longChatHintCollapsed ? (
+          <button
+            onClick={() => setLongChatHintCollapsed(false)}
+            style={{
+              marginBottom: 10, padding: "4px 10px",
+              border: "1px solid var(--rule)",
+              background: "rgba(181,78,26,0.04)",
+              color: "var(--warn)",
+              fontSize: 11, fontFamily: "var(--font-sans)",
+              cursor: "pointer", borderRadius: 2,
+              display: "inline-flex", alignItems: "center", gap: 6,
+              alignSelf: "flex-start",
+            }}>
+            <span>⚠</span>
+            <span>{t("coach.long_chat_chip", { n: chatMessages.length })}</span>
           </button>
-        </div>
+        ) : (
+          <div style={{
+            marginBottom: 14, padding: "10px 14px",
+            border: "1px solid var(--rule)",
+            background: "rgba(181,78,26,0.06)",
+            display: "flex", gap: 12, alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}>
+            <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, flex: 1, minWidth: 220 }}>
+              {t("coach.long_chat_hint", { n: chatMessages.length })}
+            </div>
+            <button onClick={() => setShowMemory(true)}
+              style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0 }}>
+              {t("coach.long_chat_action")}
+            </button>
+            <button onClick={() => setLongChatHintCollapsed(true)}
+              aria-label={t("coach.long_chat_dismiss")}
+              style={{
+                background: "none", border: "none",
+                color: "var(--ink-3)", cursor: "pointer",
+                fontSize: 16, lineHeight: 1, padding: "0 4px",
+                flexShrink: 0, marginTop: -2,
+              }}>×</button>
+          </div>
+        )
       )}
 
       <div ref={chatScrollRef} style={{

@@ -26,6 +26,13 @@ export default defineConfig({
       // "click to refresh" toast needed. Trade-off: a user mid-session may
       // get a refresh between actions; acceptable for a single-user tool.
       registerType: 'autoUpdate',
+      // Don't auto-inject the SW registration script into index.html.
+      // We register manually from src/main.jsx so we can SKIP registration
+      // when running inside Capacitor's WebView (the SW conflicts with the
+      // app-asset scheme and white-screens the APP on boot). On the web
+      // side, registration still happens — just via the virtual:pwa-register
+      // module loaded from main.jsx.
+      injectRegister: false,
       // Files the SW pre-caches so the app shell opens offline.
       includeAssets: ['favicon.jpg'],
       manifest: {

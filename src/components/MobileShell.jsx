@@ -57,9 +57,9 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         background: "var(--bg)",
         padding: "14px 14px 0",
         paddingTop: "max(env(safe-area-inset-top), 14px)",
-        // Reserve room for the position: fixed bottom nav (~56px content
+        // Reserve room for the position: fixed bottom nav (~64px content
         // + safe-area). Tab content inside main lays out above this padding.
-        paddingBottom: "calc(64px + env(safe-area-inset-bottom))",
+        paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
       }}>
         {children}
       </main>
@@ -89,16 +89,16 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
                 borderTop: active ? "2px solid var(--ink-1)" : "2px solid transparent",
                 marginTop: -1,
                 padding: "10px 4px 12px",
-                minHeight: 56,
+                minHeight: 64,
                 fontFamily: "var(--font-sans)",
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: active ? 600 : 500,
                 color: active ? "var(--ink-1)" : "var(--ink-3)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: 3,
+                gap: 5,
                 borderRadius: 0,
                 cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
@@ -111,18 +111,18 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
                 justifyContent: "center",
                 color: active ? "var(--ink-1)" : "var(--ink-3)",
               }}>
-                <Icon size={15} />
+                <Icon size={20} />
                 {showSpinner && (
                   <span style={{
                     position: "absolute",
-                    right: -8,
-                    top: -5,
+                    right: -10,
+                    top: -6,
                     color: "var(--moss)",
                     background: "var(--bg-elevated)",
                     borderRadius: 8,
                     lineHeight: 0,
                   }}>
-                    <Spinner size={9} thickness={1.4} color="var(--moss)" />
+                    <Spinner size={11} thickness={1.4} color="var(--moss)" />
                   </span>
                 )}
               </span>

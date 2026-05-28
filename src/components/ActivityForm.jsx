@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
-import { parseTimeToSeconds, formatPaceFromSec, recommendRunType } from "../utils/format";
+import { recommendRunType } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
+import { useIsMobile } from "../hooks/useMediaQuery";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -46,12 +47,20 @@ function buildEmpty() {
     ascent: "",
     cadence: "",
     aerobicTE: "",
-    gapText: "",
+    // GAP is stored as two parts: minutes (single digit, 0–9) and seconds
+    // (two digits, 0–59). Combined at save time. The split avoids forcing
+    // the user to type a colon on a mobile numeric keyboard.
+    gapMin: "", gapSec: "",
   };
 }
 
 function fromLog(log) {
   const d = splitDuration(log.duration || 0);
+  // GAP is stored in seconds (e.g. 390 = "6:30/km"). Split back into
+  // mm/ss for the two-input UI; empty strings when no GAP recorded.
+  const gapSec = log.gap || 0;
+  const gapMm = gapSec > 0 ? Math.floor(gapSec / 60) : "";
+  const gapSs = gapSec > 0 ? gapSec % 60 : "";
   return {
     date: normalizeDate(log.date),
     startedAtLocal: formatLocalDateTimeForInput(log.startedAt),
@@ -64,7 +73,8 @@ function fromLog(log) {
     ascent:    log.ascent    ? String(log.ascent)    : "",
     cadence:   log.cadence   ? String(log.cadence)   : "",
     aerobicTE: log.aerobicTE ? String(log.aerobicTE) : "",
-    gapText:   log.gap       ? formatPaceFromSec(log.gap) : "",
+    gapMin:    gapMm === "" ? "" : String(gapMm),
+    gapSec:    gapSs === "" ? "" : String(gapSs).padStart(2, "0"),
   };
 }
 
@@ -81,6 +91,7 @@ function LabeledInput({ label, unit, value, onChange, placeholder, type = "numbe
 
 export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const t = useT();
+  const isMobile = useIsMobile();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
   // Snapshot of the form's initial state — used to detect unsaved changes when
   // the user clicks outside in edit mode.
@@ -182,7 +193,9 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       ascent:    showAscent ? (parseInt(form.ascent) || 0) : 0,
       cadence:   showCadenceAndGap ? (parseInt(form.cadence) || 0) : 0,
       aerobicTE: parseFloat(form.aerobicTE)|| 0,
-      gap:       showCadenceAndGap ? (parseTimeToSeconds(form.gapText) || 0) : 0,
+      gap:       showCadenceAndGap
+        ? ((parseInt(form.gapMin) || 0) * 60 + (parseInt(form.gapSec) || 0))
+        : 0,
     });
   }
 
@@ -241,6 +254,9 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {RUN_PACE_TYPES.map(sub => {
                 const isSuggested = suggested && sub === suggested && pickedPace !== sub;
+                // Mobile drops the "Run" suffix — the column is too narrow
+                // for "Easy Run · suggested" to fit on one line.
+                const label = isMobile ? t(`enum.subtype.${sub}_short`) : t(`enum.subtype.${sub}`);
                 return (
                   <button key={sub} type="button"
                     onClick={() => setPace(pickedPace === sub ? "" : sub)}
@@ -249,7 +265,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
                       ...s.chip(pickedPace === sub),
                       ...(isSuggested ? { boxShadow: "0 0 0 1px var(--moss)", color: "var(--moss-deep)" } : {}),
                     }}>
-                    {t(`enum.subtype.${sub}`)}{isSuggested ? ` · ${t("form.run_type_suggested")}` : ""}
+                    {label}{isSuggested ? ` · ${t("form.run_type_suggested")}` : ""}
                   </button>
                 );
               })}
@@ -328,11 +344,69 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
       </div>
 
-      {/* GAP — road running only. Stays in a 3-col grid for visual consistency. */}
+      {/* GAP — road running only. Two number inputs split by a fixed colon
+          so the user types digits only (mobile keyboard never has to flip
+          to symbols for ":"). Minutes: 1 digit (0–9); seconds: 2 digits
+          (0–59). Combined back to seconds at save time. */}
       {showCadenceAndGap && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
-          <LabeledInput label={t("form.gap")} unit="min/km" placeholder="6:30" type="text"
-            value={form.gapText} onChange={e => setForm({ ...form, gapText: e.target.value })} />
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+              {t("form.gap")}<span style={{ color: "#aaa", fontWeight: 400 }}> (min/km)</span>
+            </span>
+            <div style={{
+              display: "flex", alignItems: "stretch",
+              border: "1px solid var(--rule)",
+              borderRadius: 2,
+              background: "var(--bg-elevated)",
+              overflow: "hidden",
+            }}>
+              <input
+                type="number" inputMode="numeric" min="0" max="9" maxLength={1}
+                placeholder="6" value={form.gapMin}
+                onChange={e => {
+                  // Keep at most 1 digit; allow empty so the field clears
+                  const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 1);
+                  setForm({ ...form, gapMin: v });
+                }}
+                aria-label={t("form.minutes")}
+                style={{
+                  flex: 1, width: "100%", boxSizing: "border-box",
+                  border: "none", background: "transparent",
+                  padding: "10px 8px", fontSize: 14,
+                  textAlign: "center", outline: "none",
+                  fontFamily: "var(--font-sans)",
+                  fontVariantNumeric: "tabular-nums",
+                }} />
+              <span style={{
+                display: "inline-flex", alignItems: "center", padding: "0 6px",
+                fontSize: 16, fontWeight: 600, color: "var(--ink-2)",
+                fontFamily: "var(--font-mono)", userSelect: "none",
+              }}>:</span>
+              <input
+                type="number" inputMode="numeric" min="0" max="59" maxLength={2}
+                placeholder="30" value={form.gapSec}
+                onChange={e => {
+                  const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 2);
+                  setForm({ ...form, gapSec: v });
+                }}
+                onBlur={e => {
+                  // Pad to 2 digits on blur so it reads as "06" not "6".
+                  if (e.target.value && e.target.value.length === 1) {
+                    setForm({ ...form, gapSec: e.target.value.padStart(2, "0") });
+                  }
+                }}
+                aria-label={t("form.seconds")}
+                style={{
+                  flex: 1, width: "100%", boxSizing: "border-box",
+                  border: "none", background: "transparent",
+                  padding: "10px 8px", fontSize: 14,
+                  textAlign: "center", outline: "none",
+                  fontFamily: "var(--font-sans)",
+                  fontVariantNumeric: "tabular-nums",
+                }} />
+            </div>
+          </label>
         </div>
       )}
 

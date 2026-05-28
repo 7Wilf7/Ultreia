@@ -175,6 +175,16 @@ export const RACE_PRIORITY = ["A", "B", "C"];
 // longest/hardest. PR view ranks by this order (Ultra > Beast > Super > Sprint).
 export const SPARTAN_SUBTYPES = ["Sprint", "Super", "Beast", "Ultra"];
 
+// Official Spartan Race brand colors per tier. Used as the chip background
+// so race rows / tier pickers carry the same visual language the user sees
+// at the events themselves. Source: spartan.com event branding.
+export const SPARTAN_TIER_COLOR = {
+  Sprint: "#c1272d",   /* spartan red    */
+  Super:  "#1a5bb8",   /* spartan blue   */
+  Beast:  "#2e7d32",   /* spartan green  */
+  Ultra:  "#141413",   /* spartan black  */
+};
+
 // Race categories — used for PR auto-aggregation and as a list-view tag.
 // Order matters: PR bar + form dropdowns iterate this array, so this is the
 // canonical display order (10K shortest road → progressively bigger / more

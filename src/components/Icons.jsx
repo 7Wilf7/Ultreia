@@ -230,3 +230,13 @@ export function PinIcon({ size = 13 }) {
     </svg>
   );
 }
+
+// Stylised cloud — used for the Weather API entry in the desktop top bar.
+// Outline only, so it matches the rest of the monoline icon set.
+export function CloudIcon({ size = 13 }) {
+  return (
+    <svg {...baseProps(size)}>
+      <path d="M4 9.5 C2.6 9.5 2 8.5 2 7.5 C2 6.4 2.9 5.5 4 5.5 C4.1 4 5.3 3 6.7 3 C8 3 9.1 3.9 9.4 5.1 C10.6 5.2 11.5 6.1 11.5 7.3 C11.5 8.6 10.5 9.5 9.2 9.5 Z" />
+    </svg>
+  );
+}

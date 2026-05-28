@@ -15,6 +15,7 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { LocationSettingsModal } from "./components/LocationSettingsModal";
+import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { Spinner } from "./components/Spinner";
@@ -23,12 +24,13 @@ import { LoginScreen } from "./components/Auth/LoginScreen";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
-  BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, PinIcon, SettingsIcon, TrophyIcon,
+  BookIcon, CalendarIcon, CloudIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, PinIcon, SettingsIcon, TrophyIcon,
 } from "./components/Icons";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext } from "./lib/weather";
+import { postJson } from "./lib/apiFetch";
 
 function LoadingScreen() {
   return (
@@ -93,6 +95,11 @@ function AuthedApp({ user, signOut, changePassword }) {
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
   // (or null when unset), name is a free-text label the user types in.
   const [defaultLocation, setDefaultLocationState] = useState({ lng: null, lat: null, name: "" });
+  // Optional Caiyun Weather token — empty falls back to the shared server
+  // token. Persisted to user_settings.caiyun_api_key so it follows the
+  // user across devices (whereas the AI provider's claudeEndpointId stays
+  // local because the right mirror is per-network not per-user).
+  const [caiyunApiKey, setCaiyunApiKeyState] = useState("");
   const [dataLoading, setDataLoading] = useState(true);
 
   // Fetch profile + user_settings + workouts once the auth'd user is known.
@@ -142,6 +149,7 @@ function AuthedApp({ user, signOut, changePassword }) {
             lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
             name: settingsData.defaultLocationName || "",
           });
+          setCaiyunApiKeyState(settingsData.caiyunApiKey || "");
         }
 
         // Workouts — list already sorted date desc, created_at desc by the DAL.
@@ -204,6 +212,7 @@ function AuthedApp({ user, signOut, changePassword }) {
     if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
     if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
     if ("lang" in patch) setLangState(patch.lang);
+    if ("caiyunApiKey" in patch) setCaiyunApiKeyState(patch.caiyunApiKey || "");
     try {
       await db.userSettings.updateMySettings(patch);
     } catch (err) {
@@ -223,6 +232,7 @@ function AuthedApp({ user, signOut, changePassword }) {
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
   const setLang = (v) => updateSettings({ lang: v });
+  const setCaiyunApiKey = (v) => updateSettings({ caiyunApiKey: v });
   // Patch the local state immediately AND persist to Supabase. updateSettings()
   // doesn't refresh local state, so we do it eagerly here so the Settings page
   // and any new addLog calls see the latest values without waiting for a
@@ -255,6 +265,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         startedAt: workoutData.startedAt,
         lng: loc.lng,
         lat: loc.lat,
+        caiyunToken: caiyunApiKey,
       });
       return snap;
     } catch (err) {
@@ -263,57 +274,142 @@ function AuthedApp({ user, signOut, changePassword }) {
     }
   }
 
-  // ── Workout mutations (3.3c). Server-side write completes before local
-  // state updates so we pick up the server-generated id / created_at. ──────
-  async function addLog(workoutData, { source = "manual" } = {}) {
-    try {
-      let payload = workoutData;
-      // Only manually-entered activities get a fresh weather snapshot; bulk
-      // CSV imports and calendar plans use the source branches that skip it.
-      if (source === "manual" && !workoutData.weather && !workoutData.isPlanned) {
-        const weather = await captureWeatherForNewWorkout(workoutData);
-        if (weather) payload = { ...workoutData, weather };
+  // ── Workout mutations — OPTIMISTIC.
+  //
+  // The classic "await DB → setState → resolve" flow makes save / delete
+  // feel laggy because the user's click can't close the form / modal until
+  // a network roundtrip lands. With weather snapshotting layered on top
+  // that was 1–3 seconds of dead-screen on every manual save.
+  //
+  // We now resolve the user-facing promise IMMEDIATELY after patching
+  // local state. The DB write (and any side work like weather capture)
+  // runs in a background task; success quietly swaps the optimistic row
+  // for the canonical one, failure rolls back and surfaces an alert.
+  //
+  // Trade-offs:
+  //  - Callers can't rely on the returned `id` being final — they get a
+  //    `temp-…` placeholder. None of our current call sites need the real
+  //    id, but new code should pull from the latest `logs` array.
+  //  - If the user edits an optimistic row before the background insert
+  //    finishes, that update will fail (no real id yet). We surface the
+  //    alert and revert; users can retry once the row settles.
+  function makeTempId(prefix = "temp") {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  function addLog(workoutData, { source = "manual" } = {}) {
+    const tempId = makeTempId();
+    const optimistic = {
+      id: tempId,
+      // Match the shape the DAL returns so downstream renderers don't
+      // blow up trying to read e.g. .subTypes on undefined.
+      ...workoutData,
+      subTypes: workoutData.subTypes || [],
+      weather: workoutData.weather || null,
+      isPlanned: !!workoutData.isPlanned,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true,
+    };
+    setLogs(prev => [optimistic, ...prev]);
+
+    // Background: weather snapshot (slowest piece) then DB insert. Both
+    // fire-and-forget; the user already saw their row.
+    (async () => {
+      try {
+        let payload = workoutData;
+        if (source === "manual" && !workoutData.weather && !workoutData.isPlanned) {
+          const weather = await captureWeatherForNewWorkout(workoutData);
+          if (weather) payload = { ...workoutData, weather };
+        }
+        const created = await db.workouts.createWorkout(payload, { source });
+        setLogs(prev => prev.map(l => l.id === tempId ? created : l));
+      } catch (err) {
+        console.error("[addLog] background save failed:", err);
+        setLogs(prev => prev.filter(l => l.id !== tempId));
+        window.alert("Failed to add workout: " + err.message);
       }
-      const created = await db.workouts.createWorkout(payload, { source });
-      setLogs(prev => [created, ...prev]);
-      return created;
-    } catch (err) {
-      window.alert("Failed to add workout: " + err.message);
-      throw err;
-    }
+    })();
+
+    return Promise.resolve(optimistic);
   }
 
-  async function updateLog(id, patch) {
-    try {
-      const updated = await db.workouts.updateWorkout(id, patch);
-      setLogs(prev => prev.map(l => l.id === id ? updated : l));
-      return updated;
-    } catch (err) {
-      window.alert("Failed to update workout: " + err.message);
-      throw err;
-    }
+  function updateLog(id, patch) {
+    // Snapshot the row inside the setter so we get the most recent state,
+    // not a stale closure read.
+    let snapshot = null;
+    setLogs(prev => {
+      snapshot = prev.find(l => l.id === id) || null;
+      return prev.map(l => l.id === id ? { ...l, ...patch } : l);
+    });
+
+    (async () => {
+      try {
+        const updated = await db.workouts.updateWorkout(id, patch);
+        setLogs(prev => prev.map(l => l.id === id ? updated : l));
+      } catch (err) {
+        console.error("[updateLog] background save failed:", err);
+        if (snapshot) setLogs(prev => prev.map(l => l.id === id ? snapshot : l));
+        window.alert("Failed to update workout: " + err.message);
+      }
+    })();
+
+    return Promise.resolve();
   }
 
-  async function bulkAddLogs(workouts, { source = "garmin_csv" } = {}) {
-    try {
-      const created = await db.workouts.bulkInsertWorkouts(workouts, { source });
-      setLogs(prev => [...created, ...prev]);
-      return created;
-    } catch (err) {
-      window.alert(err.message);
-      throw err;
-    }
+  function bulkAddLogs(workouts, { source = "garmin_csv" } = {}) {
+    const optimistics = workouts.map(w => ({
+      id: makeTempId("bulk"),
+      ...w,
+      subTypes: w.subTypes || [],
+      weather: w.weather || null,
+      isPlanned: !!w.isPlanned,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true,
+    }));
+    setLogs(prev => [...optimistics, ...prev]);
+
+    (async () => {
+      try {
+        const created = await db.workouts.bulkInsertWorkouts(workouts, { source });
+        const tempIds = new Set(optimistics.map(o => o.id));
+        // Replace all temp rows with the persisted ones in one pass.
+        setLogs(prev => [...created, ...prev.filter(l => !tempIds.has(l.id))]);
+      } catch (err) {
+        console.error("[bulkAddLogs] background save failed:", err);
+        const tempIds = new Set(optimistics.map(o => o.id));
+        setLogs(prev => prev.filter(l => !tempIds.has(l.id)));
+        window.alert(err.message);
+      }
+    })();
+
+    return Promise.resolve(optimistics);
   }
 
-  async function deleteLogs(ids) {
+  function deleteLogs(ids) {
     const idArr = Array.isArray(ids) ? ids : [ids];
-    try {
-      await db.workouts.deleteWorkouts(idArr);
-      setLogs(prev => prev.filter(l => !idArr.includes(l.id)));
-    } catch (err) {
-      window.alert("Failed to delete workout: " + err.message);
-      throw err;
-    }
+    const idSet = new Set(idArr);
+    let removed = [];
+    setLogs(prev => {
+      removed = prev.filter(l => idSet.has(l.id));
+      return prev.filter(l => !idSet.has(l.id));
+    });
+    // Skip the DB call for optimistic rows that were never persisted
+    // (user added then immediately deleted). For mixed batches we still
+    // call delete with the real ids only.
+    const realIds = idArr.filter(id => !String(id).startsWith("temp-") && !String(id).startsWith("bulk-"));
+
+    (async () => {
+      if (realIds.length === 0) return;
+      try {
+        await db.workouts.deleteWorkouts(realIds);
+      } catch (err) {
+        console.error("[deleteLogs] background delete failed:", err);
+        setLogs(prev => [...removed, ...prev]);
+        window.alert("Failed to delete workout: " + err.message);
+      }
+    })();
+
+    return Promise.resolve();
   }
 
   // On-demand refetch — used by AI Coach right before sendChat to guarantee
@@ -327,38 +423,74 @@ function AuthedApp({ user, signOut, changePassword }) {
     return fresh;
   }
 
-  // ── Race mutations (3.3d). Same shape as workouts: await server, then
-  // patch local state with the canonical row. ─────────────────────────────
-  async function addRace(raceData) {
-    try {
-      const created = await db.races.createRace(raceData);
-      setRaces(prev => [created, ...prev]);
-      return created;
-    } catch (err) {
-      window.alert("Failed to add race: " + err.message);
-      throw err;
-    }
+  // ── Race mutations — also OPTIMISTIC, same pattern as workouts above.
+  function addRace(raceData) {
+    const tempId = makeTempId("race");
+    const optimistic = {
+      id: tempId,
+      ...raceData,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true,
+    };
+    setRaces(prev => [optimistic, ...prev]);
+
+    (async () => {
+      try {
+        const created = await db.races.createRace(raceData);
+        setRaces(prev => prev.map(r => r.id === tempId ? created : r));
+      } catch (err) {
+        console.error("[addRace] background save failed:", err);
+        setRaces(prev => prev.filter(r => r.id !== tempId));
+        window.alert("Failed to add race: " + err.message);
+      }
+    })();
+
+    return Promise.resolve(optimistic);
   }
 
-  async function updateRace(id, patch) {
-    try {
-      const updated = await db.races.updateRace(id, patch);
-      setRaces(prev => prev.map(r => r.id === id ? updated : r));
-      return updated;
-    } catch (err) {
-      window.alert("Failed to update race: " + err.message);
-      throw err;
-    }
+  function updateRace(id, patch) {
+    let snapshot = null;
+    setRaces(prev => {
+      snapshot = prev.find(r => r.id === id) || null;
+      return prev.map(r => r.id === id ? { ...r, ...patch } : r);
+    });
+
+    (async () => {
+      try {
+        const updated = await db.races.updateRace(id, patch);
+        setRaces(prev => prev.map(r => r.id === id ? updated : r));
+      } catch (err) {
+        console.error("[updateRace] background save failed:", err);
+        if (snapshot) setRaces(prev => prev.map(r => r.id === id ? snapshot : r));
+        window.alert("Failed to update race: " + err.message);
+      }
+    })();
+
+    return Promise.resolve();
   }
 
-  async function deleteRace(id) {
-    try {
-      await db.races.deleteRace(id);
-      setRaces(prev => prev.filter(r => r.id !== id));
-    } catch (err) {
-      window.alert("Failed to delete race: " + err.message);
-      throw err;
+  function deleteRace(id) {
+    let removed = null;
+    setRaces(prev => {
+      removed = prev.find(r => r.id === id) || null;
+      return prev.filter(r => r.id !== id);
+    });
+    const idStr = String(id);
+    if (idStr.startsWith("race-") || idStr.startsWith("temp-")) {
+      // Optimistic row was never written; nothing to do.
+      return Promise.resolve();
     }
+    (async () => {
+      try {
+        await db.races.deleteRace(id);
+      } catch (err) {
+        console.error("[deleteRace] background delete failed:", err);
+        if (removed) setRaces(prev => [removed, ...prev]);
+        window.alert("Failed to delete race: " + err.message);
+      }
+    })();
+
+    return Promise.resolve();
   }
 
   // ── Coach message mutations (3.3e). Chat is append-only at the row level;
@@ -375,31 +507,60 @@ function AuthedApp({ user, signOut, changePassword }) {
     }
   }
 
-  async function clearAllChatMessages() {
-    try {
-      await db.coachMessages.clearAllMessages();
-      setChatMessages([]);
-    } catch (err) {
-      window.alert("Failed to clear messages: " + err.message);
-      throw err;
-    }
+  function clearAllChatMessages() {
+    // Optimistic clear so the user sees the panel empty instantly.
+    let snapshot = [];
+    setChatMessages(prev => { snapshot = prev; return []; });
+    (async () => {
+      try {
+        await db.coachMessages.clearAllMessages();
+      } catch (err) {
+        console.error("[clearAllChatMessages] background failed:", err);
+        setChatMessages(snapshot);
+        window.alert("Failed to clear messages: " + err.message);
+      }
+    })();
+    return Promise.resolve();
   }
 
-  // ── Daily notes — upsert by date, [] clears the row server-side. We
-  // replace the matching local entry on success; if the result is null
-  // (server deleted because tags=[]), drop the entry locally.
-  async function setDailyTags(date, tags) {
-    try {
-      const updated = await db.dailyNotes.setDailyTags(date, tags);
-      setDailyNotes(prev => {
-        const without = prev.filter(n => n.date !== date);
-        return updated ? [updated, ...without] : without;
-      });
-      return updated;
-    } catch (err) {
-      window.alert("Failed to update daily tags: " + err.message);
-      throw err;
-    }
+  // ── Daily notes — upsert by date, [] clears the row server-side.
+  // Optimistic: patch local state from `tags` (we don't have a server row
+  // yet, but the shape is straightforward) and replace with the canonical
+  // row on success / roll back on failure.
+  function setDailyTags(date, tags) {
+    let snapshot = null;
+    setDailyNotes(prev => {
+      snapshot = prev.find(n => n.date === date) || null;
+      const without = prev.filter(n => n.date !== date);
+      if (!tags || tags.length === 0) return without;
+      const optimistic = {
+        ...(snapshot || {}),
+        date,
+        tags,
+        // Mark so renderers can render a subtle "saving…" hint if they want.
+        isOptimistic: true,
+      };
+      return [optimistic, ...without];
+    });
+
+    (async () => {
+      try {
+        const updated = await db.dailyNotes.setDailyTags(date, tags);
+        setDailyNotes(prev => {
+          const without = prev.filter(n => n.date !== date);
+          return updated ? [updated, ...without] : without;
+        });
+      } catch (err) {
+        console.error("[setDailyTags] background save failed:", err);
+        setDailyNotes(prev => {
+          const without = prev.filter(n => n.date !== date);
+          return snapshot ? [snapshot, ...without] : without;
+        });
+        window.alert("Failed to update daily tags: " + err.message);
+      }
+    })();
+
+    return Promise.resolve();
   }
 
   // Transient, in-memory only — used for error fallback bubbles (API error,
@@ -442,6 +603,7 @@ function AuthedApp({ user, signOut, changePassword }) {
         coachMemory={coachMemory} setCoachMemory={setCoachMemory}
         lang={lang} setLang={setLang}
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
+        caiyunApiKey={caiyunApiKey} setCaiyunApiKey={setCaiyunApiKey}
       />
     </LanguageProvider>
   );
@@ -462,6 +624,7 @@ function AppShell({
   coachMemory, setCoachMemory,
   lang, setLang,
   defaultLocation, setDefaultLocation,
+  caiyunApiKey, setCaiyunApiKey,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -475,6 +638,7 @@ function AppShell({
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showApiSettings, setShowApiSettings] = useState(false);
+  const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
   const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
@@ -502,6 +666,7 @@ function AppShell({
   const weatherCtx = useWeatherContext({
     defaultLng: defaultLocation?.lng,
     defaultLat: defaultLocation?.lat,
+    caiyunToken: caiyunApiKey,
   });
 
   // ── Lifted sendChat — talks to DeepSeek's Anthropic-compat endpoint.
@@ -570,20 +735,23 @@ function AppShell({
     }
 
     try {
-      const resp = await fetch(endpointUrl, {
-        method: "POST",
+      // postJson goes through CapacitorHttp on the APK so the WebView can
+      // be backgrounded mid-request without the OS killing the connection.
+      // On web it falls back to plain fetch.
+      const resp = await postJson({
+        url: endpointUrl,
         headers: {
           "Content-Type": "application/json",
           "x-api-key": activeKey,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
-        body: JSON.stringify({
+        body: {
           model: apiModel,
           max_tokens: 8000,
           system: systemPrompt,
           messages: messagesToSend,
-        }),
+        },
       });
       // Detect "server returned HTML instead of JSON" up-front — that's the
       // classic symptom of a wrong endpoint URL (path 404'd, response is a
@@ -662,19 +830,22 @@ Rules:
 - Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
 
     try {
-      const resp = await fetch(endpointUrl, {
-        method: "POST",
+      // Same native-HTTP-aware POST as sendChat — the plan-extraction call
+      // benefits from backgrounding tolerance too (it can run for several
+      // seconds, and the user might tab away).
+      const resp = await postJson({
+        url: endpointUrl,
         headers: {
           "Content-Type": "application/json",
           "x-api-key": activeKey,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
-        body: JSON.stringify({
+        body: {
           model: apiModel,
           max_tokens: 8000,
           messages: [{ role: "user", content: extractPrompt }],
-        }),
+        },
       });
       const data = await resp.json();
       if (!resp.ok || data.error) {
@@ -696,14 +867,12 @@ Rules:
     }
   }
 
-  async function confirmImportPlans(workouts) {
-    try {
-      await bulkAddLogs(workouts, { source: "ai_coach_plan" });
-      setPlanProposal(null);
-      alert(t("coach.import_success", { n: workouts.length }));
-    } catch {
-      // bulkAddLogs already alerted; keep modal open for retry
-    }
+  function confirmImportPlans(workouts) {
+    // bulkAddLogs is optimistic — the rows appear on Calendar before this
+    // returns. Close the review modal immediately and skip the "success"
+    // alert (which used to compete with a possible later failure alert).
+    bulkAddLogs(workouts, { source: "ai_coach_plan" });
+    setPlanProposal(null);
   }
 
   // True when ANY long-running AI Coach operation is in flight. Used to
@@ -733,21 +902,17 @@ Rules:
     return () => document.removeEventListener("click", onClick);
   }, []);
 
-  async function executeDelete() {
+  function executeDelete() {
     if (!confirmDelete) return;
-    if (confirmDelete.type === "log") {
-      await deleteLogs([confirmDelete.id]);
-    }
-    if (confirmDelete.type === "logs") {
-      await deleteLogs(confirmDelete.ids);
-    }
-    if (confirmDelete.type === "race") {
-      await deleteRace(confirmDelete.id);
-    }
-    if (confirmDelete.type === "chat") {
-      await clearAllChatMessages();
-    }
+    // Close the confirm modal IMMEDIATELY. Each delete fn is optimistic so
+    // the corresponding row(s) are already gone from local state; the DB
+    // delete runs in the background and surfaces a rollback alert on fail.
+    const cd = confirmDelete;
     setConfirmDelete(null);
+    if (cd.type === "log") deleteLogs([cd.id]);
+    else if (cd.type === "logs") deleteLogs(cd.ids);
+    else if (cd.type === "race") deleteRace(cd.id);
+    else if (cd.type === "chat") clearAllChatMessages();
   }
 
   function toggleLang() {
@@ -911,6 +1076,14 @@ Rules:
         />
       )}
 
+      {showWeatherApiSettings && (
+        <WeatherApiSettingsModal
+          caiyunApiKey={caiyunApiKey}
+          setCaiyunApiKey={setCaiyunApiKey}
+          onClose={() => setShowWeatherApiSettings(false)}
+        />
+      )}
+
       {/* Plan-import review modal — rendered at AppShell level (not inside
           AICoachTab) so the user sees it pop up even if they walked away
           from the AI Coach tab while the extraction was running. */}
@@ -932,10 +1105,12 @@ Rules:
         user={user}
         profile={profile}
         apiKey={apiKey}
+        caiyunApiKey={caiyunApiKey}
         lang={lang}
         defaultLocation={defaultLocation}
         onOpenProfile={() => setProfileEditorMode("edit")}
         onOpenApiSettings={() => setShowApiSettings(true)}
+        onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
         onOpenLocationSettings={() => setShowLocationSettings(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
@@ -1060,6 +1235,10 @@ Rules:
             <button onClick={() => setShowLocationSettings(true)} title={t("settings.location")}
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <PinIcon size={13} />
+            </button>
+            <button onClick={() => setShowWeatherApiSettings(true)} title={t("settings.weather_api")}
+              style={{ ...headerCell, width: 38, padding: 0 }}>
+              <CloudIcon size={13} />
             </button>
             <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
               style={{ ...headerCell, width: 38, padding: 0 }}>

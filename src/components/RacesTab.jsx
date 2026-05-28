@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES } from "../constants";
+import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
@@ -219,6 +219,22 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
         ))}
       </div>
     );
+  }
+
+  // Spartan tier ribbon — colored bg using the official tier palette so the
+  // race card visually carries the same red/blue/green/black signal as the
+  // event. Non-Spartan subtypes (none currently) fall back to the plain
+  // outlined subTag style.
+  function spartanTierStyle(tier) {
+    const color = SPARTAN_TIER_COLOR[tier];
+    if (!color) return s.subTag;
+    return {
+      ...s.subTag,
+      background: color,
+      borderColor: color,
+      color: "var(--ink-inv)",
+      fontWeight: 600,
+    };
   }
 
   function renderCategoryTag(cat) {
@@ -537,7 +553,9 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
               }}>▲ {r.priority}</span>
             )}
             {renderCategoryTag(r.category)}
-            {r.subtype && <span style={{ ...s.subTag, flexShrink: 0 }}>{r.subtype}</span>}
+            {r.subtype && (
+              <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{r.subtype}</span>
+            )}
             <div style={{ flex: 1 }} />
             <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
               aria-label="Delete"
@@ -629,7 +647,7 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
               {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
             </select>
           )}
-          {r.subtype && <span style={s.subTag}>{r.subtype}</span>}
+          {r.subtype && <span style={spartanTierStyle(r.subtype)}>{r.subtype}</span>}
         </div>
 
         {/* name — fills remaining space, truncates */}
@@ -778,16 +796,34 @@ export function RacesTab({ races, addRace, updateRace, now, setConfirmDelete, it
         )}
 
         {/* Spartan-only: pick the event tier. Acts as the "size" signal in
-            place of distance/ascent for this category. */}
+            place of distance/ascent for this category. Each tier chip wears
+            its official Spartan brand color when selected so the form
+            visually matches the event's bib / signage palette. */}
         {isSpartan && (
           <div style={{ marginBottom: 10 }}>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("races.spartan_tier")}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {SPARTAN_SUBTYPES.map(st => (
-                <button key={st} type="button"
-                  onClick={() => setNewRace({ ...newRace, subtype: st })}
-                  style={s.chip(newRace.subtype === st)}>{t(`enum.spartan.${st}`)}</button>
-              ))}
+              {SPARTAN_SUBTYPES.map(st => {
+                const active = newRace.subtype === st;
+                const tierColor = SPARTAN_TIER_COLOR[st];
+                return (
+                  <button key={st} type="button"
+                    onClick={() => setNewRace({ ...newRace, subtype: st })}
+                    style={{
+                      ...s.chip(active),
+                      ...(active && tierColor ? {
+                        background: tierColor,
+                        borderColor: tierColor,
+                        color: "var(--ink-inv)",
+                      } : tierColor ? {
+                        // Even when not picked, show a small color hint on the
+                        // left so the user can map tier ↔ color at a glance.
+                        boxShadow: `inset 4px 0 0 ${tierColor}`,
+                        paddingLeft: 14,
+                      } : {}),
+                    }}>{t(`enum.spartan.${st}`)}</button>
+                );
+              })}
             </div>
           </div>
         )}

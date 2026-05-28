@@ -19,9 +19,9 @@ function emailPrefix(email) {
 }
 
 // Email cell is a dropdown trigger — opens a small menu with Change password
-// + Sign out. Clicking outside or on a menu item closes it. The Sign out
-// cell stays as a separate sibling on desktop so the most common action
-// (sign out) is still one click — the menu only adds the less-common option.
+// + Sign out. Both actions live INSIDE the dropdown so the email becomes the
+// single anchor for account-level operations, matching the mobile "tap
+// email → menu" pattern.
 export function UserBadge({ user, signOut, onChangePassword }) {
   const t = useT();
   const [signingOut, setSigningOut] = useState(false);
@@ -99,26 +99,30 @@ export function UserBadge({ user, signOut, onChangePassword }) {
                 padding: "10px 14px", fontSize: 13, fontFamily: "var(--font-sans)",
                 color: "var(--ink-1)",
                 background: "transparent", border: "none",
+                borderBottom: "1px solid var(--rule-soft)",
                 borderRadius: 0, cursor: "pointer",
               }}
             >
               {t("settings.change_password")}
             </button>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); handleSignOut(); }}
+              disabled={signingOut}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "10px 14px", fontSize: 13, fontFamily: "var(--font-sans)",
+                color: signingOut ? "var(--ink-3)" : "var(--danger)",
+                background: "transparent", border: "none",
+                borderRadius: 0,
+                cursor: signingOut ? "default" : "pointer",
+              }}
+            >
+              {signingOut ? "…" : t("settings.sign_out")}
+            </button>
           </div>
         )}
       </span>
-      <button
-        onClick={handleSignOut}
-        disabled={signingOut}
-        title="Sign out"
-        style={{
-          ...cellBase,
-          color: signingOut ? "var(--ink-3)" : "var(--ink-2)",
-          cursor: signingOut ? "default" : "pointer",
-        }}
-      >
-        {signingOut ? "…" : "Sign out"}
-      </button>
     </>
   );
 }

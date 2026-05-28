@@ -69,13 +69,17 @@ export async function getCurrentLocation({ defaultLng, defaultLat } = {}) {
 
 // Wrapper around the proxy. Throws on non-2xx so callers can decide between
 // "show error" and "fail silently and skip weather chip".
-async function fetchProxy({ lng, lat, type, begin }) {
+// `caiyunToken` (optional) — the user's own Caiyun token. When present the
+// proxy uses it instead of the Vercel-side fallback so the user spends
+// their own daily quota. Empty / undefined keeps the legacy behaviour.
+async function fetchProxy({ lng, lat, type, begin, caiyunToken }) {
   const params = new URLSearchParams({
     lng: String(roundCoord(lng)),
     lat: String(roundCoord(lat)),
     type,
   });
   if (begin) params.set('begin', String(Math.floor(begin)));
+  if (caiyunToken) params.set('token', caiyunToken);
   const base = isNative() ? WEATHER_PROXY_ORIGIN : '';
   const resp = await fetch(`${base}/api/weather?${params.toString()}`);
   if (!resp.ok) {
@@ -160,8 +164,8 @@ function buildSnapshot({
 }
 
 // Pull realtime weather and reduce to a snapshot. lng/lat caller's job.
-export async function fetchRealtimeSnapshot({ lng, lat }) {
-  const data = await fetchProxy({ lng, lat, type: 'realtime' });
+export async function fetchRealtimeSnapshot({ lng, lat, caiyunToken }) {
+  const data = await fetchProxy({ lng, lat, type: 'realtime', caiyunToken });
   const r = data.result?.realtime;
   if (!r) throw new Error('caiyun_realtime_missing_result');
   return buildSnapshot({
@@ -182,10 +186,10 @@ export async function fetchRealtimeSnapshot({ lng, lat }) {
 // Historical weather for a specific moment in the past 24h. Caiyun's
 // hourly endpoint with `begin=` returns 24 hours of past hourly data;
 // we pick the hour closest to the requested timestamp.
-export async function fetchHistoricalSnapshot({ lng, lat, when }) {
+export async function fetchHistoricalSnapshot({ lng, lat, when, caiyunToken }) {
   const beginSec = Math.floor(new Date(when).getTime() / 1000);
   if (!Number.isFinite(beginSec)) throw new Error('invalid_when');
-  const data = await fetchProxy({ lng, lat, type: 'historical', begin: beginSec });
+  const data = await fetchProxy({ lng, lat, type: 'historical', begin: beginSec, caiyunToken });
   const hourly = data.result?.hourly;
   if (!hourly) throw new Error('caiyun_historical_missing_result');
   const wantedMs = beginSec * 1000;
@@ -223,8 +227,8 @@ export async function fetchHistoricalSnapshot({ lng, lat, when }) {
 // Daily forecast for the next 7 days. Used by the calendar for future dates
 // and by the AI Coach for planned workout days. Returns an array of
 // snapshots, one per day, keyed by YYYY-MM-DD (local).
-export async function fetchDailyForecasts({ lng, lat }) {
-  const data = await fetchProxy({ lng, lat, type: 'daily' });
+export async function fetchDailyForecasts({ lng, lat, caiyunToken }) {
+  const data = await fetchProxy({ lng, lat, type: 'daily', caiyunToken });
   const d = data.result?.daily;
   if (!d) throw new Error('caiyun_daily_missing_result');
   const out = [];
@@ -259,7 +263,7 @@ export async function fetchDailyForecasts({ lng, lat }) {
 // Pick the right fetch path for a given workout: future plan → daily forecast,
 // past with timestamp → historical, otherwise realtime (= "now"). Returns
 // the snapshot or null if location is unavailable.
-export async function captureSnapshotForWorkout({ date, startedAt, lng, lat }) {
+export async function captureSnapshotForWorkout({ date, startedAt, lng, lat, caiyunToken }) {
   // Future / today-with-no-time → use daily forecast for that date.
   // Else if startedAt is in the past 24h → historical at that timestamp.
   // Else → realtime (now).
@@ -270,17 +274,17 @@ export async function captureSnapshotForWorkout({ date, startedAt, lng, lat }) {
     if (Number.isFinite(tsMs)) {
       if (tsMs > now + dayMs) {
         // Far-future plan — try daily forecast keyed on the date.
-        const forecasts = await fetchDailyForecasts({ lng, lat });
+        const forecasts = await fetchDailyForecasts({ lng, lat, caiyunToken });
         const dayKey = date || new Date(tsMs).toISOString().slice(0, 10);
         const hit = forecasts.find(f => f.date === dayKey);
         return hit ? { ts: new Date(tsMs).toISOString(), type: 'forecast', lng, lat, ...hit } : null;
       }
       if (tsMs <= now && now - tsMs < dayMs) {
-        return await fetchHistoricalSnapshot({ lng, lat, when: tsMs });
+        return await fetchHistoricalSnapshot({ lng, lat, when: tsMs, caiyunToken });
       }
     }
   }
-  return await fetchRealtimeSnapshot({ lng, lat });
+  return await fetchRealtimeSnapshot({ lng, lat, caiyunToken });
 }
 
 // localStorage-backed cache for weather data. Two freshness rules:
@@ -334,7 +338,7 @@ function coordsMatch(cache, lng, lat) {
 //   'ready'       — currentWeather populated (from cache or live)
 //   'no_location' — geolocation denied + no default; UI prompts user to set one
 //   'error'       — fetch attempted, proxy/Caiyun failed
-export function useWeatherContext({ defaultLng, defaultLat } = {}) {
+export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) {
   // Hydrate from cache synchronously on mount so the AI Coach status pill
   // doesn't flash 'idle' on every page load. The freshness check below
   // decides whether to actually refetch.
@@ -375,10 +379,10 @@ export function useWeatherContext({ defaultLng, defaultLat } = {}) {
     try {
       const [rt, daily] = await Promise.all([
         needRealtime
-          ? fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat })
+          ? fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat, caiyunToken })
           : Promise.resolve(cache?.realtime || null),
         needForecast
-          ? fetchDailyForecasts({ lng: loc.lng, lat: loc.lat }).catch(() => null)
+          ? fetchDailyForecasts({ lng: loc.lng, lat: loc.lat, caiyunToken }).catch(() => null)
           : Promise.resolve(cache?.forecasts || null),
       ]);
       const today = localDateKey();
@@ -397,13 +401,23 @@ export function useWeatherContext({ defaultLng, defaultLat } = {}) {
     } catch (e) {
       setState({ currentWeather: null, forecastByDate: null, status: 'error', error: e.message || String(e) });
     }
-  }, [defaultLng, defaultLat]);
+  }, [defaultLng, defaultLat, caiyunToken]);
 
   // run() is async — the setState calls inside happen on later ticks, not
   // synchronously inside the effect body. The lint rule still flags this
   // (it can't see across the await), so silence it explicitly.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void run(); }, [run]);
+
+  // When the Caiyun token changes (user pasted a new one / cleared it),
+  // bust the cache for this device — the prior cached entries were fetched
+  // against a different token's quota tier and we want a clean refetch.
+  useEffect(() => {
+    try { localStorage.removeItem(CACHE_KEY); } catch { /* private mode */ }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void run({ force: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caiyunToken]);
 
   // Refresh whenever the tab comes back into focus — covers the "left the
   // tab open all day, returned in the morning" case where the daily

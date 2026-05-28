@@ -13,6 +13,7 @@ export const DATA_LABELS = {
   en: {
     currentDate: "[Current Date]",
     currentWeather: "[Current Weather]",
+    weeklyForecast: "[7-Day Weather Forecast — use this when planning ANY upcoming session]",
     targets: "[Target Races]",
     history: "[Race History]",
     recent: "[Recent Activities (last 10) — each line ends with the weather at training time when available]",
@@ -23,6 +24,7 @@ export const DATA_LABELS = {
   zh: {
     currentDate: "[当前时间]",
     currentWeather: "[当前天气]",
+    weeklyForecast: "[未来 7 天天气预报 —— 排任何未来训练时都参考这里]",
     targets: "[目标比赛]",
     history: "[比赛历史]",
     recent: "[近期活动（最近 10 条）—— 行尾附该次训练当时的天气（如有）]",
@@ -240,6 +242,34 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
         .join("\n")
     : "";
 
+  // Full 7-day weather forecast — emitted whenever we have ANY forecast
+  // data, regardless of whether the user has planned sessions in those
+  // days. The coach reads this when proposing new plans so it can pick
+  // the right day for a tempo / long run based on temp / humidity / AQI.
+  // Without this block the coach used to only see weather attached to
+  // already-planned days, so an unplanned week → blind recommendations.
+  let weeklyForecastBlock = "";
+  if (forecastByDate && forecastByDate.size > 0) {
+    const todayKey = formatLocalDateTime(now).slice(0, 10);
+    const sevenDayKeys = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      sevenDayKeys.push(formatLocalDateTime(d).slice(0, 10));
+    }
+    const lines = sevenDayKeys
+      .map(k => {
+        const f = forecastByDate.get(k);
+        if (!f) return null;
+        const fcStr = formatDailyForecast(f);
+        if (!fcStr) return null;
+        const tag = k === todayKey ? " (today)" : "";
+        return `${k}${tag}: ${fcStr}`;
+      })
+      .filter(Boolean);
+    if (lines.length) weeklyForecastBlock = lines.join("\n");
+  }
+
   // Build the sections list, skipping any that have no content so we don't
   // leak empty headers ([Current Weather] with no body, etc.) into the prompt.
   const sections = [
@@ -247,6 +277,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   ];
   const cwStr = formatCurrentWeather(currentWeather);
   if (cwStr) sections.push(`${D.currentWeather}\n${cwStr}`);
+  if (weeklyForecastBlock) sections.push(`${D.weeklyForecast}\n${weeklyForecastBlock}`);
   sections.push(`${D.targets}\n${targetRaces}`);
   sections.push(`${D.history}\n${historyRaces}`);
   sections.push(`${D.recent}\n${recentLogs}`);

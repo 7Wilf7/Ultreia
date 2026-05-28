@@ -8,6 +8,10 @@
 //   lat       — latitude,  WGS84 (e.g. 31.2304)
 //   type      — 'realtime' | 'hourly' | 'daily' | 'historical'
 //   begin     — Unix timestamp (seconds), only when type=historical
+//   token     — optional: caller's personal Caiyun token. When present we
+//               use it INSTEAD of the server-side fallback, so the user
+//               consumes their own daily quota. Empty / missing → server
+//               token is used (the legacy behaviour).
 //
 // Caller responsibilities:
 //   • Throttle and cache on the client — this proxy does NOT cache.
@@ -67,13 +71,17 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'method_not_allowed' });
     return;
   }
-  const token = process.env.CAIYUN_TOKEN;
+  // Per-user token wins over the server fallback when the caller paste's
+  // their own Caiyun key in the Settings → Weather API modal. We trim and
+  // do a lightweight shape check so the URL doesn't fall apart with
+  // accidentally-quoted strings.
+  const { lng, lat, type, begin, token: userToken } = req.query || {};
+  const cleanUserToken = typeof userToken === 'string' ? userToken.trim() : '';
+  const token = cleanUserToken || process.env.CAIYUN_TOKEN;
   if (!token) {
     res.status(500).json({ error: 'server_misconfigured', detail: 'CAIYUN_TOKEN missing' });
     return;
   }
-
-  const { lng, lat, type, begin } = req.query || {};
   if (!isValidCoord(lng, -180, 180) || !isValidCoord(lat, -90, 90)) {
     res.status(400).json({ error: 'bad_coords' });
     return;

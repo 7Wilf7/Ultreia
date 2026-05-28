@@ -14,6 +14,9 @@ const FIELD_MAP = {
   defaultLng:    'default_lng',
   defaultLat:    'default_lat',
   defaultLocationName: 'default_location_name',  // friendly label, e.g. "上海"
+  // User-supplied Caiyun Weather API token. Empty = fall back to the shared
+  // server-side token. Requires column `caiyun_api_key TEXT` on user_settings.
+  caiyunApiKey:  'caiyun_api_key',
 };
 
 function fromRow(row) {

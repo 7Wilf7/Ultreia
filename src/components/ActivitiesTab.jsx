@@ -564,7 +564,12 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                         overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                         minWidth: 0, flex: "0 1 auto",
                       }}>
-                        {visible.map(st => (RUN_FLAGS.includes(st) ? "▲ " : "") + t(`enum.subtype.${st}`)).join(" · ")}
+                        {visible.map(st => {
+                          // Mobile drops the "Run" suffix on pace types ("Easy Run" → "Easy") to
+                          // keep the compact row from wrapping; flags ("Race") stay verbatim.
+                          const label = RUN_PACE_TYPES.includes(st) ? t(`enum.subtype.${st}_short`) : t(`enum.subtype.${st}`);
+                          return (RUN_FLAGS.includes(st) ? "▲ " : "") + label;
+                        }).join(" · ")}
                       </span>
                     );
                   })()}

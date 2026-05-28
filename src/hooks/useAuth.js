@@ -36,10 +36,25 @@ export function useAuth() {
     if (error) throw error;
   }
 
-  // Supabase signs the request with the live session token; no current-password
-  // check is required (and the API doesn't expose one). Throws on failure so
-  // the caller can surface the error message verbatim.
-  async function changePassword(newPassword) {
+  // Verify-then-update flow: Supabase's updateUser does NOT require the old
+  // password (the session token alone authorizes the change), so a casual
+  // attacker who walks up to an unlocked device could reset the password
+  // without knowing the current one. We re-authenticate via signInWithPassword
+  // first as a possession check. On failure we surface a distinct error so
+  // the modal can render the "wrong current password" hint. On success the
+  // user's session is refreshed (signIn returns a new token) — no side effect
+  // visible to the caller.
+  async function changePassword(currentPassword, newPassword) {
+    const email = user?.email;
+    if (!email) throw new Error("no_active_session");
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      email, password: currentPassword,
+    });
+    if (verifyErr) {
+      const e = new Error("current_password_invalid");
+      e.code = "current_password_invalid";
+      throw e;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) throw error;
   }

@@ -36,6 +36,29 @@ const dict = {
   "settings.location_set":   { en: "{name}",                zh: "{name}" },
   "settings.location_missing": { en: "Not set — weather uses device GPS only", zh: "未设置 · 仅使用设备 GPS" },
   "settings.change_password": { en: "Change password",      zh: "修改密码" },
+  "settings.section_api":       { en: "API",                  zh: "API" },
+  "settings.section_other":     { en: "Other",                zh: "其他" },
+  "settings.ai_api":            { en: "AI Coach API",         zh: "AI 教练 API" },
+  "settings.ai_api_desc":       { en: "Key + provider for the AI Coach chat.", zh: "AI 教练聊天用的 Key + Provider。" },
+  "settings.weather_api":       { en: "Weather API",          zh: "彩云天气 API" },
+  "settings.weather_api_desc":  { en: "Caiyun Weather token — paste your own to use your daily quota.", zh: "彩云天气 token —— 填了走你自己的配额，不填走默认。" },
+  "settings.weather_api_set":   { en: "Token configured",     zh: "已填写" },
+  "settings.weather_api_default": { en: "Using shared quota", zh: "使用共享配额" },
+  "settings.email_actions":     { en: "Tap email to manage password / sign out", zh: "点击邮箱管理密码 / 退出登录" },
+
+  // ===== Weather API settings =====
+  "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },
+  "weather_api.hint":           { en: "Paste your Caiyun token to use your own daily quota. Leave empty to share the app's default token (rate-limited).", zh: "粘贴你自己的彩云 token 即可使用你的每日配额。留空则共享应用默认 token（配额有限，可能限流）。" },
+  "weather_api.signup_prefix":  { en: "Get a free developer token at",  zh: "免费开发者 token 申请：" },
+  "weather_api.token_label":    { en: "Caiyun token",         zh: "彩云 Token" },
+  "weather_api.replace_label":  { en: "Paste a new token to replace…", zh: "粘贴新 token 以替换……" },
+  "weather_api.token_placeholder": { en: "Your Caiyun API token",  zh: "你的彩云 API Token" },
+  "weather_api.current_set":    { en: "A token is currently saved. Paste a new value above to replace.", zh: "当前已保存一个 token。如需替换，请在上方粘贴新值。" },
+  "weather_api.save":           { en: "Save token",           zh: "保存 Token" },
+  "weather_api.clear":          { en: "Remove",               zh: "移除" },
+  "weather_api.saved":          { en: "Token saved.",         zh: "已保存。" },
+  "weather_api.cleared":        { en: "Token removed — using shared quota.", zh: "已移除 —— 切回共享配额。" },
+  "weather_api.save_failed":    { en: "✕ Save failed: {msg}", zh: "✕ 保存失败：{msg}" },
   "coach.profile_hub_hint":  { en: "Edit your runner profile — age, training history, HR zones, injury notes. These feed into every coach reply.", zh: "编辑你的跑者资料 —— 年龄、训练履历、心率区间、伤病备注。这些都会进入教练的每次回复。" },
   "coach.clear_hub_hint":    { en: "Permanently delete the entire chat history. Distill anything worth keeping into Memory first.", zh: "永久删除整个对话历史。先把值得留下的内容固化进长期记忆。" },
   "settings.sign_out":       { en: "Sign out",              zh: "退出登录" },
@@ -51,11 +74,14 @@ const dict = {
 
   // ===== Password change modal =====
   "pwd.title":               { en: "Change password",       zh: "修改密码" },
+  "pwd.current":             { en: "Current password",      zh: "当前密码" },
   "pwd.new":                 { en: "New password",          zh: "新密码" },
   "pwd.confirm":             { en: "Confirm new password",  zh: "再次输入新密码" },
-  "pwd.hint":                { en: "At least 6 characters.", zh: "至少 6 位。" },
-  "pwd.mismatch":            { en: "Passwords do not match.", zh: "两次输入的密码不一致。" },
-  "pwd.too_short":           { en: "Password must be at least 6 characters.", zh: "密码至少 6 位。" },
+  "pwd.hint":                { en: "Enter your current password, then a new one (at least 6 characters).", zh: "先输入当前密码，再设置新密码（至少 6 位）。" },
+  "pwd.mismatch":            { en: "New passwords do not match.", zh: "两次输入的新密码不一致。" },
+  "pwd.too_short":           { en: "New password must be at least 6 characters.", zh: "新密码至少 6 位。" },
+  "pwd.current_invalid":     { en: "Current password is incorrect.", zh: "当前密码不正确。" },
+  "pwd.forgot":              { en: "Forgot your password? Contact your administrator for a reset.", zh: "忘记当前密码？请联系管理员重置。" },
   "pwd.success":             { en: "Password updated.",     zh: "密码已更新。" },
   "pwd.error":               { en: "Failed to update password: ", zh: "修改密码失败：" },
   "pwd.save":                { en: "Update password",       zh: "更新密码" },
@@ -189,15 +215,24 @@ const dict = {
   "enum.subtype.Aerobic Run":     { en: "Aerobic Run",      zh: "有氧跑" },
   "enum.subtype.Tempo Run":       { en: "Tempo Run",        zh: "节奏跑" },
   "enum.subtype.Interval Run":    { en: "Interval Run",     zh: "间歇跑" },
+  // Short forms — used on mobile where the cell width can't hold the full
+  // "Easy Run / Aerobic Run / …" label. Desktop keeps the long form.
+  "enum.subtype.Easy Run_short":     { en: "Easy",          zh: "轻松" },
+  "enum.subtype.Aerobic Run_short":  { en: "Aerobic",       zh: "有氧" },
+  "enum.subtype.Tempo Run_short":    { en: "Tempo",         zh: "节奏" },
+  "enum.subtype.Interval Run_short": { en: "Interval",      zh: "间歇" },
   "enum.subtype.Race":            { en: "Race",             zh: "比赛" },
   "enum.subtype.Upper Body":      { en: "Upper Body",       zh: "上肢" },
   "enum.subtype.Lower Body":      { en: "Lower Body",       zh: "下肢" },
   "enum.subtype.Core":            { en: "Core",             zh: "核心" },
 
   // ===== Enum: Race categories =====
-  "enum.race_cat.Half Marathon":  { en: "Half Marathon",    zh: "半程马拉松" },
-  "enum.race_cat.Half Marathon_short": { en: "Half",        zh: "半马" },
-  "enum.race_cat.Marathon":       { en: "Marathon",         zh: "全程马拉松" },
+  // Half / Full marathon now use the runner-vernacular short form everywhere
+  // ("Half Mar." / "全马") — the long "Half Marathon / 半程马拉松" version felt
+  // mismatched against the other short category tags (10K, Trail, Hyrox).
+  "enum.race_cat.Half Marathon":  { en: "Half Mar.",        zh: "半马" },
+  "enum.race_cat.Half Marathon_short": { en: "Half Mar.",   zh: "半马" },
+  "enum.race_cat.Marathon":       { en: "Full Mar.",        zh: "全马" },
   "enum.race_cat.10K":            { en: "10K",              zh: "10 公里" },
   "enum.race_cat.Trail":          { en: "Trail",            zh: "越野" },
   "enum.race_cat.Spartan":        { en: "Spartan",          zh: "斯巴达" },
@@ -292,6 +327,9 @@ const dict = {
   "calendar.save_plan":        { en: "Save Plan",            zh: "保存计划" },
   "calendar.plan_empty_warning":{ en: "Enter at least a distance or duration for the plan.", zh: "请至少填写距离或时长。" },
   "calendar.tag.massage":      { en: "Massage",              zh: "按摩" },
+  "calendar.weather_strip_title": { en: "7-day weather",      zh: "未来 7 天天气" },
+  "calendar.weather_strip_empty": { en: "No weather data — set a default location to enable forecasts.", zh: "暂无天气数据 —— 在设置里填写默认位置后会自动获取预报。" },
+  "calendar.weather_today_tag":   { en: "Today",              zh: "今天" },
 
   // ===== Global filter =====
   "filter.type_label":        { en: "Type:",                zh: "类型：" },

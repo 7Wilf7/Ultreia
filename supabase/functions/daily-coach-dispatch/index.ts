@@ -132,8 +132,12 @@ async function callLLM(provider: string, key: string, system: string, user: stri
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
+      // Generous cap: deepseek-v4-pro is a reasoning model, so the thinking
+      // tokens count against max_tokens — too low and the visible answer comes
+      // back empty. The notification stays short via the prompt, not the cap;
+      // billing is by actual tokens so unused headroom costs nothing.
       model: cfg.model,
-      max_tokens: 300,
+      max_tokens: 4000,
       system,
       messages: [{ role: "user", content: user }],
     }),

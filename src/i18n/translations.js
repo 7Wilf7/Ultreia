@@ -353,7 +353,7 @@ const dict = {
   "calendar.plan_empty_warning":{ en: "Enter at least a distance or duration for the plan.", zh: "请至少填写距离或时长。" },
   "calendar.tag.massage":      { en: "Massage",              zh: "按摩" },
   "calendar.tag.stretching":   { en: "Stretching",           zh: "拉伸" },
-  "calendar.tag.poor_sleep":   { en: "Poor sleep",           zh: "睡眠差" },
+  "calendar.tag.poor_sleep":   { en: "Poor sleep (last night)", zh: "睡眠差（昨晚）" },
   "calendar.tag.sick":         { en: "Sick",                 zh: "生病" },
   "calendar.tag.travel":       { en: "Travel",               zh: "出差" },
   "calendar.weather_strip_title": { en: "7-day weather",      zh: "未来 7 天天气" },

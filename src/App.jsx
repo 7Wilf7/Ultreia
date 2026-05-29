@@ -915,6 +915,7 @@ Rules:
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
     if (!isProfileComplete(profile)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileEditorMode("setup");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

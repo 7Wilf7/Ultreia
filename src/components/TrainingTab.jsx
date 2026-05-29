@@ -48,7 +48,7 @@ function ViewToggle({ view, setView, t, style }) {
 
 export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
-  filter, setFilter, filterDropdown, setFilterDropdown,
+  filter, setFilter,
   period, setPeriod, periodDropdown, setPeriodDropdown,
   view, setView,            // "activities" | "charts" — lifted to AppShell so
                             // it survives top-tab switches within a session

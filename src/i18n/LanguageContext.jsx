@@ -1,3 +1,9 @@
+// This file intentionally co-locates the LanguageProvider component with its
+// useLanguage / useT hooks (the idiomatic React context pattern). That trips
+// react-refresh/only-export-components, a dev-only Fast-Refresh rule — the
+// alternative (splitting hooks into a separate module) would churn every import
+// site app-wide for zero runtime benefit. Disabled here deliberately.
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useMemo } from "react";
 import { translate, LANGUAGES } from "./translations";
 

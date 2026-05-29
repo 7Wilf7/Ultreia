@@ -97,9 +97,14 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   // the user clicks outside in edit mode.
   const initialFormRef = useRef(initial ? fromLog(initial) : buildEmpty());
 
+  // Re-sync the form when a different row is passed in for editing. Callers
+  // mount this with key={row.id} so this mostly fires on the rare in-place
+  // initial swap; it's an intentional reset-on-prop-change, not the cascading-
+  // render anti-pattern the rule guards against.
   useEffect(() => {
     if (initial) {
       const snapshot = fromLog(initial);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(snapshot);
       initialFormRef.current = snapshot;
     }

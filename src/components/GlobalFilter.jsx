@@ -1,3 +1,9 @@
+// Co-locates the GlobalFilter component with its filter-shape constant
+// (INITIAL_FILTER) and pure predicate (logMatchesFilter) that callers import
+// from here. Trips react-refresh/only-export-components, a dev-only
+// Fast-Refresh rule — splitting these out would churn import sites for no
+// runtime benefit. Disabled deliberately.
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState } from "react";
 import { RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";

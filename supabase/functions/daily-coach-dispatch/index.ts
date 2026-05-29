@@ -137,7 +137,7 @@ async function callLLM(provider: string, key: string, system: string, user: stri
       // back empty. The notification stays short via the prompt, not the cap;
       // billing is by actual tokens so unused headroom costs nothing.
       model: cfg.model,
-      max_tokens: 4000,
+      max_tokens: 8000,
       system,
       messages: [{ role: "user", content: user }],
     }),

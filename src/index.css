@@ -1,17 +1,18 @@
 /* ============================================================
    Wilf's Training Studio — Instrument Aesthetic
    Brutalist-minimal monochrome + low-sat moss accent + topographic language.
-   Humanist grotesque (Barlow) for UI/display, Barlow Semi Condensed for data
-   readouts — a sport-watch condensed-numeral feel that stays readable. Chinese
-   glyphs fall through to the system CJK face (Microsoft YaHei / PingFang).
+   Rounded geometric sans (Outfit) for everything — UI/display AND data
+   readouts — for a clean, cohesive sport-watch (COROS-ish) feel. Numbers stay
+   aligned via tabular-nums (set on .num/.mono). Chinese glyphs fall through to
+   the system CJK face (Microsoft YaHei / PingFang).
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
   /* ---- Type ---- */
-  --font-sans: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
-  --font-mono: "Barlow Semi Condensed", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  --font-mono: "Outfit", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
   /* ---- Surface ---- */
   --bg:           #f2f1ec;   /* slightly warm off-white (parchment-ish) */

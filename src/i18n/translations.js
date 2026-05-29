@@ -441,6 +441,7 @@ const dict = {
   "activities.unknown_type_apply": { en: "Apply Mappings", zh: "应用映射" },
   "activities.delete_tooltip":{ en: "Delete",               zh: "删除" },
   "activities.edit":          { en: "Edit",                 zh: "编辑" },
+  "activities.saving":        { en: "saving…",              zh: "保存中…" },
   "activities.sort.date_desc":{ en: "Date ↓",               zh: "日期 ↓" },
   "activities.sort.date_asc": { en: "Date ↑",               zh: "日期 ↑" },
   "activities.sort.distance_desc": { en: "Dist ↓",          zh: "距离 ↓" },

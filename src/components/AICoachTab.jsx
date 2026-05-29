@@ -10,6 +10,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildSystemPrompt } from "../utils/profile";
 import { buildDataBlock } from "../utils/coachPrompt";
+import { postJson } from "../lib/apiFetch";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon } from "./Icons";
@@ -338,8 +339,11 @@ Return ONLY the updated memory text. Guidelines:
 Output the memory text only, nothing else.`;
 
     try {
-      const resp = await fetch(apiEndpoint, {
-        method: "POST",
+      // postJson → CapacitorHttp on the APK, so backgrounding the app mid-call
+      // doesn't trip "network request failed" (the same fix already applied to
+      // sendChat / importToCalendar; this call site had been missed).
+      const resp = await postJson({
+        url: apiEndpoint,
         headers: {
           "Content-Type": "application/json",
           "x-api-key": activeKey,

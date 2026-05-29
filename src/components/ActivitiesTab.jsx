@@ -81,6 +81,17 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     setConfirmDelete({ type: "log", id });
   }
 
+  // Enter inline edit for a row — but not while it's still an optimistic
+  // (not-yet-persisted) row. Editing a temp id would hit updateWorkout with
+  // an id the DB doesn't have yet → write fails and the row rolls back. The
+  // optimistic window is ~1–3s (weather capture + insert); the user can tap
+  // again once the "saving…" cue clears.
+  function startEdit(l) {
+    if (l.isOptimistic) return;
+    setEditingId(l.id);
+    setShowAdd(false);
+  }
+
   function bulkDeleteSelected() {
     if (selectedIds.size === 0) return;
     setConfirmDelete({ type: "logs", ids: Array.from(selectedIds) });
@@ -615,14 +626,15 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   }}>
                     <ExpandedMetrics log={l} t={t} />
                     <button
+                      disabled={l.isOptimistic}
                       onClick={(e) => {
                         e.stopPropagation();
+                        if (l.isOptimistic) return;
                         setExpandedId(null);
-                        setEditingId(l.id);
-                        setShowAdd(false);
+                        startEdit(l);
                       }}
-                      style={{ ...s.btn, alignSelf: "flex-start", fontSize: 12, padding: "6px 14px", minHeight: 36 }}>
-                      {t("activities.edit")}
+                      style={{ ...s.btn, alignSelf: "flex-start", fontSize: 12, padding: "6px 14px", minHeight: 36, opacity: l.isOptimistic ? 0.5 : 1 }}>
+                      {l.isOptimistic ? t("activities.saving") : t("activities.edit")}
                     </button>
                   </div>
                 )}
@@ -634,8 +646,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             if (selectMode) {
               toggleSelected(l.id);
             } else {
-              setEditingId(l.id);
-              setShowAdd(false);
+              startEdit(l);
             }
           };
           return (
@@ -668,6 +679,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                 )}
                 <div style={{ minWidth: 50, fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>{formatDateShort(l.date)}</div>
                 <div style={{ ...s.tag(l.type), flexShrink: 0 }}>{t(`enum.activity.${l.type}`)}</div>
+                {l.isOptimistic && (
+                  <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>
+                    {t("activities.saving")}
+                  </span>
+                )}
                 <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, flexWrap: isNarrow ? "wrap" : "nowrap", overflow: "hidden" }}>
                   {l.subTypes.filter(st => {
                     if (RUN_FLAGS.includes(st)) return true;

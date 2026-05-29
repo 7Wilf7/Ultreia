@@ -2,7 +2,7 @@
 // be called from the lifted sendChat/importToCalendar in AppShell. None of
 // these touch React; they're pure data → string transforms.
 
-import { SPARTAN_SUBTYPES } from "../constants";
+import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
 import { formatDuration, formatPaceFromSec } from "./format";
 
 // Locale-aware headers for the dynamic data block (current date / target races /
@@ -16,6 +16,7 @@ export const DATA_LABELS = {
     weeklyForecast: "[7-Day Weather Forecast — use this when planning ANY upcoming session]",
     targets: "[Target Races]",
     history: "[Race History]",
+    weeklyTrend: "[Weekly Training Load — last 8 weeks of run-group volume (distance + ascent + session count). Watch week-over-week jumps as an injury-risk signal.]",
     recent: "[Recent Activities (last 10) — each line ends with the weather at training time when available]",
     upcoming: "[Upcoming Planned Sessions — next 7 days, with daily forecast]",
     none: "None",
@@ -27,6 +28,7 @@ export const DATA_LABELS = {
     weeklyForecast: "[未来 7 天天气预报 —— 排任何未来训练时都参考这里]",
     targets: "[目标比赛]",
     history: "[比赛历史]",
+    weeklyTrend: "[周训练量 —— 最近 8 周跑步类训练量（距离 + 爬升 + 次数）。关注周环比突增带来的伤病风险。]",
     recent: "[近期活动（最近 10 条）—— 行尾附该次训练当时的天气（如有）]",
     upcoming: "[未来计划训练 —— 接下来 7 天，附当日天气预报]",
     none: "无",
@@ -196,6 +198,60 @@ export function formatHistoryRace(r) {
   return line;
 }
 
+// Compact week-range label for the weekly-trend block, e.g. "5/12–18" (same
+// month) or "5/30–6/5" (cross-month). Built from LOCAL date components — going
+// through toISOString() would shift the day for users east of UTC. `start` is
+// the Monday 00:00 of the week; the label spans the 7 days start..start+6.
+function weekTrendLabel(start) {
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const sm = start.getMonth() + 1, sd = start.getDate();
+  const em = end.getMonth() + 1, ed = end.getDate();
+  return sm === em ? `${sm}/${sd}–${ed}` : `${sm}/${sd}–${em}/${ed}`;
+}
+
+// Recent weekly training load — the periodization signal the flat last-10 list
+// can't convey. For each of the last `weeks` Monday-start weeks (matching the
+// week buckets in ChartsTab) we sum run-group distance + ascent and count the
+// sessions. Weeks are emitted oldest→newest so the trend reads left-to-right.
+// Leading fully-empty weeks are dropped so a runner who only started 3 weeks
+// ago doesn't get a wall of "0km" lines. Returns "" when there's no run data
+// in the window at all — caller then omits the section entirely.
+export function buildWeeklyTrend(logs, now, weeks = 8) {
+  const dayOfWeek = (now.getDay() + 6) % 7; // Mon=0 … Sun=6
+  const thisWeekStart = new Date(now);
+  thisWeekStart.setDate(now.getDate() - dayOfWeek);
+  thisWeekStart.setHours(0, 0, 0, 0);
+
+  const rows = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const start = new Date(thisWeekStart);
+    start.setDate(thisWeekStart.getDate() - i * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+    let dist = 0, ascent = 0, count = 0;
+    for (const l of logs) {
+      if (l.isPlanned) continue;
+      if (!RUN_GROUP_TYPES.includes(l.type)) continue;
+      const d = new Date(l.date);
+      if (d < start || d >= end) continue;
+      dist += l.distance || 0;
+      ascent += l.ascent || 0;
+      count += 1;
+    }
+    rows.push({ start, dist, ascent, count });
+  }
+  while (rows.length && rows[0].count === 0) rows.shift();
+  if (!rows.length) return "";
+
+  return rows.map(r => {
+    const parts = [`${+r.dist.toFixed(1)}km`];
+    if (r.ascent > 0) parts.push(`+${Math.round(r.ascent)}m`);
+    parts.push(`${r.count} ${r.count === 1 ? "run" : "runs"}`);
+    return `${weekTrendLabel(r.start)}: ${parts.join(", ")}`;
+  }).join("\n");
+}
+
 // Dynamic data block injected into the system prompt. Only the section titles
 // are localized; values (dates, race names, numbers) stay verbatim across
 // languages so the model receives consistent data.
@@ -280,6 +336,8 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   if (weeklyForecastBlock) sections.push(`${D.weeklyForecast}\n${weeklyForecastBlock}`);
   sections.push(`${D.targets}\n${targetRaces}`);
   sections.push(`${D.history}\n${historyRaces}`);
+  const weeklyTrend = buildWeeklyTrend(logs, now, 8);
+  if (weeklyTrend) sections.push(`${D.weeklyTrend}\n${weeklyTrend}`);
   sections.push(`${D.recent}\n${recentLogs}`);
   if (upcomingPlans) sections.push(`${D.upcoming}\n${upcomingPlans}`);
   return sections.join("\n\n");

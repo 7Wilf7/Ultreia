@@ -748,7 +748,7 @@ function AppShell({
       profile, coachConfig, coachMemory,
       dataBlock: buildDataBlock({
         logs: freshLogs, races, now, lang: "en",
-        currentWeather, forecastByDate,
+        currentWeather, forecastByDate, dailyNotes,
       }),
       lang: "en",
     });
@@ -1082,6 +1082,7 @@ Rules:
           appendLocalChatMessage={appendLocalChatMessage}
           now={now}
           setConfirmDelete={setConfirmDelete}
+          dailyNotes={dailyNotes}
           apiProvider={apiProvider}
           apiKey={apiKey}
           claudeApiKey={claudeApiKey}

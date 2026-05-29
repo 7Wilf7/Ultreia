@@ -487,6 +487,11 @@ const dict = {
   "form.started_at":          { en: "Start time",           zh: "开始时间" },
   "form.started_at_optional": { en: "optional",             zh: "可选" },
   "form.started_at_hint":     { en: "Leave empty to use weather at the moment you save. Fill in to fetch historical/forecast weather for that timestamp.", zh: "留空：使用保存时的天气；填写：抓取对应时间点的历史/预报天气。" },
+  "form.optional":            { en: "optional",             zh: "选填" },
+  "form.rpe":                 { en: "RPE",                  zh: "RPE 自觉用力" },
+  "form.rpe_hint":            { en: "Rate of Perceived Exertion — how hard the session felt, 1 = very easy, 10 = all-out. Used to estimate training load. Leave empty if unsure.", zh: "自觉用力程度 —— 这次训练有多累，1 = 很轻松，10 = 拼尽全力。用来估算训练负荷，拿不准就留空。" },
+  "form.note":                { en: "Note",                 zh: "备注" },
+  "form.note_placeholder":    { en: "e.g. new shoes, knee felt tight, slept badly", zh: "例如：换了新鞋、膝盖有点紧、昨晚没睡好" },
 
   // ===== Races tab =====
   "races.tab_pr":             { en: "Personal Records",     zh: "个人纪录" },

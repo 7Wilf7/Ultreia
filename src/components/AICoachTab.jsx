@@ -202,7 +202,7 @@ export function AICoachTab({
   logs, races, profile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   chatMessages,
-  now, setConfirmDelete,
+  now, setConfirmDelete, dailyNotes,
   apiProvider, apiKey, claudeApiKey, claudeEndpointId, apiModel, onEditProfile,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
@@ -414,6 +414,7 @@ Output the memory text only, nothing else.`;
       logs, races, now, lang: previewLang,
       currentWeather: weatherCtx?.currentWeather,
       forecastByDate: weatherCtx?.forecastByDate,
+      dailyNotes,
     }),
     lang: previewLang,
   });

@@ -51,6 +51,8 @@ function buildEmpty() {
     // (two digits, 0–59). Combined at save time. The split avoids forcing
     // the user to type a colon on a mobile numeric keyboard.
     gapMin: "", gapSec: "",
+    rpe: "",
+    note: "",
   };
 }
 
@@ -75,6 +77,8 @@ function fromLog(log) {
     aerobicTE: log.aerobicTE ? String(log.aerobicTE) : "",
     gapMin:    gapMm === "" ? "" : String(gapMm),
     gapSec:    gapSs === "" ? "" : String(gapSs).padStart(2, "0"),
+    rpe:       log.rpe ? String(log.rpe) : "",
+    note:      log.note || "",
   };
 }
 
@@ -201,6 +205,10 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       gap:       showCadenceAndGap
         ? ((parseInt(form.gapMin) || 0) * 60 + (parseInt(form.gapSec) || 0))
         : 0,
+      // RPE: keep only a valid 1–10 integer; anything else (empty / out of
+      // range) → null so the DB CHECK (rpe BETWEEN 1 AND 10) never rejects.
+      rpe:       (() => { const n = parseInt(form.rpe, 10); return n >= 1 && n <= 10 ? n : null; })(),
+      note:      form.note.trim() || null,
     });
   }
 
@@ -414,6 +422,38 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           </label>
         </div>
       )}
+
+      {/* RPE — optional, every activity type. Drives the training-load (sRPE)
+          calculation. Kept narrow so it doesn't read like a required metric;
+          the hint below spells out the 1–10 scale for users new to RPE. */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 160 }}>
+          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+            {t("form.rpe")}<span style={{ color: "#aaa", fontWeight: 400 }}> (1–10, {t("form.optional")})</span>
+          </span>
+          <input type="number" inputMode="numeric" min="1" max="10" step="1"
+            placeholder="—" value={form.rpe}
+            onChange={e => setForm({ ...form, rpe: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })}
+            style={s.input} />
+        </label>
+        <span style={{ fontSize: 11, color: "#999", lineHeight: 1.45, display: "block", marginTop: 6 }}>
+          {t("form.rpe_hint")}
+        </span>
+      </div>
+
+      {/* Free-text note — travels into the coach prompt verbatim, so things
+          like "new shoes" / "knee felt tight" become coaching context. */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+            {t("form.note")}<span style={{ color: "#aaa", fontWeight: 400 }}> ({t("form.optional")})</span>
+          </span>
+          <textarea rows={2} placeholder={t("form.note_placeholder")}
+            value={form.note}
+            onChange={e => setForm({ ...form, note: e.target.value })}
+            style={{ ...s.input, resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45 }} />
+        </label>
+      </div>
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={handleSave} style={s.btn}>{mode === "edit" ? t("common.save_changes") : t("common.save")}</button>

@@ -14,6 +14,8 @@ const FIELD_MAP = {
   cadence:    'cadence',
   aerobicTE:  'aerobic_te',
   gap:        'gap',
+  note:       'note',          // text — optional free-text note ("new shoes", "knee tight")
+  rpe:        'rpe',           // smallint 1–10 — optional session RPE (perceived exertion)
   isPlanned:  'is_planned',    // boolean — future plan (true) vs completed (false)
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
   startedAt:  'started_at',    // timestamptz — when the activity actually started; null = unknown
@@ -41,7 +43,7 @@ const WRITE_SKIP = new Set(['createdAt', 'updatedAt']);  // server-managed
 // (e.g. cadence "173.4", duration "435.9") which Postgres rejects. Round
 // defensively in toRow. NUMERIC columns — distance / pace / ascent / aerobic_te
 // / gap — keep their original precision.
-const INT_FIELDS = new Set(['duration', 'hr', 'maxHR', 'cadence']);
+const INT_FIELDS = new Set(['duration', 'hr', 'maxHR', 'cadence', 'rpe']);
 
 function fromRow(row) {
   if (!row) return null;

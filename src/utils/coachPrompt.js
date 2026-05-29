@@ -17,7 +17,8 @@ export const DATA_LABELS = {
     targets: "[Target Races]",
     history: "[Race History]",
     weeklyTrend: "[Weekly Training Load — last 8 weeks of run-group volume (distance + ascent + session count). Watch week-over-week jumps as an injury-risk signal.]",
-    recent: "[Recent Activities (last 10) — each line ends with the weather at training time when available]",
+    recent: "[Recent Activities (last 10) — RPE is the runner's 1–10 perceived exertion; note is their own comment. Weather at training time appended when available]",
+    dayNotes: "[Recent Day Notes — recovery/context flags the runner logged (sick, travel, poor sleep, massage, stretching). Factor these into load assessment and planning.]",
     upcoming: "[Upcoming Planned Sessions — next 7 days, with daily forecast]",
     none: "None",
     priorityTag: (p) => `[Priority ${p}]`,
@@ -29,7 +30,8 @@ export const DATA_LABELS = {
     targets: "[目标比赛]",
     history: "[比赛历史]",
     weeklyTrend: "[周训练量 —— 最近 8 周跑步类训练量（距离 + 爬升 + 次数）。关注周环比突增带来的伤病风险。]",
-    recent: "[近期活动（最近 10 条）—— 行尾附该次训练当时的天气（如有）]",
+    recent: "[近期活动（最近 10 条）—— RPE 是跑者 1–10 的自觉用力评分，note 是他自己的备注。行尾附该次训练当时的天气（如有）]",
+    dayNotes: "[近期当日标记 —— 跑者记录的恢复/状态标记（生病、出差、睡眠差、按摩、拉伸）。评估负荷和排计划时要考虑。]",
     upcoming: "[未来计划训练 —— 接下来 7 天，附当日天气预报]",
     none: "无",
     priorityTag: (p) => `[${p} 级目标]`,
@@ -258,7 +260,7 @@ export function buildWeeklyTrend(logs, now, weeks = 8) {
 // `currentWeather` is the realtime snapshot (or null when unavailable).
 // `forecastByDate` is a Map<YYYY-MM-DD, dailyForecast> covering the next 7
 // days; used to attach daily weather to planned sessions in that window.
-export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null }) {
+export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, dailyNotes = [] }) {
   const D = DATA_LABELS[lang] || DATA_LABELS.en;
   // Strip future-planned entries — the LLM should only see what actually
   // happened. Planned rows would otherwise be misread as "recent activity"
@@ -267,8 +269,27 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   // training time. Skip the suffix entirely when missing — never write
   // "weather: null", that confuses the LLM more than it helps.
   const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
-    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}${formatWeatherInline(l.weather)}`
+    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`
   ).join("\n");
+  // Day-level recovery/context flags (sick / travel / poor sleep / massage /
+  // stretching) from the Calendar, last 21 days only, oldest→newest. Tag slugs
+  // are de-underscored ("poor_sleep" → "poor sleep") for the LLM. Skipped when
+  // the runner hasn't tagged any recent day.
+  const dayNotesBlock = (() => {
+    if (!Array.isArray(dailyNotes) || !dailyNotes.length) return "";
+    const todayMs = now.getTime();
+    const windowMs = 21 * 24 * 60 * 60 * 1000;
+    return dailyNotes
+      .filter(n => n && n.date && Array.isArray(n.tags) && n.tags.length)
+      .filter(n => {
+        const ms = new Date(`${n.date}T00:00:00`).getTime();
+        return ms >= todayMs - windowMs && ms <= todayMs + 12 * 60 * 60 * 1000;
+      })
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+      .map(n => `${n.date}: ${n.tags.map(tg => String(tg).replace(/_/g, " ")).join(", ")}`)
+      .join("\n");
+  })();
+
   const targetRaces = races.filter(r => r.isTarget)
     .map(r => formatTargetRace(r, lang)).join("\n") || D.none;
   const historyRaces = selectHistoryForPrompt(races.filter(r => !r.isTarget))
@@ -339,6 +360,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   const weeklyTrend = buildWeeklyTrend(logs, now, 8);
   if (weeklyTrend) sections.push(`${D.weeklyTrend}\n${weeklyTrend}`);
   sections.push(`${D.recent}\n${recentLogs}`);
+  if (dayNotesBlock) sections.push(`${D.dayNotes}\n${dayNotesBlock}`);
   if (upcomingPlans) sections.push(`${D.upcoming}\n${upcomingPlans}`);
   return sections.join("\n\n");
 }

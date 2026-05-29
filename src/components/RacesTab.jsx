@@ -45,6 +45,17 @@ function raceToForm(race) {
   };
 }
 
+// Whole days from `now` to a race date, using LOCAL midnight on both sides so
+// users east of UTC don't get an off-by-one. Returns null for missing/invalid
+// dates, 0 for race day, negative for past.
+function daysUntilRace(dateStr, now) {
+  if (!dateStr) return null;
+  const race = new Date(`${dateStr}T00:00:00`);
+  if (isNaN(race.getTime())) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((race - today) / 86400000);
+}
+
 export function RacesTab({
   races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
   // Lifted to AppShell so the chosen top/sub tab survives switching away to
@@ -253,6 +264,32 @@ export function RacesTab({
         textTransform: "uppercase", letterSpacing: "0.05em",
         flexShrink: 0,
       }}>{t(`enum.race_cat.${cat}`)}</span>
+    );
+  }
+
+  // Countdown badge for an upcoming target race — "in 9w" / "还有 9 周". Only
+  // for target races with a future (or today) date; returns null otherwise so
+  // history rows and undated/past targets stay clean. Weeks once ≥7 days out,
+  // days inside the final week — the periodization signal a runner actually
+  // reads ("9 weeks → still base; 2 weeks → taper").
+  function renderCountdown(r) {
+    if (!r.isTarget || !r.date) return null;
+    const days = daysUntilRace(r.date, now);
+    if (days == null || days < 0) return null;
+    let label;
+    if (days === 0) label = t("races.countdown_today");
+    else if (days < 7) label = t("races.countdown_days", { n: days });
+    else {
+      const w = Math.floor(days / 7), d = days % 7;
+      label = d === 0 ? t("races.countdown_weeks", { n: w }) : t("races.countdown_weeks_days", { w, d });
+    }
+    return (
+      <span style={{
+        fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
+        color: "var(--moss-deep)", background: "var(--moss-bg)",
+        border: "1px solid var(--moss)", borderRadius: 2,
+        padding: "1px 6px", whiteSpace: "nowrap", letterSpacing: "0.02em",
+      }}>{label}</span>
     );
   }
 
@@ -515,6 +552,7 @@ export function RacesTab({
   function renderRaceCardInner(r, timeStr) {
     const distStr = r.distance > 0 ? `${r.distance} km` : "";
     const ascStr  = r.ascent && parseInt(r.ascent) > 0 ? `+${r.ascent} m` : "";
+    const countdown = renderCountdown(r);
 
     // Mobile: fixed-shape card.
     //   Row 1 = date · priority · category tag · delete (every race).
@@ -548,6 +586,7 @@ export function RacesTab({
               fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
               fontVariantNumeric: "tabular-nums", flexShrink: 0,
             }}>{r.date || "—"}</span>
+            {countdown}
             {r.isTarget && r.priority && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
@@ -619,11 +658,14 @@ export function RacesTab({
           gridTemplateColumns: RACE_ROW_GRID,
           alignItems: "center", gap: 12,
         }}>
-        {/* date */}
-        <div style={{
-          fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
-          fontVariantNumeric: "tabular-nums",
-        }}>{r.date || "—"}</div>
+        {/* date + (target only) countdown stacked underneath */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+          <span style={{
+            fontFamily: "var(--font-mono)", fontSize: 13, color: "var(--ink-3)",
+            fontVariantNumeric: "tabular-nums",
+          }}>{r.date || "—"}</span>
+          {countdown && <span style={{ alignSelf: "flex-start" }}>{countdown}</span>}
+        </div>
 
         {/* priority (target only — empty cell for history keeps the grid aligned) */}
         <div>

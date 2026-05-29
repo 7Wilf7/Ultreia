@@ -535,6 +535,10 @@ const dict = {
   "races.empty_history":      { en: "No race history yet",  zh: "暂无历史比赛" },
   "races.edit_title":         { en: "Edit Race",            zh: "编辑比赛" },
   "races.edit_hint":          { en: "Click any race to edit. Click ✕ to delete.", zh: "点击比赛卡片可编辑，点击 ✕ 删除。" },
+  "races.countdown_today":    { en: "race day",             zh: "就在今天" },
+  "races.countdown_days":     { en: "in {n}d",              zh: "还有 {n} 天" },
+  "races.countdown_weeks":    { en: "in {n}w",              zh: "还有 {n} 周" },
+  "races.countdown_weeks_days": { en: "in {w}w {d}d",       zh: "还有 {w} 周 {d} 天" },
 
   // ===== Personal Records tab =====
   "pr.title":                 { en: "Personal Records",     zh: "个人最佳成绩" },

@@ -263,10 +263,41 @@ export async function fetchDailyForecasts({ lng, lat, caiyunToken }) {
   return out;
 }
 
+// For a long session (≥ LONG_SESSION_SEC) recorded with a real start time,
+// sample the weather at several points across its duration — start temps on a
+// 10h ultra say nothing about the midday heat. Each point is a historical
+// snapshot; we cap the count and stay inside the historical window (past ~24h).
+// Returns an array of { atHours, tempC, apparentC, humidity, skycon, ... } or
+// [] when nothing usable. The chip still shows only the start; this series is
+// for the AI coach.
+const LONG_SESSION_SEC = 3 * 3600;
+async function captureWeatherSeries({ lng, lat, startMs, durationSec, now, caiyunToken }) {
+  const stepMs = 2 * 60 * 60 * 1000;                 // ~every 2 hours
+  const endMs = Math.min(startMs + durationSec * 1000, now);
+  const stamps = [];
+  for (let tMs = startMs; tMs < endMs - 30 * 60 * 1000; tMs += stepMs) stamps.push(tMs);
+  stamps.push(endMs);
+  const uniq = [...new Set(stamps)].slice(0, 8);     // cap proxy calls
+  const out = [];
+  for (const tMs of uniq) {
+    if (now - tMs >= 24 * 60 * 60 * 1000) continue;   // outside historical window
+    try {
+      const s = await fetchHistoricalSnapshot({ lng, lat, when: tMs, caiyunToken });
+      if (s) out.push({
+        atHours: Math.round(((tMs - startMs) / 3600000) * 10) / 10,
+        tempC: s.tempC, apparentC: s.apparentC, humidity: s.humidity,
+        skycon: s.skycon, windSpeed: s.windSpeed, aqi: s.aqi,
+      });
+    } catch { /* skip this point */ }
+  }
+  return out;
+}
+
 // Pick the right fetch path for a given workout: future plan → daily forecast,
 // past with timestamp → historical, otherwise realtime (= "now"). Returns
-// the snapshot or null if location is unavailable.
-export async function captureSnapshotForWorkout({ date, startedAt, lng, lat, caiyunToken }) {
+// the snapshot or null if location is unavailable. For long past sessions the
+// returned snapshot also carries a `series` array (see captureWeatherSeries).
+export async function captureSnapshotForWorkout({ date, startedAt, durationSec = 0, lng, lat, caiyunToken }) {
   // Future / today-with-no-time → use daily forecast for that date.
   // Else if startedAt is in the past 24h → historical at that timestamp.
   // Else → realtime (now).
@@ -283,7 +314,12 @@ export async function captureSnapshotForWorkout({ date, startedAt, lng, lat, cai
         return hit ? { ts: new Date(tsMs).toISOString(), type: 'forecast', lng, lat, ...hit } : null;
       }
       if (tsMs <= now && now - tsMs < dayMs) {
-        return await fetchHistoricalSnapshot({ lng, lat, when: tsMs, caiyunToken });
+        const start = await fetchHistoricalSnapshot({ lng, lat, when: tsMs, caiyunToken });
+        if (start && durationSec >= LONG_SESSION_SEC) {
+          const series = await captureWeatherSeries({ lng, lat, startMs: tsMs, durationSec, now, caiyunToken });
+          if (series.length > 1) return { ...start, series };
+        }
+        return start;
       }
     }
   }

@@ -307,6 +307,7 @@ function AuthedApp({ user, signOut, changePassword }) {
       const snap = await captureSnapshotForWorkout({
         date: workoutData.date,
         startedAt: workoutData.startedAt,
+        durationSec: workoutData.duration || 0,
         lng: loc.lng,
         lat: loc.lat,
         caiyunToken: caiyunApiKey,

@@ -62,7 +62,18 @@ function formatWeatherInline(w) {
     parts.push(`wind ${w.windSpeed}km/h`);
   }
   if (Number.isFinite(w.aqi) && w.aqi > 0) parts.push(`AQI${w.aqi}`);
-  return parts.length ? ` weather: ${parts.join(", ")}` : "";
+  let out = parts.length ? ` weather: ${parts.join(", ")}` : "";
+  // Long-session weather series — how conditions evolved across the activity
+  // (e.g. a 10h ultra that started at 15°C and hit 32°C by midday). Only the
+  // start is on the line above; this appends the trajectory for the coach.
+  if (Array.isArray(w.series) && w.series.length > 1) {
+    const pts = w.series.map(p => {
+      const a = Number.isFinite(p.apparentC) ? p.apparentC : p.tempC;
+      return `+${p.atHours}h ${Math.round(p.tempC)}°C(feels ${Math.round(a)})`;
+    }).join(" / ");
+    out += ` [during: ${pts}]`;
+  }
+  return out;
 }
 
 // Realtime — slightly more verbose than the inline form because this is

@@ -38,12 +38,32 @@ git tag v0.2.0 && git push origin v0.2.0
 
 keystore 文件本地在 `android/app/training-studio-release.jks`（gitignored），passwords 在 Claude 用户级 memory（永远不进 repo）。
 
+### Edge Functions 部署（每日推送 / 收件箱）
+
+推送链路在 Supabase Edge Functions 里。**前端发版（push main / tag）不会带上它们**——改了 `supabase/functions/*` 的代码，必须单独手动部署：
+
+```
+cd <项目根>
+npx supabase login                                    # 一次性；token 存 Windows 凭据管理器
+npx supabase link --project-ref ihibmkfgfznqwzavaeiq   # 一次性；状态存 supabase/.temp/（已 gitignore）
+npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
+```
+
+- **`--no-verify-jwt` 必须加**：`daily-coach-dispatch` 由 pg_cron 定时调用、靠 header `x-cron-secret` 鉴权，不是登录用户的 JWT；不加会被网关挡掉。
+- 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
+- 函数：`daily-coach-dispatch`（定时生成 AI 打卡 → FCM 推送 → 写 `push_inbox`）、`push-test`（早期冒烟测试，可退役）。
+
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+
 ### 历史教训（避免重蹈）
 
 - **PWA service worker 必须在 Capacitor WebView 里跳过**：SW 拦截 app-asset scheme fetch → 白屏。`src/main.jsx` 已做 `isNativePlatform` 检测，native 上不注册并 unregister 旧 SW。
 - **Rolldown 1.0.0 linux-x64 tree-shaking 过激**：CI vite build 砍掉一半 app 代码。`vite.config.js` 里 `build.rolldownOptions.treeshake = false` 关掉，bundle 大 ~400KB 但正确。upstream 修了再考虑打开。
 - **`.env.local` 不进 git 但 CI 要它的值**：所有 `VITE_*` 变量需要在 GitHub Secrets 里也存一份，workflow build step 用 `env:` 注入。
 - **Android Studio 装在 F 盘**：`F:\Android Studio\jbr\bin\keytool.exe`；SDK 在 `%LOCALAPPDATA%\Android\Sdk`；`ANDROID_HOME` 已设。新机器要重新设。
+- **移动端全局 `button { min-height: 40px }`（`src/index.css`）会撑大小按钮**：开关、徽章这类本该很小的 `<button>` 在手机上被强行撑到 40px 高（为了点击热区）。做小控件时在按钮上显式写 `minHeight: 0`（或具体高度）覆盖。坑过：每日推送开关、PR 卡的 ITRA 小标。
+- **`@supabase/supabase-js` 用新版 `sb_publishable_…` key 当 `VITE_SUPABASE_ANON_KEY`**：是 anon key 的现行替代，浏览器安全、配合 RLS。**绝不要**把 `sb_secret_…`（service_role）放进前端 / `.env.local`——它绕过 RLS，只能在 Edge Function 里用。
+- **天气列 `workouts.weather` 是 jsonb**：往里塞嵌套结构（如长训练的 `series` 数组）不需要改表。
 
 ## 目录约定
 - `src/App.jsx` —— 主组件入口

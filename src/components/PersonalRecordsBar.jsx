@@ -374,6 +374,10 @@ function ITRABadge({
             fontFamily: "var(--font-mono)",
             fontSize: 10, fontWeight: 600,
             padding: "2px 7px",
+            // minHeight:0 overrides the global mobile button min-height:40px so
+            // the badge stays short — otherwise the Trail PR card is taller than
+            // every other category's card.
+            minHeight: 0, lineHeight: 1.5,
             border: "1px solid var(--moss)",
             background: "var(--moss-bg)",
             color: "var(--moss-deep)",

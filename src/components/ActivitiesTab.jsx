@@ -576,9 +576,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                         minWidth: 0, flex: "0 1 auto",
                       }}>
                         {visible.map(st => {
-                          // Mobile drops the "Run" suffix on pace types ("Easy Run" → "Easy") to
-                          // keep the compact row from wrapping; flags ("Race") stay verbatim.
-                          const label = RUN_PACE_TYPES.includes(st) ? t(`enum.subtype.${st}_short`) : t(`enum.subtype.${st}`);
+                          // Mobile drops the "Run" suffix on pace types ("Easy Run" → "Easy") and
+                          // the "Body" suffix on strength subtypes ("Lower Body" → "Lower") so the
+                          // compact row doesn't ellipsis away a later tag (e.g. Core). Flags
+                          // ("Race") stay verbatim. The strip is a no-op for the Chinese labels.
+                          const label = (RUN_PACE_TYPES.includes(st) ? t(`enum.subtype.${st}_short`) : t(`enum.subtype.${st}`)).replace(/ Body$/, "");
                           return (RUN_FLAGS.includes(st) ? "▲ " : "") + label;
                         }).join(" · ")}
                       </span>
@@ -1043,10 +1045,13 @@ function ExpandedMetrics({ log: l }) {
   return (
     <>
       {/* Metric data — kept on its own row so weather (below) doesn't push a
-          number like TE onto a second line. Still wraps if the device is too
-          narrow for every metric, but weather no longer competes for the space. */}
+          number like TE onto a second line. Tight gap + space-between spreads
+          the metrics across the full width and fits as many on one line as the
+          screen allows (a very narrow phone with many road-run metrics may
+          still wrap one item). */}
       <div style={{
-        display: "flex", gap: 14, flexWrap: "wrap",
+        display: "flex", gap: "6px 10px", flexWrap: "wrap",
+        justifyContent: "space-between",
         fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
         fontSize: 12, color: "var(--ink-2)",
       }}>

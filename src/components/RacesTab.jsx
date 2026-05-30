@@ -337,9 +337,14 @@ export function RacesTab({
     let label;
     if (days === 0) label = t("races.countdown_today");
     else if (days < 7) label = t("races.countdown_days", { n: days });
-    else {
+    else if (days < 30) {
+      // Under a month → weeks + days (the taper-window granularity).
       const w = Math.floor(days / 7), d = days % 7;
       label = d === 0 ? t("races.countdown_weeks", { n: w }) : t("races.countdown_weeks_days", { w, d });
+    } else {
+      // A month or more out → months + days (approx, 30-day months).
+      const m = Math.floor(days / 30), d = days % 30;
+      label = d === 0 ? t("races.countdown_months", { n: m }) : t("races.countdown_months_days", { m, d });
     }
     return (
       <span style={{
@@ -644,7 +649,6 @@ export function RacesTab({
               fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
               fontVariantNumeric: "tabular-nums", flexShrink: 0,
             }}>{r.date || "—"}</span>
-            {countdown}
             {r.isTarget && r.priority && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
@@ -658,6 +662,7 @@ export function RacesTab({
             {r.subtype && (
               <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{r.subtype}</span>
             )}
+            {countdown}
             <div style={{ flex: 1 }} />
             <button onClick={(e) => { e.stopPropagation(); deleteRace(r.id); }}
               aria-label="Delete"

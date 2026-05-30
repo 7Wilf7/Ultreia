@@ -98,15 +98,15 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimezone, setPus
               role="switch"
               aria-checked={enabled}
               style={{
-                width: 44, height: 24, flexShrink: 0, borderRadius: 12,
+                width: 40, height: 22, minHeight: 22, flexShrink: 0, borderRadius: 11,
                 border: "none", boxSizing: "border-box",
                 background: enabled ? "var(--moss)" : "var(--rule)",
                 position: "relative", cursor: "pointer", transition: "background 0.15s",
                 padding: 0,
               }}>
               <span style={{
-                position: "absolute", top: 2, left: enabled ? 22 : 2,
-                width: 20, height: 20, borderRadius: "50%",
+                position: "absolute", top: 2, left: enabled ? 20 : 2,
+                width: 18, height: 18, borderRadius: "50%",
                 background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.35)",
                 transition: "left 0.15s",
               }} />

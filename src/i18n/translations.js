@@ -562,6 +562,8 @@ const dict = {
   "races.countdown_days":     { en: "in {n}d",              zh: "还有 {n} 天" },
   "races.countdown_weeks":    { en: "in {n}w",              zh: "还有 {n} 周" },
   "races.countdown_weeks_days": { en: "in {w}w {d}d",       zh: "还有 {w} 周 {d} 天" },
+  "races.countdown_months":   { en: "in {n}mo",             zh: "还有 {n} 个月" },
+  "races.countdown_months_days": { en: "in {m}mo {d}d",     zh: "还有 {m} 个月 {d} 天" },
   "races.location_label":     { en: "Race location",        zh: "比赛地点" },
   "races.location_placeholder": { en: "Type a city, e.g. Guangzhou", zh: "输入城市，如 广州" },
   "races.location_hint":      { en: "Type a place name, then pick a match to set it (city-level is fine).", zh: "输入地名后从下拉里选一个（精确到城市即可）。" },

@@ -25,8 +25,11 @@ function roundCoord(n) {
 export async function getCurrentLocation({ defaultLng, defaultLat } = {}) {
   if (isNative()) {
     try {
+      // Low accuracy on purpose: city-level is all weather needs, and
+      // enableHighAccuracy:true is what triggers Android's "Location Accuracy"
+      // (Google Play Services) upsell dialog. Network/coarse location is fine.
       const pos = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: true,
+        enableHighAccuracy: false,
         timeout: 8000,
       });
       return {
@@ -355,6 +358,18 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
 
   const run = useCallback(async (opts = {}) => {
     const force = !!opts.force;
+    const cachedNow = readCache();
+    // Fast path: both realtime + forecast are still fresh → serve straight from
+    // cache WITHOUT touching device geolocation. This is the common case on
+    // app-foreground refresh; calling getCurrentLocation() here is what popped
+    // the Android "Location Accuracy" dialog every time the user switched back
+    // to the app. Only invoke GPS when something is actually stale (or forced).
+    if (!force && cachedNow && realtimeFresh(cachedNow) && forecastFresh(cachedNow)) {
+      const m = new Map();
+      if (Array.isArray(cachedNow.forecasts)) for (const f of cachedNow.forecasts) m.set(f.date, f);
+      setState({ currentWeather: cachedNow.realtime, forecastByDate: m, status: 'ready', error: null, lastUpdatedAt: cachedNow.realtimeAt || null });
+      return;
+    }
     let loc;
     try {
       loc = await getCurrentLocation({ defaultLng, defaultLat });

@@ -565,11 +565,23 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   <span style={{ ...s.tag(l.type), fontSize: 10, padding: "2px 7px", flexShrink: 0 }}>
                     {t(`enum.activity.${l.type}`)}
                   </span>
+                  {/* Race flag — pulled out of the inline subtype text into its
+                      own trophy chip with a background so it actually reads as
+                      "this was a race" (the faint "▲ RACE" text didn't). */}
+                  {l.subTypes.includes("Race") && (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 3, flexShrink: 0,
+                      fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600,
+                      background: "var(--moss)", color: "var(--ink-inv)",
+                      padding: "2px 6px", letterSpacing: "0.04em",
+                    }}>🏆 {t("enum.subtype.Race")}</span>
+                  )}
                   {/* Sub-types — inline joined text, no chips. Allows ellipsis
-                      if too long (e.g. "Lower Body · Core · Upper Body"). */}
+                      if too long (e.g. "Lower Body · Core · Upper Body"). Race
+                      is excluded here — it's the trophy chip above. */}
                   {l.subTypes.length > 0 && (() => {
                     const visible = l.subTypes.filter(st => {
-                      if (RUN_FLAGS.includes(st)) return true;
+                      if (RUN_FLAGS.includes(st)) return false;
                       if (RUN_PACE_TYPES.includes(st)) return l.type === "Road Run";
                       return l.type === "Strength";
                     });
@@ -625,24 +637,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   <CompactMetrics log={l} t={t} />
                 </div>
 
-                {/* Expanded: extra metrics + Edit button */}
+                {/* Expanded: extra metrics. Edit/Delete now live in the
+                    long-press action modal, so no inline Edit button here. */}
                 {isExpanded && (
                   <div style={{
                     borderTop: "1px solid var(--rule-soft)", paddingTop: 8, marginTop: 2,
                     display: "flex", flexDirection: "column", gap: 8,
                   }}>
                     <ExpandedMetrics log={l} t={t} />
-                    <button
-                      disabled={l.isOptimistic}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (l.isOptimistic) return;
-                        setExpandedId(null);
-                        startEdit(l);
-                      }}
-                      style={{ ...s.btn, alignSelf: "flex-start", fontSize: 12, padding: "6px 14px", minHeight: 36, opacity: l.isOptimistic ? 0.5 : 1 }}>
-                      {l.isOptimistic ? t("activities.saving") : t("activities.edit")}
-                    </button>
                   </div>
                 )}
               </div>
@@ -698,11 +700,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     return l.type === "Strength";
                   }).map(st => {
                     const isFlag = RUN_FLAGS.includes(st);
+                    // Race flag → filled trophy chip (matches the mobile card),
+                    // so it reads as a clear marker rather than a faint outline.
                     return (
                       <div key={st} style={isFlag
-                        ? { ...s.subTag, background: "rgba(181,78,26,0.08)", color: "var(--warn)", borderColor: "rgba(181,78,26,0.3)" }
+                        ? { ...s.subTag, display: "inline-flex", alignItems: "center", gap: 3, background: "var(--moss)", color: "var(--ink-inv)", borderColor: "var(--moss)" }
                         : s.subTag}>
-                        {isFlag ? "▲ " : ""}{t(`enum.subtype.${st}`)}
+                        {isFlag ? "🏆 " : ""}{t(`enum.subtype.${st}`)}
                       </div>
                     );
                   })}

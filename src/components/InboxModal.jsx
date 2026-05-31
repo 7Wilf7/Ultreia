@@ -77,17 +77,18 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
 
   return (
     <ModalRoot onClose={onClose}>
-      <div onClick={onClose} style={{
+      <div onClick={onClose} className="ts-overlay-in" style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",
         backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 9999, padding: 16, overscrollBehavior: "contain",
       }}>
-        <div onClick={e => e.stopPropagation()} style={{
+        <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
           background: "var(--bg-elevated)", border: "1px solid var(--rule)",
           borderRadius: 4, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
-          width: "100%", maxWidth: 480, maxHeight: "calc(100dvh - 32px)",
+          // Was full-height; trimmed ~1/3 so it reads as a card, not a page.
+          width: "100%", maxWidth: 420, maxHeight: "min(560px, 66dvh)",
           display: "flex", flexDirection: "column",
           padding: "22px 24px 20px", boxSizing: "border-box",
           fontFamily: "var(--font-sans)",

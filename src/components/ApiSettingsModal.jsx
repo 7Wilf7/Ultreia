@@ -75,9 +75,9 @@ export function ApiSettingsModal({
 
   return (
     <ModalRoot onClose={onClose}>
-    <div onClick={onClose} style={s.modalOverlay(isMobile)}>
+    <div onClick={onClose} style={s.modalOverlay(isMobile, { float: true })}>
       <div onClick={e => e.stopPropagation()}
-        style={s.modalCard(isMobile, { maxWidth: 600 })}>
+        style={s.modalCard(isMobile, { maxWidth: 600, float: true })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>

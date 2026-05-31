@@ -57,7 +57,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
     setLocating(true);
     setLocError("");
     try {
-      const loc = await getCurrentLocation({}); // force device path (no defaults)
+      const loc = await getCurrentLocation({ forceDevice: true }); // explicit GPS opt-in
       setLocDraft({ lng: String(loc.lng), lat: String(loc.lat) });
       const addr = await reverseGeocode({ lng: loc.lng, lat: loc.lat, lang });
       if (addr) setDraft(d => ({ ...d, city: addr }));
@@ -86,9 +86,9 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
   return (
     <ModalRoot onClose={mode === "setup" ? undefined : attemptClose}>
     <div onClick={mode === "setup" ? undefined : attemptClose}
-      style={s.modalOverlay(isMobile)}>
+      style={s.modalOverlay(isMobile, { float: true })}>
       <div onClick={e => e.stopPropagation()}
-        style={s.modalCard(isMobile, { maxWidth: 680, bg: "#fff" })}>
+        style={s.modalCard(isMobile, { maxWidth: 680, bg: "#fff", float: true })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>
@@ -130,13 +130,14 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
           <div style={{ ...s.label, marginBottom: 6 }}>
             {t("profile.gender")} <span style={{ color: "#c0392b" }}>*</span>
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <select value={draft.gender || ""}
+            onChange={e => setDraft({ ...draft, gender: e.target.value })}
+            style={{ ...s.input, maxWidth: 200 }}>
+            <option value="">—</option>
             {GENDERS.map(g => (
-              <button key={g.id} type="button"
-                onClick={() => setDraft({ ...draft, gender: g.id })}
-                style={s.chip(draft.gender === g.id)}>{t(`enum.gender.${g.id}`)}</button>
+              <option key={g.id} value={g.id}>{t(`enum.gender.${g.id}`)}</option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Location — address text (feeds the AI prompt) + GPS auto-fill +
@@ -178,13 +179,14 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Occupation (with Other free-text) */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.day_job")}</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <select value={draft.occupation || ""}
+            onChange={e => setDraft({ ...draft, occupation: e.target.value })}
+            style={{ ...s.input, maxWidth: 260 }}>
+            <option value="">—</option>
             {OCCUPATIONS.map(o => (
-              <button key={o.id} type="button"
-                onClick={() => setDraft({ ...draft, occupation: o.id })}
-                style={s.chip(draft.occupation === o.id)}>{t(`enum.occ.${o.id}`)}</button>
+              <option key={o.id} value={o.id}>{t(`enum.occ.${o.id}`)}</option>
             ))}
-          </div>
+          </select>
           {draft.occupation === "other" && (
             <input type="text"
               placeholder={t("profile.occupation_other_placeholder")}
@@ -200,13 +202,14 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             {t("profile.years_training")} <span style={{ color: "#c0392b" }}>*</span>
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.years_training_hint")}</span>
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <select value={draft.experience || ""}
+            onChange={e => setDraft({ ...draft, experience: e.target.value })}
+            style={{ ...s.input, maxWidth: 260 }}>
+            <option value="">—</option>
             {RUN_EXPERIENCE.map(o => (
-              <button key={o.id} type="button"
-                onClick={() => setDraft({ ...draft, experience: o.id })}
-                style={s.chip(draft.experience === o.id)}>{t(`enum.exp.${o.id}`)}</button>
+              <option key={o.id} value={o.id}>{t(`enum.exp.${o.id}`)}</option>
             ))}
-          </div>
+          </select>
         </div>
 
         {/* Race types done */}
@@ -279,14 +282,13 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             </label>
           </div>
           <div style={{ ...s.label, marginBottom: 6, fontSize: 12 }}>{t("profile.hr_zone_method")}</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          <select value={draft.hrZoneMethod || ""}
+            onChange={e => setDraft({ ...draft, hrZoneMethod: e.target.value })}
+            style={{ ...s.input, maxWidth: 260, marginBottom: 8 }}>
             {HR_ZONE_METHODS.map(m => (
-              <button key={m.id} type="button"
-                onClick={() => setDraft({ ...draft, hrZoneMethod: m.id })}
-                title={m.note}
-                style={s.chip(draft.hrZoneMethod === m.id)}>{m.label}</button>
+              <option key={m.id} value={m.id} title={m.note}>{m.label}</option>
             ))}
-          </div>
+          </select>
           {(() => {
             const zones = computeHRZones(draft.restingHR, draft.maxHR, draft.hrZoneMethod);
             if (!zones) {
@@ -330,6 +332,95 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         </div>
       </div>
     </div>
+    </ModalRoot>
+  );
+}
+
+// Read-only profile preview — opens FIRST when the user taps their profile.
+// Shows only the fields they've actually filled (no empty/optional clutter),
+// with a close button (top-right) and an edit button (top-left) that hands off
+// to the full ProfileEditor. Keeps the common "just check my info" path from
+// dropping the user straight into a long form.
+export function ProfilePreview({ profile, defaultLocation, onClose, onEdit }) {
+  const t = useT();
+  const isMobile = useIsMobile();
+  const p = profile || {};
+  const age = calculateAge(p.birthDate);
+
+  const rows = [];
+  const add = (label, val) => {
+    if (val == null) return;
+    if (Array.isArray(val)) { if (val.length) rows.push([label, val.join(" · ")]); return; }
+    const s2 = String(val).trim();
+    if (s2) rows.push([label, s2]);
+  };
+  add(t("profile.display_name"), p.displayName);
+  if (age != null) add(t("profile.age_label"), String(age));
+  if (p.gender) add(t("profile.gender"), t(`enum.gender.${p.gender}`));
+  add(t("profile.city"), p.city);
+  if (p.occupation) {
+    add(t("profile.day_job"), p.occupation === "other" ? (p.occupationOther || t("enum.occ.other")) : t(`enum.occ.${p.occupation}`));
+  }
+  if (p.experience) add(t("profile.years_training"), t(`enum.exp.${p.experience}`));
+  if (p.raceTypes?.length) add(t("profile.race_types_done"), p.raceTypes.map(id => t(`enum.race_done.${id}`)));
+  {
+    const inj = [];
+    if (p.recentInjuries?.length) inj.push(p.recentInjuries.map(id => t(`enum.injury.${id}`)).join(" · "));
+    if (p.injuriesNote?.trim()) inj.push(p.injuriesNote.trim());
+    if (inj.length) add(t("profile.recent_injuries"), inj.join(" · "));
+  }
+  {
+    const eq = [];
+    if (p.equipment?.length) eq.push(p.equipment.map(id => t(`enum.equip.${id}`)).join(" · "));
+    if (p.equipmentOther?.trim()) eq.push(p.equipmentOther.trim());
+    if (eq.length) add(t("profile.equipment"), eq.join(" · "));
+  }
+  if (p.restingHR || p.maxHR) {
+    const hr = [];
+    if (p.restingHR) hr.push(`${t("profile.resting_hr")} ${p.restingHR}`);
+    if (p.maxHR) hr.push(`${t("profile.max_hr")} ${p.maxHR}`);
+    add(t("profile.heart_rate"), hr.join(" · "));
+  }
+  if (defaultLocation?.lat != null && defaultLocation?.lng != null && !p.city) {
+    add(t("profile.loc_manual"), `${defaultLocation.lat}, ${defaultLocation.lng}`);
+  }
+  if (p.notes?.trim()) add(t("profile.notes"), p.notes.trim());
+
+  return (
+    <ModalRoot onClose={onClose}>
+      <div onClick={onClose} style={s.modalOverlay(isMobile, { float: true })}>
+        <div onClick={e => e.stopPropagation()}
+          style={s.modalCard(isMobile, { maxWidth: 480, bg: "#fff", float: true })}>
+          {/* Header: edit (left) · title · close (right) */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <button onClick={onEdit} style={{ ...s.btnGhost, fontSize: 13, padding: "6px 12px" }}>
+              {t("profile.edit")}
+            </button>
+            <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--ink-1)" }}>
+              {t("settings.profile")}
+            </h2>
+            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+          </div>
+
+          {rows.length === 0 ? (
+            <div style={{ ...s.muted, lineHeight: 1.6, padding: "8px 0 16px" }}>
+              {t("profile.preview_empty")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              {rows.map(([label, val], i) => (
+                <div key={i} style={{
+                  display: "flex", gap: 12, padding: "10px 0",
+                  borderBottom: i < rows.length - 1 ? "1px solid var(--rule-soft)" : "none",
+                }}>
+                  <div style={{ ...s.label, margin: 0, flex: "0 0 38%", minWidth: 0 }}>{label}</div>
+                  <div style={{ fontSize: 14, color: "var(--ink-1)", flex: 1, minWidth: 0, lineHeight: 1.5, wordBreak: "break-word" }}>{val}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </ModalRoot>
   );
 }

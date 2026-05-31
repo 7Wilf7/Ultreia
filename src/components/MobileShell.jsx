@@ -1,6 +1,22 @@
+import { useRef } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
+
+// Walk up from the touch target: if any ancestor is itself horizontally
+// scrollable (charts, wide tables, the filter dropdown), a horizontal drag
+// there belongs to that element — NOT a tab swipe. Lets us ignore those.
+function inHorizontalScroller(node) {
+  let el = node;
+  while (el && el !== document.body) {
+    if (el.scrollWidth > el.clientWidth + 4) {
+      const ov = getComputedStyle(el).overflowX;
+      if (ov === "auto" || ov === "scroll") return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
 
 /**
  * Mobile chrome — no top header, content slot, fixed bottom 5-tab nav.
@@ -28,6 +44,31 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
     { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
+  // ── Swipe between tabs ─────────────────────────────────────────────────
+  // A clearly-horizontal drag on the content area switches to the adjacent
+  // tab (left → next, right → prev). Thresholds are deliberately strict
+  // (≥70px and horizontal at least 2× the vertical) so it never fights
+  // vertical scrolling or a card tap. Drags that begin inside a horizontal
+  // scroller are left alone (see inHorizontalScroller).
+  const touch = useRef(null);
+  function onTouchStart(e) {
+    if (e.touches.length !== 1) { touch.current = null; return; }
+    const p = e.touches[0];
+    touch.current = { x: p.clientX, y: p.clientY, skip: inHorizontalScroller(e.target) };
+  }
+  function onTouchEnd(e) {
+    const st = touch.current;
+    touch.current = null;
+    if (!st || st.skip) return;
+    const p = e.changedTouches?.[0];
+    if (!p) return;
+    const dx = p.clientX - st.x;
+    const dy = p.clientY - st.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    if (dx < 0 && tab < TABS.length - 1) setTab(tab + 1);
+    else if (dx > 0 && tab > 0) setTab(tab - 1);
+  }
+
   return (
     <div style={{
       // Lock the shell to exactly the viewport — no body-level scroll, no
@@ -44,7 +85,10 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
           tabs that fit (Calendar, AI Coach, Settings) use height: 100%
           flex layouts and never overflow. overscroll-behavior: contain
           keeps drag gestures from bouncing the page. */}
-      <main style={{
+      <main
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        style={{
         flex: 1,
         minHeight: 0,
         overflowY: "auto",

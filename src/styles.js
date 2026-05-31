@@ -148,45 +148,63 @@ export const s = {
   // it's a centered card with the given maxWidth. Use:
   //   <div style={s.modalOverlay(isMobile)}>
   //     <div style={s.modalCard(isMobile, { maxWidth: 600, bg: "..." })} ...>
-  modalOverlay: (isMobile) => ({
+  // `float` (opt): when true the modal is a centered floating card EVEN on
+  // mobile (instead of the default full-screen page). Use for short, dialog-
+  // like settings panels (profile, API keys, add-race, coach config) so they
+  // don't swallow the whole screen. Reading-pane modals (guide) keep full bleed.
+  modalOverlay: (isMobile, { float = false } = {}) => ({
     position: "fixed",
     top: 0, left: 0, right: 0, bottom: 0,
     background: "rgba(0,0,0,0.4)",
     display: "flex",
-    alignItems: isMobile ? "stretch" : "flex-start",
+    alignItems: isMobile ? (float ? "center" : "stretch") : "flex-start",
     justifyContent: "center",
     // 9999 — well above MobileShell's fixed nav (20). Combined with the
     // ModalRoot portal (which moves the overlay to document.body, escaping
     // any ancestor stacking context), z-index conflicts are avoided.
     zIndex: 9999,
-    padding: isMobile ? 0 : 20,
+    padding: isMobile ? (float ? 16 : 0) : 20,
     // NB: no overflow here. The CARD scrolls internally (see modalCard).
     // Previously the overlay scrolled, which on some Chromium builds caused
     // the modal card to slide up and reveal the page underneath through
     // the semi-transparent backdrop. Card-internal scroll keeps the backdrop
     // anchored to the viewport at all times.
     overscrollBehavior: "contain",
+    // Subtle backdrop blur + fade-in. Blur unifies the "second-level modal"
+    // feel across the app (inbox already blurred); fade is via ts-overlay-in.
+    backdropFilter: "blur(5px)",
+    WebkitBackdropFilter: "blur(5px)",
+    animation: "ts-overlay-in 0.16s ease-out",
   }),
-  modalCard: (isMobile, { maxWidth = 600, bg = "var(--bg-elevated)" } = {}) => ({
-    background: bg,
-    border: isMobile ? "none" : "1px solid var(--rule)",
-    borderRadius: isMobile ? 0 : 4,
-    boxShadow: isMobile ? "none" : "0 10px 40px rgba(0,0,0,0.2)",
-    width: "100%",
-    maxWidth: isMobile ? "none" : maxWidth,
-    margin: isMobile ? 0 : "20px auto",
-    // Mobile: card fills the viewport exactly and scrolls its own content.
-    // Desktop: card centers with a top margin and caps at viewport-minus-margins.
-    height: isMobile ? "100dvh" : "auto",
-    maxHeight: isMobile ? "100dvh" : "calc(100dvh - 40px)",
-    overflowY: "auto",
-    overscrollBehavior: "contain",
-    WebkitOverflowScrolling: "touch",
-    padding: isMobile
-      ? "calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)"
-      : 24,
-    boxSizing: "border-box",
-  }),
+  modalCard: (isMobile, { maxWidth = 600, bg = "var(--bg-elevated)", float = false } = {}) => {
+    // Floating mobile card: behaves like the desktop centered card (border,
+    // radius, shadow, capped height with internal scroll) instead of a
+    // full-screen page. Desktop is unaffected by `float`.
+    const floatMobile = isMobile && float;
+    return {
+      background: bg,
+      border: floatMobile || !isMobile ? "1px solid var(--rule)" : "none",
+      borderRadius: floatMobile ? 12 : (isMobile ? 0 : 4),
+      boxShadow: floatMobile || !isMobile ? "0 10px 40px rgba(0,0,0,0.2)" : "none",
+      width: "100%",
+      maxWidth: (isMobile && !float) ? "none" : (floatMobile ? 460 : maxWidth),
+      margin: (isMobile && !float) ? 0 : (floatMobile ? "auto" : "20px auto"),
+      // Full-bleed mobile: fills the viewport. Floating mobile / desktop: sizes
+      // to content, capped so it never exceeds the viewport (scrolls inside).
+      height: (isMobile && !float) ? "100dvh" : "auto",
+      maxHeight: (isMobile && !float) ? "100dvh" : (floatMobile ? "calc(100dvh - 32px)" : "calc(100dvh - 40px)"),
+      overflowY: "auto",
+      overscrollBehavior: "contain",
+      WebkitOverflowScrolling: "touch",
+      padding: (isMobile && !float)
+        ? "calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)"
+        : (floatMobile ? "20px 18px" : 24),
+      boxSizing: "border-box",
+      // Grow-in entrance (see index.css ts-modal-in).
+      animation: "ts-modal-in 0.2s cubic-bezier(0.2,0.7,0.3,1)",
+      transformOrigin: "center center",
+    };
+  },
   // Close button (the × in modal headers). Bumped tap target so it works
   // reliably on touch — desktop also benefits from a larger hit area.
   modalCloseBtn: {

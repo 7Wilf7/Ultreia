@@ -29,6 +29,7 @@ export function SettingsMobileTab({
   pushHours,
   pushTimes,
   pushFlash,
+  profileFlash,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -72,13 +73,19 @@ export function SettingsMobileTab({
             onClick={() => { setAccountOpen(false); onChangePassword(); }}
           />
           <SubCell
-            primary={signingOut ? "…" : t("settings.sign_out")}
+            primary={signingOut
+              ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <span className="ts-spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
+                  {t("settings.signing_out")}
+                </span>
+              : t("settings.sign_out")}
             danger
             onClick={handleSignOut}
           />
         </div>
       )}
       <Cell
+        flash={profileFlash}
         primary={t("settings.profile")}
         secondary={t("settings.profile_desc")}
         onClick={onOpenProfile}
@@ -116,7 +123,7 @@ export function SettingsMobileTab({
       />
       <Cell
         primary={t("settings.language")}
-        rightValue={lang === "en" ? "English" : "中文"}
+        rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
         onClick={onToggleLang}
       />
       <Cell
@@ -125,6 +132,47 @@ export function SettingsMobileTab({
         onClick={onOpenGuide}
       />
       <UpdateChecker />
+    </div>
+  );
+}
+
+// Oval 中/EN segmented switch — a knob slides to the active side on tap.
+// Rendered inside the language Cell as its right-hand control. Uses a div
+// (not a button) to stay valid nested inside the Cell's <button>, and stops
+// propagation so it toggles exactly once.
+function LangSwitch({ lang, onToggle }) {
+  const isEn = lang === "en";
+  return (
+    <div
+      role="switch"
+      aria-checked={isEn}
+      aria-label="Language"
+      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      style={{
+        position: "relative", width: 76, height: 30, borderRadius: 15,
+        background: "var(--bg-sunken)", border: "1px solid var(--rule)",
+        cursor: "pointer", flexShrink: 0, userSelect: "none",
+        WebkitTapHighlightColor: "transparent",
+      }}>
+      {/* Sliding knob — left:2 for 中, left:38 for EN. */}
+      <div style={{
+        position: "absolute", top: 2, left: isEn ? 38 : 2,
+        width: 36, height: 24, borderRadius: 12,
+        background: "var(--ink-1)",
+        transition: "left 180ms cubic-bezier(0.2,0.7,0.3,1)",
+      }} />
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
+        <span style={{
+          flex: 1, textAlign: "center", fontSize: 13, fontFamily: "var(--font-sans)",
+          fontWeight: 600, zIndex: 1, transition: "color 180ms",
+          color: !isEn ? "var(--ink-inv)" : "var(--ink-3)",
+        }}>中</span>
+        <span style={{
+          flex: 1, textAlign: "center", fontSize: 11, fontFamily: "var(--font-mono)",
+          fontWeight: 600, zIndex: 1, letterSpacing: "0.04em", transition: "color 180ms",
+          color: isEn ? "var(--ink-inv)" : "var(--ink-3)",
+        }}>EN</span>
+      </div>
     </div>
   );
 }

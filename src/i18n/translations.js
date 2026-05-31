@@ -86,6 +86,7 @@ const dict = {
   "coach.profile_hub_hint":  { en: "Edit your runner profile — age, training history, HR zones, injury notes. These feed into every coach reply.", zh: "编辑你的跑者资料 —— 年龄、训练履历、心率区间、伤病备注。这些都会进入教练的每次回复。" },
   "coach.clear_hub_hint":    { en: "Permanently delete the entire chat history. Distill anything worth keeping into Memory first.", zh: "永久删除整个对话历史。先把值得留下的内容固化进长期记忆。" },
   "settings.sign_out":       { en: "Sign out",              zh: "退出登录" },
+  "settings.signing_out":    { en: "Signing out…",          zh: "退出中…" },
   "settings.app_section":    { en: "App",                   zh: "应用" },
   "settings.version":        { en: "Version",               zh: "版本" },
   "settings.check_update":   { en: "Check for updates",     zh: "检查更新" },
@@ -97,6 +98,7 @@ const dict = {
   "settings.update_downloading": { en: "Downloading…",      zh: "下载中…" },
   "settings.update_installing":  { en: "Opening installer…", zh: "正在打开安装…" },
   "settings.update_install_failed": { en: "In-app install failed — opening download in browser instead.", zh: "应用内安装失败 —— 已改用浏览器下载。" },
+  "settings.update_network_hint": { en: "Looks like a network/DNS issue — check your connection and try again.", zh: "看起来是网络/DNS 问题 —— 请检查网络后重试。" },
   "settings.update_view":    { en: "View release notes",    zh: "查看更新说明" },
   "settings.update_error":   { en: "Could not check for updates", zh: "无法检查更新" },
 
@@ -147,10 +149,14 @@ const dict = {
   "confirm.title.logs":   { en: "Delete {n} selected activities?", zh: "删除选中的 {n} 条活动？" },
   "confirm.title.race":   { en: "Delete this race?",        zh: "删除这场比赛？" },
   "confirm.title.chat":   { en: "Clear all chat messages?", zh: "清空所有聊天记录？" },
+  "confirm.body.chat":    { en: "This can't be undone. Tip: open Memory and run Update first to keep anything worth remembering before you clear.", zh: "此操作无法撤销。建议：清空前先打开「记忆」点一下「更新」，把值得留下的内容固化进长期记忆。" },
 
   // ===== Profile editor =====
   "profile.title_setup":  { en: "Welcome! Set up your profile", zh: "欢迎！请完善个人资料" },
   "profile.title_edit":   { en: "Personal Profile",         zh: "个人资料" },
+  "profile.edit":         { en: "Edit",                     zh: "编辑" },
+  "profile.age_label":    { en: "Age",                      zh: "年龄" },
+  "profile.preview_empty": { en: "No profile info yet. Tap Edit to fill it in.", zh: "还没填写资料，点「编辑」开始填写。" },
   "profile.desc_setup":   { en: "This data shapes how AI Coach gives advice. Filled once, edit anytime via the ⚙ icon.", zh: "这些信息会影响 AI 教练的建议方式。只需填写一次，之后可通过 ⚙ 图标随时修改。" },
   "profile.desc_edit":    { en: "Updated values are used in the next AI Coach message.", zh: "修改后从下一次 AI 教练对话开始生效。" },
   "profile.display_name":         { en: "Display Name",     zh: "显示名" },
@@ -575,6 +581,8 @@ const dict = {
   "races.location_clear":     { en: "Clear",                zh: "清除" },
   "races.weather_forecast":   { en: "Race-day forecast",     zh: "比赛日预报" },
   "races.weather_climate":    { en: "Typical for the date",  zh: "往年同期" },
+  "races.weather_actual":     { en: "Actual on race day",    zh: "当天实况" },
+  "races.weather_toggle":     { en: "Weather",               zh: "天气" },
   "races.weather_feels":      { en: "feels ",               zh: "体感" },
   "races.weather_rain":       { en: "rain ",                zh: "降水" },
 
@@ -613,6 +621,7 @@ const dict = {
   "coach.memory_edit":        { en: "Edit",                 zh: "编辑" },
   "coach.memory_auto_update": { en: "Auto-update from chat", zh: "从对话自动更新" },
   "coach.memory_updating":    { en: "Updating…",            zh: "更新中……" },
+  "coach.memory_ready_banner": { en: "Memory update ready — tap to review what to keep", zh: "记忆更新已就绪 —— 点击查看要保留/删除的内容" },
   "coach.memory_need_chat":   { en: "Chat with the coach first — there's nothing to summarize yet.", zh: "请先和教练聊几句，再使用自动更新。" },
   "coach.memory_empty_response":{ en: "The model returned an empty memory. Try again or edit manually.", zh: "模型返回空内容。请重试或手动编辑。" },
   "coach.memory_proposal_title":{ en: "Proposed update — review before accepting:", zh: "更新建议 —— 接受前请审核：" },

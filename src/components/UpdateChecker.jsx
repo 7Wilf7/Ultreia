@@ -110,12 +110,29 @@ export function UpdateChecker() {
           setDownloadPct(Math.min(100, Math.round((p.bytes / p.contentLength) * 100)));
         }
       });
-      const res = await Filesystem.downloadFile({
-        url: apkUrl,
-        path: "ts-update.apk",
-        directory: Directory.Cache,
-        progress: true,
-      });
+      // Download with one retry. The common failure is a transient DNS hiccup
+      // ("Unable to resolve host github.com") — the asset URL 302-redirects
+      // github.com → objects.githubusercontent.com, and a momentary network
+      // blip on either lookup aborts the whole download. A short backoff +
+      // single retry recovers most of those without bothering the user.
+      let res = null, lastErr = null;
+      for (let attempt = 0; attempt < 2 && !res; attempt++) {
+        try {
+          res = await Filesystem.downloadFile({
+            url: apkUrl,
+            path: "ts-update.apk",
+            directory: Directory.Cache,
+            progress: true,
+          });
+        } catch (e) {
+          lastErr = e;
+          if (attempt === 0) {
+            setDownloadPct(null);
+            await new Promise((r) => setTimeout(r, 1500));
+          }
+        }
+      }
+      if (!res) throw lastErr || new Error("download failed");
       const path = res?.path;
       if (!path) throw new Error("download returned no path");
       setInstallState("installing");
@@ -128,7 +145,14 @@ export function UpdateChecker() {
       // Surface the actual reason (so a failure is diagnosable) AND still fall
       // back to the browser download so the button never dead-ends. The message
       // persists in-app when the user returns from the browser.
-      setInstallMsg(`${t("settings.update_install_failed")} (${err?.message || String(err)})`);
+      const reason = err?.message || String(err);
+      // DNS / host-resolution failures are the common transient case — add a
+      // "check your network" hint so the user knows a retry will likely work.
+      const isNetwork = /resolve host|No address|network|timeout|unable to|failed to connect/i.test(reason);
+      setInstallMsg(
+        `${t("settings.update_install_failed")} (${reason})` +
+        (isNetwork ? ` ${t("settings.update_network_hint")}` : "")
+      );
       window.open(apkUrl, "_blank", "noreferrer");
     } finally {
       progressHandle?.remove?.();

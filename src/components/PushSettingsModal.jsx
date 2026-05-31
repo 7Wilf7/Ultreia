@@ -28,8 +28,6 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
       ? [...new Set(pushHours.map(h => `${String(h).padStart(2, "0")}:00`))].sort()
       : ["08:00"];
   const [times, setTimes] = useState(initial);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
 
   const detectedTz = (() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
@@ -51,36 +49,31 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
     });
   }
 
-  async function save() {
-    setBusy(true);
-    setMsg("");
-    try {
-      // De-dupe + sort on the way out; if enabling with no slots, keep ["08:00"].
-      const clean = [...new Set(times)].sort();
-      await setPushSettings({
-        pushEnabled: enabled,
-        pushTimes: enabled ? (clean.length ? clean : ["08:00"]) : clean,
-        pushTimezone: detectedTz || pushTimezone || "",
-      });
-      setMsg(t("push.saved"));
-      setTimeout(() => onClose(), 700);
-    } catch (e) {
-      setMsg(t("push.save_failed", { msg: e?.message || String(e) }));
-    } finally {
-      setBusy(false);
-    }
+  function save() {
+    // De-dupe + sort on the way out; if enabling with no slots, keep ["08:00"].
+    const clean = [...new Set(times)].sort();
+    // Fire-and-forget: local state updates synchronously inside setPushSettings
+    // (see updateSettings in App), so the Settings cell reflects the change
+    // immediately and we close without waiting on the DB round-trip. The write
+    // persists in the background; a failure only logs (it'll re-sync on reload).
+    Promise.resolve(setPushSettings({
+      pushEnabled: enabled,
+      pushTimes: enabled ? (clean.length ? clean : ["08:00"]) : clean,
+      pushTimezone: detectedTz || pushTimezone || "",
+    })).catch((e) => console.error("[push] settings save failed:", e));
+    onClose();
   }
 
   return (
     <ModalRoot onClose={onClose}>
-      <div onClick={onClose} style={{
+      <div onClick={onClose} className="ts-overlay-in" style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",
         backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 9999, padding: 16, overscrollBehavior: "contain",
       }}>
-        <div onClick={e => e.stopPropagation()} style={{
+        <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
           background: "var(--bg-elevated)", border: "1px solid var(--rule)",
           borderRadius: 4, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
           width: "100%", maxWidth: 480, maxHeight: "calc(100dvh - 32px)",
@@ -157,19 +150,9 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
             {t("push.apk_note")}
           </div>
 
-          {msg && (
-            <div style={{
-              color: msg.startsWith("✕") ? "var(--danger)" : "var(--moss-deep)",
-              fontSize: 12, marginBottom: 12, lineHeight: 1.5,
-            }}>{msg}</div>
-          )}
-
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
-            <button onClick={save} disabled={busy}
-              style={{ ...s.btn, opacity: busy ? 0.5 : 1 }}>
-              {busy ? "…" : t("common.save")}
-            </button>
+            <button onClick={save} style={s.btn}>{t("common.save")}</button>
           </div>
         </div>
       </div>

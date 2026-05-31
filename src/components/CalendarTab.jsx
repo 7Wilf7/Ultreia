@@ -47,7 +47,7 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, weatherCtx }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, weatherCtx, races }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -121,6 +121,16 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     }
     return m;
   }, [dailyNotes]);
+
+  // Race days (target + history) → a date-key set so each cell can show a
+  // trophy. Pulled straight from the races list so it stays in sync.
+  const raceDays = useMemo(() => {
+    const set = new Set();
+    for (const r of races || []) {
+      if (r.date) set.add(r.date);
+    }
+    return set;
+  }, [races]);
 
   const [openDay, setOpenDay] = useState(null);
 
@@ -245,6 +255,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
               isWeekend={isWeekend}
               logs={dayLogs}
               note={dayNote}
+              isRace={raceDays.has(key)}
               colIdx={i % 7}
               rowIdx={Math.floor(i / 7)}
               onClick={() => setOpenDay({ dateKey: key, isFuture })}
@@ -556,7 +567,7 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 //     bottom-right corner — independent from workouts.
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colIdx, rowIdx, onClick, t, isMobile }) {
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onClick, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
 
@@ -587,21 +598,27 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
           display: "flex", flexDirection: "column", alignItems: "center",
         }}
       >
-        {/* Day number — centered on mobile, smaller box for "today" */}
+        {/* Day number — centered on mobile, smaller box for "today". A trophy
+            sits to its right on race days (pulled from the races list). */}
         <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          fontWeight: isToday ? 600 : 500,
-          color: isToday ? "var(--ink-1)"
-                : isWeekend ? "var(--ink-3)"
-                : "var(--ink-2)",
-          fontVariantNumeric: "tabular-nums",
-          padding: isToday ? "0 4px" : "0",
-          border: isToday ? "1px solid var(--ink-1)" : "none",
-          borderRadius: isToday ? 3 : 0,
-          lineHeight: 1,
-          marginBottom: 2,
-        }}>{date.getDate()}</span>
+          display: "inline-flex", alignItems: "center", gap: 2,
+          marginBottom: 2, lineHeight: 1,
+        }}>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 12,
+            fontWeight: isToday ? 600 : 500,
+            color: isToday ? "var(--ink-1)"
+                  : isWeekend ? "var(--ink-3)"
+                  : "var(--ink-2)",
+            fontVariantNumeric: "tabular-nums",
+            padding: isToday ? "0 4px" : "0",
+            border: isToday ? "1px solid var(--ink-1)" : "none",
+            borderRadius: isToday ? 3 : 0,
+            lineHeight: 1,
+          }}>{date.getDate()}</span>
+          {isRace && <span aria-label="race" style={{ fontSize: 9, lineHeight: 1 }}>🏆</span>}
+        </span>
 
         {/* Activity bars — short horizontal pills, one per workout, stacked
             vertically. With the new shorter cell we cap at 3 bars before
@@ -668,7 +685,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
         overflow: "hidden",
       }}
     >
-      {/* Day number — weather moved out of the grid into the strip below. */}
+      {/* Day number — weather moved out of the grid into the strip below.
+          Trophy to the right of the date on race days. */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         marginBottom: 8,
@@ -686,6 +704,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, colI
           borderRadius: isToday ? 3 : 0,
           lineHeight: 1,
         }}>{date.getDate()}</span>
+        {isRace && <span aria-label="race" title={t("filter.child.Race") || "Race"} style={{ fontSize: 13, lineHeight: 1 }}>🏆</span>}
       </div>
 
       {/* Workouts */}

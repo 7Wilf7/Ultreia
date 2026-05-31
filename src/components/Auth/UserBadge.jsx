@@ -118,7 +118,12 @@ export function UserBadge({ user, signOut, onChangePassword }) {
                 cursor: signingOut ? "default" : "pointer",
               }}
             >
-              {signingOut ? "…" : t("settings.sign_out")}
+              {signingOut
+                ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span className="ts-spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                    {t("settings.signing_out")}
+                  </span>
+                : t("settings.sign_out")}
             </button>
           </div>
         )}

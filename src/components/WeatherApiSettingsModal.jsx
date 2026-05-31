@@ -51,7 +51,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
 
   return (
     <ModalRoot onClose={onClose}>
-      <div onClick={onClose} style={{
+      <div onClick={onClose} className="ts-overlay-in" style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",
         backdropFilter: "blur(6px)",
@@ -60,7 +60,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
         zIndex: 9999, padding: 16,
         overscrollBehavior: "contain",
       }}>
-        <div onClick={e => e.stopPropagation()} style={{
+        <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)",
           borderRadius: 4,

@@ -41,6 +41,13 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Daily-coach tray notifications. Android 13+ (API 33) gates posting
+         notifications behind this runtime permission; without it declared the
+         OS silently drops FCM tray messages even though the push arrives. The
+         @capacitor/push-notifications plugin requests it at runtime, but the
+         permission must be declared here for that request to take effect. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- In-app self-update: download the release APK and launch the system
          package installer on it (see ApkInstallerPlugin). The OS still gates
          the install behind the user's per-source "allow unknown apps" toggle. -->

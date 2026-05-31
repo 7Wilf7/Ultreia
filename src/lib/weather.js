@@ -22,7 +22,18 @@ function roundCoord(n) {
 // Returns { lng, lat, source } where source ∈ 'native' | 'browser' | 'default'.
 // Throws if no source is available — caller decides whether to surface or fall
 // back to "weather unavailable".
-export async function getCurrentLocation({ defaultLng, defaultLat } = {}) {
+//
+// Default-location-first: if the user has set a fixed training location we use
+// it and DON'T touch device GPS. Calling device geolocation is what pops
+// Android's "Location Accuracy" (Google Play Services) dialog — and a runner's
+// training spot rarely moves, so a manual default is both quieter and more
+// accurate. Pass `forceDevice: true` (the explicit "use current location"
+// affordance) to deliberately opt into GPS and refresh the saved coords.
+export async function getCurrentLocation({ defaultLng, defaultLat, forceDevice = false } = {}) {
+  const hasDefault = Number.isFinite(Number(defaultLng)) && Number.isFinite(Number(defaultLat));
+  if (hasDefault && !forceDevice) {
+    return { lng: roundCoord(defaultLng), lat: roundCoord(defaultLat), source: 'default' };
+  }
   if (isNative()) {
     try {
       // Low accuracy on purpose: city-level is all weather needs, and
@@ -60,7 +71,7 @@ export async function getCurrentLocation({ defaultLng, defaultLat } = {}) {
     }
   }
 
-  if (Number.isFinite(Number(defaultLng)) && Number.isFinite(Number(defaultLat))) {
+  if (hasDefault) {
     return {
       lng: roundCoord(defaultLng),
       lat: roundCoord(defaultLat),
@@ -614,6 +625,61 @@ export async function fetchClimateNormal({ lat, lng, date }) {
   }
 }
 
+// ── Actual past-day weather from the Open-Meteo ERA5 archive. Unlike
+// fetchClimateNormal (which averages a ±4-day window across 5 years for a
+// TYPICAL value), this returns what the weather ACTUALLY was on one specific
+// historical date — works back to 1940, lags ~5 days behind today. Used for
+// finished (history) races so the card can show the real race-day conditions.
+// Daily granularity (max/min/apparent/precip) — for a long race the min–max
+// span is the useful "range"; for a short one we surface the day average as a
+// stand-in for start temp (history races don't store a start time). Returns a
+// forecast-shaped object { source:'archive', ... } or null.
+export async function fetchActualDailyWeather({ lat, lng, date }) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  const target = new Date(`${date}T00:00:00`);
+  if (isNaN(target.getTime())) return null;
+  const url = `https://archive-api.open-meteo.com/v1/archive`
+    + `?latitude=${roundCoord(lat)}&longitude=${roundCoord(lng)}`
+    + `&start_date=${date}&end_date=${date}`
+    + `&daily=temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_mean,precipitation_sum`
+    + `&timezone=auto`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const dd = (await resp.json()).daily;
+    if (!dd || !Array.isArray(dd.time) || !dd.time.length) return null;
+    const r1 = (x) => (x == null || !Number.isFinite(Number(x))) ? null : Math.round(Number(x) * 10) / 10;
+    const tMax = r1(dd.temperature_2m_max?.[0]);
+    const tMin = r1(dd.temperature_2m_min?.[0]);
+    if (tMax == null && tMin == null) return null;
+    return {
+      tempMaxC: tMax,
+      tempMinC: tMin,
+      tempAvgC: (tMax != null && tMin != null) ? r1((tMax + tMin) / 2) : (tMax ?? tMin),
+      apparentMaxC: r1(dd.apparent_temperature_max?.[0]),
+      apparentAvgC: r1(dd.apparent_temperature_mean?.[0]),
+      precipMm: r1(dd.precipitation_sum?.[0]),
+      source: 'archive',
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Resolver for a FINISHED race's actual weather, cached. Past archive data is
+// immutable, so cache for 30 days (a refetch only matters if coords/date
+// change, which busts the key anyway). Returns { kind:'archive', ... } or null.
+export async function fetchHistoryRaceWeather({ lat, lng, date }) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  const cached = _readRaceWx(lat, lng, date);
+  if (cached) return cached;
+  const actual = await fetchActualDailyWeather({ lat, lng, date });
+  if (!actual) return null;
+  const v = { kind: 'archive', ...actual };
+  _writeRaceWx(lat, lng, date, v);
+  return v;
+}
+
 // localStorage cache for race-day weather so switching to the Races tab is
 // instant and we don't re-hit the API every time. Climate normals are
 // effectively constant → cache 7 days (also forces a re-eval within a week, so
@@ -632,7 +698,10 @@ function _readRaceWx(lat, lng, date) {
 function _writeRaceWx(lat, lng, date, value) {
   try {
     let expires;
-    if (value.kind === "climate") {
+    if (value.kind === "archive") {
+      // Actual past-day weather never changes → cache 30 days.
+      expires = Date.now() + 30 * 24 * 60 * 60 * 1000;
+    } else if (value.kind === "climate") {
       expires = Date.now() + 7 * 24 * 60 * 60 * 1000;
     } else {
       const m = new Date(); m.setHours(24, 0, 0, 0); expires = m.getTime();

@@ -170,6 +170,29 @@ summary::-webkit-details-marker { display: none; }
   animation: ts-spin 0.8s linear infinite;
 }
 
+/* Second-level modal entrance — the overlay fades in while the card grows
+   from slightly small. Keeps the appearance from feeling abrupt. Respect
+   reduced-motion below. */
+@keyframes ts-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ts-modal-in {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.ts-overlay-in {
+  animation: ts-overlay-in 0.16s ease-out;
+}
+.ts-modal-in {
+  animation: ts-modal-in 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transform-origin: center center;
+  will-change: transform, opacity;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ts-overlay-in, .ts-modal-in { animation: none; }
+}
+
 /* ============================================================
    Mobile-only overrides
    ------------------------------------------------------------

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
-import { forwardGeocode, fetchRaceDayWeather, skyconMeta } from "../lib/weather";
+import { forwardGeocode, fetchRaceDayWeather, fetchHistoryRaceWeather, skyconMeta } from "../lib/weather";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import { ClockIcon } from "./Icons";
@@ -78,13 +78,24 @@ export function RacesTab({
   // out → climate normal. Fetched lazily, keyed by race id. Re-runs when the
   // race list changes (new/edited location or date).
   const [raceWeather, setRaceWeather] = useState({});
+  // Per-race weather fold state — weather is hidden until the user taps the
+  // "weather" chip on the card (keeps the cards compact). Keyed by race id.
+  const [weatherOpen, setWeatherOpen] = useState({});
+  function toggleWeather(id, e) {
+    e?.stopPropagation();
+    setWeatherOpen(prev => ({ ...prev, [id]: !prev[id] }));
+  }
   useEffect(() => {
-    const targets = races.filter(r => r.isTarget && r.category !== "Hyrox"
+    // Outdoor races with a location. Targets (future) → forecast/climate normal;
+    // history (past) → the ACTUAL archived weather of that day. Hyrox is indoor.
+    const located = races.filter(r => r.category !== "Hyrox"
       && Number.isFinite(r.locationLat) && Number.isFinite(r.locationLng) && r.date);
     let cancelled = false;
     (async () => {
-      for (const r of targets) {
-        const w = await fetchRaceDayWeather({ lat: r.locationLat, lng: r.locationLng, date: r.date });
+      for (const r of located) {
+        const w = r.isTarget
+          ? await fetchRaceDayWeather({ lat: r.locationLat, lng: r.locationLng, date: r.date })
+          : await fetchHistoryRaceWeather({ lat: r.locationLat, lng: r.locationLng, date: r.date });
         if (cancelled) return;
         if (w) setRaceWeather(prev => ({ ...prev, [r.id]: w }));
       }
@@ -95,31 +106,75 @@ export function RacesTab({
   // Compact race-day weather line for a target card. Forecast → skycon icon +
   // range + feels-like; climate → range + feels-like + typical rain. Returns
   // null when no weather was resolved for this race.
+  // ≥3h sessions get a temperature RANGE; shorter ones a single representative
+  // temp. History races store no start time, so for a short past race we use
+  // the day average in place of "start temp".
+  const LONG_RACE_SEC = 3 * 3600;
+
   function renderRaceWeather(r) {
     const w = raceWeather[r.id];
     if (!w) return null;
+    const isLong = Number(r.resultSeconds) >= LONG_RACE_SEC;
     const parts = [];
     if (w.kind === "forecast" && w.skycon) {
       const meta = skyconMeta(w.skycon, lang);
       if (meta?.icon) parts.push(meta.icon);
     }
-    if (Number.isFinite(w.tempMinC) && Number.isFinite(w.tempMaxC)) parts.push(`${w.tempMinC}–${w.tempMaxC}°C`);
-    else if (Number.isFinite(w.tempAvgC)) parts.push(`${w.tempAvgC}°C`);
+    // History (archive): long race → min–max range; short → day average.
+    // Target (forecast/climate): keep the existing min–max-or-avg behaviour.
+    if (w.kind === "archive") {
+      if (isLong && Number.isFinite(w.tempMinC) && Number.isFinite(w.tempMaxC)) {
+        parts.push(`${w.tempMinC}–${w.tempMaxC}°C`);
+      } else if (Number.isFinite(w.tempAvgC)) {
+        parts.push(`${w.tempAvgC}°C`);
+      } else if (Number.isFinite(w.tempMaxC)) {
+        parts.push(`${w.tempMaxC}°C`);
+      }
+    } else if (Number.isFinite(w.tempMinC) && Number.isFinite(w.tempMaxC)) {
+      parts.push(`${w.tempMinC}–${w.tempMaxC}°C`);
+    } else if (Number.isFinite(w.tempAvgC)) {
+      parts.push(`${w.tempAvgC}°C`);
+    }
     const app = Number.isFinite(w.apparentAvgC) ? w.apparentAvgC : w.apparentMaxC;
     if (Number.isFinite(app)) parts.push(`${t("races.weather_feels")}${Math.round(app)}°C`);
-    if (w.kind === "climate" && Number.isFinite(w.precipMm) && w.precipMm >= 0.5) {
+    if ((w.kind === "climate" || w.kind === "archive") && Number.isFinite(w.precipMm) && w.precipMm >= 0.5) {
       parts.push(`${t("races.weather_rain")}${w.precipMm}mm`);
     }
     if (!parts.length) return null;
+    const sourceLabel = w.kind === "forecast" ? t("races.weather_forecast")
+      : w.kind === "archive" ? t("races.weather_actual")
+      : t("races.weather_climate");
     return (
       <div style={{
         display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap",
         fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)",
+        marginTop: 2,
       }}>
-        <span style={{ color: "var(--ink-3)" }}>
-          {w.kind === "forecast" ? t("races.weather_forecast") : t("races.weather_climate")}
-        </span>
+        <span style={{ color: "var(--ink-3)" }}>{sourceLabel}</span>
         <span>{parts.join(" ")}</span>
+      </div>
+    );
+  }
+
+  // Folded weather block for a race card: a small tappable chip that toggles
+  // the weather line. Renders nothing if there's no weather for this race.
+  function renderRaceWeatherFold(r) {
+    if (!raceWeather[r.id]) return null;
+    const open = !!weatherOpen[r.id];
+    return (
+      <div style={{ marginTop: 1 }}>
+        <button
+          onClick={(e) => toggleWeather(r.id, e)}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            background: "transparent", border: "1px solid var(--rule)",
+            borderRadius: 2, padding: "3px 9px", minHeight: 0,
+            fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)",
+            cursor: "pointer", WebkitTapHighlightColor: "transparent",
+          }}>
+          🌤 {t("races.weather_toggle")} <span style={{ fontSize: 9, color: "var(--ink-3)" }}>{open ? "▲" : "▼"}</span>
+        </button>
+        {open && renderRaceWeather(r)}
       </div>
     );
   }
@@ -207,6 +262,17 @@ export function RacesTab({
   }
   function attemptCloseEdit() {
     if (!isEditFormDirty() || window.confirm(t("form.discard_confirm"))) cancelEdit();
+  }
+
+  // Add form is also a blurred modal now (was inline on the page). Same
+  // dirty-guard so a tap on the backdrop doesn't silently drop a half-entered
+  // race. "Dirty" = the draft has diverged from the pristine empty template.
+  function isAddFormDirty() {
+    if (!addingMode) return false;
+    return JSON.stringify(newRace) !== JSON.stringify(EMPTY_RACE(addingMode === "target"));
+  }
+  function attemptCloseAdd() {
+    if (!isAddFormDirty() || window.confirm(t("form.discard_confirm"))) cancelAdd();
   }
 
   function deleteRace(id) {
@@ -483,14 +549,28 @@ export function RacesTab({
       )}
       {editingRaceId && (
         <ModalRoot onClose={attemptCloseEdit}>
-          <div onClick={attemptCloseEdit} style={{
+          <div onClick={attemptCloseEdit} className="ts-overlay-in" style={{
             position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
             backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 9999, padding: 16, overflowY: "auto", overscrollBehavior: "contain",
           }}>
-            <div onClick={e => e.stopPropagation()} style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
+            <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
               {renderRaceForm("edit")}
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+      {addingMode && !editingRaceId && (
+        <ModalRoot onClose={attemptCloseAdd}>
+          <div onClick={attemptCloseAdd} className="ts-overlay-in" style={{
+            position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
+            backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+            display: "flex", alignItems: "flex-start", justifyContent: "center",
+            zIndex: 9999, padding: 16, overflowY: "auto", overscrollBehavior: "contain",
+          }}>
+            <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
+              {renderRaceForm("add")}
             </div>
           </div>
         </ModalRoot>
@@ -604,8 +684,6 @@ export function RacesTab({
               </div>
             )}
 
-            {addingMode && !editingRaceId && renderRaceForm("add")}
-
             {mobileSubTab === "target" && renderMobileSection({
               kind: "target",
               list: targetRacesList,
@@ -651,8 +729,6 @@ export function RacesTab({
           </div>
         </div>
       )}
-
-      {addingMode && !editingRaceId && renderRaceForm("add")}
 
       {renderTargetSection()}
       {renderHistorySection()}
@@ -758,7 +834,7 @@ export function RacesTab({
             </select>
           )}
           {r.itraScore && <span style={{ ...s.subTag, fontSize: 10, alignSelf: "flex-start" }}>ITRA {r.itraScore}</span>}
-          {renderRaceWeather(r)}
+          {renderRaceWeatherFold(r)}
           {/* Race day reached → let the user enter a finish time, which moves
               this race from Target to History. */}
           {r.isTarget && daysUntilRace(r.date, now) !== null && daysUntilRace(r.date, now) <= 0 && (

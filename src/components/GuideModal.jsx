@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -206,6 +206,22 @@ export function GuideModal({ onClose }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [active, setActive] = useState(0);
+  const [tocOpen, setTocOpen] = useState(false);
+  const tocRef = useRef(null);
+
+  // Close the inline TOC on outside tap (mirrors GlobalFilter).
+  useEffect(() => {
+    if (!tocOpen) return;
+    function onClick(e) {
+      if (tocRef.current && !tocRef.current.contains(e.target)) setTocOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("touchstart", onClick);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("touchstart", onClick);
+    };
+  }, [tocOpen]);
 
   function navigateToFile(file) {
     const idx = CHAPTERS.findIndex(c => c.file.toLowerCase() === file.toLowerCase());
@@ -215,6 +231,13 @@ export function GuideModal({ onClose }) {
       const body = document.getElementById("guide-scroll-body");
       if (body) body.scrollTop = 0;
     }
+  }
+
+  function pickChapter(idx) {
+    setActive(idx);
+    setTocOpen(false);
+    const body = document.getElementById("guide-scroll-body");
+    if (body) body.scrollTop = 0;
   }
 
   const components = makeGuideComponents(navigateToFile, isMobile);
@@ -241,14 +264,50 @@ export function GuideModal({ onClose }) {
               <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink-1)" }}>{t("settings.guide")}</h2>
               <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
             </div>
-            <select
-              value={active}
-              onChange={e => navigateToFile(CHAPTERS[Number(e.target.value)].file)}
-              style={{ ...s.input, height: 40, fontSize: 14, padding: "0 10px" }}>
-              {CHAPTERS.map((c, i) => (
-                <option key={c.file} value={i}>{c.title}</option>
-              ))}
-            </select>
+            {/* Inline TOC dropdown — opens a list right under the box instead
+                of the OS's full-screen native <select> picker. */}
+            <div ref={tocRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setTocOpen(o => !o)}
+                style={{
+                  ...s.input, height: 40, fontSize: 14, padding: "0 12px",
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  cursor: "pointer", textAlign: "left",
+                }}>
+                <span style={{ color: "var(--ink-1)", fontWeight: 500 }}>{chapter.title}</span>
+                <span style={{ fontSize: 10, color: "var(--ink-3)", marginLeft: 8 }}>
+                  {tocOpen ? "▲" : "▼"}
+                </span>
+              </button>
+              {tocOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--rule)", borderRadius: 4,
+                  padding: "4px 0",
+                  boxShadow: "0 8px 24px rgba(20,20,19,0.12)",
+                  zIndex: 50,
+                  maxHeight: "60vh", overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                }}>
+                  {CHAPTERS.map((c, i) => (
+                    <button key={c.file} onClick={() => pickChapter(i)}
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        width: "100%", textAlign: "left",
+                        background: i === active ? "var(--bg-sunken)" : "transparent",
+                        border: "none", padding: "11px 14px",
+                        fontFamily: "var(--font-sans)", fontSize: 14,
+                        color: "var(--ink-1)", cursor: "pointer",
+                        fontWeight: i === active ? 600 : 400, borderRadius: 0,
+                      }}>
+                      <span>{c.title}</span>
+                      {i === active && <span style={{ color: "var(--moss)", fontSize: 13 }}>●</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Scrollable reading pane. */}

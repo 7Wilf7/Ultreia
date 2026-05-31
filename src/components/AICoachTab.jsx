@@ -3,13 +3,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import {
-  API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl,
+  API_PROVIDERS, DEFAULT_API_PROVIDER,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton } from "../utils/coachPrompt";
-import { postJson } from "../lib/apiFetch";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
@@ -193,9 +192,11 @@ function makeMdComponents(isMobile) {
 }
 
 // At this many persisted messages, surface a soft hint suggesting the user
-// distill Memory + clear the chat. Older turns start competing with the
-// system prompt for the model's attention past ~20 turns.
-const LONG_CHAT_HINT_THRESHOLD = 20;
+// distill Memory + clear the chat. This is NOT a context-window limit — the
+// providers we use carry far more than this — it's an attention/cost heuristic:
+// older turns start competing with the system prompt for the model's focus.
+// 40 (~20 exchanges) keeps the nudge from firing on every short session.
+const LONG_CHAT_HINT_THRESHOLD = 40;
 
 export function AICoachTab({
   coachConfig, setCoachConfig,
@@ -203,7 +204,7 @@ export function AICoachTab({
   coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
   chatMessages,
   setConfirmDelete,
-  apiProvider, apiKey, claudeApiKey, claudeEndpointId, apiModel, onEditProfile,
+  apiProvider, onEditProfile,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
@@ -216,14 +217,14 @@ export function AICoachTab({
   // header. Opens the InboxModal owned by AppShell; inboxUnread drives the
   // badge.
   onOpenInbox, inboxUnread = 0,
+  // Memory update lifted to AppShell so it survives leaving this tab (the
+  // request keeps running; a top banner invites the user back when ready).
+  showMemory, setShowMemory,
+  memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
 }) {
-  // Provider-aware endpoint + key for the memory-proposal call, which still
-  // lives in this tab (only triggered from the Memory modal opened inside it).
+  // Provider label for the status pill. The memory-update call (which used to
+  // need a resolved endpoint + key here) now lives in AppShell.
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
-  const apiEndpoint = apiProvider === "claude"
-    ? getEndpointUrl("claude", claudeEndpointId)
-    : provider.endpoints[0].url;
-  const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -237,12 +238,11 @@ export function AICoachTab({
   // Preview language is independent of UI language — defaults to UI language
   // but the user can flip it to read the prompt in the other language.
   const [previewLang, setPreviewLang] = useState(lang);
-  const [showMemory, setShowMemory] = useState(false);
+  // showMemory / memoryUpdating / memoryProposal are now lifted to AppShell
+  // (props) so the update can finish after the user leaves this tab.
   const [memoryLang, setMemoryLang] = useState(lang); // EN/中 toggle for the memory view
   const [memoryDraft, setMemoryDraft] = useState(coachMemory);
   const [memoryEditing, setMemoryEditing] = useState(false);
-  const [memoryUpdating, setMemoryUpdating] = useState(false);
-  const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } when LLM has proposed an update
   // The memory text shown/edited for the currently-selected language.
   const shownMemory = memoryLang === "zh" ? coachMemoryZh : coachMemory;
   // Empty by default — the daily template is shown as a placeholder so it
@@ -310,81 +310,9 @@ export function AICoachTab({
     setMemoryEditing(false);
   }
 
-  // Ask the LLM to produce an updated memory from the current chat + existing memory.
-  // User reviews the proposal before it replaces the live memory.
-  async function proposeMemoryUpdate() {
-    if (!activeKey) {
-      alert(t("coach.no_key"));
-      return;
-    }
-    if (chatMessages.length === 0) {
-      alert(t("coach.memory_need_chat"));
-      return;
-    }
-    setMemoryUpdating(true);
-    const chatTranscript = chatMessages.map(m => `[${m.role}]\n${m.content}`).join("\n\n");
-    const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
-
-Current memory (English):
-${coachMemory || "(empty)"}
-
-Recent conversation:
-${chatTranscript}
-
-Guidelines:
-- One short fact per line. No markdown headings.
-- Keep durable facts (preferences, goals, injuries, training style, recurring concerns).
-- DROP session-specific things (today's specific question, one-off advice).
-- Don't repeat what's already in the user's profile (age, location, basic stats).
-- Maximum ~500 words. Trim older entries if needed.
-- If nothing meaningful to add or update, return the existing memory unchanged.
-
-Output the updated memory in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
-===EN===
-<english memory, one fact per line>
-===ZH===
-<中文记忆，每行一条，与英文逐行一一对应>`;
-
-    try {
-      // postJson → CapacitorHttp on the APK, so backgrounding the app mid-call
-      // doesn't trip "network request failed" (the same fix already applied to
-      // sendChat / importToCalendar; this call site had been missed).
-      const resp = await postJson({
-        url: apiEndpoint,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": activeKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: apiModel,
-          // 8000 = DeepSeek's hard output ceiling (with small margin). Memory
-          // prompt asks for ~500 words so this is generous headroom — billed
-          // by actual tokens, the cap costs nothing if unused.
-          max_tokens: 8000,
-          messages: [{ role: "user", content: memoryPrompt }],
-        }),
-      });
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
-        setMemoryUpdating(false);
-        return;
-      }
-      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      if (!text.trim()) {
-        alert(t("coach.memory_empty_response"));
-        setMemoryUpdating(false);
-        return;
-      }
-      setMemoryProposal(parseBilingualMemory(text));
-    } catch (err) {
-      console.error("[AI Coach] Memory update error:", err);
-      alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
-    }
-    setMemoryUpdating(false);
-  }
+  // proposeMemoryUpdate lives in AppShell now (lifted) so the request survives
+  // this tab unmounting — it's passed in as a prop and triggered from the
+  // Memory modal's "Update" button below.
 
   // Accepts the kept points from the per-point review — both language versions,
   // kept in sync, saved in one write.
@@ -512,8 +440,8 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
           (one at a time is fine — these aren't compared often). */}
       {showCoachConfig && (
         <ModalRoot onClose={() => setShowCoachConfig(false)}>
-          <div style={s.modalOverlay(isMobile)} onClick={() => setShowCoachConfig(false)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowCoachConfig(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 600, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.behavior")}</h2>
                 <button onClick={() => setShowCoachConfig(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
@@ -565,8 +493,8 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
           preference, not a behavior knob about the coach itself. */}
       {showCalendarSettings && (
         <ModalRoot onClose={() => setShowCalendarSettings(false)}>
-          <div style={s.modalOverlay(isMobile)} onClick={() => setShowCalendarSettings(false)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowCalendarSettings(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 600, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.calendar_btn_label")}</h2>
                 <button onClick={() => setShowCalendarSettings(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
@@ -589,8 +517,8 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
 
       {showMemory && (
         <ModalRoot onClose={() => setShowMemory(false)}>
-          <div style={s.modalOverlay(isMobile)} onClick={() => setShowMemory(false)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 600 })} onClick={(e) => e.stopPropagation()}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowMemory(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 600, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
                 <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
@@ -601,7 +529,8 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
                 <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={proposeMemoryUpdate}
                     disabled={memoryUpdating || chatMessages.length === 0}
-                    style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                     {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                   </button>
                   <button onClick={startEditMemory}
@@ -648,8 +577,8 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
 
       {showPromptPreview && (
         <ModalRoot onClose={() => setShowPromptPreview(false)}>
-          <div style={s.modalOverlay(isMobile)} onClick={() => setShowPromptPreview(false)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 680 })} onClick={(e) => e.stopPropagation()}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowPromptPreview(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 680, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.prompt_title")}</h2>
                 <div style={{ display: "flex", gap: 0, marginLeft: "auto" }}>
@@ -782,6 +711,12 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
             <button onClick={() => setShowMemory(true)}
               style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0 }}>
               {t("coach.long_chat_action")}
+            </button>
+            {/* Clear chat right from the nudge. The confirm dialog reminds the
+                user to distill Memory first (see ConfirmDeleteModal chat body). */}
+            <button onClick={clearChat}
+              style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0, color: "var(--danger)", borderColor: "var(--danger)" }}>
+              {t("coach.clear_chat")}
             </button>
             <button onClick={() => setLongChatHintCollapsed(true)}
               aria-label={t("coach.long_chat_dismiss")}
@@ -1233,7 +1168,8 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
                         <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                           <button onClick={proposeMemoryUpdate}
                             disabled={memoryUpdating || chatMessages.length === 0}
-                            style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1 }}>
+                            style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                             {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                           </button>
                           <button onClick={startEditMemory} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
@@ -1323,20 +1259,6 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
           running). See <CoachPlanImportModal> in App.jsx. */}
     </div>
   );
-}
-
-// Split an LLM memory reply into aligned English + Chinese halves using the
-// ===EN=== / ===ZH=== markers. Falls back to using the whole text for both
-// languages if the model didn't emit the markers.
-function parseBilingualMemory(text) {
-  const parts = (text || "").split(/===\s*ZH\s*===/i);
-  if (parts.length >= 2) {
-    const en = parts[0].replace(/===\s*EN\s*===/i, "").trim();
-    const zh = parts.slice(1).join("").replace(/===\s*EN\s*===/i, "").trim();
-    if (en || zh) return { en: en || zh, zh: zh || en };
-  }
-  const plain = (text || "").replace(/===\s*(EN|ZH)\s*===/ig, "").trim();
-  return { en: plain, zh: plain };
 }
 
 // Per-point review of a proposed (bilingual) memory update. Shows the points in

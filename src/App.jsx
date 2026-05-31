@@ -13,9 +13,10 @@ import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
 import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
+import { parseBilingualMemory } from "./utils/memory";
 import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
-import { ProfileEditor } from "./components/ProfileEditor";
+import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
 import { ApiSettingsModal } from "./components/ApiSettingsModal";
 import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { PushSettingsModal } from "./components/PushSettingsModal";
@@ -716,6 +717,8 @@ function AppShell({
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
   // "set up daily push" button — draws the eye to where the setting lives.
   const [pushFlash, setPushFlash] = useState(false);
+  // Same idea as pushFlash, for the "edit profile" jump from the AI Coach.
+  const [profileFlash, setProfileFlash] = useState(false);
 
   // Inbox messages, loaded ONCE at startup so opening the inbox is instant (no
   // per-open fetch) and the unread badge derives from this list — marking read
@@ -740,6 +743,19 @@ function AppShell({
     }
   }
 
+  // Jump from the AI Coach's "edit profile" to the Settings → profile cell.
+  // On mobile, switch to Settings and flash the cell (so the user learns where
+  // their profile lives); on desktop, open the editor directly.
+  function goToProfileSettings() {
+    if (isMobile) {
+      setTab(4);
+      setProfileFlash(true);
+      setTimeout(() => setProfileFlash(false), 2200);
+    } else {
+      setProfileEditorMode("preview");
+    }
+  }
+
   // ── AI Coach in-flight state, lifted from AICoachTab so it SURVIVES tab
   //    switches. Previously the fetch and chatLoading both lived in
   //    AICoachTab → switching away mid-send unmounted the component, the
@@ -754,6 +770,80 @@ function AppShell({
   const [chatLoading, setChatLoading] = useState(false);
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
+  // ── Memory-update state, LIFTED here so it survives leaving the AI Coach
+  //    tab. The user can hit "Update" in the Memory modal, walk away, and the
+  //    request keeps running; when the proposal is ready a top banner invites
+  //    them back to review it (see the memory banner near the return). showMemory
+  //    is lifted too so the banner can open the modal.
+  const [memoryUpdating, setMemoryUpdating] = useState(false);
+  const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } once ready
+  const [showMemory, setShowMemory] = useState(false);
+
+  // Ask the LLM to distill an updated memory from the current chat + existing
+  // memory. Runs at app scope (not inside AICoachTab) so unmounting that tab
+  // mid-request doesn't drop the result. Errors surface via alert; success
+  // sets memoryProposal, which both the Memory modal and the top banner react to.
+  async function proposeMemoryUpdate() {
+    const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
+    if (!activeKey) { window.alert(t("coach.no_key")); return; }
+    if (!chatMessages.length) { window.alert(t("coach.memory_need_chat")); return; }
+    const providerCfg = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+    const apiEndpoint = apiProvider === "claude"
+      ? getEndpointUrl("claude", claudeEndpointId)
+      : providerCfg.endpoints[0].url;
+    const chatTranscript = chatMessages.map(m => `[${m.role}]\n${m.content}`).join("\n\n");
+    const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
+
+Current memory (English):
+${coachMemory || "(empty)"}
+
+Recent conversation:
+${chatTranscript}
+
+Guidelines:
+- One short fact per line. No markdown headings.
+- Keep durable facts (preferences, goals, injuries, training style, recurring concerns).
+- DROP session-specific things (today's specific question, one-off advice).
+- Don't repeat what's already in the user's profile (age, location, basic stats).
+- Maximum ~500 words. Trim older entries if needed.
+- If nothing meaningful to add or update, return the existing memory unchanged.
+
+Output the updated memory in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
+===EN===
+<english memory, one fact per line>
+===ZH===
+<中文记忆，每行一条，与英文逐行一一对应>`;
+    setMemoryUpdating(true);
+    try {
+      const resp = await postJson({
+        url: apiEndpoint,
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": activeKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: apiModel,
+          max_tokens: 8000,
+          messages: [{ role: "user", content: memoryPrompt }],
+        }),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.error) {
+        window.alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
+        return;
+      }
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      if (!text.trim()) { window.alert(t("coach.memory_empty_response")); return; }
+      setMemoryProposal(parseBilingualMemory(text));
+    } catch (err) {
+      console.error("[AI Coach] Memory update error:", err);
+      window.alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
+    } finally {
+      setMemoryUpdating(false);
+    }
+  }
 
   // Shared weather context — populated once on mount (or when default
   // location changes). Consumed by sendChat (for the prompt), AICoachTab
@@ -997,7 +1087,7 @@ Rules:
   // True when ANY long-running AI Coach operation is in flight. Used to
   // render the spinner badge on the AI Coach tab label so the user knows
   // the model is still working even when they've switched to another tab.
-  const coachBusy = chatLoading || !!extractingForMsgId;
+  const coachBusy = chatLoading || !!extractingForMsgId || memoryUpdating;
 
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
@@ -1135,6 +1225,7 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
           setDailyTags={setDailyTags}
+          races={races}
           /* Shared weather context — same cache as AI Coach. Per-tab-mount
              fetch was wasteful; cache + visibility-change refresh in the
              hook is enough. */
@@ -1178,7 +1269,7 @@ Rules:
           claudeApiKey={claudeApiKey}
           claudeEndpointId={claudeEndpointId}
           apiModel={apiModel}
-          onEditProfile={() => setProfileEditorMode("edit")}
+          onEditProfile={goToProfileSettings}
           /* Lifted state + handlers — see AppShell top for definitions. */
           chatLoading={chatLoading}
           extractingForMsgId={extractingForMsgId}
@@ -1192,6 +1283,13 @@ Rules:
           /* Inbox entry — top-right of the AI Coach header. */
           onOpenInbox={() => setShowInbox(true)}
           inboxUnread={inboxUnread}
+          /* Memory update lifted to app scope (survives leaving the tab). */
+          showMemory={showMemory}
+          setShowMemory={setShowMemory}
+          memoryUpdating={memoryUpdating}
+          memoryProposal={memoryProposal}
+          setMemoryProposal={setMemoryProposal}
+          proposeMemoryUpdate={proposeMemoryUpdate}
         />
       )}
     </>
@@ -1199,13 +1297,42 @@ Rules:
 
   const modals = (
     <>
+      {/* Memory-update-ready banner — appears at the top of the app once the
+          background memory proposal lands and the Memory modal isn't open, so
+          the user can wander off while it runs and get pulled back to review.
+          Tapping jumps to the AI Coach tab and opens the Memory modal. */}
+      {memoryProposal && !showMemory && (
+        <button
+          onClick={() => { setTab(3); setShowMemory(true); }}
+          className="ts-overlay-in"
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
+            background: "var(--moss)", color: "var(--ink-inv)", border: "none",
+            padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px",
+            fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500,
+            cursor: "pointer", textAlign: "center", width: "100%",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+          }}>
+          <span aria-hidden="true">🧠</span>
+          <span>{t("coach.memory_ready_banner")}</span>
+        </button>
+      )}
       <ConfirmDeleteModal
         confirmDelete={confirmDelete}
         setConfirmDelete={setConfirmDelete}
         onConfirm={executeDelete}
       />
 
-      {profileEditorMode && (
+      {profileEditorMode === "preview" && (
+        <ProfilePreview
+          profile={profile}
+          defaultLocation={defaultLocation}
+          onClose={() => setProfileEditorMode(null)}
+          onEdit={() => setProfileEditorMode("edit")}
+        />
+      )}
+      {(profileEditorMode === "edit" || profileEditorMode === "setup") && (
         <ProfileEditor
           profile={profile}
           setProfile={setProfile}
@@ -1292,7 +1419,7 @@ Rules:
         apiKey={apiKey}
         caiyunApiKey={caiyunApiKey}
         lang={lang}
-        onOpenProfile={() => setProfileEditorMode("edit")}
+        onOpenProfile={() => setProfileEditorMode("preview")}
         onOpenApiSettings={() => setShowApiSettings(true)}
         onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
         onOpenPushSettings={() => setShowPushSettings(true)}
@@ -1300,6 +1427,7 @@ Rules:
         pushHours={pushHours}
         pushTimes={pushTimes}
         pushFlash={pushFlash}
+        profileFlash={profileFlash}
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
@@ -1424,7 +1552,7 @@ Rules:
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <CloudIcon size={13} />
             </button>
-            <button onClick={() => setProfileEditorMode("edit")} title={t("header.profile")}
+            <button onClick={() => setProfileEditorMode("preview")} title={t("header.profile")}
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <SettingsIcon size={14} />
             </button>

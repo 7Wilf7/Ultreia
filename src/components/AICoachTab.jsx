@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -281,16 +281,61 @@ export function AICoachTab({
     return () => clearInterval(id);
   }, [isMobile, weatherCtx]);
 
-  // Auto-scroll the chat container to the latest message whenever the
-  // message list grows (new send/receive) or whenever the tab is mounted
-  // (so switching back from another tab doesn't strand the user on the
-  // oldest message).
+  // Chat scroll container + the two floating jump buttons. The buttons live
+  // inside the (sticky) message window so the provider pills above and the
+  // input row below never move while the user scrolls messages.
   const chatScrollRef = useRef(null);
-  useEffect(() => {
+  const [showJumpTop, setShowJumpTop] = useState(false);
+  const [showJumpBottom, setShowJumpBottom] = useState(false);
+
+  // Drive the jump buttons from scroll position: "↑ top" once the user has
+  // scrolled down into history, "↓ latest" whenever they're not near the
+  // newest message. 120px hysteresis so a tiny scroll doesn't flicker them.
+  const updateJumpButtons = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const fromBottom = el.scrollHeight - el.clientHeight - el.scrollTop;
+    setShowJumpTop(el.scrollTop > 120);
+    setShowJumpBottom(fromBottom > 120);
+  }, []);
+  const scrollToBottom = useCallback((behavior = "auto") => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+  const scrollToTop = useCallback(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  // Pin to the latest message on mount (tab switch) and whenever the list
+  // grows. Markdown tables/long replies can lay out a frame late, so we set
+  // scrollTop synchronously AND again in a post-paint rAF — a plain effect
+  // sometimes measured scrollHeight before the content settled and stranded
+  // the user near the oldest message (the regression this fixes).
+  useLayoutEffect(() => {
     const el = chatScrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [chatMessages.length, chatLoading]);
+    const id = requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      updateJumpButtons();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [chatMessages.length, chatLoading, updateJumpButtons]);
+
+  // Small circular jump button, vertically pinned to top/bottom of the window.
+  const jumpBtnStyle = (edge) => ({
+    position: "absolute",
+    left: "50%", transform: "translateX(-50%)",
+    [edge]: 12,
+    width: 32, height: 32, borderRadius: 16,
+    border: "1px solid var(--rule)",
+    background: "var(--bg-elevated)", color: "var(--ink-1)",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+    cursor: "pointer", zIndex: 5,
+    display: "inline-flex", alignItems: "center", justifyContent: "center",
+    fontSize: 16, lineHeight: 1, WebkitTapHighlightColor: "transparent",
+  });
   function clearChat() {
     setConfirmDelete({ type: "chat", id: null });
   }
@@ -730,8 +775,11 @@ export function AICoachTab({
         )
       )}
 
-      <div ref={chatScrollRef} style={{
-        ...s.card,
+      {/* Message window — fixed in the middle. The pills above and the input
+          row below stay put; only this box scrolls. position:relative anchors
+          the floating jump buttons. */}
+      <div style={{
+        position: "relative",
         marginBottom: isMobile ? 0 : 12,
         // Mobile: chat fills available vertical space inside the flex column;
         // min-height: 0 lets it shrink (default min-content would prevent
@@ -739,6 +787,13 @@ export function AICoachTab({
         flex: isMobile ? 1 : undefined,
         minHeight: isMobile ? 0 : 200,
         maxHeight: isMobile ? undefined : 500,
+        display: "flex", flexDirection: "column", minWidth: 0,
+      }}>
+      <div ref={chatScrollRef} onScroll={updateJumpButtons} style={{
+        ...s.card,
+        marginBottom: 0,
+        flex: 1,
+        minHeight: 0,
         overflowY: "auto",
       }}>
         {chatMessages.length === 0 ? (
@@ -850,6 +905,18 @@ export function AICoachTab({
             )}
           </div>
         )}
+      </div>
+
+      {/* Jump to oldest — shows once the user scrolls down into history. */}
+      {showJumpTop && chatMessages.length > 0 && (
+        <button onClick={scrollToTop} aria-label={lang === "zh" ? "回到顶部" : "Jump to top"}
+          style={jumpBtnStyle("top")}>↑</button>
+      )}
+      {/* Jump to latest — shows when scrolled up away from the newest message. */}
+      {showJumpBottom && chatMessages.length > 0 && (
+        <button onClick={() => scrollToBottom("smooth")} aria-label={lang === "zh" ? "回到最新" : "Jump to latest"}
+          style={jumpBtnStyle("bottom")}>↓</button>
+      )}
       </div>
 
       {/* Input row. flex-shrink: 0 pins it to the bottom of the AICoachTab

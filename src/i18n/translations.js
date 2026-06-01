@@ -365,6 +365,7 @@ const dict = {
   "calendar.empty_past":       { en: "Rest day — no activity recorded.", zh: "休息日 —— 没有记录活动。" },
   "calendar.empty_future":     { en: "No plan yet for this day.", zh: "尚未为这一天安排计划。" },
   "calendar.add_plan_title":   { en: "Plan a workout",       zh: "安排训练计划" },
+  "calendar.edit_plan_title":  { en: "Edit planned workout", zh: "编辑训练计划" },
   "calendar.add_plan_button":  { en: "+ Add planned workout", zh: "+ 添加计划训练" },
   "calendar.save_plan":        { en: "Save Plan",            zh: "保存计划" },
   "calendar.plan_time_of_day": { en: "Time of day",          zh: "时段" },

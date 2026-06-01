@@ -30,7 +30,7 @@ function logHeadline(log) {
 
 export function CalendarDayModal({
   dateKey, isFuture, logs, note, weather, onClose,
-  addLog, setConfirmDelete, setDailyTags,
+  addLog, updateLog, setConfirmDelete, setDailyTags,
 }) {
   const t = useT();
   const { lang } = useLanguage();
@@ -40,12 +40,15 @@ export function CalendarDayModal({
   // null | 'plan'
   const [panel, setPanel] = useState(null);
 
-  // ── "Add planned workout" form state (future days only) ──
+  // ── Plan form state. Used both to add a new plan (future days) and to edit
+  // an existing planned workout. editingId is null in add mode, the log id in
+  // edit mode (Save then calls updateLog instead of addLog). ──
   const [planType, setPlanType] = useState("Road Run");
   const [planDistance, setPlanDistance] = useState("");
   const [planDurationMin, setPlanDurationMin] = useState("");
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
+  const [editingId, setEditingId] = useState(null);
   const planIsStrength = planType === "Strength";
 
   // Day-level tags live in dailyNotes — we toggle in-place. The Save is implicit:
@@ -69,6 +72,26 @@ export function CalendarDayModal({
     setPlanSubTypes(prev => prev.includes(sub) ? prev.filter(x => x !== sub) : [...prev, sub]);
   }
 
+  function resetPlanForm() {
+    setPlanType("Road Run");
+    setPlanDistance("");
+    setPlanDurationMin("");
+    setPlanTimeOfDay("");
+    setPlanSubTypes([]);
+    setEditingId(null);
+  }
+
+  // Load an existing planned workout into the form for editing.
+  function startEditPlan(l) {
+    setEditingId(l.id);
+    setPlanType(l.type);
+    setPlanDistance(l.distance > 0 ? String(l.distance) : "");
+    setPlanDurationMin(l.duration > 0 ? String(Math.round(l.duration / 60)) : "");
+    setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
+    setPlanSubTypes(Array.isArray(l.subTypes) ? l.subTypes : []);
+    setPanel("plan");
+  }
+
   async function savePlan() {
     const distNum = parseFloat(planDistance) || 0;
     const durSec = (parseFloat(planDurationMin) || 0) * 60;
@@ -80,23 +103,30 @@ export function CalendarDayModal({
       return;
     }
     try {
-      await addLog({
-        date: dateKey,
-        type: planType,
-        subTypes,
-        distance: distNum,
-        duration: Math.round(durSec),
-        pace: 0, hr: 0, maxHR: 0,
-        ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
-        startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
-        isPlanned: true,
-        tags: [],
-      }, { source: "calendar_plan" });
-      setPlanType("Road Run");
-      setPlanDistance("");
-      setPlanDurationMin("");
-      setPlanTimeOfDay("");
-      setPlanSubTypes([]);
+      if (editingId) {
+        // Edit mode: patch the existing planned row (stays is_planned=true).
+        await updateLog(editingId, {
+          type: planType,
+          subTypes,
+          distance: distNum,
+          duration: Math.round(durSec),
+          startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
+        });
+      } else {
+        await addLog({
+          date: dateKey,
+          type: planType,
+          subTypes,
+          distance: distNum,
+          duration: Math.round(durSec),
+          pace: 0, hr: 0, maxHR: 0,
+          ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
+          startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
+          isPlanned: true,
+          tags: [],
+        }, { source: "calendar_plan" });
+      }
+      resetPlanForm();
       setPanel(null);
     } catch { /* alert shown by wrapper */ }
   }
@@ -220,26 +250,27 @@ export function CalendarDayModal({
                           </div>
                         ) : null;
                       })()}
-                      {l.isPlanned && (
-                        <div style={{
-                          fontSize: 10, fontFamily: "var(--font-mono)",
-                          color: "var(--ink-3)", textTransform: "uppercase",
-                          letterSpacing: "0.06em",
-                        }}>
-                          {t("calendar.planned_badge")}
-                        </div>
-                      )}
                       <div style={{
                         fontFamily: "var(--font-mono)", fontSize: 13,
                         color: "var(--ink-2)", fontVariantNumeric: "tabular-nums",
                       }}>
                         {logHeadline(l)}
                       </div>
-                      <button onClick={() => deleteLog(l.id)}
-                        style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
-                          marginLeft: "auto", color: "var(--danger)" }}>
-                        {t("common.delete")}
-                      </button>
+                      <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
+                        {/* Planned workouts can be edited in place; the dashed
+                            border already marks them as a plan, so no text badge. */}
+                        {l.isPlanned && (
+                          <button onClick={() => startEditPlan(l)}
+                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px" }}>
+                            {t("common.edit")}
+                          </button>
+                        )}
+                        <button onClick={() => deleteLog(l.id)}
+                          style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
+                            color: "var(--danger)" }}>
+                          {t("common.delete")}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -298,13 +329,14 @@ export function CalendarDayModal({
           </div>
         )}
 
-        {/* Future days only: add planned workout */}
-        {isFuture && (
+        {/* Add a plan (future days) or edit an existing planned workout (the
+            form also opens via the Edit button on a planned row above). */}
+        {(isFuture || panel === "plan") && (
           <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14 }}>
             {panel === "plan" ? (
               <>
                 <div style={{ ...s.label, marginBottom: 8 }}>
-                  {t("calendar.add_plan_title")}
+                  {editingId ? t("calendar.edit_plan_title") : t("calendar.add_plan_title")}
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div>
@@ -361,7 +393,7 @@ export function CalendarDayModal({
                   <button onClick={savePlan} style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
                     {t("calendar.save_plan")}
                   </button>
-                  <button onClick={() => { setPanel(null); setPlanDistance(""); setPlanDurationMin(""); setPlanTimeOfDay(""); setPlanSubTypes([]); }} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 14px" }}>
+                  <button onClick={() => { setPanel(null); resetPlanForm(); }} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 14px" }}>
                     {t("common.cancel")}
                   </button>
                 </div>

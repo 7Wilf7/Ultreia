@@ -116,8 +116,13 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
       }}>
         {/* Keyed by tab so each switch remounts + replays the slide-in. The
             tab content is conditionally rendered upstream anyway, so this adds
-            no extra unmount cost. */}
-        <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}>
+            no extra unmount cost.
+            height:100% passes the content slot's height down to tabs that want
+            to fill it (AI Coach pins its pills + input and scrolls only the
+            message window). Tabs taller than the slot (Training, Calendar)
+            overflow it and `main` scrolls them as before. */}
+        <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}
+          style={{ height: "100%" }}>
           {children}
         </div>
       </main>

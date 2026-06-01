@@ -117,15 +117,16 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         // some devices.
         paddingBottom: "calc(100px + env(safe-area-inset-bottom))",
       }}>
-        {/* Keyed by tab so each switch remounts + replays the slide-in. The
-            tab content is conditionally rendered upstream anyway, so this adds
-            no extra unmount cost.
-            height:100% passes the content slot's height down to tabs that want
-            to fill it (AI Coach pins its pills + input and scrolls only the
-            message window). Tabs taller than the slot (Training, Calendar)
-            overflow it and `main` scrolls them as before. */}
+        {/* Keyed by tab so each switch remounts + replays the slide-in.
+            height:100% is applied ONLY to the AI Coach tab (idx 3): it must
+            fill the slot so its provider pills + input row pin and only the
+            message window scrolls internally. Every OTHER tab keeps its natural
+            height — forcing height:100% on all tabs capped the wrapper at one
+            viewport, so `main`'s scrollHeight never exceeded its clientHeight
+            and the taller tabs (Settings, Calendar…) couldn't scroll at all.
+            That was a regression; this restores their normal page scroll. */}
         <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}
-          style={{ height: "100%" }}>
+          style={{ height: tab === 3 ? "100%" : undefined }}>
           {children}
         </div>
       </main>

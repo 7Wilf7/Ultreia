@@ -9,6 +9,7 @@ import { ClockIcon } from "./Icons";
 import { ModalRoot } from "./ModalRoot";
 import { ItemActionModal } from "./ItemActionModal";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
+import { Dropdown } from "./Dropdown";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
 // the Target and History sections so every column lines up across both lists.
@@ -335,15 +336,14 @@ export function RacesTab({
         // row owns the spacing.
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("races.filter_label")}</span>
-          <select
-            value={value}
-            onChange={e => setFilter(e.target.value ? [e.target.value] : [])}
-            style={{ ...s.input, flex: 1, padding: "0 10px", height: 40, fontSize: 13 }}>
-            <option value="">{t("races.filter_all")}</option>
-            {RACE_CATEGORIES.map(c => (
-              <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>
-            ))}
-          </select>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Dropdown
+              ariaLabel={t("races.filter_label")}
+              options={[{ value: "", label: t("races.filter_all") }, ...RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))]}
+              value={value}
+              onChange={(v) => setFilter(v ? [v] : [])}
+            />
+          </div>
         </div>
       );
     }
@@ -813,13 +813,15 @@ export function RacesTab({
             </div>
           )}
           {!r.category && (
-            <select value=""
-              onClick={(e) => e.stopPropagation()}
-              onChange={e => updateRaceCategory(r.id, e.target.value)}
-              style={{ ...s.input, padding: "3px 6px", fontSize: 11, color: "#888" }}>
-              <option value="">{t("races.set_category")}</option>
-              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-            </select>
+            <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block", maxWidth: 170 }}>
+              <Dropdown
+                placeholder={t("races.set_category")}
+                ariaLabel={t("races.set_category")}
+                options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
+                value=""
+                onChange={(v) => updateRaceCategory(r.id, v)}
+              />
+            </span>
           )}
           {r.itraScore && <span style={{ ...s.subTag, fontSize: 10, alignSelf: "flex-start" }}>ITRA {r.itraScore}</span>}
           {weatherOpen[r.id] && renderRaceWeather(r)}
@@ -875,13 +877,15 @@ export function RacesTab({
             name then begins immediately to the right. */}
         <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
           {r.category ? renderCategoryTag(r.category) : (
-            <select value=""
-              onClick={(e) => e.stopPropagation()}
-              onChange={e => updateRaceCategory(r.id, e.target.value)}
-              style={{ ...s.input, padding: "3px 6px", fontSize: 11, color: "#888" }}>
-              <option value="">{t("races.set_category")}</option>
-              {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-            </select>
+            <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block", maxWidth: 170 }}>
+              <Dropdown
+                placeholder={t("races.set_category")}
+                ariaLabel={t("races.set_category")}
+                options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
+                value=""
+                onChange={(v) => updateRaceCategory(r.id, v)}
+              />
+            </span>
           )}
           {r.subtype && <span style={spartanTierStyle(r.subtype)}>{r.subtype}</span>}
         </div>
@@ -996,17 +1000,16 @@ export function RacesTab({
               </div>
               <div>
                 <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
-                <select value={newRace.category}
-                  onChange={e => setNewRace({ ...newRace, category: e.target.value })}
-                  style={s.input}>
-                  <option value="">{t("races.category_placeholder")}</option>
-                  {RACE_CATEGORIES.map(c => (
-                    <option key={c} value={c}>
-                      {/* Abbreviate Half Marathon on the narrow phone select. */}
-                      {c === "Half Marathon" ? t("enum.race_cat.Half Marathon_short") : t(`enum.race_cat.${c}`)}
-                    </option>
-                  ))}
-                </select>
+                <Dropdown
+                  placeholder={t("races.category_placeholder")}
+                  ariaLabel={t("races.category_label")}
+                  options={RACE_CATEGORIES.map(c => ({
+                    value: c,
+                    label: c === "Half Marathon" ? t("enum.race_cat.Half Marathon_short") : t(`enum.race_cat.${c}`),
+                  }))}
+                  value={newRace.category}
+                  onChange={(v) => setNewRace({ ...newRace, category: v })}
+                />
               </div>
             </div>
           </>
@@ -1015,12 +1018,13 @@ export function RacesTab({
           <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 10, marginBottom: 10 }}>
             <div>
               <div style={{ ...s.label, marginBottom: 6 }}>{t("races.category_label")}</div>
-              <select value={newRace.category}
-                onChange={e => setNewRace({ ...newRace, category: e.target.value })}
-                style={s.input}>
-                <option value="">{t("races.category_placeholder")}</option>
-                {RACE_CATEGORIES.map(c => <option key={c} value={c}>{t(`enum.race_cat.${c}`)}</option>)}
-              </select>
+              <Dropdown
+                placeholder={t("races.category_placeholder")}
+                ariaLabel={t("races.category_label")}
+                options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
+                value={newRace.category}
+                onChange={(v) => setNewRace({ ...newRace, category: v })}
+              />
             </div>
             <div>
               <div style={{ ...s.label, marginBottom: 6 }}>{t("races.name_label")}</div>

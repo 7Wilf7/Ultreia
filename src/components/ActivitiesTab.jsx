@@ -9,6 +9,7 @@ import {
 } from "../utils/format";
 import { computeHRZones } from "../utils/profile";
 import { ActivityForm } from "./ActivityForm";
+import { Dropdown } from "./Dropdown";
 import { ItemActionModal } from "./ItemActionModal";
 import { ModalRoot } from "./ModalRoot";
 import {
@@ -363,35 +364,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           overflow: "hidden",
         }}>
           {!isMobile && <SortIcon size={13} />}
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-            aria-label="Sort activities"
-            style={{
-              border: "none",
-              padding: 0,
-              fontSize: 12,
-              background: "transparent",
-              color: "var(--ink-2)",
-              fontFamily: "var(--font-sans)",
-              minWidth: 0,
-              maxWidth: isMobile ? 70 : 160,
-              outline: "none",
-              // Hide the native chevron; the span below is sized by us.
-              appearance: "none",
-              WebkitAppearance: "none",
-              MozAppearance: "none",
-              cursor: "pointer",
-            }}>
-            {SORT_OPTIONS.map(o => (
-              <option key={o.id} value={o.id}>
-                {t(`activities.sort.${o.id}`)}
-              </option>
-            ))}
-          </select>
-          <span aria-hidden="true" style={{
-            fontSize: 10, color: "var(--ink-3)",
-            lineHeight: 1, pointerEvents: "none",
-            flexShrink: 0,
-          }}>▾</span>
+          <Dropdown
+            variant="inline"
+            fontSize={12}
+            ariaLabel="Sort activities"
+            options={SORT_OPTIONS.map(o => ({ value: o.id, label: t(`activities.sort.${o.id}`) }))}
+            value={sortBy}
+            onChange={setSortBy}
+          />
         </label>
       </div>
 
@@ -448,10 +428,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   <span style={{ color: "#999" }}>{t("activities.unknown_type_original")}</span>
                   <span style={{ fontFamily: "var(--font-mono)", color: "#333" }}>{r._originalType}</span>
                 </div>
-                <select value={r.type} onChange={e => updateUnknownTypeRow(r.id, e.target.value)}
-                  style={{ ...s.input, width: "auto", padding: "4px 8px", fontSize: 12 }}>
-                  {ACTIVITY_TYPES.map(at => <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>)}
-                </select>
+                <div style={{ width: 150 }}>
+                  <Dropdown
+                    ariaLabel={t("form.type")}
+                    options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
+                    value={r.type}
+                    onChange={(v) => updateUnknownTypeRow(r.id, v)}
+                  />
+                </div>
                 <button onClick={() => updateUnknownTypeRow(r.id, r.type)}
                   style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px" }}>
                   ✓
@@ -490,10 +474,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`} {r.aerobicTE > 0 && `· TE ${r.aerobicTE}`}
                 </div>
                 {r.type === "Road Run" && (
-                  <select value={r.subTypes[0] || ""} onChange={(e) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [e.target.value] } : x))}
-                    style={{ ...s.input, width: "auto", padding: "3px 6px", fontSize: 11 }}>
-                    {RUN_SUBTYPES.map(st => <option key={st} value={st}>{t(`enum.subtype.${st}`)}</option>)}
-                  </select>
+                  <div style={{ width: 130 }}>
+                    <Dropdown
+                      ariaLabel={t("form.run_type")}
+                      options={RUN_SUBTYPES.map(st => ({ value: st, label: t(`enum.subtype.${st}`) }))}
+                      value={r.subTypes[0] || ""}
+                      onChange={(v) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [v] } : x))}
+                    />
+                  </div>
                 )}
               </div>
             ))}

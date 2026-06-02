@@ -19,6 +19,7 @@ export function Dropdown({
   multi = false,
   placeholder = "—",
   variant = "field",
+  fontSize,
   disabled = false,
   ariaLabel,
 }) {
@@ -62,7 +63,7 @@ export function Dropdown({
         background: "transparent", border: "none",
         cursor: disabled ? "default" : "pointer",
         padding: "6px 8px 6px 0",
-        fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 500,
+        fontFamily: "var(--font-sans)", fontSize: fontSize || 15, fontWeight: 500,
         color: "var(--ink-1)", letterSpacing: "-0.01em",
         display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
         opacity: disabled ? 0.5 : 1,

@@ -138,6 +138,9 @@ const dict = {
   "common.undo_warning":  { en: "This action cannot be undone.", zh: "此操作无法撤销。" },
   "common.no_data":       { en: "—",                        zh: "—" },
   "tutorial.view":        { en: "View setup guide",         zh: "查看申请教程" },
+  "tour.skip":            { en: "Skip",                     zh: "跳过" },
+  "tour.next":            { en: "Next",                     zh: "下一步" },
+  "tour.back":            { en: "Back",                     zh: "上一步" },
   "common.optional":      { en: "(optional)",               zh: "（可选）" },
   "common.saving":        { en: "Saving…",                  zh: "保存中…" },
 

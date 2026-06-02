@@ -23,6 +23,7 @@ import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
+import { OnboardingTour, TOUR_FLAG } from "./components/OnboardingTour";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
@@ -715,6 +716,7 @@ function AppShell({
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showInviteCodes, setShowInviteCodes] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const [showGuide, setShowGuide] = useState(false);
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
@@ -1103,6 +1105,25 @@ Rules:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // First-run guided tour: fire once when a brand-new user's profile flips
+  // incomplete -> complete (they just finished the setup wizard). Existing users
+  // mount already-complete (null -> true), so they don't get it. Per-device flag.
+  const prevProfileCompleteRef = useRef(null);
+  const tourFiredRef = useRef(false);
+  useEffect(() => {
+    const complete = isProfileComplete(profile);
+    const prev = prevProfileCompleteRef.current;
+    prevProfileCompleteRef.current = complete;
+    if (tourFiredRef.current) return;
+    let seen = true;
+    try { seen = !!localStorage.getItem(TOUR_FLAG); } catch { /* private mode: skip */ }
+    if (seen) return;
+    if (prev === false && complete === true) {
+      tourFiredRef.current = true;
+      setShowTour(true);
+    }
+  }, [profile]);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
@@ -1373,6 +1394,14 @@ Rules:
 
       {showInviteCodes && (
         <InviteCodeModal onClose={() => setShowInviteCodes(false)} />
+      )}
+
+      {showTour && !profileEditorMode && (
+        <OnboardingTour
+          isMobile={isMobile}
+          onChangeTab={setTab}
+          onClose={() => setShowTour(false)}
+        />
       )}
 
       {showWeatherApiSettings && (

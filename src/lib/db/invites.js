@@ -12,6 +12,7 @@ function fromRow(row) {
     createdAt: row.created_at,
     usedBy: row.used_by ?? null,
     usedAt: row.used_at ?? null,
+    usedEmail: row.used_email ?? '',
     note: row.note ?? '',
   };
 }
@@ -51,6 +52,14 @@ export async function createInviteCode(note = '') {
     throw new Error(error.message);
   }
   return fromRow(data);
+}
+
+export async function deleteInviteCode(code) {
+  const { error } = await supabase.from('invite_codes').delete().eq('code', code);
+  if (error) {
+    console.error('deleteInviteCode failed:', error);
+    throw new Error(error.message);
+  }
 }
 
 // Calls the Edge Function. Throws an Error whose `.code` is the server's error

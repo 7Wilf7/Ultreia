@@ -50,6 +50,9 @@ export function ApiSettingsModal({
   const isMobile = useIsMobile();
   const [keyDraft, setKeyDraft] = useState("");
   const [tutId, setTutId] = useState(null);
+  // Pricing comparison starts expanded on open; collapsing animates it back
+  // into the "!" info button next to the title. Re-open by tapping that button.
+  const [pricingOpen, setPricingOpen] = useState(true);
 
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS.deepseek;
   const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
@@ -83,19 +86,50 @@ export function ApiSettingsModal({
         style={s.modalCard(isMobile, { maxWidth: 600, float: true })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>
+            <button
+              onClick={() => setPricingOpen(o => !o)}
+              title={t("api.pricing_title")} aria-label={t("api.pricing_title")}
+              style={{
+                width: 19, height: 19, borderRadius: "50%",
+                border: `1px solid ${pricingOpen ? "var(--ink-1)" : "var(--ink-3)"}`,
+                background: pricingOpen ? "var(--ink-1)" : "transparent",
+                color: pricingOpen ? "var(--ink-inv)" : "var(--ink-3)",
+                fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)",
+                cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 160ms, color 160ms, border-color 160ms",
+              }}>!</button>
+          </div>
           <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
         <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6 }}>{t("api.desc_pick_provider")}</p>
 
-        {/* Pricing comparison — same content shows in the Guide. Kept inline
-            here so the user sees the cost difference at the moment they're
-            about to pick a provider, not buried in docs. */}
+        {/* Pricing comparison — collapses into the "!" button by the title so it
+            doesn't dominate the modal. Animated via max-height/opacity/scale
+            with the origin at the top-left (where the "!" sits). */}
+        <div style={{
+          overflow: "hidden",
+          maxHeight: pricingOpen ? 600 : 0,
+          opacity: pricingOpen ? 1 : 0,
+          transform: pricingOpen ? "scale(1)" : "scale(0.92)",
+          transformOrigin: "top left",
+          transition: "max-height 300ms ease, opacity 220ms ease, transform 300ms ease",
+          marginBottom: pricingOpen ? 22 : 0,
+        }}>
         <div style={{
           border: "1px solid var(--rule)", borderRadius: 6,
-          padding: "12px 14px", marginBottom: 22,
+          padding: "12px 14px",
           background: "var(--bg-elevated)",
+          position: "relative",
         }}>
+          <button onClick={() => setPricingOpen(false)} aria-label="Close"
+            style={{
+              position: "absolute", top: 6, right: 8,
+              background: "none", border: "none", color: "var(--ink-3)",
+              fontSize: 18, lineHeight: 1, cursor: "pointer", padding: 2,
+            }}>×</button>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("api.pricing_title")}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {Object.values(API_PROVIDERS).map(p => {
@@ -130,6 +164,7 @@ export function ApiSettingsModal({
             )}
           </div>
         </div>
+        </div>
 
         {/* Provider switch */}
         <div style={{ ...s.label, marginBottom: 6 }}>{t("api.provider_label")}</div>
@@ -142,24 +177,7 @@ export function ApiSettingsModal({
           ))}
         </div>
 
-        <h3 style={sectionH}>{provider.label}</h3>
-        {provider.isThirdParty ? (
-          <p style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>
-            {t("api.third_party_notice")}{" "}
-            <a href={provider.consoleUrl} target="_blank" rel="noreferrer"
-              style={{ color: "var(--moss-deep)", textDecoration: "underline" }}>
-              {provider.consoleUrl}
-            </a>
-          </p>
-        ) : (
-          <p style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>
-            <a href={provider.signupUrl} target="_blank" rel="noreferrer"
-              style={{ color: "var(--moss-deep)", textDecoration: "underline" }}>
-              {provider.signupUrl}
-            </a>
-          </p>
-        )}
-
+        <h3 style={{ ...sectionH, marginBottom: 10 }}>{provider.label}</h3>
         {TUTORIALS[apiProvider] && (
           <button type="button" onClick={() => setTutId(apiProvider)} style={{ ...s.btnGhost, marginBottom: 18 }}>
             {t("tutorial.view")}

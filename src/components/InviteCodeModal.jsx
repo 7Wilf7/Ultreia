@@ -35,6 +35,16 @@ export function InviteCodeModal({ onClose }) {
     }
   }
 
+  async function remove(code) {
+    setErr("");
+    try {
+      await invites.deleteInviteCode(code);
+      setCodes(prev => (prev || []).filter(c => c.code !== code));
+    } catch (e) {
+      setErr(e?.message || String(e));
+    }
+  }
+
   async function copy(code) {
     try {
       await navigator.clipboard.writeText(code);
@@ -93,27 +103,39 @@ export function InviteCodeModal({ onClose }) {
                 const used = !!c.usedBy;
                 return (
                   <div key={c.code} style={{
-                    display: "flex", alignItems: "center", gap: 10,
+                    display: "flex", alignItems: "center", gap: 8,
                     border: "1px solid var(--rule)", borderRadius: 4,
                     padding: "10px 12px",
                     background: used ? "var(--bg-sunken)" : "var(--bg-elevated)",
                   }}>
-                    <span style={{
-                      fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600,
-                      color: used ? "var(--ink-3)" : "var(--ink-1)",
-                      textDecoration: used ? "line-through" : "none",
-                      flex: 1, minWidth: 0, wordBreak: "break-all",
-                    }}>{c.code}</span>
-                    {used ? (
-                      <span style={{ fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>
-                        {t("invite.used")}{c.usedAt ? ` · ${c.usedAt.slice(0, 10)}` : ""}
-                      </span>
-                    ) : (
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600,
+                        color: used ? "var(--ink-3)" : "var(--ink-1)",
+                        textDecoration: used ? "line-through" : "none",
+                        wordBreak: "break-all",
+                      }}>{c.code}</div>
+                      {used && (
+                        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3, wordBreak: "break-all" }}>
+                          {t("invite.used")}
+                          {c.usedEmail ? ` · ${c.usedEmail}` : ""}
+                          {c.usedAt ? ` · ${c.usedAt.slice(0, 10)}` : ""}
+                        </div>
+                      )}
+                    </div>
+                    {!used && (
                       <button onClick={() => copy(c.code)}
                         style={{ ...s.btnGhost, fontSize: 12, padding: "5px 12px", minHeight: 0, flexShrink: 0 }}>
                         {copied === c.code ? t("invite.copied") : t("invite.copy")}
                       </button>
                     )}
+                    <button onClick={() => remove(c.code)} aria-label={t("common.delete")}
+                      title={t("common.delete")}
+                      style={{
+                        background: "none", border: "none", color: "var(--ink-3)",
+                        fontSize: 18, lineHeight: 1, cursor: "pointer", padding: "2px 4px",
+                        minHeight: 0, flexShrink: 0,
+                      }}>×</button>
                   </div>
                 );
               })}

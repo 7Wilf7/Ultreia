@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
   //    roll back by deleting the user we just created.
   const { data: burned, error: burnErr } = await db
     .from("invite_codes")
-    .update({ used_by: newUserId, used_at: new Date().toISOString() })
+    .update({ used_by: newUserId, used_at: new Date().toISOString(), used_email: email })
     .eq("code", code)
     .is("used_by", null)
     .select("code");

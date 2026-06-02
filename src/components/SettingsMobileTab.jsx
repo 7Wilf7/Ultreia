@@ -33,6 +33,7 @@ export function SettingsMobileTab({
   onOpenGuide,
   onToggleLang,
   onChangePassword,
+  onDeleteAccount,
   isAdmin,
   onGenerateInvite,
   signOut,
@@ -89,6 +90,11 @@ export function SettingsMobileTab({
               : t("settings.sign_out")}
             danger
             onClick={handleSignOut}
+          />
+          <SubCell
+            primary={t("settings.delete_account")}
+            danger
+            onClick={() => { setAccountOpen(false); onDeleteAccount(); }}
           />
         </div>
       )}

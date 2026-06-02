@@ -22,6 +22,7 @@ import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
+import { DeleteAccountModal } from "./components/DeleteAccountModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
 import { OnboardingTour, TOUR_FLAG } from "./components/OnboardingTour";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
@@ -79,14 +80,14 @@ function LoadingScreen() {
 }
 
 export default function App() {
-  const { user, loading, signIn, signOut, changePassword, register } = useAuth();
+  const { user, loading, signIn, signOut, changePassword, register, deleteAccount } = useAuth();
 
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} register={register} />;
-  return <AuthedApp user={user} signOut={signOut} changePassword={changePassword} />;
+  return <AuthedApp user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount} />;
 }
 
-function AuthedApp({ user, signOut, changePassword }) {
+function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // ── Supabase-backed: workouts (3.3c) + races (3.3d) + chatMessages (3.3e)
   //    + dailyNotes (Calendar day-level tags, e.g. ['massage'])
   const [logs, setLogs] = useState([]);
@@ -641,7 +642,7 @@ function AuthedApp({ user, signOut, changePassword }) {
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppShell
-        user={user} signOut={signOut} changePassword={changePassword}
+        user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount}
         logs={logs} refreshLogs={refreshLogs}
         addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
         races={races}
@@ -672,7 +673,7 @@ function AuthedApp({ user, signOut, changePassword }) {
 }
 
 function AppShell({
-  user, signOut, changePassword,
+  user, signOut, changePassword, deleteAccount,
   logs, refreshLogs, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
@@ -715,6 +716,7 @@ function AppShell({
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showInviteCodes, setShowInviteCodes] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
@@ -1392,6 +1394,13 @@ Rules:
         />
       )}
 
+      {showDeleteAccount && (
+        <DeleteAccountModal
+          deleteAccount={deleteAccount}
+          onClose={() => setShowDeleteAccount(false)}
+        />
+      )}
+
       {showInviteCodes && (
         <InviteCodeModal onClose={() => setShowInviteCodes(false)} />
       )}
@@ -1469,6 +1478,7 @@ Rules:
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
+        onDeleteAccount={() => setShowDeleteAccount(true)}
         isAdmin={isAdmin}
         onGenerateInvite={() => setShowInviteCodes(true)}
         signOut={signOut}
@@ -1596,7 +1606,7 @@ Rules:
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <SettingsIcon size={14} />
             </button>
-            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} isAdmin={isAdmin} onGenerateInvite={() => setShowInviteCodes(true)} />
+            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} onDeleteAccount={() => setShowDeleteAccount(true)} isAdmin={isAdmin} onGenerateInvite={() => setShowInviteCodes(true)} />
           </div>
         </div>
       </div>

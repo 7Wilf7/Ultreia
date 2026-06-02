@@ -68,5 +68,26 @@ export function useAuth() {
     if (error) throw error;
   }
 
-  return { user, loading, signIn, signOut, changePassword, register };
+  // Permanent account deletion. Re-authenticates first as a possession check
+  // (same rationale as changePassword), then calls the delete-account Edge
+  // Function (service_role wipes the user's data + auth row), then signs out so
+  // the now-invalid session is cleared and the UI returns to the login screen.
+  async function deleteAccount(currentPassword) {
+    const email = user?.email;
+    if (!email) throw new Error("no_active_session");
+    const { error: verifyErr } = await supabase.auth.signInWithPassword({
+      email, password: currentPassword,
+    });
+    if (verifyErr) {
+      const e = new Error("current_password_invalid");
+      e.code = "current_password_invalid";
+      throw e;
+    }
+    const { data, error } = await supabase.functions.invoke("delete-account", { body: {} });
+    if (error) throw new Error(error.message || "delete_failed");
+    if (data && data.error) throw new Error(data.detail || data.error);
+    await supabase.auth.signOut();
+  }
+
+  return { user, loading, signIn, signOut, changePassword, register, deleteAccount };
 }

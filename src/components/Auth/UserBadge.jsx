@@ -22,7 +22,7 @@ function emailPrefix(email) {
 // + Sign out. Both actions live INSIDE the dropdown so the email becomes the
 // single anchor for account-level operations, matching the mobile "tap
 // email → menu" pattern.
-export function UserBadge({ user, signOut, onChangePassword, isAdmin, onGenerateInvite }) {
+export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, isAdmin, onGenerateInvite }) {
   const t = useT();
   const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -140,6 +140,20 @@ export function UserBadge({ user, signOut, onChangePassword, isAdmin, onGenerate
                     {t("settings.signing_out")}
                   </span>
                 : t("settings.sign_out")}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); onDeleteAccount?.(); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "10px 14px", fontSize: 13, fontFamily: "var(--font-sans)",
+                color: "var(--danger)",
+                background: "transparent", border: "none",
+                borderTop: "1px solid var(--rule-soft)",
+                borderRadius: 0, cursor: "pointer",
+              }}
+            >
+              {t("settings.delete_account")}
             </button>
           </div>
         )}

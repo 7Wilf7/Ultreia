@@ -110,6 +110,7 @@ export function SettingsMobileTab({
       <Cell
         primary={t("settings.weather_api")}
         secondary={caiyunApiKey ? t("settings.weather_api_set") : t("settings.weather_api_default")}
+        secondaryWarn={!caiyunApiKey}
         onClick={onOpenWeatherApiSettings}
       />
 

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { s } from "../styles";
 import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAG_ICONS } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
+import { CalendarDayPreview } from "./CalendarDayPreview";
 import { skyconMeta } from "../lib/weather";
 import { startedAtToTimeOfDay } from "../utils/format";
 
@@ -133,7 +134,32 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     return set;
   }, [races]);
 
-  const [openDay, setOpenDay] = useState(null);
+  // Short tap → read-only preview (dateKey string); long-press → edit modal
+  // ({dateKey, isFuture}). previewKey also drives the ‹/› day stepping.
+  const [previewKey, setPreviewKey] = useState(null);
+  const [editDay, setEditDay] = useState(null);
+
+  // Shift a YYYY-MM-DD key by N days (for the preview's prev/next arrows).
+  function shiftDayKey(key, delta) {
+    const [y, m, d] = key.split("-").map(Number);
+    return dateKey(new Date(y, m - 1, d + delta));
+  }
+
+  // Vertical swipe on the calendar grid changes month (up = next, down = prev);
+  // the 7-day weather strip below scrolls normally.
+  const swipeRef = useRef(null);
+  function onGridTouchStart(e) {
+    if (e.touches.length !== 1) { swipeRef.current = null; return; }
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  function onGridTouchEnd(e) {
+    const st = swipeRef.current; swipeRef.current = null;
+    const p = e.changedTouches && e.changedTouches[0];
+    if (!st || !p) return;
+    const dx = p.clientX - st.x, dy = p.clientY - st.y;
+    if (Math.abs(dy) < 50 || Math.abs(dy) < Math.abs(dx) * 1.5) return; // need a clear vertical swipe
+    if (dy < 0) gotoNext(); else gotoPrev();
+  }
 
   function gotoPrev() {
     setViewMonth(v => {
@@ -179,7 +205,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 
   return (
     <div>
-      <div style={monthBlockStyle}>
+      <div style={monthBlockStyle} onTouchStart={onGridTouchStart} onTouchEnd={onGridTouchEnd}>
       {/* Month navigation bar */}
       <div style={{
         display: "flex", alignItems: "center", gap: 10,
@@ -259,7 +285,8 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
               isRace={raceDays.has(key)}
               colIdx={i % 7}
               rowIdx={Math.floor(i / 7)}
-              onClick={() => setOpenDay({ dateKey: key, isFuture })}
+              onTap={() => setPreviewKey(key)}
+              onLongPress={() => setEditDay({ dateKey: key, isFuture })}
               t={t}
               isMobile={isMobile}
             />
@@ -283,21 +310,40 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         refreshing={weatherCtx?.status === "loading"}
       />
 
-      {openDay && (() => {
-        // Same lookup the cell did. For past days we fall back to the
-        // first logged workout's weather; today/future use the forecast.
-        const k = openDay.dateKey;
+      {/* Short tap → read-only preview with ‹/› day stepping. */}
+      {previewKey && (() => {
+        const k = previewKey;
+        const w = k >= todayKey
+          ? (forecastByDate.get(k) || null)
+          : ((byDate.get(k) || []).find(l => l.weather)?.weather || null);
+        return (
+          <CalendarDayPreview
+            dateKey={k}
+            isFuture={k > todayKey}
+            logs={byDate.get(k) || []}
+            note={notesByDate.get(k) || null}
+            weather={w}
+            onPrev={() => setPreviewKey(shiftDayKey(k, -1))}
+            onNext={() => setPreviewKey(shiftDayKey(k, 1))}
+            onClose={() => setPreviewKey(null)}
+          />
+        );
+      })()}
+
+      {/* Long-press → full edit modal. */}
+      {editDay && (() => {
+        const k = editDay.dateKey;
         const modalWeather = k >= todayKey
           ? (forecastByDate.get(k) || null)
           : ((byDate.get(k) || []).find(l => l.weather)?.weather || null);
         return (
           <CalendarDayModal
-            dateKey={openDay.dateKey}
-            isFuture={openDay.isFuture}
-            logs={byDate.get(openDay.dateKey) || []}
-            note={notesByDate.get(openDay.dateKey) || null}
+            dateKey={editDay.dateKey}
+            isFuture={editDay.isFuture}
+            logs={byDate.get(editDay.dateKey) || []}
+            note={notesByDate.get(editDay.dateKey) || null}
             weather={modalWeather}
-            onClose={() => setOpenDay(null)}
+            onClose={() => setEditDay(null)}
             addLog={addLog}
             updateLog={updateLog}
             setConfirmDelete={setConfirmDelete}
@@ -568,9 +614,42 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 //     bottom-right corner — independent from workouts.
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onClick, t, isMobile }) {
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, onLongPress, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
+
+  // Short tap → preview; long-press (450ms) → edit. A drag/swipe >10px cancels
+  // the long-press (so a vertical month-swipe doesn't open the editor); the
+  // browser suppresses the click after a touch drag, so a swipe won't open the
+  // preview either.
+  const pressTimer = useRef(null);
+  const longFired = useRef(false);
+  const startPos = useRef(null);
+  function startPress(e) {
+    longFired.current = false;
+    startPos.current = { x: e.clientX, y: e.clientY };
+    pressTimer.current = setTimeout(() => { longFired.current = true; onLongPress(); }, 450);
+  }
+  function movePress(e) {
+    if (!startPos.current) return;
+    if (Math.abs(e.clientX - startPos.current.x) > 10 || Math.abs(e.clientY - startPos.current.y) > 10) {
+      clearTimeout(pressTimer.current);
+    }
+  }
+  function endPress() { clearTimeout(pressTimer.current); }
+  function handleClick() {
+    if (longFired.current) { longFired.current = false; return; }
+    onTap();
+  }
+  const pressHandlers = {
+    onClick: handleClick,
+    onPointerDown: startPress,
+    onPointerMove: movePress,
+    onPointerUp: endPress,
+    onPointerLeave: endPress,
+    onPointerCancel: endPress,
+    onContextMenu: (e) => e.preventDefault(),
+  };
 
   const cellBg = isToday
     ? "var(--moss-bg)"
@@ -584,7 +663,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   if (isMobile) {
     return (
       <div
-        onClick={onClick}
+        {...pressHandlers}
         style={{
           position: "relative",
           minHeight: 48,
@@ -672,7 +751,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   // Desktop / tablet — full layout with type names and metrics.
   return (
     <div
-      onClick={onClick}
+      {...pressHandlers}
       style={{
         position: "relative",
         minHeight: 132,

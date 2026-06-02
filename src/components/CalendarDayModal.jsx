@@ -10,7 +10,7 @@ import { ItemActionModal } from "./ItemActionModal";
 import { Dropdown } from "./Dropdown";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
-function formatHeaderDate(yyyy_mm_dd, lang) {
+export function formatHeaderDate(yyyy_mm_dd, lang) {
   const [y, m, d] = yyyy_mm_dd.split("-").map(Number);
   const dt = new Date(y, m - 1, d);
   if (lang === "zh") {
@@ -24,12 +24,12 @@ function formatHeaderDate(yyyy_mm_dd, lang) {
 
 // Order workouts within a day: AM on top, PM at the bottom, untimed in between.
 const TOD_RANK = { am: 0, pm: 2 };
-function todRank(l) {
+export function todRank(l) {
   const tod = startedAtToTimeOfDay(l.startedAt);
   return tod ? TOD_RANK[tod] : 1;
 }
 
-function logHeadline(log) {
+export function logHeadline(log) {
   if (RUN_GROUP_TYPES.includes(log.type) && log.distance > 0) {
     return `${log.distance} km${log.duration > 0 ? " · " + formatDuration(log.duration) : ""}`;
   }

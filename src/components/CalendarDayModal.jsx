@@ -21,6 +21,13 @@ function formatHeaderDate(yyyy_mm_dd, lang) {
   return `${wkEn}, ${monEn} ${d} ${y}`;
 }
 
+// Order workouts within a day: AM on top, PM at the bottom, untimed in between.
+const TOD_RANK = { am: 0, pm: 2 };
+function todRank(l) {
+  const tod = startedAtToTimeOfDay(l.startedAt);
+  return tod ? TOD_RANK[tod] : 1;
+}
+
 function logHeadline(log) {
   if (RUN_GROUP_TYPES.includes(log.type) && log.distance > 0) {
     return `${log.distance} km${log.duration > 0 ? " · " + formatDuration(log.duration) : ""}`;
@@ -234,7 +241,7 @@ export function CalendarDayModal({
               {t("calendar.day_logs_title")}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {logs.map(l => {
+              {[...logs].sort((a, b) => todRank(a) - todRank(b)).map(l => {
                 const color = TYPE_COLOR[l.type] || "var(--ink-2)";
                 return (
                   <div key={l.id}

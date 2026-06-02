@@ -123,8 +123,11 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const isRun = RUN_GROUP_TYPES.includes(form.type);
   const isRoadRun = form.type === "Road Run";
   const isStrength = form.type === "Strength";
+  // A race isn't an easy/tempo/etc session, so when the Race flag is on we hide
+  // the run-type picker and don't require a pace type (req #2).
+  const isRace = isRun && form.subTypes.includes("Race");
   // Only road Running uses pace types (Easy/Aerobic/Tempo/Interval). Trail / Hiking / Floor just track time + climb.
-  const showPaceTypes = isRoadRun;
+  const showPaceTypes = isRoadRun && !isRace;
   // GAP + cadence make sense for road running only. Trail/hiking pace is dominated by terrain, strength has no distance.
   const showCadenceAndGap = isRoadRun;
   // Floor Climbing tracks vertical only — no horizontal distance. Other Run-group types do track distance.
@@ -144,7 +147,13 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   function toggleFlag(flag) {
     const hasIt = pickedFlags.includes(flag);
     const newFlags = hasIt ? pickedFlags.filter(f => f !== flag) : [...pickedFlags, flag];
-    const next = pickedPace ? [pickedPace, ...newFlags] : newFlags;
+    // Race ⇒ no pace type: drop it when Race turns on; when Race turns off on a
+    // Road Run, restore the default so the required pace field stays satisfied.
+    const raceOn = newFlags.includes("Race");
+    let pace = pickedPace;
+    if (raceOn) pace = "";
+    else if (isRoadRun && !pace) pace = "Easy Run";
+    const next = pace ? [pace, ...newFlags] : [...newFlags];
     setForm({ ...form, subTypes: next });
   }
 
@@ -172,7 +181,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       alert(t("form.alert_body"));
       return;
     }
-    if (form.type === "Road Run" && !pickedPace) {
+    if (form.type === "Road Run" && !isRace && !pickedPace) {
       alert(t("form.alert_run"));
       return;
     }

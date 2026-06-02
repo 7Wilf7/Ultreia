@@ -59,24 +59,32 @@ export function PersonalRecordsBar({ races, itraPI, setItraPI }) {
       const metric = DISTANCE_RANKED_CATEGORIES.has(cat) ? "distance"
         : DIFFICULTY_RANKED_CATEGORIES.has(cat) ? "difficulty"
         : "time";
-      let sorted, best;
+      let best;
       if (metric === "distance") {
-        sorted = [...group].sort((a, b) => (b.distance || 0) - (a.distance || 0));
-        best = (sorted[0]?.distance || 0) > 0 ? sorted[0] : null;
+        const byDist = [...group].sort((a, b) => (b.distance || 0) - (a.distance || 0));
+        best = (byDist[0]?.distance || 0) > 0 ? byDist[0] : null;
       } else if (metric === "difficulty") {
-        sorted = [...group].sort((a, b) => (SPARTAN_RANK[b.subtype] || 0) - (SPARTAN_RANK[a.subtype] || 0));
-        best = SPARTAN_RANK[sorted[0]?.subtype] ? sorted[0] : null;
+        const byDiff = [...group].sort((a, b) => (SPARTAN_RANK[b.subtype] || 0) - (SPARTAN_RANK[a.subtype] || 0));
+        best = SPARTAN_RANK[byDiff[0]?.subtype] ? byDiff[0] : null;
       } else {
-        sorted = [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b));
-        const bestSec = resultSeconds(sorted[0]);
-        best = isFinite(bestSec) ? sorted[0] : null;
+        const byTime = [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b));
+        best = isFinite(resultSeconds(byTime[0])) ? byTime[0] : null;
       }
+      // "Other finishes": everything except the headline PR. Trail + Spartan
+      // list these chronologically (recent first) — distance/difficulty already
+      // define the headline card, so a date order reads better than re-sorting
+      // by the same metric. Time categories keep fastest-first (a PR ladder).
+      const byDateDesc = (a, b) => (b.date || "").localeCompare(a.date || "");
+      const others = metric === "time"
+        ? [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b)).filter(r => r !== best)
+        : group.filter(r => r !== best).sort(byDateDesc);
       out.push({
         category: cat,
         metric,
         best,
         bestSeconds: best ? resultSeconds(best) : Infinity,
-        all: sorted,
+        others,
+        total: group.length,
       });
     }
     return out;
@@ -172,7 +180,7 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
           <div style={{
             display: "flex", alignItems: "baseline", gap: 6, minWidth: 0,
           }}>
-            <span style={{ fontSize: 12, color: "var(--ink-2)", fontWeight: 500 }}>
+            <span style={{ fontSize: 15, color: "var(--ink-1)", fontWeight: 600 }}>
               {t(`enum.race_cat.${rec.category}`)}
             </span>
             {(rec.metric === "distance" || rec.metric === "difficulty") && (
@@ -218,31 +226,34 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
           </div>
         ) : (
           <div style={{ ...s.muted, fontSize: 12, marginTop: 4 }}>
-            {t("pr.no_times", { n: rec.all.length })}
+            {t("pr.no_times", { n: rec.total })}
           </div>
         )}
 
         {/* Bottom row: "+N other finishes" on the left, ITRA pinned to the
             bottom-right corner. align-items:flex-start keeps ITRA next to the
             summary line when the details list is expanded. */}
-        {(rec.all.length > 1 || isTrail) && (
+        {(rec.others.length > 0 || isTrail) && (
           <div style={{
             display: "flex", justifyContent: "space-between",
             alignItems: "flex-start", gap: 10, marginTop: 6,
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              {rec.all.length > 1 && (
+              {rec.others.length > 0 && (
                 <details>
                   <summary style={{ ...s.muted, cursor: "pointer", fontSize: 11 }}>
-                    + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
+                    + {t("pr.other_finishes", { n: rec.others.length, plural: rec.others.length > 1 ? "es" : "" })}
                   </summary>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 6 }}>
-                    {rec.all.slice(1).map(r => (
-                      <div key={r.id} style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-2)" }}>
-                        {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
-                          : rec.metric === "difficulty" ? (r.subtype || "—")
-                          : formatHMS(resultSeconds(r))}
-                        {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
+                    {rec.others.map(r => (
+                      <div key={r.id} style={{ ...s.dataNum, fontSize: 11, color: "var(--ink-2)", display: "flex", alignItems: "baseline", gap: 5, whiteSpace: "nowrap" }}>
+                        <span style={{ flexShrink: 0 }}>
+                          {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
+                            : rec.metric === "difficulty" ? (r.subtype || "—")
+                            : formatHMS(resultSeconds(r))}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-sans)", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{r.name}</span>
+                        <span style={{ color: "var(--ink-3)", flexShrink: 0 }}>{r.date}</span>
                       </div>
                     ))}
                   </div>
@@ -271,7 +282,7 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
       borderTop: "3px solid " + categoryColor,
     }}>
       <div style={{
-        fontSize: 13, color: "var(--ink-2)", marginBottom: 6, fontWeight: 500,
+        fontSize: 16, color: "var(--ink-1)", marginBottom: 6, fontWeight: 600,
         display: "flex", alignItems: "baseline", gap: 8,
       }}>
         <span>{t(`enum.race_cat.${rec.category}`)}</span>
@@ -304,28 +315,31 @@ function PRCell({ rec, itraPI, setItraPI, t, isMobile }) {
           </div>
         </>
       ) : (
-        <div style={{ ...s.muted, marginTop: 4 }}>{t("pr.no_times", { n: rec.all.length })}</div>
+        <div style={{ ...s.muted, marginTop: 4 }}>{t("pr.no_times", { n: rec.total })}</div>
       )}
       {/* Bottom row: "+N other finishes" on the left, ITRA pinned to the
           bottom-right corner. */}
-      {(rec.all.length > 1 || isTrail) && (
+      {(rec.others.length > 0 || isTrail) && (
         <div style={{
           display: "flex", justifyContent: "space-between",
           alignItems: "flex-start", gap: 12, marginTop: 10,
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            {rec.all.length > 1 && (
+            {rec.others.length > 0 && (
               <details>
                 <summary style={{ ...s.muted, cursor: "pointer", fontSize: 12 }}>
-                  + {t("pr.other_finishes", { n: rec.all.length - 1, plural: rec.all.length > 2 ? "es" : "" })}
+                  + {t("pr.other_finishes", { n: rec.others.length, plural: rec.others.length > 1 ? "es" : "" })}
                 </summary>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
-                  {rec.all.slice(1).map(r => (
-                    <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)" }}>
-                      {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
-                        : rec.metric === "difficulty" ? (r.subtype || "—")
-                        : formatHMS(resultSeconds(r))}
-                      {" · "}<span style={{ fontFamily: "var(--font-sans)" }}>{r.name}</span> · <span style={{ color: "var(--ink-3)" }}>{r.date}</span>
+                  {rec.others.map(r => (
+                    <div key={r.id} style={{ ...s.dataNum, fontSize: 12, color: "var(--ink-2)", display: "flex", alignItems: "baseline", gap: 6, whiteSpace: "nowrap" }}>
+                      <span style={{ flexShrink: 0 }}>
+                        {rec.metric === "distance" ? (r.distance > 0 ? `${r.distance}km` : "—")
+                          : rec.metric === "difficulty" ? (r.subtype || "—")
+                          : formatHMS(resultSeconds(r))}
+                      </span>
+                      <span style={{ fontFamily: "var(--font-sans)", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>{r.name}</span>
+                      <span style={{ color: "var(--ink-3)", flexShrink: 0 }}>{r.date}</span>
                     </div>
                   ))}
                 </div>

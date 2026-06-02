@@ -2,22 +2,29 @@ import { useState } from "react";
 import { s } from "../../styles";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { ModalRoot } from "../ModalRoot";
+import { translate } from "../../i18n/translations";
 
-// Map the Edge Function's error ids to friendly copy. Kept English to match the
-// rest of this (pre-auth, English-only) screen.
-function registerErrorText(code) {
-  switch (code) {
-    case "invalid_code":  return "Invalid invite code.";
-    case "code_used":     return "This invite code has already been used.";
-    case "email_taken":   return "This email is already registered — try signing in instead.";
-    case "weak_password": return "Password must be at least 6 characters.";
-    case "bad_input":     return "Please check your email and invite code.";
-    default:              return "Registration failed. Please try again.";
-  }
+const LANG_KEY = "ts-lang";
+
+function initialLang() {
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    if (saved === "zh" || saved === "en") return saved;
+  } catch { /* private mode */ }
+  try {
+    return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
+  } catch { return "en"; }
 }
 
+// Pre-auth screen: no LanguageProvider in scope (it lives inside the authed
+// app), so we translate directly via translate(key, lang) and keep the chosen
+// language in localStorage. The authed app reads that same key on first load so
+// a brand-new user's UI + onboarding tour open in the language they picked here.
 export function LoginScreen({ onClose, signIn, register }) {
   const isMobile = useIsMobile();
+  const [lang, setLang] = useState(initialLang);
+  const tt = (k) => translate(k, lang);
+
   const [mode, setMode] = useState("signin"); // "signin" | "register"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -27,6 +34,21 @@ export function LoginScreen({ onClose, signIn, register }) {
   const [submitting, setSubmitting] = useState(false);
 
   const isRegister = mode === "register";
+
+  function changeLang(next) {
+    setLang(next);
+    try { localStorage.setItem(LANG_KEY, next); } catch { /* private mode */ }
+  }
+
+  function registerErrorText(code) {
+    switch (code) {
+      case "invalid_code":  return tt("login.err_invalid_code");
+      case "code_used":     return tt("login.err_code_used");
+      case "email_taken":   return tt("login.err_email_taken");
+      case "weak_password": return tt("login.err_pw_short");
+      default:              return tt("login.err_register");
+    }
+  }
 
   function switchMode(next) {
     setMode(next);
@@ -41,9 +63,9 @@ export function LoginScreen({ onClose, signIn, register }) {
     setError("");
 
     if (isRegister) {
-      if (password.length < 6) { setError("Password must be at least 6 characters."); return; }
-      if (password !== password2) { setError("The two passwords don't match."); return; }
-      if (!invite.trim()) { setError("An invite code is required."); return; }
+      if (password.length < 6) { setError(tt("login.err_pw_short")); return; }
+      if (password !== password2) { setError(tt("login.err_mismatch")); return; }
+      if (!invite.trim()) { setError(tt("login.err_invite_required")); return; }
     }
 
     setSubmitting(true);
@@ -57,7 +79,7 @@ export function LoginScreen({ onClose, signIn, register }) {
     } catch (err) {
       setError(isRegister
         ? registerErrorText(err?.code)
-        : (err?.message || "Sign in failed"));
+        : (err?.message || tt("login.err_signin")));
       setSubmitting(false);
     }
   }
@@ -65,6 +87,19 @@ export function LoginScreen({ onClose, signIn, register }) {
   const canSubmit = isRegister
     ? email && password && password2 && invite
     : email && password;
+
+  function langSeg(active) {
+    return {
+      background: active ? "var(--ink-1)" : "transparent",
+      color: active ? "var(--ink-inv)" : "var(--ink-3)",
+      border: "none", borderRadius: 0,
+      padding: "0 10px", height: 26, minHeight: 0,
+      fontSize: active ? 13 : 11,
+      fontFamily: active ? "var(--font-sans)" : "var(--font-mono)",
+      fontWeight: 600, cursor: "pointer",
+      transition: "background 160ms, color 160ms",
+    };
+  }
 
   return (
     <ModalRoot>
@@ -81,29 +116,30 @@ export function LoginScreen({ onClose, signIn, register }) {
           padding: isMobile ? "calc(env(safe-area-inset-top) + 28px) 22px calc(env(safe-area-inset-bottom) + 24px)" : 28,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--moss)", fontWeight: 600 }}>
             ▲ Training Studio
           </div>
-          {!submitting && (
-            <button type="button" onClick={onClose}
-              style={{ background: "none", border: "none", fontSize: 22, color: "var(--ink-3)", cursor: "pointer", padding: 0, lineHeight: 1 }}>
-              ×
-            </button>
-          )}
+          {/* Language pill — lets a brand-new user read the screen + tour in
+              their language before any account exists. */}
+          <div style={{
+            display: "flex", overflow: "hidden",
+            border: "1px solid var(--rule)", borderRadius: 13, height: 26,
+          }}>
+            <button type="button" onClick={() => changeLang("zh")} style={langSeg(lang === "zh")} aria-label="中文">中</button>
+            <button type="button" onClick={() => changeLang("en")} style={langSeg(lang === "en")} aria-label="English">EN</button>
+          </div>
         </div>
 
         <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 22, fontWeight: 500, margin: "10px 0 4px", color: "var(--ink-1)", letterSpacing: "-0.01em" }}>
-          {isRegister ? "Create account" : "Sign in"}
+          {isRegister ? tt("login.create") : tt("login.signin")}
         </h2>
         <p style={{ ...s.muted, marginBottom: 22, lineHeight: 1.5 }}>
-          {isRegister
-            ? "Register with an invite code from the admin."
-            : "Access your training data across devices."}
+          {isRegister ? tt("login.register_desc") : tt("login.signin_desc")}
         </p>
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>Email</div>
+          <div style={{ ...s.label, marginBottom: 6 }}>{tt("login.email")}</div>
           <input
             type="email"
             required
@@ -117,7 +153,7 @@ export function LoginScreen({ onClose, signIn, register }) {
         </div>
 
         <div style={{ marginBottom: isRegister ? 14 : 18 }}>
-          <div style={{ ...s.label, marginBottom: 6 }}>Password</div>
+          <div style={{ ...s.label, marginBottom: 6 }}>{tt("login.password")}</div>
           <input
             type="password"
             required
@@ -132,7 +168,7 @@ export function LoginScreen({ onClose, signIn, register }) {
         {isRegister && (
           <>
             <div style={{ marginBottom: 14 }}>
-              <div style={{ ...s.label, marginBottom: 6 }}>Confirm password</div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{tt("login.confirm")}</div>
               <input
                 type="password"
                 required
@@ -144,7 +180,7 @@ export function LoginScreen({ onClose, signIn, register }) {
               />
             </div>
             <div style={{ marginBottom: 18 }}>
-              <div style={{ ...s.label, marginBottom: 6 }}>Invite code</div>
+              <div style={{ ...s.label, marginBottom: 6 }}>{tt("login.invite")}</div>
               <input
                 type="text"
                 required
@@ -188,8 +224,8 @@ export function LoginScreen({ onClose, signIn, register }) {
           }}
         >
           {submitting
-            ? (isRegister ? "Creating…" : "Signing in…")
-            : (isRegister ? "Create account" : "Sign in")}
+            ? (isRegister ? tt("login.creating") : tt("login.signing"))
+            : (isRegister ? tt("login.create") : tt("login.signin"))}
         </button>
 
         <div style={{
@@ -197,24 +233,24 @@ export function LoginScreen({ onClose, signIn, register }) {
           paddingTop: 14,
           borderTop: "1px solid var(--rule)",
           textAlign: "center",
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
+          fontFamily: "var(--font-sans)",
+          fontSize: 12.5,
           color: "var(--ink-3)",
         }}>
           {isRegister ? (
             <>
-              Already have an account?{" "}
+              {tt("login.have_account")}{" "}
               <button type="button" onClick={() => switchMode("signin")}
                 style={{ background: "none", border: "none", padding: 0, color: "var(--moss-deep)", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", textDecoration: "underline" }}>
-                Sign in
+                {tt("login.signin")}
               </button>
             </>
           ) : (
             <>
-              Have an invite code?{" "}
+              {tt("login.have_invite")}{" "}
               <button type="button" onClick={() => switchMode("register")}
                 style={{ background: "none", border: "none", padding: 0, color: "var(--moss-deep)", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", textDecoration: "underline" }}>
-                Register
+                {tt("login.create")}
               </button>
             </>
           )}

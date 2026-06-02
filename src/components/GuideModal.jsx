@@ -202,7 +202,7 @@ function makeGuideComponents(onNavigate, isMobile) {
   };
 }
 
-export function GuideModal({ onClose }) {
+export function GuideModal({ onClose, onReplayTour }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [active, setActive] = useState(0);
@@ -262,7 +262,15 @@ export function GuideModal({ onClose }) {
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 12 }}>
               <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink-1)" }}>{t("settings.guide")}</h2>
-              <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {onReplayTour && (
+                  <button onClick={onReplayTour}
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", minHeight: 0, flexShrink: 0 }}>
+                    {t("tour.replay")}
+                  </button>
+                )}
+                <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
             </div>
             {/* Inline TOC dropdown — opens a list right under the box instead
                 of the OS's full-screen native <select> picker. */}

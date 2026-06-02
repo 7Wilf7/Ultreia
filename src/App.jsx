@@ -179,7 +179,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           });
           setCoachMemoryState(settingsData.coachMemory ?? "");
           setCoachMemoryZhState(settingsData.coachMemoryZh ?? "");
-          setLangState(settingsData.lang || DEFAULT_LANG);
           setDefaultLocationState({
             lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
             lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
@@ -190,6 +189,21 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           setPushHoursState(Array.isArray(settingsData.pushHours) ? settingsData.pushHours : []);
           setPushTimesState(Array.isArray(settingsData.pushTimes) ? settingsData.pushTimes : []);
           setPushTimezoneState(settingsData.pushTimezone || "");
+        }
+
+        // Language: a saved setting wins; otherwise fall back to the choice the
+        // user made on the login screen (stored in localStorage). For a brand-new
+        // user with no saved lang, seed it into settings so it persists server-
+        // side and the onboarding tour opens in their chosen language.
+        let preLang = null;
+        try {
+          const v = localStorage.getItem("ts-lang");
+          if (v === "zh" || v === "en") preLang = v;
+        } catch { /* private mode */ }
+        const savedLang = settingsData?.lang;
+        setLangState(savedLang || preLang || DEFAULT_LANG);
+        if (!savedLang && preLang) {
+          db.userSettings.updateMySettings({ lang: preLang }).catch(() => {});
         }
 
         // Workouts — list already sorted date desc, created_at desc by the DAL.
@@ -1441,7 +1455,12 @@ Rules:
         />
       )}
 
-      {showGuide && <GuideModal onClose={() => setShowGuide(false)} />}
+      {showGuide && (
+        <GuideModal
+          onClose={() => setShowGuide(false)}
+          onReplayTour={() => { setShowGuide(false); setShowTour(true); }}
+        />
+      )}
 
       {/* Plan-import review modal — rendered at AppShell level (not inside
           AICoachTab) so the user sees it pop up even if they walked away

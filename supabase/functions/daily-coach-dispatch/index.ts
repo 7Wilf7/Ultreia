@@ -107,6 +107,7 @@ function buildPrompt(opts: {
   lang: string; name: string; today: string;
   workouts: any[]; targetRace: any | null; memory: string;
   travel?: { date: string; dest: string } | null;
+  recentChat?: { role: string; content: string }[];
 }): { system: string; user: string } {
   const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
   const lines = (opts.workouts || []).slice(0, 8).map((w) => {
@@ -127,16 +128,29 @@ function buildPrompt(opts: {
     `You are this runner's coach. Write ONE short daily check-in to push as a phone notification. ` +
     `Hard rules: write in ${langName}; at most 2 sentences; no greeting, no sign-off, no markdown, no emoji; ` +
     `be specific and actionable using the data (e.g. if yesterday was hard, suggest easy today; mind the race countdown). ` +
+    `If [Recent coach chat] is present, treat it as the FRESHEST context: reference what the runner just told you (a session they're doing today, how they feel, a change of plan) and stay consistent with it — do NOT just repeat the same race reminder every day; vary the focus. ` +
     `If the runner is travelling, you may wish them a good trip and suggest a local running spot or local food to try. ` +
     `If there's no recent training, give a brief encouraging nudge. Output ONLY the message text.`;
   const travelLine = opts.travel
     ? `[Travel] ${opts.travel.date === opts.today ? "today" : "soon"} going to ${opts.travel.dest}\n`
+    : "";
+  // Recent in-app coach chat — most recent last. Lets the push pick up what the
+  // runner just told the coach (e.g. "bootcamp tonight") instead of only the
+  // structured data. Each turn truncated so a long reply can't blow up the prompt.
+  const chatLines = (opts.recentChat || []).map((m) => {
+    const who = m.role === "user" ? "Runner" : "Coach";
+    const text = String(m.content || "").replace(/\s+/g, " ").trim().slice(0, 200);
+    return text ? `${who}: ${text}` : "";
+  }).filter(Boolean);
+  const chatBlock = chatLines.length
+    ? `[Recent coach chat (most recent last)]\n${chatLines.join("\n")}\n`
     : "";
   const user =
     `[Today] ${opts.today}\n` +
     `[Recent training (newest first)]\n${lines.length ? lines.join("\n") : "none"}\n` +
     `[Target race] ${race}\n` +
     travelLine +
+    chatBlock +
     (opts.memory ? `[Notes about this runner] ${opts.memory.slice(0, 600)}\n` : "");
   return { system, user };
 }
@@ -251,9 +265,20 @@ Deno.serve(async (req) => {
       const travelHit = (travelNotes || []).find((n) => n.travel_dest);
       const travel = travelHit ? { date: travelHit.date, dest: travelHit.travel_dest } : null;
 
+      // Recent in-app coach chat (last ~8 turns, chronological) so the push can
+      // reference what the runner just told the coach.
+      const { data: chatRows } = await supabase
+        .from("coach_messages")
+        .select("role, content")
+        .eq("user_id", u.user_id)
+        .order("created_at", { ascending: false })
+        .limit(8);
+      const recentChat = (chatRows || []).reverse();
+
       const { system, user } = buildPrompt({
         lang: u.lang || "en", name: "", today: date,
         workouts: workouts || [], targetRace, memory: u.coach_memory || "", travel,
+        recentChat,
       });
 
       let message = "";

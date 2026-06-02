@@ -110,12 +110,13 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         background: "var(--bg)",
         padding: "14px 14px 0",
         paddingTop: "max(env(safe-area-inset-top), 14px)",
-        // Reserve room for the position: fixed bottom nav (~64px content
-        // + safe-area), plus headroom so the LAST line of a scrolled tab
-        // (e.g. the version cell's "you're on the latest version") clears the
-        // nav instead of hiding behind it. 76px left the last line clipped on
-        // some devices.
-        paddingBottom: "calc(100px + env(safe-area-inset-bottom))",
+        // Reserve room for the position: fixed bottom nav. The nav is ~66px
+        // tall (icon + label), so 76px clears it with a ~10px gap — just
+        // enough, no dead space. (The earlier "last line hidden" wasn't a
+        // padding problem — it was the height:100% wrapper regression, fixed
+        // separately; bumping this to 100px was a misdiagnosis that left a
+        // ~34px gap at the bottom of every scrolled tab.)
+        paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
       }}>
         {/* Keyed by tab so each switch remounts + replays the slide-in.
             height:100% is applied ONLY to the AI Coach tab (idx 3): it must

@@ -4,6 +4,8 @@
 
 ## 初次配置
 
+> 新账号自带 **10 次免费 AI 对话额度**（用作者的额度，无需先申请 key 就能体验）。用完后按下面的步骤填入自己的 key 即可继续；剩余次数在 API 设置里能看到。
+
 1. 打开 API 设置（**电脑**：顶部右侧 **API key** 按钮；**手机**：Settings tab → API key）。
 2. 选一个 **Provider**：
    - **DeepSeek** —— 在 [platform.deepseek.com](https://platform.deepseek.com/) 注册申请 Key。便宜、速度快。

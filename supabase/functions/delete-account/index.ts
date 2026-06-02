@@ -40,6 +40,7 @@ const USER_TABLES = [
   "push_subscriptions",
   "push_inbox",
   "push_log",
+  "usage_quota",
 ];
 
 Deno.serve(async (req) => {

@@ -4,6 +4,7 @@ import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
+import { FREE_WEATHER_LIMIT } from "../constants";
 
 // Caiyun Weather API token settings — lets the user paste their own free
 // developer token from dashboard.caiyunapp.com. Empty = falls back to the
@@ -12,7 +13,7 @@ import { TUTORIALS } from "../data/tutorials";
 // Persistence lives in user_settings.caiyun_api_key (synced across devices
 // via Supabase) — the caller (App.jsx) wires `caiyunApiKey` + `setCaiyunApiKey`
 // to the same DAL writer the rest of user_settings uses.
-export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose }) {
+export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWeatherLeft, onClose }) {
   const t = useT();
   // Mask the existing key on first render so it doesn't leak when the user
   // hands their phone over; "draft" tracks the new value being typed.
@@ -82,6 +83,19 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>
             {t("weather_api.hint")}
           </p>
+          {!hasKey && typeof freeWeatherLeft === "number" && (
+            <div style={{
+              border: "1px solid var(--rule)", borderRadius: 6,
+              padding: "9px 12px", marginBottom: 14,
+              background: freeWeatherLeft > 0 ? "var(--moss-bg)" : "var(--bg-sunken)",
+              fontSize: 12.5, lineHeight: 1.55,
+              color: freeWeatherLeft > 0 ? "var(--moss-deep)" : "var(--ink-2)",
+            }}>
+              {freeWeatherLeft > 0
+                ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
+                : t("quota.weather_used")}
+            </div>
+          )}
           <button type="button" onClick={() => setShowTut(true)} style={{ ...s.btnGhost, marginBottom: 18 }}>
             {t("tutorial.view")}
           </button>

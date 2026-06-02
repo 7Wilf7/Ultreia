@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
+import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
 
 /**
  * Mobile-only settings page — three sections, top-down:
@@ -20,6 +21,8 @@ export function SettingsMobileTab({
   profile,
   apiKey,
   caiyunApiKey,      // optional — undefined until #9 schema lands
+  freeDeepseekLeft,
+  freeWeatherLeft,
   lang,
   onOpenProfile,
   onOpenApiSettings,
@@ -109,14 +112,22 @@ export function SettingsMobileTab({
       <SectionHeader label={t("settings.section_api")} />
       <Cell
         primary={t("settings.ai_api")}
-        secondary={apiKey ? t("settings.api_set") : t("settings.api_missing")}
-        secondaryWarn={!apiKey}
+        secondary={apiKey
+          ? t("settings.api_set")
+          : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
+              ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
+              : t("settings.api_missing"))}
+        secondaryWarn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
         onClick={onOpenApiSettings}
       />
       <Cell
         primary={t("settings.weather_api")}
-        secondary={caiyunApiKey ? t("settings.weather_api_set") : t("settings.weather_api_default")}
-        secondaryWarn={!caiyunApiKey}
+        secondary={caiyunApiKey
+          ? t("settings.weather_api_set")
+          : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
+              ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
+              : t("settings.weather_api_default"))}
+        secondaryWarn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
         onClick={onOpenWeatherApiSettings}
       />
 

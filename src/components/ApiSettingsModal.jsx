@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { s } from "../styles";
-import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPUT_TOKENS } from "../constants";
+import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPUT_TOKENS, FREE_DEEPSEEK_LIMIT } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
@@ -44,6 +44,7 @@ export function ApiSettingsModal({
   claudeApiKey, setClaudeApiKey,
   claudeEndpointId, setClaudeEndpointId,
   apiModel, setApiModel,
+  freeDeepseekLeft,
   onClose,
 }) {
   const t = useT();
@@ -179,6 +180,23 @@ export function ApiSettingsModal({
         </div>
 
         <h3 style={{ ...sectionH, marginBottom: 10 }}>{provider.label}</h3>
+
+        {/* Free-tier allowance — only for DeepSeek when the user has no own key
+            yet (served from the app owner's shared key via coach-proxy). */}
+        {apiProvider === "deepseek" && !activeKey && (
+          <div style={{
+            border: "1px solid var(--rule)", borderRadius: 6,
+            padding: "9px 12px", marginBottom: 14,
+            background: freeDeepseekLeft > 0 ? "var(--moss-bg)" : "var(--bg-sunken)",
+            fontSize: 12.5, lineHeight: 1.55,
+            color: freeDeepseekLeft > 0 ? "var(--moss-deep)" : "var(--ink-2)",
+          }}>
+            {freeDeepseekLeft > 0
+              ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
+              : t("quota.ai_used")}
+          </div>
+        )}
+
         {TUTORIALS[apiProvider] && (
           <button type="button" onClick={() => setTutId(apiProvider)} style={{ ...s.btnGhost, marginBottom: 18 }}>
             {t("tutorial.view")}

@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Geolocation } from '@capacitor/geolocation';
+import { supabase } from './supabase';
 
 const isNative = () => Capacitor.isNativePlatform?.() === true;
 const WEATHER_PROXY_ORIGIN = 'https://www.aitrainstudio.com';
@@ -177,10 +178,10 @@ function buildSnapshot({
   };
 }
 
-// Pull realtime weather and reduce to a snapshot. lng/lat caller's job.
-export async function fetchRealtimeSnapshot({ lng, lat, caiyunToken }) {
-  const data = await fetchProxy({ lng, lat, type: 'realtime', caiyunToken });
-  const r = data.result?.realtime;
+// Reduce a raw Caiyun realtime payload to a snapshot. Shared by the direct
+// (own-token) path and the free-tier proxy bundle.
+function snapshotFromRealtimeData(data, lng, lat) {
+  const r = data?.result?.realtime;
   if (!r) throw new Error('caiyun_realtime_missing_result');
   return buildSnapshot({
     ts: new Date().toISOString(),
@@ -195,6 +196,12 @@ export async function fetchRealtimeSnapshot({ lng, lat, caiyunToken }) {
     aqi: r.air_quality?.aqi?.chn,
     source: 'caiyun',
   });
+}
+
+// Pull realtime weather and reduce to a snapshot. lng/lat caller's job.
+export async function fetchRealtimeSnapshot({ lng, lat, caiyunToken }) {
+  const data = await fetchProxy({ lng, lat, type: 'realtime', caiyunToken });
+  return snapshotFromRealtimeData(data, lng, lat);
 }
 
 // Historical weather for a specific moment in the past 24h. Caiyun's
@@ -241,9 +248,10 @@ export async function fetchHistoricalSnapshot({ lng, lat, when, caiyunToken }) {
 // Daily forecast for the next 7 days. Used by the calendar for future dates
 // and by the AI Coach for planned workout days. Returns an array of
 // snapshots, one per day, keyed by YYYY-MM-DD (local).
-export async function fetchDailyForecasts({ lng, lat, caiyunToken }) {
-  const data = await fetchProxy({ lng, lat, type: 'daily', caiyunToken });
-  const d = data.result?.daily;
+// Reduce a raw Caiyun daily payload to the forecast array. Shared by the direct
+// (own-token) path and the free-tier proxy bundle.
+function forecastsFromDailyData(data) {
+  const d = data?.result?.daily;
   if (!d) throw new Error('caiyun_daily_missing_result');
   const out = [];
   const days = d.temperature?.length || 0;
@@ -272,6 +280,38 @@ export async function fetchDailyForecasts({ lng, lat, caiyunToken }) {
     });
   }
   return out;
+}
+
+export async function fetchDailyForecasts({ lng, lat, caiyunToken }) {
+  const data = await fetchProxy({ lng, lat, type: 'daily', caiyunToken });
+  return forecastsFromDailyData(data);
+}
+
+// Free-tier path: one call to the weather-proxy Edge Function (uses the app
+// owner's shared Caiyun token, gated by per-user quota) returns realtime + 7-day
+// forecast in one shot and counts as ONE quota unit. Returns
+// { realtime, forecasts, remaining }. Throws an Error with `.code` (e.g.
+// 'quota_exceeded') so the hook can branch.
+async function weatherProxyBundle({ lng, lat }) {
+  const { data, error } = await supabase.functions.invoke('weather-proxy', {
+    body: { mode: 'bundle', lng: roundCoord(lng), lat: roundCoord(lat) },
+  });
+  if (error) {
+    let code = '';
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === 'function') { const b = await ctx.json(); code = b?.error || ''; }
+    } catch { /* ignore */ }
+    const e = new Error(code || error.message || 'weather_proxy_failed');
+    e.code = code;
+    throw e;
+  }
+  if (data && data.error) { const e = new Error(data.error); e.code = data.error; throw e; }
+  return {
+    realtime: data?.realtime ? snapshotFromRealtimeData(data.realtime, lng, lat) : null,
+    forecasts: data?.daily ? forecastsFromDailyData(data.daily) : null,
+    remaining: data?.remaining,
+  };
 }
 
 // For a long session (≥ LONG_SESSION_SEC) recorded with a real start time,
@@ -348,7 +388,9 @@ export async function captureSnapshotForWorkout({ date, startedAt, durationSec =
 // Cache invalidates wholesale when coords change (user updates default
 // location) — old data is for the wrong city.
 const CACHE_KEY = 'ts.weather.v1';
-const REALTIME_TTL_MS = 60 * 60 * 1000;
+// 3h: weather doesn't change minute-to-minute, and a longer TTL means far fewer
+// Caiyun calls (matters for the shared free-tier quota — see weather-proxy).
+const REALTIME_TTL_MS = 3 * 60 * 60 * 1000;
 
 function readCache() {
   try {
@@ -391,7 +433,7 @@ function coordsMatch(cache, lng, lat) {
 // `lastUpdatedAt` is the ISO timestamp of the most recent successful
 //   realtime fetch — surfaced so the UI can render "updated HH:MM" labels
 //   and decide when a manual refresh is meaningful.
-export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) {
+export function useWeatherContext({ defaultLng, defaultLat, caiyunToken, freeWeatherLeft = 0, onWeatherUsed } = {}) {
   // Hydrate from cache synchronously on mount so the AI Coach status pill
   // doesn't flash 'idle' on every page load. The freshness check below
   // decides whether to actually refetch.
@@ -439,17 +481,39 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
       return;
     }
 
+    // Free-tier users (no own token) refresh via the weather-proxy Edge Function
+    // — one bundled call (realtime + forecast) = one quota unit. When the free
+    // allowance is spent, weather goes unavailable until they add their own
+    // token. Users WITH a token keep the direct /api/weather path.
+    if (!caiyunToken && freeWeatherLeft <= 0) {
+      setState({ currentWeather: cache?.realtime || null, forecastByDate: (() => {
+        const m = new Map();
+        if (Array.isArray(cache?.forecasts)) for (const f of cache.forecasts) m.set(f.date, f);
+        return m;
+      })(), status: 'no_token', error: null, lastUpdatedAt: cache?.realtimeAt || null });
+      return;
+    }
+
     setState((s) => ({ ...s, status: s.currentWeather ? 'ready' : 'loading' }));
 
     try {
-      const [rt, daily] = await Promise.all([
-        needRealtime
-          ? fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat, caiyunToken })
-          : Promise.resolve(cache?.realtime || null),
-        needForecast
-          ? fetchDailyForecasts({ lng: loc.lng, lat: loc.lat, caiyunToken }).catch(() => null)
-          : Promise.resolve(cache?.forecasts || null),
-      ]);
+      let rt, daily;
+      if (caiyunToken) {
+        [rt, daily] = await Promise.all([
+          needRealtime
+            ? fetchRealtimeSnapshot({ lng: loc.lng, lat: loc.lat, caiyunToken })
+            : Promise.resolve(cache?.realtime || null),
+          needForecast
+            ? fetchDailyForecasts({ lng: loc.lng, lat: loc.lat, caiyunToken }).catch(() => null)
+            : Promise.resolve(cache?.forecasts || null),
+        ]);
+      } else {
+        // Free tier: one proxied bundle call (counts as 1 quota unit).
+        const bundle = await weatherProxyBundle({ lng: loc.lng, lat: loc.lat });
+        rt = bundle.realtime ?? (cache?.realtime || null);
+        daily = bundle.forecasts ?? (cache?.forecasts || null);
+        if (typeof bundle.remaining === 'number' && onWeatherUsed) onWeatherUsed(bundle.remaining);
+      }
       const today = localDateKey();
       const nextCache = {
         lng: loc.lng,
@@ -470,9 +534,12 @@ export function useWeatherContext({ defaultLng, defaultLat, caiyunToken } = {}) 
         lastUpdatedAt: nextCache.realtimeAt,
       });
     } catch (e) {
-      setState({ currentWeather: null, forecastByDate: null, status: 'error', error: e.message || String(e), lastUpdatedAt: null });
+      // Free-tier quota ran out between the check and the call → weather off.
+      const status = e?.code === 'quota_exceeded' ? 'no_token' : 'error';
+      if (e?.code === 'quota_exceeded' && onWeatherUsed) onWeatherUsed(0);
+      setState({ currentWeather: null, forecastByDate: null, status, error: status === 'error' ? (e.message || String(e)) : null, lastUpdatedAt: null });
     }
-  }, [defaultLng, defaultLat, caiyunToken]);
+  }, [defaultLng, defaultLat, caiyunToken, freeWeatherLeft, onWeatherUsed]);
 
   // run() is async — the setState calls inside happen on later ticks, not
   // synchronously inside the effect body. The lint rule still flags this

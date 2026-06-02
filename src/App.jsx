@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
   API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl, ACTIVITY_TYPES, ADMIN_EMAIL,
+  FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -135,6 +136,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [pushHours, setPushHoursState] = useState([]);
   const [pushTimes, setPushTimesState] = useState([]);
   const [pushTimezone, setPushTimezoneState] = useState("");
+  // Free-tier usage counters (served from the owner's shared keys via the
+  // coach-proxy / weather-proxy Edge Functions). Read-only here; the proxies are
+  // the source of truth and return `remaining` which we mirror into these.
+  const [deepseekUsed, setDeepseekUsed] = useState(0);
+  const [weatherUsed, setWeatherUsed] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
 
   // Fetch profile + user_settings + workouts once the auth'd user is known.
@@ -142,13 +148,14 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     let cancelled = false;
     (async () => {
       try {
-        const [profileData, settingsData, workoutsData, racesData, messagesData, notesData] = await Promise.all([
+        const [profileData, settingsData, workoutsData, racesData, messagesData, notesData, usageData] = await Promise.all([
           db.profiles.getMyProfile(),
           db.userSettings.getMySettings(),
           db.workouts.listMyWorkouts(),
           db.races.listMyRaces(),
           db.coachMessages.listMyMessages(),
           db.dailyNotes.listMyDailyNotes(),
+          db.usage.getMyUsage(),
         ]);
         if (cancelled) return;
 
@@ -219,6 +226,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
         setDailyNotes(notesData);
+
+        // Free-tier usage counters.
+        setDeepseekUsed(usageData?.deepseekUsed ?? 0);
+        setWeatherUsed(usageData?.weatherUsed ?? 0);
       } catch (err) {
         console.error("Failed to load user data:", err);
         if (!cancelled) {
@@ -681,6 +692,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
         caiyunApiKey={caiyunApiKey} setCaiyunApiKey={setCaiyunApiKey}
         pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
+        deepseekUsed={deepseekUsed} setDeepseekUsed={setDeepseekUsed}
+        weatherUsed={weatherUsed} setWeatherUsed={setWeatherUsed}
       />
     </LanguageProvider>
   );
@@ -704,6 +717,7 @@ function AppShell({
   defaultLocation, setDefaultLocation,
   caiyunApiKey, setCaiyunApiKey,
   pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings,
+  deepseekUsed, setDeepseekUsed, weatherUsed, setWeatherUsed,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -872,10 +886,20 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
   // the same forecastByDate if we lift that later. Status field lets the
   // UI tell the user *why* weather isn't showing up instead of silently
   // dropping it.
+  // Free-tier remaining (one-time allowance from the owner's shared keys).
+  const freeDeepseekLeft = Math.max(0, FREE_DEEPSEEK_LIMIT - deepseekUsed);
+  const freeWeatherLeft = Math.max(0, FREE_WEATHER_LIMIT - weatherUsed);
+  // Stable so it doesn't churn the weather hook's effect every render.
+  const onWeatherUsed = useCallback((remaining) => {
+    if (typeof remaining === "number") setWeatherUsed(FREE_WEATHER_LIMIT - remaining);
+  }, [setWeatherUsed]);
+
   const weatherCtx = useWeatherContext({
     defaultLng: defaultLocation?.lng,
     defaultLat: defaultLocation?.lat,
     caiyunToken: caiyunApiKey,
+    freeWeatherLeft,
+    onWeatherUsed,
   });
 
   // ── Lifted sendChat — talks to DeepSeek's Anthropic-compat endpoint.
@@ -891,8 +915,12 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       ? getEndpointUrl("claude", claudeEndpointId)
       : provider.endpoints[0].url;
     const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
-    if (!activeKey) {
-      appendLocalChatMessage("assistant", t("coach.no_key"));
+    // Free tier: DeepSeek with no own key but remaining allowance → route through
+    // the coach-proxy (owner's shared key). Claude has no free tier.
+    const useFreeProxy = apiProvider === "deepseek" && !apiKey && freeDeepseekLeft > 0;
+    if (!activeKey && !useFreeProxy) {
+      const exhausted = apiProvider === "deepseek" && !apiKey && freeDeepseekLeft <= 0;
+      appendLocalChatMessage("assistant", exhausted ? t("coach.free_used") : t("coach.no_key"));
       return false;
     }
 
@@ -962,6 +990,31 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       window.alert("Failed to save message: " + err.message);
       setChatLoading(false);
       return false;
+    }
+
+    if (useFreeProxy) {
+      // Free tier: the coach-proxy Edge Function calls DeepSeek with the owner's
+      // shared key, enforces + decrements quota, and returns { content, remaining }.
+      try {
+        const data = await db.usage.coachProxy({
+          system: systemPrompt,
+          messages: messagesToSend,
+          max_tokens: 8000,
+        });
+        if (typeof data.remaining === "number") setDeepseekUsed(FREE_DEEPSEEK_LIMIT - data.remaining);
+        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+        try { await appendChatMessage("assistant", reply); } catch { /* alerted by wrapper */ }
+      } catch (err) {
+        if (err?.code === "quota_exceeded") {
+          setDeepseekUsed(FREE_DEEPSEEK_LIMIT);
+          appendLocalChatMessage("assistant", t("coach.free_used"));
+        } else {
+          console.error("[AI Coach] proxy error:", err);
+          appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
+        }
+      }
+      setChatLoading(false);
+      return true;
     }
 
     try {
@@ -1397,6 +1450,7 @@ Rules:
           setClaudeEndpointId={setClaudeEndpointId}
           apiModel={apiModel}
           setApiModel={setApiModel}
+          freeDeepseekLeft={freeDeepseekLeft}
           onClose={() => setShowApiSettings(false)}
         />
       )}
@@ -1431,6 +1485,7 @@ Rules:
         <WeatherApiSettingsModal
           caiyunApiKey={caiyunApiKey}
           setCaiyunApiKey={setCaiyunApiKey}
+          freeWeatherLeft={freeWeatherLeft}
           onClose={() => setShowWeatherApiSettings(false)}
         />
       )}
@@ -1484,6 +1539,8 @@ Rules:
         profile={profile}
         apiKey={apiKey}
         caiyunApiKey={caiyunApiKey}
+        freeDeepseekLeft={freeDeepseekLeft}
+        freeWeatherLeft={freeWeatherLeft}
         lang={lang}
         onOpenProfile={() => setProfileEditorMode("preview")}
         onOpenApiSettings={() => setShowApiSettings(true)}

@@ -85,6 +85,13 @@ export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoints[0].url;
 export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
 
+// Free-tier allowance per account, served from the app owner's shared keys via
+// the coach-proxy / weather-proxy Edge Functions. One-time (not recurring).
+// MUST match the limits hardcoded in those functions. Used here only for the
+// "X / N left" countdown UI; the server is the source of truth for enforcement.
+export const FREE_DEEPSEEK_LIMIT = 10;
+export const FREE_WEATHER_LIMIT = 30;
+
 // The one account allowed to mint invite codes. Checked client-side to show
 // the "Generate invite code" affordance; enforced server-side by the
 // invite_codes RLS policy (auth.jwt()->>'email' = this) so it's not just UI.

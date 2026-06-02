@@ -269,17 +269,10 @@ export function AICoachTab({
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
 
-  // Mobile-only: refresh the shared weather every hour while the AI Coach
-  // tab is mounted, so a runner sitting on this tab through the day sees
-  // realtime that tracks the actual weather. The hook's cache TTL is also
-  // 1h, so this effectively just kicks the refetch when the timer fires.
-  // Desktop relies on visibility-change in the hook (less aggressive
-  // because desktop sessions are usually short).
-  useEffect(() => {
-    if (!isMobile || !weatherCtx?.refetch) return;
-    const id = setInterval(() => { void weatherCtx.refetch(); }, 60 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [isMobile, weatherCtx]);
+  // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
+  // day for a runner sitting on this tab. The hook already refetches on tab
+  // foreground / app resume, and the realtime cache TTL is now 3h — plenty
+  // fresh, and far kinder to the shared free-tier weather quota.)
 
   // Chat scroll container + the two floating jump buttons. The buttons live
   // inside the (sticky) message window so the provider pills above and the

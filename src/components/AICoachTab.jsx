@@ -1070,23 +1070,21 @@ export function AICoachTab({
         );
         return (
           <ModalRoot onClose={() => setShowCoachMenu(false)}>
-            <div onClick={() => setShowCoachMenu(false)} style={{
+            <div onClick={() => setShowCoachMenu(false)} className="ts-overlay-in" style={{
               position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
-              display: "flex", flexDirection: "column", justifyContent: "flex-end",
-              zIndex: 9999, overscrollBehavior: "contain",
+              backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 9999, overscrollBehavior: "contain", padding: 16,
             }}>
-              <div onClick={e => e.stopPropagation()} style={{
+              <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
                 background: "var(--bg-elevated)",
-                borderTopLeftRadius: 14, borderTopRightRadius: 14,
-                boxShadow: "0 -8px 30px rgba(0,0,0,0.2)",
-                paddingBottom: "calc(env(safe-area-inset-bottom) + 8px)",
-                maxHeight: "80dvh", overflowY: "auto",
+                border: "1px solid var(--rule)", borderRadius: 14,
+                boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
+                width: "100%", maxWidth: 420,
+                maxHeight: "calc(100dvh - 32px)", overflowY: "auto",
+                paddingBottom: 8,
               }}>
-                {/* grab handle + title */}
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "10px 0 4px" }}>
-                  <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--rule)" }} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 16px 6px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px 6px" }}>
                   <div style={{ ...s.section, margin: 0 }}>{t("coach.settings_title")}</div>
                   <button onClick={() => setShowCoachMenu(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>

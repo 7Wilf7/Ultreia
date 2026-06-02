@@ -369,6 +369,7 @@ const dict = {
   "calendar.edit_plan_title":  { en: "Edit planned workout", zh: "编辑训练计划" },
   "calendar.add_plan_button":  { en: "+ Add planned workout", zh: "+ 添加计划训练" },
   "calendar.preview_edit_hint":{ en: "Long-press a day to edit", zh: "长按某天可编辑" },
+  "calendar.add_short":        { en: "+ Add",                 zh: "+ 添加" },
   "calendar.save_plan":        { en: "Save Plan",            zh: "保存计划" },
   "calendar.plan_time_of_day": { en: "Time of day",          zh: "时段" },
   "calendar.plan_tod_any":     { en: "Any time",             zh: "不限" },

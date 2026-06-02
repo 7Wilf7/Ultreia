@@ -4,7 +4,6 @@ import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAG_ICONS } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
-import { CalendarDayPreview } from "./CalendarDayPreview";
 import { skyconMeta } from "../lib/weather";
 import { startedAtToTimeOfDay } from "../utils/format";
 
@@ -134,10 +133,9 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     return set;
   }, [races]);
 
-  // Short tap → read-only preview (dateKey string); long-press → edit modal
-  // ({dateKey, isFuture}). previewKey also drives the ‹/› day stepping.
-  const [previewKey, setPreviewKey] = useState(null);
-  const [editDay, setEditDay] = useState(null);
+  // Tap a day → one centered day modal that views + edits + adds. dayKey also
+  // drives the ‹/› day stepping inside the modal.
+  const [dayKey, setDayKey] = useState(null);
 
   // Shift a YYYY-MM-DD key by N days (for the preview's prev/next arrows).
   function shiftDayKey(key, delta) {
@@ -285,8 +283,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
               isRace={raceDays.has(key)}
               colIdx={i % 7}
               rowIdx={Math.floor(i / 7)}
-              onTap={() => setPreviewKey(key)}
-              onLongPress={() => setEditDay({ dateKey: key, isFuture })}
+              onTap={() => setDayKey(key)}
               t={t}
               isMobile={isMobile}
             />
@@ -310,40 +307,23 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         refreshing={weatherCtx?.status === "loading"}
       />
 
-      {/* Short tap → read-only preview with ‹/› day stepping. */}
-      {previewKey && (() => {
-        const k = previewKey;
+      {/* Tap a day → one centered modal (view + long-press-edit + add), with
+          ‹/› stepping to the previous/next day in place. */}
+      {dayKey && (() => {
+        const k = dayKey;
         const w = k >= todayKey
           ? (forecastByDate.get(k) || null)
           : ((byDate.get(k) || []).find(l => l.weather)?.weather || null);
         return (
-          <CalendarDayPreview
+          <CalendarDayModal
             dateKey={k}
             isFuture={k > todayKey}
             logs={byDate.get(k) || []}
             note={notesByDate.get(k) || null}
             weather={w}
-            onPrev={() => setPreviewKey(shiftDayKey(k, -1))}
-            onNext={() => setPreviewKey(shiftDayKey(k, 1))}
-            onClose={() => setPreviewKey(null)}
-          />
-        );
-      })()}
-
-      {/* Long-press → full edit modal. */}
-      {editDay && (() => {
-        const k = editDay.dateKey;
-        const modalWeather = k >= todayKey
-          ? (forecastByDate.get(k) || null)
-          : ((byDate.get(k) || []).find(l => l.weather)?.weather || null);
-        return (
-          <CalendarDayModal
-            dateKey={editDay.dateKey}
-            isFuture={editDay.isFuture}
-            logs={byDate.get(editDay.dateKey) || []}
-            note={notesByDate.get(editDay.dateKey) || null}
-            weather={modalWeather}
-            onClose={() => setEditDay(null)}
+            onPrev={() => setDayKey(shiftDayKey(k, -1))}
+            onNext={() => setDayKey(shiftDayKey(k, 1))}
+            onClose={() => setDayKey(null)}
             addLog={addLog}
             updateLog={updateLog}
             setConfirmDelete={setConfirmDelete}
@@ -614,42 +594,9 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 //     bottom-right corner — independent from workouts.
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, onLongPress, t, isMobile }) {
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const hasContent = logs.length > 0;
-
-  // Short tap → preview; long-press (450ms) → edit. A drag/swipe >10px cancels
-  // the long-press (so a vertical month-swipe doesn't open the editor); the
-  // browser suppresses the click after a touch drag, so a swipe won't open the
-  // preview either.
-  const pressTimer = useRef(null);
-  const longFired = useRef(false);
-  const startPos = useRef(null);
-  function startPress(e) {
-    longFired.current = false;
-    startPos.current = { x: e.clientX, y: e.clientY };
-    pressTimer.current = setTimeout(() => { longFired.current = true; onLongPress(); }, 450);
-  }
-  function movePress(e) {
-    if (!startPos.current) return;
-    if (Math.abs(e.clientX - startPos.current.x) > 10 || Math.abs(e.clientY - startPos.current.y) > 10) {
-      clearTimeout(pressTimer.current);
-    }
-  }
-  function endPress() { clearTimeout(pressTimer.current); }
-  function handleClick() {
-    if (longFired.current) { longFired.current = false; return; }
-    onTap();
-  }
-  const pressHandlers = {
-    onClick: handleClick,
-    onPointerDown: startPress,
-    onPointerMove: movePress,
-    onPointerUp: endPress,
-    onPointerLeave: endPress,
-    onPointerCancel: endPress,
-    onContextMenu: (e) => e.preventDefault(),
-  };
 
   const cellBg = isToday
     ? "var(--moss-bg)"
@@ -663,7 +610,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   if (isMobile) {
     return (
       <div
-        {...pressHandlers}
+        onClick={onTap}
         style={{
           position: "relative",
           minHeight: 48,
@@ -751,7 +698,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   // Desktop / tablet — full layout with type names and metrics.
   return (
     <div
-      {...pressHandlers}
+      onClick={onTap}
       style={{
         position: "relative",
         minHeight: 132,

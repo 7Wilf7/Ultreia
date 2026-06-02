@@ -224,6 +224,15 @@ summary::-webkit-details-marker { display: none; }
   .ts-msg-in { animation: none; }
 }
 
+/* Scroll-snap wheel picker (push times) — hide the scrollbar so it reads as a
+   clean rotating wheel, not a scroll box. */
+.ts-wheel {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* old Edge */
+  -webkit-overflow-scrolling: touch;
+}
+.ts-wheel::-webkit-scrollbar { display: none; }  /* Chromium / WebView / Safari */
+
 /* ============================================================
    Mobile-only overrides
    ------------------------------------------------------------

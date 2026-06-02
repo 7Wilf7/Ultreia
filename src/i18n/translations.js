@@ -53,6 +53,7 @@ const dict = {
   "push.enabled_off":           { en: "Daily push off",       zh: "已关闭" },
   "push.times_label":           { en: "Push times (your local time, up to 3/day)", zh: "推送时间（你的本地时间，最多 3 个/天）" },
   "push.add_time":              { en: "+ Add time",           zh: "+ 添加时间" },
+  "push.pick_time":             { en: "Pick a time",          zh: "选择时间" },
   "push.remove_time":           { en: "Remove time",          zh: "删除时间" },
   "push.tz_note":               { en: "Anchored to your timezone: {tz}", zh: "按你的时区计算：{tz}" },
   "push.apk_note":              { en: "Notifications are delivered on the Android app only. On the web this preference is saved but no notification is sent.", zh: "通知只在安卓 App 上送达；网页版能保存设置，但不会真正弹通知。" },

@@ -5,6 +5,7 @@ import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
 import { ModalRoot } from "./ModalRoot";
+import { Dropdown } from "./Dropdown";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
@@ -166,13 +167,12 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                     </div>
                     <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
-                      <select value={it.type}
-                        onChange={e => patch(it._id, { type: e.target.value })}
-                        style={{ ...s.input, padding: "5px 8px", fontSize: 12 }}>
-                        {ACTIVITY_TYPES.map(at => (
-                          <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>
-                        ))}
-                      </select>
+                      <Dropdown
+                        ariaLabel={t("form.type")}
+                        options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
+                        value={it.type}
+                        onChange={(v) => patch(it._id, { type: v })}
+                      />
                     </div>
                     {showDistance && (
                       <div>
@@ -197,13 +197,18 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                   {/* Second row: time of day + (strength) area chips, so an
                       imported plan clearly says when + what to train. */}
                   <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <select value={it.timeOfDay}
-                      onChange={e => patch(it._id, { timeOfDay: e.target.value })}
-                      style={{ ...s.input, width: "auto", padding: "4px 8px", fontSize: 12 }}>
-                      <option value="">{t("calendar.plan_tod_any")}</option>
-                      <option value="am">{t("calendar.plan_tod_am")}</option>
-                      <option value="pm">{t("calendar.plan_tod_pm")}</option>
-                    </select>
+                    <div style={{ width: 130 }}>
+                      <Dropdown
+                        ariaLabel={t("calendar.plan_time_of_day")}
+                        options={[
+                          { value: "", label: t("calendar.plan_tod_any") },
+                          { value: "am", label: t("calendar.plan_tod_am") },
+                          { value: "pm", label: t("calendar.plan_tod_pm") },
+                        ]}
+                        value={it.timeOfDay}
+                        onChange={(v) => patch(it._id, { timeOfDay: v })}
+                      />
+                    </div>
                     {it.type === "Strength" && STRENGTH_SUBS.map(sub => {
                       const on = (it.subTypes || []).includes(sub);
                       return (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { TimeWheelModal } from "./WheelPicker";
 
 const MAX_TIMES = 3;
 
@@ -28,6 +29,8 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
       ? [...new Set(pushHours.map(h => `${String(h).padStart(2, "0")}:00`))].sort()
       : ["08:00"];
   const [times, setTimes] = useState(initial);
+  // Which time row's wheel picker is open (null = none).
+  const [editingIdx, setEditingIdx] = useState(null);
 
   const detectedTz = (() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
@@ -119,12 +122,15 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {times.map((tm, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <select value={tm} onChange={e => setTimeAt(i, e.target.value)}
-                    style={{ ...s.input, maxWidth: 140 }}>
-                    {HALF_HOUR_SLOTS.map(slot => (
-                      <option key={slot} value={slot}>{slot}</option>
-                    ))}
-                  </select>
+                  <button onClick={() => setEditingIdx(i)}
+                    style={{
+                      ...s.input, maxWidth: 140, cursor: "pointer", textAlign: "left",
+                      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                      fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: 16,
+                    }}>
+                    <span>{tm}</span>
+                    <span style={{ fontSize: 11, color: "var(--ink-3)" }}>▾</span>
+                  </button>
                   {times.length > 1 && (
                     <button onClick={() => removeAt(i)} aria-label={t("push.remove_time")}
                       style={{
@@ -154,6 +160,14 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
             <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
             <button onClick={save} style={s.btn}>{t("common.save")}</button>
           </div>
+
+          {editingIdx != null && (
+            <TimeWheelModal
+              value={times[editingIdx]}
+              onConfirm={(v) => { setTimeAt(editingIdx, v); setEditingIdx(null); }}
+              onClose={() => setEditingIdx(null)}
+            />
+          )}
         </div>
       </div>
     </ModalRoot>

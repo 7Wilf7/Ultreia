@@ -7,6 +7,7 @@ import { formatDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../u
 import { formatWeatherShort, skyconMeta } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 import { ItemActionModal } from "./ItemActionModal";
+import { Dropdown } from "./Dropdown";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
 function formatHeaderDate(yyyy_mm_dd, lang) {
@@ -378,12 +379,12 @@ export function CalendarDayModal({
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.type")}</div>
-                    <select value={planType} onChange={e => setPlanType(e.target.value)}
-                      style={{ ...s.input, padding: "8px 10px", fontSize: 14 }}>
-                      {ACTIVITY_TYPES.map(at => (
-                        <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>
-                      ))}
-                    </select>
+                    <Dropdown
+                      ariaLabel={t("form.type")}
+                      options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
+                      value={planType}
+                      onChange={setPlanType}
+                    />
                   </div>
                   {RUN_GROUP_TYPES.includes(planType) && (
                     <div>
@@ -403,12 +404,16 @@ export function CalendarDayModal({
                   </div>
                   <div>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_time_of_day")}</div>
-                    <select value={planTimeOfDay} onChange={e => setPlanTimeOfDay(e.target.value)}
-                      style={{ ...s.input, padding: "8px 10px", fontSize: 14 }}>
-                      <option value="">{t("calendar.plan_tod_any")}</option>
-                      <option value="am">{t("calendar.plan_tod_am")}</option>
-                      <option value="pm">{t("calendar.plan_tod_pm")}</option>
-                    </select>
+                    <Dropdown
+                      ariaLabel={t("calendar.plan_time_of_day")}
+                      options={[
+                        { value: "", label: t("calendar.plan_tod_any") },
+                        { value: "am", label: t("calendar.plan_tod_am") },
+                        { value: "pm", label: t("calendar.plan_tod_pm") },
+                      ]}
+                      value={planTimeOfDay}
+                      onChange={setPlanTimeOfDay}
+                    />
                   </div>
                 </div>
                 {/* Strength: which area(s) — so an imported "Strength" plan shows

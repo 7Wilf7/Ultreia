@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { Dropdown } from "./Dropdown";
 import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
@@ -48,7 +49,18 @@ function getChartConfig(filter) {
 export function ChartsTab({ filteredAllLogs, filter }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const [chartPeriod, setChartPeriod] = useState({ type: "week", count: 4 });
+  // Persisted to localStorage so the chosen period survives tab switches (and
+  // reloads) instead of snapping back to the 4-week default every time.
+  const [chartPeriod, setChartPeriod] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("ts-chart-period"));
+      if (saved && saved.type && saved.count) return saved;
+    } catch { /* ignore bad/missing value */ }
+    return { type: "week", count: 4 };
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ts-chart-period", JSON.stringify(chartPeriod)); } catch { /* ignore */ }
+  }, [chartPeriod]);
 
   const config = useMemo(() => getChartConfig(filter), [filter]);
 
@@ -291,19 +303,17 @@ export function ChartsTab({ filteredAllLogs, filter }) {
       {isMobile ? (
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
           <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("charts.show")}</span>
-          <select
-            value={`${chartPeriod.type}-${chartPeriod.count}`}
-            onChange={e => {
-              const [type, count] = e.target.value.split("-");
-              setChartPeriod({ type, count: parseInt(count, 10) });
-            }}
-            style={{ ...s.input, flex: 1, padding: "6px 10px", fontSize: 13 }}>
-            {presets.map(opt => (
-              <option key={`${opt.type}-${opt.count}`} value={`${opt.type}-${opt.count}`}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Dropdown
+              ariaLabel={t("charts.show")}
+              options={presets.map(opt => ({ value: `${opt.type}-${opt.count}`, label: opt.label }))}
+              value={`${chartPeriod.type}-${chartPeriod.count}`}
+              onChange={(v) => {
+                const [type, count] = v.split("-");
+                setChartPeriod({ type, count: parseInt(count, 10) });
+              }}
+            />
+          </div>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>

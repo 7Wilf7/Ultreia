@@ -9,11 +9,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { getCurrentLocation, reverseGeocode } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
-
-function toggleArr(arr, id) {
-  const a = Array.isArray(arr) ? arr : [];
-  return a.includes(id) ? a.filter(x => x !== id) : [...a, id];
-}
+import { Dropdown } from "./Dropdown";
 
 // `defaultLocation` / `setDefaultLocation` are the weather coordinates (stored
 // in user_settings). Location now lives ONLY here in the profile: the address
@@ -130,14 +126,14 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
           <div style={{ ...s.label, marginBottom: 6 }}>
             {t("profile.gender")} <span style={{ color: "#c0392b" }}>*</span>
           </div>
-          <select value={draft.gender || ""}
-            onChange={e => setDraft({ ...draft, gender: e.target.value })}
-            style={{ ...s.input, maxWidth: 200 }}>
-            <option value="">—</option>
-            {GENDERS.map(g => (
-              <option key={g.id} value={g.id}>{t(`enum.gender.${g.id}`)}</option>
-            ))}
-          </select>
+          <div style={{ maxWidth: 200 }}>
+            <Dropdown
+              ariaLabel={t("profile.gender")}
+              options={[{ value: "", label: "—" }, ...GENDERS.map(g => ({ value: g.id, label: t(`enum.gender.${g.id}`) }))]}
+              value={draft.gender || ""}
+              onChange={v => setDraft({ ...draft, gender: v })}
+            />
+          </div>
         </div>
 
         {/* Location — address text (feeds the AI prompt) + GPS auto-fill +
@@ -179,14 +175,14 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Occupation (with Other free-text) */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.day_job")}</div>
-          <select value={draft.occupation || ""}
-            onChange={e => setDraft({ ...draft, occupation: e.target.value })}
-            style={{ ...s.input, maxWidth: 260 }}>
-            <option value="">—</option>
-            {OCCUPATIONS.map(o => (
-              <option key={o.id} value={o.id}>{t(`enum.occ.${o.id}`)}</option>
-            ))}
-          </select>
+          <div style={{ maxWidth: 260 }}>
+            <Dropdown
+              ariaLabel={t("profile.day_job")}
+              options={[{ value: "", label: "—" }, ...OCCUPATIONS.map(o => ({ value: o.id, label: t(`enum.occ.${o.id}`) }))]}
+              value={draft.occupation || ""}
+              onChange={v => setDraft({ ...draft, occupation: v })}
+            />
+          </div>
           {draft.occupation === "other" && (
             <input type="text"
               placeholder={t("profile.occupation_other_placeholder")}
@@ -202,26 +198,26 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             {t("profile.years_training")} <span style={{ color: "#c0392b" }}>*</span>
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.years_training_hint")}</span>
           </div>
-          <select value={draft.experience || ""}
-            onChange={e => setDraft({ ...draft, experience: e.target.value })}
-            style={{ ...s.input, maxWidth: 260 }}>
-            <option value="">—</option>
-            {RUN_EXPERIENCE.map(o => (
-              <option key={o.id} value={o.id}>{t(`enum.exp.${o.id}`)}</option>
-            ))}
-          </select>
+          <div style={{ maxWidth: 260 }}>
+            <Dropdown
+              ariaLabel={t("profile.years_training")}
+              options={[{ value: "", label: "—" }, ...RUN_EXPERIENCE.map(o => ({ value: o.id, label: t(`enum.exp.${o.id}`) }))]}
+              value={draft.experience || ""}
+              onChange={v => setDraft({ ...draft, experience: v })}
+            />
+          </div>
         </div>
 
         {/* Race types done */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.race_types_done")}</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {RACE_TYPES_DONE.map(o => (
-              <button key={o.id} type="button"
-                onClick={() => setDraft({ ...draft, raceTypes: toggleArr(draft.raceTypes, o.id) })}
-                style={s.chip(draft.raceTypes?.includes(o.id))}>{t(`enum.race_done.${o.id}`)}</button>
-            ))}
-          </div>
+          <Dropdown
+            multi
+            ariaLabel={t("profile.race_types_done")}
+            options={RACE_TYPES_DONE.map(o => ({ value: o.id, label: t(`enum.race_done.${o.id}`) }))}
+            value={draft.raceTypes || []}
+            onChange={arr => setDraft({ ...draft, raceTypes: arr })}
+          />
         </div>
 
         {/* Recent injuries */}
@@ -230,13 +226,13 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             {t("profile.recent_injuries")}
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.recent_injuries_note")}</span>
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {INJURY_HISTORY.map(o => (
-              <button key={o.id} type="button"
-                onClick={() => setDraft({ ...draft, recentInjuries: toggleArr(draft.recentInjuries, o.id) })}
-                style={s.chip(draft.recentInjuries?.includes(o.id))}>{t(`enum.injury.${o.id}`)}</button>
-            ))}
-          </div>
+          <Dropdown
+            multi
+            ariaLabel={t("profile.recent_injuries")}
+            options={INJURY_HISTORY.map(o => ({ value: o.id, label: t(`enum.injury.${o.id}`) }))}
+            value={draft.recentInjuries || []}
+            onChange={arr => setDraft({ ...draft, recentInjuries: arr })}
+          />
         </div>
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.muted, marginBottom: 4 }}>{t("profile.injury_older_label")}</div>
@@ -250,13 +246,13 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Equipment */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.equipment")}</div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {EQUIPMENT_AVAILABLE.map(o => (
-              <button key={o.id} type="button"
-                onClick={() => setDraft({ ...draft, equipment: toggleArr(draft.equipment, o.id) })}
-                style={s.chip(draft.equipment?.includes(o.id))}>{t(`enum.equip.${o.id}`)}</button>
-            ))}
-          </div>
+          <Dropdown
+            multi
+            ariaLabel={t("profile.equipment")}
+            options={EQUIPMENT_AVAILABLE.map(o => ({ value: o.id, label: t(`enum.equip.${o.id}`) }))}
+            value={draft.equipment || []}
+            onChange={arr => setDraft({ ...draft, equipment: arr })}
+          />
           <input type="text"
             placeholder={t("profile.equipment_other_placeholder")}
             value={draft.equipmentOther}
@@ -282,13 +278,14 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             </label>
           </div>
           <div style={{ ...s.label, marginBottom: 6, fontSize: 12 }}>{t("profile.hr_zone_method")}</div>
-          <select value={draft.hrZoneMethod || ""}
-            onChange={e => setDraft({ ...draft, hrZoneMethod: e.target.value })}
-            style={{ ...s.input, maxWidth: 260, marginBottom: 8 }}>
-            {HR_ZONE_METHODS.map(m => (
-              <option key={m.id} value={m.id} title={m.note}>{m.label}</option>
-            ))}
-          </select>
+          <div style={{ maxWidth: 260, marginBottom: 8 }}>
+            <Dropdown
+              ariaLabel={t("profile.hr_zone_method")}
+              options={HR_ZONE_METHODS.map(m => ({ value: m.id, label: m.label }))}
+              value={draft.hrZoneMethod || HR_ZONE_METHODS[0].id}
+              onChange={v => setDraft({ ...draft, hrZoneMethod: v })}
+            />
+          </div>
           {(() => {
             const zones = computeHRZones(draft.restingHR, draft.maxHR, draft.hrZoneMethod);
             if (!zones) {

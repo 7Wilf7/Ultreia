@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES } from "../constants";
+import { Dropdown } from "./Dropdown";
 import { useT } from "../i18n/LanguageContext";
 import { recommendRunType } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
@@ -236,9 +237,12 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
         </label>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.type")}</span>
-          <select value={form.type} onChange={e => changeType(e.target.value)} style={s.input}>
-            {ACTIVITY_TYPES.map(at => <option key={at} value={at}>{t(`enum.activity.${at}`)}</option>)}
-          </select>
+          <Dropdown
+            ariaLabel={t("form.type")}
+            options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
+            value={form.type}
+            onChange={changeType}
+          />
         </label>
       </div>
 

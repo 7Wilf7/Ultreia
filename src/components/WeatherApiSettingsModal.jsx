@@ -82,14 +82,6 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>
             {t("weather_api.hint")}
           </p>
-          <p style={{ ...s.muted, marginBottom: 10, lineHeight: 1.6, fontSize: 12 }}>
-            {t("weather_api.signup_prefix")}{" "}
-            <a href="https://dashboard.caiyunapp.com/user/sign_in/"
-              target="_blank" rel="noreferrer"
-              style={{ color: "var(--moss-deep)", textDecoration: "underline" }}>
-              dashboard.caiyunapp.com →
-            </a>
-          </p>
           <button type="button" onClick={() => setShowTut(true)} style={{ ...s.btnGhost, marginBottom: 18 }}>
             {t("tutorial.view")}
           </button>

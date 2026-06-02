@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { registerWithInvite } from "../lib/db/invites";
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -36,6 +37,14 @@ export function useAuth() {
     if (error) throw error;
   }
 
+  // Invite-gated registration: the Edge Function validates the code + creates
+  // the (pre-confirmed) account, then we sign in so a session is established.
+  // registerWithInvite throws an Error with `.code` set to the server error id.
+  async function register(email, password, code) {
+    await registerWithInvite(email, password, code);
+    return signIn(email, password);
+  }
+
   // Verify-then-update flow: Supabase's updateUser does NOT require the old
   // password (the session token alone authorizes the change), so a casual
   // attacker who walks up to an unlocked device could reset the password
@@ -59,5 +68,5 @@ export function useAuth() {
     if (error) throw error;
   }
 
-  return { user, loading, signIn, signOut, changePassword };
+  return { user, loading, signIn, signOut, changePassword, register };
 }

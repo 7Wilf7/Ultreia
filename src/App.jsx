@@ -4,7 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl, ACTIVITY_TYPES,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl, ACTIVITY_TYPES, ADMIN_EMAIL,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -22,6 +22,7 @@ import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
+import { InviteCodeModal } from "./components/InviteCodeModal";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
@@ -77,10 +78,10 @@ function LoadingScreen() {
 }
 
 export default function App() {
-  const { user, loading, signIn, signOut, changePassword } = useAuth();
+  const { user, loading, signIn, signOut, changePassword, register } = useAuth();
 
   if (loading) return <LoadingScreen />;
-  if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} />;
+  if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} register={register} />;
   return <AuthedApp user={user} signOut={signOut} changePassword={changePassword} />;
 }
 
@@ -713,6 +714,8 @@ function AppShell({
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showInviteCodes, setShowInviteCodes] = useState(false);
+  const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const [showGuide, setShowGuide] = useState(false);
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
   // "set up daily push" button — draws the eye to where the setting lives.
@@ -1368,6 +1371,10 @@ Rules:
         />
       )}
 
+      {showInviteCodes && (
+        <InviteCodeModal onClose={() => setShowInviteCodes(false)} />
+      )}
+
       {showWeatherApiSettings && (
         <WeatherApiSettingsModal
           caiyunApiKey={caiyunApiKey}
@@ -1433,6 +1440,8 @@ Rules:
         onOpenGuide={() => setShowGuide(true)}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
+        isAdmin={isAdmin}
+        onGenerateInvite={() => setShowInviteCodes(true)}
         signOut={signOut}
       />
     ) : tabContent;
@@ -1558,7 +1567,7 @@ Rules:
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <SettingsIcon size={14} />
             </button>
-            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} />
+            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} isAdmin={isAdmin} onGenerateInvite={() => setShowInviteCodes(true)} />
           </div>
         </div>
       </div>

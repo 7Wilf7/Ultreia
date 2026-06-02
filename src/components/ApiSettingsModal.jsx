@@ -28,7 +28,7 @@ function fmtCost(usd) {
  * so flipping the provider switch doesn't lose anything.
  *
  * Model is LOCKED to each provider's flagship (deepseek-v4-pro and
- * claude-opus-4-7 as of this build). There's no UI to change it; when a
+ * claude-opus-4-8 as of this build). There's no UI to change it; when a
  * vendor ships a new top model, bump it in constants.js and every user
  * picks it up on next load. The Active Model line below is informational
  * only.

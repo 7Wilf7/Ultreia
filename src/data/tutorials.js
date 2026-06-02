@@ -19,16 +19,16 @@ export const TUTORIALS = {
         link: "https://platform.caiyunapp.com/login",
       },
       {
-        zh: "实名认证：登录后点「立即认证」，选「个人开发者认证」，填写资料 + 手机验证码并提交。",
-        en: "Verify identity: after login click “Verify now”, choose “Individual developer”, fill in your info + phone code, and submit.",
+        zh: "实名认证：登录后点「立即认证」，选「个人开发者认证」。所属行业选「互联网」，应用场景选「天气」，填好资料 + 手机验证码后提交。",
+        en: "Verify identity: after login click “Verify now”, choose “Individual developer”. Set industry to “Internet” and use-case to “Weather”, fill in your info + phone code, and submit.",
       },
       {
-        zh: "创建应用：认证通过后，新建一个应用（名字随便填，比如 training）。",
-        en: "Create an app: once verified, create a new application (any name, e.g. “training”).",
+        zh: "创建应用：认证通过后新建应用。应用名字填 trainingstudio，接口类型选「天气」，应用场景选「天气服务」。⚠ 不要选任何付费套餐。",
+        en: "Create an app: once verified, create a new application. Name it “trainingstudio”, set API type to “Weather” and scenario to “Weather service”. ⚠ Do NOT select any paid plan.",
       },
       {
-        zh: "复制令牌：进入应用详情，复制生成的 API 令牌（Token）。",
-        en: "Copy the token: open the app detail page and copy the generated API token.",
+        zh: "获取令牌：创建应用后，点进该应用的「访问控制」，复制里面的令牌（Token）。",
+        en: "Get the token: after creating the app, open its “Access control” page and copy the token shown there.",
       },
       {
         zh: "回到本页：把令牌粘进上面的输入框，保存即可。",
@@ -36,8 +36,8 @@ export const TUTORIALS = {
       },
     ],
     footnote: {
-      zh: "新账号赠送约 1 万次免费额度（正常使用约够半年）；超出后约 25 元/万次。不填令牌则使用 app 的共享额度，有限，高峰时段可能取不到天气。",
-      en: "New accounts get ~10,000 free calls (roughly half a year of normal use); beyond that ~¥25 per 10,000. Leaving it empty falls back to the app’s shared quota — limited, and may fail to fetch weather at peak times.",
+      zh: "新账号赠送约 1 万次免费额度（正常使用约够半年）；超出后约 25 元/万次。天气功能需要你自己的令牌才能用。",
+      en: "New accounts get ~10,000 free calls (roughly half a year of normal use); beyond that ~¥25 per 10,000. Weather requires your own token to work.",
     },
   },
 

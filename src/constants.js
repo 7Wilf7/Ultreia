@@ -32,7 +32,7 @@ export const API_PROVIDERS = {
     // claudeapi.com — not Anthropic directly. The label and console URL
     // reflect that so the user doesn't confuse it with an official Anthropic
     // account.
-    label: "Claude API (第三方)",
+    label: "Claude API",
     isThirdParty: true,
     consoleUrl: "https://console.claudeapi.com/",
     signupUrl: "https://console.claudeapi.com/",
@@ -46,7 +46,7 @@ export const API_PROVIDERS = {
       { id: "jp",      label: "日本线路",  url: "https://jp.claudeapi.com/v1/messages" },
       { id: "sg",      label: "新加坡线路", url: "https://sg.claudeapi.com/v1/messages" },
     ],
-    defaultModel: "claude-opus-4-7",
+    defaultModel: "claude-opus-4-8",
     pricing: { inputPerM: 4, outputPerM: 20 },
   },
 };
@@ -84,6 +84,11 @@ export function getEndpointUrl(providerId, endpointId) {
 export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoints[0].url;
 export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
+
+// The one account allowed to mint invite codes. Checked client-side to show
+// the "Generate invite code" affordance; enforced server-side by the
+// invite_codes RLS policy (auth.jwt()->>'email' = this) so it's not just UI.
+export const ADMIN_EMAIL = "wilf7wufan@gmail.com";
 
 // Top-level tabs. PR is absorbed into Races (PersonalRecordsBar sits at the
 // top of the Races view). Calendar is a peer tab — its own month grid +

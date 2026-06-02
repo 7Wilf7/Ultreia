@@ -8,10 +8,10 @@
 //   lat       — latitude,  WGS84 (e.g. 31.2304)
 //   type      — 'realtime' | 'hourly' | 'daily' | 'historical'
 //   begin     — Unix timestamp (seconds), only when type=historical
-//   token     — optional: caller's personal Caiyun token. When present we
-//               use it INSTEAD of the server-side fallback, so the user
-//               consumes their own daily quota. Empty / missing → server
-//               token is used (the legacy behaviour).
+//   token     — REQUIRED: caller's personal Caiyun token. Each user registers
+//               their own free Caiyun token and the app uses it. There is no
+//               server-side shared token anymore (it drained too fast on a
+//               single shared quota). Missing token → 400 no_token.
 //
 // Caller responsibilities:
 //   • Throttle and cache on the client — this proxy does NOT cache.
@@ -71,15 +71,14 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'method_not_allowed' });
     return;
   }
-  // Per-user token wins over the server fallback when the caller paste's
-  // their own Caiyun key in the Settings → Weather API modal. We trim and
-  // do a lightweight shape check so the URL doesn't fall apart with
-  // accidentally-quoted strings.
+  // Each user supplies their own Caiyun token (Settings → Weather API). No
+  // server-side shared fallback — a single shared quota got drained fast, so
+  // weather now requires the user's own free token. Missing → 400 no_token,
+  // which the frontend surfaces as "set your weather token".
   const { lng, lat, type, begin, token: userToken } = req.query || {};
-  const cleanUserToken = typeof userToken === 'string' ? userToken.trim() : '';
-  const token = cleanUserToken || process.env.CAIYUN_TOKEN;
+  const token = typeof userToken === 'string' ? userToken.trim() : '';
   if (!token) {
-    res.status(500).json({ error: 'server_misconfigured', detail: 'CAIYUN_TOKEN missing' });
+    res.status(400).json({ error: 'no_token' });
     return;
   }
   if (!isValidCoord(lng, -180, 180) || !isValidCoord(lat, -90, 90)) {

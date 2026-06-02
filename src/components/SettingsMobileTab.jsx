@@ -33,6 +33,8 @@ export function SettingsMobileTab({
   onOpenGuide,
   onToggleLang,
   onChangePassword,
+  isAdmin,
+  onGenerateInvite,
   signOut,
 }) {
   const t = useT();
@@ -72,6 +74,12 @@ export function SettingsMobileTab({
             primary={t("settings.change_password")}
             onClick={() => { setAccountOpen(false); onChangePassword(); }}
           />
+          {isAdmin && (
+            <SubCell
+              primary={t("settings.generate_invite")}
+              onClick={() => { setAccountOpen(false); onGenerateInvite(); }}
+            />
+          )}
           <SubCell
             primary={signingOut
               ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>

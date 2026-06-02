@@ -8,6 +8,7 @@
 2. 选一个 **Provider**：
    - **DeepSeek** —— 在 [platform.deepseek.com](https://platform.deepseek.com/) 注册申请 Key。便宜、速度快。
    - **Claude API（第三方）** —— 在 [console.claudeapi.com](https://console.claudeapi.com/) 注册申请 Key。**不是** Anthropic 官方，是第三方中转服务，但接口和模型保持同步。质量更高、价格也更高。
+   - 不会申请？每个 provider 下面都有「查看申请教程」按钮，点开就是从注册、充值到创建密钥的分步说明。
 3. 设置弹窗下方只会显示**当前 provider** 的设置；切到另一个 provider 时另一组 Key 仍然保留在后台，切回来还在。可以两边都填好做横评。
 4. **接入线路（仅 Claude API）**：第三方服务提供多条线路（默认 / 香港 / 日本 / 新加坡），按当前网络延迟选一条。这个选择按设备保存 —— 手机和电脑可以走不同线路。
 5. **模型**：每个 provider 都**锁定为该家当前最强模型**（DeepSeek = V4 Pro，Claude = Opus 4.7），用户不需要选。厂商有新旗舰发布，应用下次启动会自动跟进。

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { TutorialModal } from "./TutorialModal";
+import { TUTORIALS } from "../data/tutorials";
 
 // Caiyun Weather API token settings — lets the user paste their own free
 // developer token from dashboard.caiyunapp.com. Empty = falls back to the
@@ -17,6 +19,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const [showTut, setShowTut] = useState(false);
 
   async function save() {
     setBusy(true);
@@ -79,7 +82,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>
             {t("weather_api.hint")}
           </p>
-          <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6, fontSize: 12 }}>
+          <p style={{ ...s.muted, marginBottom: 10, lineHeight: 1.6, fontSize: 12 }}>
             {t("weather_api.signup_prefix")}{" "}
             <a href="https://dashboard.caiyunapp.com/user/sign_in/"
               target="_blank" rel="noreferrer"
@@ -87,6 +90,9 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
               dashboard.caiyunapp.com →
             </a>
           </p>
+          <button type="button" onClick={() => setShowTut(true)} style={{ ...s.btnGhost, marginBottom: 18 }}>
+            {t("tutorial.view")}
+          </button>
 
           <div style={{ ...s.label, marginBottom: 6 }}>
             {hasKey ? t("weather_api.replace_label") : t("weather_api.token_label")}
@@ -125,6 +131,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, onClose
           </div>
         </div>
       </div>
+      {showTut && <TutorialModal tutorial={TUTORIALS.caiyun} onClose={() => setShowTut(false)} />}
     </ModalRoot>
   );
 }

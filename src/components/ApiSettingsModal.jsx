@@ -4,6 +4,8 @@ import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPU
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
+import { TutorialModal } from "./TutorialModal";
+import { TUTORIALS } from "../data/tutorials";
 
 function maskedKey(k) {
   if (!k) return "";
@@ -47,6 +49,7 @@ export function ApiSettingsModal({
   const t = useT();
   const isMobile = useIsMobile();
   const [keyDraft, setKeyDraft] = useState("");
+  const [tutId, setTutId] = useState(null);
 
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS.deepseek;
   const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
@@ -157,6 +160,12 @@ export function ApiSettingsModal({
           </p>
         )}
 
+        {TUTORIALS[apiProvider] && (
+          <button type="button" onClick={() => setTutId(apiProvider)} style={{ ...s.btnGhost, marginBottom: 18 }}>
+            {t("tutorial.view")}
+          </button>
+        )}
+
         {/* API key for the active provider only — the other provider's key
             persists silently in state, untouched. */}
         <div style={{ ...s.label, marginBottom: 6 }}>{t("api.key_label")}</div>
@@ -232,6 +241,7 @@ export function ApiSettingsModal({
         </div>
       </div>
     </div>
+    {tutId && <TutorialModal tutorial={TUTORIALS[tutId]} onClose={() => setTutId(null)} />}
     </ModalRoot>
   );
 }

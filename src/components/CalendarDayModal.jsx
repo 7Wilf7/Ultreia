@@ -1,3 +1,9 @@
+// This file exports a few small date/label helpers (formatHeaderDate,
+// logHeadline, todRank) alongside the modal component — CalendarTab imports
+// them. Splitting them into a separate module would churn import sites for zero
+// runtime benefit, so we disable the dev-only Fast-Refresh rule here (same call
+// LanguageContext.jsx makes).
+/* eslint-disable react-refresh/only-export-components */
 import { useState, useRef } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";

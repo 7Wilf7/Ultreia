@@ -127,6 +127,7 @@ const dict = {
   "common.required":      { en: "⚠ Required fields missing", zh: "⚠ 必填项未填" },
   "common.undo_warning":  { en: "This action cannot be undone.", zh: "此操作无法撤销。" },
   "common.no_data":       { en: "—",                        zh: "—" },
+  "tutorial.view":        { en: "View setup guide",         zh: "查看申请教程" },
   "common.optional":      { en: "(optional)",               zh: "（可选）" },
   "common.saving":        { en: "Saving…",                  zh: "保存中…" },
 

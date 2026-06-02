@@ -92,7 +92,8 @@ export function ApiSettingsModal({
               onClick={() => setPricingOpen(o => !o)}
               title={t("api.pricing_title")} aria-label={t("api.pricing_title")}
               style={{
-                width: 19, height: 19, borderRadius: "50%",
+                width: 20, height: 20, minHeight: 0, minWidth: 0,
+                borderRadius: "50%", boxSizing: "border-box",
                 border: `1px solid ${pricingOpen ? "var(--ink-1)" : "var(--ink-3)"}`,
                 background: pricingOpen ? "var(--ink-1)" : "transparent",
                 color: pricingOpen ? "var(--ink-inv)" : "var(--ink-3)",

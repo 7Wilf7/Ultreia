@@ -94,7 +94,7 @@ const dict = {
 
   // ===== Weather API settings =====
   "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },
-  "weather_api.hint":           { en: "Weather needs your own free Caiyun token — register one and paste it here (new accounts come with a daily free quota).", zh: "天气功能需要你自己的彩云 token —— 免费申请一个粘贴到这里即可（新账号自带每日免费额度）。" },
+  "weather_api.hint":           { en: "Weather needs your own free Caiyun token — register one and paste it here (new accounts include a one-time free quota that lasts about half a year).", zh: "天气功能需要你自己的彩云 token —— 免费申请一个粘贴到这里即可（新账号送一笔免费额度，约够用半年）。" },
   "weather_api.token_label":    { en: "Caiyun token",         zh: "彩云 Token" },
   "weather_api.replace_label":  { en: "Paste a new token to replace…", zh: "粘贴新 token 以替换……" },
   "weather_api.token_placeholder": { en: "Your Caiyun API token",  zh: "你的彩云 API Token" },

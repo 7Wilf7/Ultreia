@@ -1365,6 +1365,8 @@ Rules:
           claudeEndpointId={claudeEndpointId}
           apiModel={apiModel}
           onEditProfile={goToProfileSettings}
+          onGoToTraining={() => setTab(0)}
+          onGoToRaces={() => setTab(2)}
           /* Lifted state + handlers — see AppShell top for definitions. */
           chatLoading={chatLoading}
           extractingForMsgId={extractingForMsgId}

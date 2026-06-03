@@ -5,6 +5,7 @@ import { s } from "../styles";
 import {
   API_PROVIDERS, DEFAULT_API_PROVIDER,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
+  DEFAULT_COACH_CONFIG,
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -203,8 +204,11 @@ export function AICoachTab({
   coachMemory,
   coachMemoryZh, setCoachMemoryBoth,
   chatMessages,
+  logs = [], races = [],
   setConfirmDelete,
   apiProvider, onEditProfile,
+  // Jump to other tabs from the first-send guidance nudge.
+  onGoToTraining, onGoToRaces,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
@@ -249,6 +253,8 @@ export function AICoachTab({
   // disappears the moment the user starts typing, instead of being pre-filled
   // content the user has to delete.
   const [chatInput, setChatInput] = useState("");
+  // First-send guidance: { msg, hints } while the one-time nudge modal is open.
+  const [coachHints, setCoachHints] = useState(null);
 
   // Single ⚙ toggle replaces the row of toggle buttons (config / memory /
   // prompt preview / edit profile / clear chat). Open the menu to access
@@ -438,9 +444,35 @@ export function AICoachTab({
   // Wrapper around the lifted sendChat — clears the input box on the way
   // through. Guards against empty input + already-loading at this layer so
   // we don't even bother calling up if the input is empty.
+  // First-send guidance — gentle, one-time (per device). The more context the
+  // user gives, the more tailored the coach is; so before their first message
+  // we point out what's still empty (coach style on defaults / few workouts /
+  // no target race), each with a jump button. They can also just send anyway.
+  const HINTS_FLAG = "ts-coach-hints-seen";
+  function computeCoachHints() {
+    const out = [];
+    const cfgDefault = (coachConfig?.style ?? DEFAULT_COACH_CONFIG.style) === DEFAULT_COACH_CONFIG.style
+      && (coachConfig?.outputLength ?? DEFAULT_COACH_CONFIG.outputLength) === DEFAULT_COACH_CONFIG.outputLength
+      && (coachConfig?.intervention ?? DEFAULT_COACH_CONFIG.intervention) === DEFAULT_COACH_CONFIG.intervention;
+    if (cfgDefault) out.push("config");
+    if (logs.filter(l => !l.isPlanned).length < 3) out.push("workouts");
+    if (!races.some(r => r.isTarget)) out.push("races");
+    return out;
+  }
+  function markHintsSeen() {
+    try { localStorage.setItem(HINTS_FLAG, "1"); } catch { /* private mode */ }
+  }
+
   async function handleSend() {
     const userMsg = chatInput.trim();
     if (!userMsg || chatLoading) return;
+    let seen = true;
+    try { seen = !!localStorage.getItem(HINTS_FLAG); } catch { /* private mode */ }
+    if (!seen) {
+      const hints = computeCoachHints();
+      if (hints.length) { setCoachHints({ msg: userMsg, hints }); return; }
+      markHintsSeen();
+    }
     setChatInput("");
     await sendChat(userMsg);
   }
@@ -1044,6 +1076,58 @@ export function AICoachTab({
           beneath it (they shape the prompt), then a "Chat" group with the
           calendar-button toggle + clear chat. Tapping any item closes the
           sheet and opens the matching modal. */}
+      {coachHints && (() => {
+        const proceed = () => {
+          markHintsSeen();
+          const m = coachHints.msg;
+          setCoachHints(null);
+          setChatInput("");
+          sendChat(m);
+        };
+        const META = {
+          config:   { text: t("coach.hint_config"),   jump: () => { markHintsSeen(); setCoachHints(null); setShowCoachConfig(true); } },
+          workouts: { text: t("coach.hint_workouts"), jump: () => { markHintsSeen(); setCoachHints(null); onGoToTraining?.(); } },
+          races:    { text: t("coach.hint_races"),    jump: () => { markHintsSeen(); setCoachHints(null); onGoToRaces?.(); } },
+        };
+        return (
+          <ModalRoot onClose={() => { markHintsSeen(); setCoachHints(null); }}>
+            <div onClick={() => { markHintsSeen(); setCoachHints(null); }} className="ts-overlay-in" style={{
+              position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
+              backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              zIndex: 9999, overscrollBehavior: "contain", padding: 16,
+            }}>
+              <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
+                background: "var(--bg-elevated)", border: "1px solid var(--rule)",
+                borderRadius: 12, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
+                width: "100%", maxWidth: 420, maxHeight: "calc(100dvh - 32px)",
+                overflowY: "auto", padding: "20px 22px 18px", boxSizing: "border-box",
+                fontFamily: "var(--font-sans)",
+              }}>
+                <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>{t("coach.hints_title")}</h2>
+                <p style={{ ...s.muted, fontSize: 12.5, lineHeight: 1.6, margin: "0 0 14px" }}>{t("coach.hints_intro")}</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 16 }}>
+                  {coachHints.hints.map(id => (
+                    <div key={id} style={{
+                      display: "flex", alignItems: "center", gap: 10,
+                      border: "1px solid var(--rule)", borderRadius: 8, padding: "10px 12px",
+                    }}>
+                      <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5, color: "var(--ink-1)" }}>{META[id].text}</span>
+                      <button onClick={META[id].jump} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", minHeight: 0, flexShrink: 0 }}>
+                        {t("coach.hint_go")}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={proceed} style={{ ...s.btn, width: "100%" }}>
+                  {t("coach.hints_proceed")}
+                </button>
+              </div>
+            </div>
+          </ModalRoot>
+        );
+      })()}
+
       {showCoachMenu && isMobile && (() => {
         // pick: close the menu then act — for items that navigate away (edit
         // profile) or are destructive (clear chat).

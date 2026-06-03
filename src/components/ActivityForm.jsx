@@ -59,7 +59,9 @@ function fromLog(log) {
     startedAtLocal: formatLocalDateTimeForInput(log.startedAt),
     type: log.type || "Road Run",
     subTypes: Array.isArray(log.subTypes) ? log.subTypes : [],
-    distance: log.distance ? String(log.distance) : "",
+    // Swimming distance is entered/displayed in meters; stored in km like
+    // everything else. Convert km → m for the input here, m → km on save.
+    distance: log.distance ? String(log.type === "Swimming" ? Math.round(log.distance * 1000) : log.distance) : "",
     durationH: d.h, durationM: d.m, durationS: d.s,
     hr:        log.hr        ? String(log.hr)        : "",
     maxHR:     log.maxHR     ? String(log.maxHR)     : "",
@@ -111,17 +113,20 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const isRun = RUN_GROUP_TYPES.includes(form.type);
   const isRoadRun = form.type === "Road Run";
   const isStrength = form.type === "Strength";
+  const isCycling = form.type === "Cycling";
+  const isSwimming = form.type === "Swimming";
   // A race isn't an easy/tempo/etc session, so when the Race flag is on we hide
   // the run-type picker and don't require a pace type (req #2).
   const isRace = isRun && form.subTypes.includes("Race");
   // Only road Running uses pace types (Easy/Aerobic/Tempo/Interval). Trail / Hiking / Floor just track time + climb.
   const showPaceTypes = isRoadRun && !isRace;
-  // Cadence makes sense for road running only. Trail/hiking pace is dominated by terrain, strength has no distance.
+  // Cadence makes sense for road running only. Trail/hiking pace is dominated by
+  // terrain, strength has no distance, cycling here has no cadence sensor data.
   const showCadence = isRoadRun;
-  // Floor Climbing tracks vertical only — no horizontal distance. Other Run-group types do track distance.
-  const showDistance = isRun && form.type !== "Floor Climbing";
-  // All Run-group types track ascent (Floor Climbing is essentially pure ascent).
-  const showAscent = isRun;
+  // Distance: Run-group (except Floor Climbing, vertical-only) + Cycling + Swimming.
+  const showDistance = (isRun && form.type !== "Floor Climbing") || isCycling || isSwimming;
+  // Ascent: all Run-group types + Cycling (road climbing). Swimming has none.
+  const showAscent = isRun || isCycling;
 
   const pickedPace = isRoadRun ? (form.subTypes.find(t => RUN_PACE_TYPES.includes(t)) || "") : "";
   const pickedFlags = isRun ? form.subTypes.filter(t => RUN_FLAGS.includes(t)) : [];
@@ -173,7 +178,11 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       alert(t("form.alert_run"));
       return;
     }
-    const dist = showDistance ? (parseFloat(form.distance) || 0) : 0;
+    // Swimming input is in meters → convert back to km for storage.
+    const distInput = showDistance ? (parseFloat(form.distance) || 0) : 0;
+    const dist = isSwimming ? +(distInput / 1000).toFixed(3) : distInput;
+    // pace (min/km) is a running metric only. Cycling shows speed, swimming
+    // shows /100m — both derived at display time, so we leave pace at 0.
     const pace = (dist > 0 && isRun) ? Math.round(dur / dist) : 0;
 
     // Optional started_at — convert local "YYYY-MM-DDTHH:MM" to ISO. The DAL
@@ -333,7 +342,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           fixed 1/3 width, no full-width stretching, no empty placeholder cells. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 10 }}>
         {showDistance && (
-          <LabeledInput label={t("form.distance")} unit="km" placeholder="0"
+          <LabeledInput label={t("form.distance")} unit={isSwimming ? "m" : "km"} placeholder="0"
             value={form.distance} onChange={e => setForm({ ...form, distance: e.target.value })} />
         )}
         <LabeledInput label={t("form.avg_hr")} unit="bpm" placeholder="0"

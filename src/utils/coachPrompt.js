@@ -3,7 +3,7 @@
 // these touch React; they're pure data → string transforms.
 
 import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
-import { formatDuration, formatPaceFromSec } from "./format";
+import { formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
 
 // Locale-aware headers for the dynamic data block (current date / target races /
 // race history / recent activities). Numbers + race names stay as-is — only the
@@ -296,9 +296,13 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   // Each line ends with the weather snapshot when one was captured at
   // training time. Skip the suffix entirely when missing — never write
   // "weather: null", that confuses the LLM more than it helps.
-  const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
-    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`
-  ).join("\n");
+  const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l => {
+    // Cycling reports speed (km/h), Swimming pace per 100m — pace (min/km) is
+    // for runs only, so those two carry their own derived metric instead.
+    const speed = (l.type === "Cycling" && l.distance > 0 && l.duration > 0) ? " " + formatSpeedKmh(l.distance, l.duration) + "km/h" : "";
+    const swim = (l.type === "Swimming" && l.distance > 0 && l.duration > 0) ? " " + formatSwimPace(l.distance, l.duration) + "/100m" : "";
+    return `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${speed}${swim}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`;
+  }).join("\n");
   // Day-level recovery/context flags (sick / travel / poor sleep / massage /
   // stretching) from the Calendar, last 21 days only, oldest→newest. Tag slugs
   // are de-underscored ("poor_sleep" → "poor sleep") for the LLM. Skipped when

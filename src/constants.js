@@ -104,17 +104,27 @@ export const TABS = ["Training", "Calendar", "Races", "AI Coach"];
 
 // Activity types (stored in log.type). Recovery removed — active recovery is
 // a day-level tag in the daily_notes table now, not a workout row.
-export const ACTIVITY_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing", "Strength", "HIIT"];
+export const ACTIVITY_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing", "Cycling", "Swimming", "Strength", "HIIT"];
 
 // Types that aggregate into the Run filter group (kept here so it's the single source of truth)
 export const RUN_GROUP_TYPES = ["Road Run", "Trail Run", "Hiking", "Floor Climbing"];
+
+// Endurance group for the "Run / Endurance" FILTER label. Cycling + Swimming
+// live under this group visually (triathlon disciplines), but are NOT runs —
+// they're kept OUT of RUN_GROUP_TYPES so they never get HR-pace classification,
+// run PR logic, or the running mileage trend. The "All Run / Endurance" filter
+// still aggregates running types only (see logMatchesFilter); Cycling/Swimming
+// are filterable individually so they don't pollute running stats.
+export const CYCLING_TYPE = "Cycling";
+export const SWIMMING_TYPE = "Swimming";
+export const ENDURANCE_GROUP_TYPES = [...RUN_GROUP_TYPES, CYCLING_TYPE, SWIMMING_TYPE];
 
 // Types where weather actually matters — outdoor sessions where temp /
 // humidity / AQI influence pace / HR / hydration. Indoor types (Strength
 // gym workouts, Floor Climbing on a stair machine) get no weather chip;
 // weather data still gets captured if you happen to be outside, but we
 // don't surface it in the UI for those types.
-export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "HIIT"];
+export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "Cycling", "HIIT"];
 
 // Day-level tags stored in daily_notes.tags[]. Surfaced on Calendar day
 // cells and toggled via the day modal. Recovery/context markers that don't
@@ -153,6 +163,8 @@ export const TYPE_COLOR = {
   "Trail Run":       "#4a5e3a",   /* moss green */
   "Hiking":          "#b07a3e",   /* ochre / warm clay — split from Trail */
   "Floor Climbing":  "#5d4a78",   /* muted plum — split from Hiking ochre */
+  "Cycling":         "#1f7a8c",   /* teal — endurance, distinct from moss/slate */
+  "Swimming":        "#2b6cb0",   /* water blue — saturated, distinct from slate */
   "Strength":        "#3a5566",   /* slate blue — split from black */
   "HIIT":            "#b54e1a",   /* burnt orange — alert/intensity */
 };
@@ -168,6 +180,8 @@ export const FILTER_GROUPS = {
       { id: "Trail Run", label: "Trail Run" },
       { id: "Hiking", label: "Hiking", section: "other" },
       { id: "Floor Climbing", label: "Floor Climbing", section: "other" },
+      { id: "Cycling", label: "Cycling", section: "other" },
+      { id: "Swimming", label: "Swimming", section: "other" },
     ],
   },
   strength: {

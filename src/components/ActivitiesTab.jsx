@@ -1,11 +1,11 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR, WEATHER_RELEVANT_TYPES } from "../constants";
+import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, RUN_GROUP_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR, WEATHER_RELEVANT_TYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import {
   recommendRunType, parseTimeToSeconds,
-  formatDuration, formatPaceFromSec, formatDateShort, formatWeekdayShort, isDuplicate,
+  formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
 import { computeHRZones, calculateAge } from "../utils/profile";
 import { parseFitFile } from "../lib/fit";
@@ -26,7 +26,12 @@ function mapGarminActivityType(at) {
   if (at.includes("trail")) return { type: "Trail Run", unknown: false };
   if (at.includes("hiking") || at.includes("walking") || at === "walk") return { type: "Hiking", unknown: false };
   if (at.includes("stair") || at.includes("stepper") || at.includes("step machine") || at.includes("floor")) return { type: "Floor Climbing", unknown: false };
+  if (at.includes("cycl") || at.includes("bike") || at.includes("biking")) return { type: "Cycling", unknown: false };
+  if (at.includes("swim")) return { type: "Swimming", unknown: false };
   if (at.includes("hiit") || at.includes("interval training") || at.includes("crossfit")) return { type: "HIIT", unknown: false };
+  // Coros logs gym/class cardio as "training cardio_training" — treat as HIIT
+  // (the dominant case; the occasional short one can be edited to Strength).
+  if (at.includes("cardio")) return { type: "HIIT", unknown: false };
   if (at.includes("strength") || at.includes("weight")) return { type: "Strength", unknown: false };
   if (at.includes("yoga") || at.includes("pilates") || at.includes("stretch")) return { type: "Strength", unknown: false };
   if (at.includes("run")) return { type: "Road Run", unknown: false };
@@ -61,11 +66,33 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [uploadMsg, setUploadMsg] = useState("");
   const [parsedRows, setParsedRows] = useState(null);
   const [duplicateWarning, setDuplicateWarning] = useState(null);
-  const [unknownTypeRows, setUnknownTypeRows] = useState(null); // { rows, dupIds? } – staged until user maps
+  const [unknownTypeRows, setUnknownTypeRows] = useState(null); // staged rows until user maps unknown types
+  const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
+  const [durMin, setDurMin] = useState(""); // duration filter (minutes); "" = no bound
+  const [durMax, setDurMax] = useState("");
   const fileRef = useRef();
 
+  // Distinct unknown-type groups (by original sport name) + their row counts,
+  // so the mapping modal asks once per type instead of once per row (a Coros
+  // folder can have 100+ rows of the same unmapped type).
+  const unknownGroups = useMemo(() => {
+    if (!unknownTypeRows) return [];
+    const m = new Map();
+    for (const r of unknownTypeRows) {
+      if (!r._unknown) continue;
+      const k = r._originalType || "(empty)";
+      m.set(k, (m.get(k) || 0) + 1);
+    }
+    return [...m.entries()].map(([orig, count]) => ({ orig, count }));
+  }, [unknownTypeRows]);
+
   const displayedLogs = useMemo(() => {
-    const sorted = [...periodLogs];
+    // Duration range filter (minutes → seconds). Empty bound = open-ended.
+    const lo = durMin ? parseFloat(durMin) * 60 : 0;
+    const hi = durMax ? parseFloat(durMax) * 60 : Infinity;
+    const sorted = (lo > 0 || hi < Infinity)
+      ? periodLogs.filter(l => (l.duration || 0) >= lo && (l.duration || 0) <= hi)
+      : [...periodLogs];
     sorted.sort((a, b) => {
       switch (sortBy) {
         case "date_desc": return new Date(b.date) - new Date(a.date);
@@ -80,7 +107,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       }
     });
     return sorted;
-  }, [periodLogs, sortBy]);
+  }, [periodLogs, sortBy, durMin, durMax]);
 
   function deleteLog(id) {
     setConfirmDelete({ type: "log", id });
@@ -188,8 +215,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   // straight through to the DB.
   function fitRow(d, idSeed) {
     const mapped = mapGarminActivityType(d.sportStr);
-    const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
-    const pace = (!isAerobicLike && d.distance > 0) ? Math.round(d.duration / d.distance) : 0;
+    // pace (min/km) only for running types; Cycling/Swimming/Strength/HIIT don't use it.
+    const pace = (RUN_GROUP_TYPES.includes(mapped.type) && d.distance > 0) ? Math.round(d.duration / d.distance) : 0;
     const subTypes = mapped.type === "Road Run" ? [recommendRunType(d.hr, false, hrZones)] : [];
     return {
       id: idSeed,
@@ -220,7 +247,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     }
     if (!rows.length) { setUploadMsg(t("activities.fit_empty")); return; }
     setUploadMsg("");
-    if (rows.some(r => r._unknown)) { setUnknownTypeRows(rows); return; }
+    if (rows.some(r => r._unknown)) { setUnknownChoices({}); setUnknownTypeRows(rows); return; }
     finalizeParsedRows(rows);
   }
 
@@ -295,9 +322,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       const maxHR = iMaxHR >= 0 ? Math.round(num(c[iMaxHR])) : 0;
       const ascent = Math.round(num(c[iAscent]));
       const cadence = iCadence >= 0 ? Math.round(num(c[iCadence])) : 0;
-      // pace only meaningful for activities with real distance (Run/Trail/Hiking/Stair); placeholder Running for unknowns is overridden later
-      const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
-      const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
+      // pace only meaningful for running types; placeholder Running for unknowns is overridden later
+      const pace = (RUN_GROUP_TYPES.includes(mapped.type) && distance > 0) ? Math.round(duration / distance) : 0;
       const date = c[iDate].split(" ")[0];
       const subTypes = mapped.type === "Road Run" ? [recommendRunType(hr, false, hrZones)] : [];
 
@@ -315,6 +341,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     // Duplicate detection waits until after mapping is resolved (type may change).
     const unknowns = rows.filter(r => r._unknown);
     if (unknowns.length > 0) {
+      setUnknownChoices({});
       setUnknownTypeRows(rows);
       setUploadMsg("");
       return;
@@ -334,23 +361,30 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
 
   function applyUnknownMappings() {
-    // user picked a type for each unknown row; strip the staging-only flags and continue
-    const cleaned = unknownTypeRows.map(r => {
-      const rest = { ...r };
-      delete rest._unknown;
-      delete rest._originalType;
-      // recompute subTypes if the user remapped a row into Running
+    // Per-group choice: map every row of that original type to the chosen type,
+    // or drop it entirely when the group is set to skip. Known rows pass through.
+    const cleaned = [];
+    for (const r of unknownTypeRows) {
+      if (!r._unknown) {
+        const rest = { ...r };
+        delete rest._unknown; delete rest._originalType;
+        cleaned.push(rest);
+        continue;
+      }
+      const choice = unknownChoices[r._originalType || "(empty)"];
+      if (choice === "__skip__") continue; // dropped — not imported
+      const rest = { ...r, type: choice };
+      delete rest._unknown; delete rest._originalType;
       if (rest.type === "Road Run" && (!rest.subTypes || rest.subTypes.length === 0)) {
         rest.subTypes = [recommendRunType(rest.hr, false, hrZones)];
       }
-      return rest;
-    });
+      // A mapped non-running type shouldn't carry a leftover placeholder pace.
+      if (!RUN_GROUP_TYPES.includes(rest.type)) rest.pace = 0;
+      cleaned.push(rest);
+    }
     setUnknownTypeRows(null);
+    setUnknownChoices({});
     finalizeParsedRows(cleaned);
-  }
-
-  function updateUnknownTypeRow(id, newType) {
-    setUnknownTypeRows(unknownTypeRows.map(r => r.id === id ? { ...r, type: newType, _unknown: false } : r));
   }
 
   async function confirmDuplicates(skipDups) {
@@ -450,6 +484,30 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         </div>
       </div>
 
+      {/* Duration range filter (minutes) — thin secondary row. Handy for
+          post-import cleanup (e.g. isolate "HIIT under 45 min" to recategorize)
+          and a permanent way to slice the list by session length. */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
+        fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+        flexWrap: "wrap",
+      }}>
+        <span style={{ flexShrink: 0 }}>{t("activities.dur_filter")}</span>
+        <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_min")}
+          value={durMin} onChange={e => setDurMin(e.target.value)}
+          style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
+        <span style={{ flexShrink: 0 }}>–</span>
+        <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_max")}
+          value={durMax} onChange={e => setDurMax(e.target.value)}
+          style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
+        {(durMin || durMax) && (
+          <button onClick={() => { setDurMin(""); setDurMax(""); }}
+            style={{ ...s.btnGhost, fontSize: 11, padding: "3px 8px", minHeight: 0 }}>
+            {t("activities.dur_clear")}
+          </button>
+        )}
+      </div>
+
       {selectMode && (
         // Select All / Clear / Delete share one row. The "N selected" label
         // was dropped — the Select button itself shows ✓N, already conveys
@@ -493,40 +551,40 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
           <div style={{ ...s.section, color: "#7a5a00" }}>{t("activities.unknown_type_title")}</div>
           <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
-            {t("activities.unknown_type_body", { n: unknownTypeRows.filter(r => r._unknown).length })}
+            {t("activities.unknown_type_body", { n: unknownTypeRows.filter(r => r._unknown).length, g: unknownGroups.length })}
           </div>
-          {/* No inner scroll — it clipped the type Dropdown's menu. The page
-              scrolls instead. */}
+          {/* Grouped by original sport name — one choice per type covers all its
+              rows. No inner scroll (it clipped the Dropdown menu); page scrolls. */}
           <div style={{ marginBottom: 10 }}>
-            {unknownTypeRows.filter(r => r._unknown).map(r => (
-              <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ fontSize: 11, color: "#888", minWidth: 60 }}>{formatDateShort(r.date)}</div>
-                <div style={{ fontSize: 12, flex: 1, minWidth: 160 }}>
+            {unknownGroups.map(({ orig, count }) => (
+              <div key={orig} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, flex: 1, minWidth: 150 }}>
                   <span style={{ color: "#999" }}>{t("activities.unknown_type_original")}</span>
-                  <span style={{ fontFamily: "var(--font-mono)", color: "#333" }}>{r._originalType}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", color: "#333" }}>{orig}</span>
+                  <span style={{ color: "#aaa", marginLeft: 6 }}>{t("activities.unknown_count", { n: count })}</span>
                 </div>
-                <div style={{ width: 150 }}>
+                <div style={{ width: 170 }}>
                   <Dropdown
                     ariaLabel={t("form.type")}
-                    options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
-                    value={r.type}
-                    onChange={(v) => updateUnknownTypeRow(r.id, v)}
+                    options={[
+                      ...ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) })),
+                      { value: "__skip__", label: t("activities.unknown_skip") },
+                    ]}
+                    value={unknownChoices[orig] || ""}
+                    placeholder={t("form.type")}
+                    onChange={(v) => setUnknownChoices(c => ({ ...c, [orig]: v }))}
                   />
                 </div>
-                <button onClick={() => updateUnknownTypeRow(r.id, r.type)}
-                  style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px" }}>
-                  ✓
-                </button>
               </div>
             ))}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={applyUnknownMappings}
-              disabled={unknownTypeRows.some(r => r._unknown)}
-              style={{ ...s.btn, opacity: unknownTypeRows.some(r => r._unknown) ? 0.5 : 1 }}>
+              disabled={!unknownGroups.every(g => unknownChoices[g.orig])}
+              style={{ ...s.btn, opacity: unknownGroups.every(g => unknownChoices[g.orig]) ? 1 : 0.5 }}>
               {t("activities.unknown_type_apply")}
             </button>
-            <button onClick={() => { setUnknownTypeRows(null); setUploadMsg(""); }} style={s.btnGhost}>{t("common.cancel")}</button>
+            <button onClick={() => { setUnknownTypeRows(null); setUnknownChoices({}); setUploadMsg(""); }} style={s.btnGhost}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
@@ -841,12 +899,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </span>
                   )}
                 </div>
-                {/* 3. Distance */}
+                {/* 3. Distance — Swimming reads in meters, others in km */}
                 <div>
                   {l.distance > 0 && (
                     <span style={{ fontWeight: 500, fontSize: 14, color: "var(--ink-1)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ color: "var(--ink-3)" }}><RouteIcon size={13} /></span>
-                      {l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span>
+                      {l.type === "Swimming"
+                        ? <>{Math.round(l.distance * 1000)}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>m</span></>
+                        : <>{l.distance}<span style={{ color: "var(--ink-3)", marginLeft: 1, fontSize: 10 }}>km</span></>}
                     </span>
                   )}
                 </div>
@@ -859,14 +919,24 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </span>
                   )}
                 </div>
-                {/* 5. Pace */}
+                {/* 5. Pace — Cycling shows speed (km/h), Swimming /100m, runs /km */}
                 <div>
-                  {l.pace > 0 && (
+                  {l.type === "Cycling" && l.distance > 0 && l.duration > 0 ? (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={13} /></span>
+                      {formatSpeedKmh(l.distance, l.duration)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>km/h</span>
+                    </span>
+                  ) : l.type === "Swimming" && l.distance > 0 && l.duration > 0 ? (
+                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={13} /></span>
+                      {formatSwimPace(l.distance, l.duration)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/100m</span>
+                    </span>
+                  ) : l.pace > 0 ? (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
                       <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={13} /></span>
                       {formatPaceFromSec(l.pace)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/km</span>
                     </span>
-                  )}
+                  ) : null}
                 </div>
                 {/* Cadence (SPM) — Road Run only */}
                 <div>
@@ -963,6 +1033,33 @@ function MetricPace({ p }) {
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
       <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={12} /></span>
       {formatPaceFromSec(p)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/km</span>
+    </span>
+  );
+}
+// Cycling headline = speed (km/h). Swimming headline = pace per 100m. Both
+// reuse the pace icon slot (they're the "how fast" metric for their sport).
+function MetricSpeed({ kmh }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={12} /></span>
+      {kmh}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>km/h</span>
+    </span>
+  );
+}
+function MetricSwimPace({ p }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><RunnerIcon size={12} /></span>
+      {p}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>/100m</span>
+    </span>
+  );
+}
+// Swim distance reads in meters (1500m), not km.
+function MetricSwimDistance({ km }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+      <span style={{ color: "var(--ink-3)" }}><RouteIcon size={12} /></span>
+      {Math.round(km * 1000)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>m</span>
     </span>
   );
 }
@@ -1095,6 +1192,24 @@ function CompactMetrics({ log: l }) {
       </>
     );
   }
+  if (l.type === "Cycling") {
+    return (
+      <>
+        {l.duration > 0 && <MetricDuration sec={l.duration} />}
+        {l.distance > 0 && <MetricDistance km={l.distance} />}
+        {l.distance > 0 && l.duration > 0 && <MetricSpeed kmh={formatSpeedKmh(l.distance, l.duration)} />}
+      </>
+    );
+  }
+  if (l.type === "Swimming") {
+    return (
+      <>
+        {l.duration > 0 && <MetricDuration sec={l.duration} />}
+        {l.distance > 0 && <MetricSwimDistance km={l.distance} />}
+        {l.distance > 0 && l.duration > 0 && <MetricSwimPace p={formatSwimPace(l.distance, l.duration)} />}
+      </>
+    );
+  }
   // Strength + HIIT
   return (
     <>
@@ -1110,6 +1225,8 @@ function ExpandedMetrics({ log: l }) {
   const isRoad = l.type === "Road Run";
   const isTrailOrHike = l.type === "Trail Run" || l.type === "Hiking";
   const isFloor = l.type === "Floor Climbing";
+  const isCycling = l.type === "Cycling";
+  const isSwimming = l.type === "Swimming";
   const isStrengthLike = l.type === "Strength" || l.type === "HIIT";
 
   return (
@@ -1139,6 +1256,11 @@ function ExpandedMetrics({ log: l }) {
         {isFloor && l.distance > 0 && <MetricDistance km={l.distance} />}
         {isFloor && l.pace > 0 && <MetricPace p={l.pace} />}
         {isFloor && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+        {/* Cycling extras — ascent + HR (speed/distance are in compact) */}
+        {isCycling && l.ascent > 0 && <MetricAscent m={l.ascent} />}
+        {isCycling && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
+        {/* Swimming extras — HR (distance/pace are in compact) */}
+        {isSwimming && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
         {/* Strength / HIIT extras */}
         {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
       </div>

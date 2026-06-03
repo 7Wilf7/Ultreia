@@ -71,6 +71,23 @@ export function formatPaceFromSec(secPerKm) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Cycling speed in km/h from distance (km) + duration (sec). Cycling reads in
+// speed, not pace (min/km), so this is the headline metric on cycling cards.
+export function formatSpeedKmh(distanceKm, durationSec) {
+  if (!distanceKm || !durationSec) return "—";
+  return (distanceKm / (durationSec / 3600)).toFixed(1);
+}
+
+// Swim pace per 100m (the universal swim metric) from distance (km) + duration
+// (sec). distanceKm * 10 = number of 100m laps.
+export function formatSwimPace(distanceKm, durationSec) {
+  if (!distanceKm || !durationSec) return "—";
+  const secPer100 = durationSec / (distanceKm * 10);
+  const m = Math.floor(secPer100 / 60);
+  const sec = Math.round(secPer100 % 60);
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
+
 export function formatDateShort(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);

@@ -6,6 +6,9 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useRef, useState } from "react";
 import { RUN_GROUP_TYPES } from "../constants";
+// Cycling/Swimming sit under the "Run / Endurance" group visually but are NOT
+// runs — "All Run / Endurance" stays running-only, while each is filterable on
+// its own. Listed here so the predicate can match the individual selection.
 import { useT } from "../i18n/LanguageContext";
 
 /**
@@ -31,9 +34,15 @@ export const INITIAL_FILTER = {
 export function logMatchesFilter(log, filter) {
   if (filter.all) return true;
   const g = filter.groups;
-  if (g.run.enabled && RUN_GROUP_TYPES.includes(log.type)) {
-    if (g.run.subs.length === 0) return true;
-    if (g.run.subs.includes(log.type)) return true;
+  if (g.run.enabled) {
+    // No specific child picked ("All Run / Endurance") → running types only,
+    // so Cycling/Swimming don't inflate the running mileage shown in stats.
+    if (g.run.subs.length === 0) {
+      if (RUN_GROUP_TYPES.includes(log.type)) return true;
+    } else if (g.run.subs.includes(log.type)) {
+      // A specific child picked — incl. Cycling / Swimming.
+      return true;
+    }
   }
   if (g.strength.enabled && log.type === "Strength") {
     if (g.strength.subs.length === 0) return true;
@@ -131,6 +140,8 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
     { kind: "option", value: "run-Trail Run",      label: t("filter.child.Trail Run") },
     { kind: "option", value: "run-Hiking",         label: t("filter.child.Hiking") },
     { kind: "option", value: "run-Floor Climbing", label: t("filter.child.Floor Climbing") },
+    { kind: "option", value: "run-Cycling",        label: t("filter.child.Cycling") },
+    { kind: "option", value: "run-Swimming",       label: t("filter.child.Swimming") },
     { kind: "header", label: t("filter.group.strength") },
     { kind: "option", value: "strength-all",         label: t("filter.strength_all") },
     { kind: "option", value: "strength-Upper Body",  label: t("filter.child.Upper Body") },

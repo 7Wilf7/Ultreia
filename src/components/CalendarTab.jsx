@@ -101,6 +101,10 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 
   const cells = useMemo(() => buildMonthGrid(view.year, view.month), [view]);
 
+  // Direction of the last month change (1 = next/forward, -1 = prev/back),
+  // drives the slide-in animation so switching months isn't an instant flash.
+  const [dir, setDir] = useState(0);
+
   // Index workouts AND dailyNotes by date for O(1) lookup per cell. Multiple
   // workouts can share a date (morning run + evening strength); daily_notes
   // is UNIQUE per (user_id, date) so there's at most one note entry per day.
@@ -160,19 +164,26 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
   }
 
   function gotoPrev() {
+    setDir(-1);
     setViewMonth(v => {
       const d = new Date(v.year, v.month - 1, 1);
       return { year: d.getFullYear(), month: d.getMonth() };
     });
   }
   function gotoNext() {
+    setDir(1);
     setViewMonth(v => {
       const d = new Date(v.year, v.month + 1, 1);
       return { year: d.getFullYear(), month: d.getMonth() };
     });
   }
   function gotoToday() {
-    setViewMonth({ year: today.getFullYear(), month: today.getMonth() });
+    setViewMonth(v => {
+      const target = today.getFullYear() * 12 + today.getMonth();
+      const cur = v.year * 12 + v.month;
+      setDir(target === cur ? 0 : target > cur ? 1 : -1);
+      return { year: today.getFullYear(), month: today.getMonth() };
+    });
   }
 
   const monthLabel = t("period.month_year", {
@@ -199,6 +210,11 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     paddingBottom: 8,
     borderBottom: "1px solid var(--rule)",
     marginBottom: 14,
+    // Consume touch gestures on the calendar block for our month-change swipe
+    // (handled in JS) instead of letting them scroll the page — so swiping the
+    // calendar no longer drags the weather strip below. The weather strip sits
+    // outside this block and scrolls normally.
+    touchAction: "none",
   } : {};
 
   return (
@@ -252,8 +268,12 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         ))}
       </div>
 
-      {/* The 6 × 7 grid */}
-      <div style={{
+      {/* The 6 × 7 grid. Keyed by month so switching remounts it and replays the
+          slide-in (direction set by gotoPrev/Next). */}
+      <div
+        key={`${view.year}-${view.month}`}
+        className={dir > 0 ? "ts-cal-in-next" : dir < 0 ? "ts-cal-in-prev" : undefined}
+        style={{
         display: "grid",
         gridTemplateColumns: "repeat(7, 1fr)",
         gap: 0,

@@ -193,6 +193,16 @@ summary::-webkit-details-marker { display: none; }
   .ts-overlay-in, .ts-modal-in { animation: none; }
 }
 
+/* Calendar month-change slide. Vertical so it matches the up=next / down=prev
+   swipe and never causes horizontal overflow. */
+@keyframes ts-cal-next { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ts-cal-prev { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+.ts-cal-in-next { animation: ts-cal-next 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ts-cal-in-prev { animation: ts-cal-prev 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .ts-cal-in-next, .ts-cal-in-prev { animation: none; }
+}
+
 /* Tab-switch slide — the content slides in from the side you swiped toward
    (left swipe → next tab enters from the right, and vice-versa), so changing
    tabs reads as motion instead of a hard cut. Short + subtle. */

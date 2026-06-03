@@ -15,6 +15,7 @@ import { TrainingTab } from "./components/TrainingTab";
 import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
 import { parseBilingualMemory } from "./utils/memory";
+import { reportError } from "./lib/errorOverlay";
 import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
@@ -83,6 +84,14 @@ function LoadingScreen() {
 export default function App() {
   const { user, loading, signIn, signOut, changePassword, register, deleteAccount } = useAuth();
 
+  // Watchdog: if auth init never resolves the loading state, surface it on the
+  // error overlay so a stuck-on-splash boot is diagnosable on the device.
+  useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => reportError("Boot watchdog: auth still loading after 25s (stuck on splash). Likely auth/session init hang."), 25000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
   if (loading) return <LoadingScreen />;
   if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} register={register} />;
   return <AuthedApp user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount} />;
@@ -146,6 +155,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Fetch profile + user_settings + workouts once the auth'd user is known.
   useEffect(() => {
     let cancelled = false;
+    // Watchdog: if the initial data load doesn't settle, the app sits on the
+    // LoadingScreen (which looks identical to the native splash) forever. Surface
+    // it so a hang is diagnosable on the device instead of a silent stuck-splash.
+    const watchdog = setTimeout(() => {
+      if (!cancelled) reportError("Boot watchdog: data load still pending after 25s (stuck on splash). Likely one of profiles/settings/workouts/races/messages/notes/usage never resolved.");
+    }, 25000);
     (async () => {
       try {
         const [profileData, settingsData, workoutsData, racesData, messagesData, notesData, usageData] = await Promise.all([
@@ -233,13 +248,15 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       } catch (err) {
         console.error("Failed to load user data:", err);
         if (!cancelled) {
+          reportError(`Data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
           window.alert("Failed to load your data, please refresh.");
         }
       } finally {
+        clearTimeout(watchdog);
         if (!cancelled) setDataLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(watchdog); };
   }, [user.id]);
 
   // Register this device for push (Android APK only; no-op on web). Fires once

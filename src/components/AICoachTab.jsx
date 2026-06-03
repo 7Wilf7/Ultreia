@@ -200,8 +200,8 @@ const LONG_CHAT_HINT_THRESHOLD = 40;
 
 export function AICoachTab({
   coachConfig, setCoachConfig,
-  coachMemory, setCoachMemory,
-  coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
+  coachMemory,
+  coachMemoryZh, setCoachMemoryBoth,
   chatMessages,
   setConfirmDelete,
   apiProvider, onEditProfile,
@@ -380,9 +380,13 @@ export function AICoachTab({
     setMemoryEditing(true);
   }
   function saveMemory() {
-    // Manual edit writes only the currently-shown language's box.
-    if (memoryLang === "zh") setCoachMemoryZh(memoryDraft);
-    else setCoachMemory(memoryDraft);
+    // Option A: a manual edit IS what gets sent to the AI. The prompt only ever
+    // sends the canonical (coach_memory) field, so writing just the Chinese mirror
+    // used to be silently ignored. Now any manual edit overwrites BOTH fields with
+    // the edited text — so what you typed is exactly what the coach receives,
+    // regardless of which language tab you were on. (The bilingual split only
+    // persists for AI-generated memory proposals, until you edit by hand.)
+    setCoachMemoryBoth(memoryDraft, memoryDraft);
     setMemoryEditing(false);
   }
   function cancelEditMemory() {
@@ -1041,7 +1045,12 @@ export function AICoachTab({
           calendar-button toggle + clear chat. Tapping any item closes the
           sheet and opens the matching modal. */}
       {showCoachMenu && isMobile && (() => {
+        // pick: close the menu then act — for items that navigate away (edit
+        // profile) or are destructive (clear chat).
         const pick = (fn) => { setShowCoachMenu(false); fn(); };
+        // openSub: KEEP the menu open and open a sub-modal on top of it (the menu
+        // sits at a lower z-index, below). Closing the sub returns to the menu.
+        const openSub = (fn) => { fn(); };
         const sub = (label, onClick, badge) => (
           <button onClick={onClick} style={{
             display: "flex", alignItems: "center", width: "100%", textAlign: "left",
@@ -1067,7 +1076,8 @@ export function AICoachTab({
               position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
               backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              zIndex: 9999, overscrollBehavior: "contain", padding: 16,
+              // Below the sub-modals (9999) it opens, so closing a sub returns here.
+              zIndex: 9990, overscrollBehavior: "contain", padding: 16,
             }}>
               <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
                 background: "var(--bg-elevated)",
@@ -1084,7 +1094,7 @@ export function AICoachTab({
 
                 {/* Prompt group — parent row opens preview, sub-items nested */}
                 {groupHeader(t("coach.group_prompt"), t("coach.group_prompt_hint"))}
-                <button onClick={() => pick(() => setShowPromptPreview(true))} style={{
+                <button onClick={() => openSub(() => setShowPromptPreview(true))} style={{
                   display: "flex", alignItems: "center", width: "100%", textAlign: "left",
                   background: "transparent", border: "none",
                   borderTop: "1px solid var(--rule-soft)",
@@ -1096,12 +1106,12 @@ export function AICoachTab({
                   <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
                 </button>
                 {sub(t("coach.edit_profile"), () => pick(onEditProfile))}
-                {sub(t("coach.show_config"), () => pick(() => setShowCoachConfig(true)))}
-                {sub(t("coach.show_memory"), () => pick(() => setShowMemory(true)), !!coachMemory)}
+                {sub(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
+                {sub(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), !!coachMemory)}
 
                 {/* Chat group */}
                 {groupHeader(t("coach.group_chat"))}
-                {sub(t("coach.calendar_btn_label"), () => pick(() => setShowCalendarSettings(true)))}
+                {sub(t("coach.calendar_btn_label"), () => openSub(() => setShowCalendarSettings(true)))}
                 {chatMessages.length > 0 && (
                   <button onClick={() => pick(clearChat)} style={{
                     display: "flex", alignItems: "center", width: "100%", textAlign: "left",

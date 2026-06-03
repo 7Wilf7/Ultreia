@@ -345,13 +345,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <CheckSquareIcon size={13} />
           <span>{selectMode ? selectedIds.size : t("activities.select_short")}</span>
         </button>
-        <label style={{
+        {/* Was a <label> — but it wraps the Dropdown's <button>, and a label
+            re-dispatches clicks to its labelable descendant, so every tap fired
+            twice (open→close) and the sort menu never stayed open. A plain div
+            is just the styled container we want. */}
+        <div style={{
           marginLeft: "auto",
           display: "inline-flex",
           alignItems: "center",
-          // Mobile drops SortIcon and uses our own chevron outside the
-          // select. Native select chevrons reserve different widths across
-          // browsers and can overflow this compact control.
           gap: isMobile ? 4 : 6,
           border: "1px solid var(--rule)",
           borderRadius: 2,
@@ -372,7 +373,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             value={sortBy}
             onChange={setSortBy}
           />
-        </label>
+        </div>
       </div>
 
       {selectMode && (

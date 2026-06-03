@@ -122,6 +122,9 @@ const dict = {
   "settings.update_network_hint": { en: "Looks like a network/DNS issue — check your connection and try again.", zh: "看起来是网络/DNS 问题 —— 请检查网络后重试。" },
   "settings.update_view":    { en: "View release notes",    zh: "查看更新说明" },
   "settings.update_error":   { en: "Could not check for updates", zh: "无法检查更新" },
+  "settings.view_recent":    { en: "View recent updates",   zh: "查看最近更新" },
+  "settings.update_new_title": { en: "New version v{v}",     zh: "新版本 v{v}" },
+  "settings.update_recent_title": { en: "Latest version v{v}", zh: "最新版本 v{v}" },
 
   // ===== Password change modal =====
   "pwd.title":               { en: "Change password",       zh: "修改密码" },

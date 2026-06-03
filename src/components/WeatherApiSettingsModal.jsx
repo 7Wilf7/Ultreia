@@ -6,6 +6,12 @@ import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
 import { FREE_WEATHER_LIMIT } from "../constants";
 
+function maskedKey(k) {
+  if (!k) return "";
+  if (k.length <= 12) return "•".repeat(k.length);
+  return k.slice(0, 7) + "…" + k.slice(-4);
+}
+
 // Caiyun Weather API token settings — lets the user paste their own free
 // developer token from dashboard.caiyunapp.com. Empty = falls back to the
 // app's shared server-side token (best-effort, limited daily quota).
@@ -111,8 +117,12 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
             style={{ ...s.input, marginBottom: 8, fontFamily: "var(--font-mono)" }} />
 
           {hasKey && (
-            <div style={{ ...s.muted, fontSize: 11, marginBottom: 14 }}>
-              {t("weather_api.current_set")}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
+              <span style={{ ...s.muted, fontFamily: "var(--font-mono)" }}>{t("api.current", { key: maskedKey(caiyunApiKey) })}</span>
+              <button onClick={clear} disabled={busy}
+                style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", color: "var(--danger)", borderColor: "var(--danger)" }}>
+                {t("weather_api.clear")}
+              </button>
             </div>
           )}
 
@@ -124,11 +134,6 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            {hasKey && (
-              <button onClick={clear} disabled={busy} style={{ ...s.btnGhost, color: "var(--danger)" }}>
-                {t("weather_api.clear")}
-              </button>
-            )}
             <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
             <button onClick={save} disabled={busy || !draft.trim()}
               style={{ ...s.btn, opacity: busy || !draft.trim() ? 0.5 : 1 }}>

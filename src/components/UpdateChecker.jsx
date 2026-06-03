@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { useT } from "../i18n/LanguageContext";
@@ -63,6 +63,13 @@ export function UpdateChecker() {
   // Download progress 0–100, or null when the server gives no Content-Length
   // (then we show an indeterminate bar instead of a percentage).
   const [downloadPct, setDownloadPct] = useState(null);
+  // "View recent updates" (up-to-date case) expands the latest release notes.
+  const [showNotes, setShowNotes] = useState(false);
+
+  // Auto-check once on mount so the button can show "new version + red dot" vs
+  // "view recent updates" without the user having to tap first. Settings is the
+  // only place this mounts, so it's at most one GitHub call per Settings open.
+  useEffect(() => { check(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function check() {
     setStatus("checking");
@@ -167,25 +174,47 @@ export function UpdateChecker() {
           <div style={primaryStyle}>{t("settings.version")}</div>
           <div style={secondaryStyle}>v{currentVersion}</div>
         </div>
-        <button
-          onClick={check}
-          disabled={status === "checking"}
-          style={btnStyle}
-        >
-          {status === "checking" ? t("settings.update_checking") : t("settings.check_update")}
-        </button>
+        {status === "latest" ? (
+          // Up to date → button reveals the latest version's changelog.
+          <button onClick={() => setShowNotes(o => !o)} style={btnStyle}>
+            {t("settings.view_recent")}
+          </button>
+        ) : (
+          <button
+            onClick={check}
+            disabled={status === "checking"}
+            style={{ ...btnStyle, position: "relative" }}
+          >
+            {status === "checking" ? t("settings.update_checking") : t("settings.check_update")}
+            {status === "newer" && (
+              <span style={{
+                position: "absolute", top: -3, right: -3,
+                width: 8, height: 8, borderRadius: "50%",
+                background: "var(--danger)", border: "1px solid var(--bg-elevated)",
+              }} />
+            )}
+          </button>
+        )}
       </div>
-
-      {status === "latest" && (
-        <div style={resultOkStyle}>✓ {t("settings.update_latest")}</div>
-      )}
 
       {status === "error" && (
         <div style={resultErrStyle}>{t("settings.update_error")}</div>
       )}
 
+      {/* Up-to-date: show the latest release notes when the user taps "view
+          recent updates". Version as the panel title. */}
+      {status === "latest" && showNotes && release && (
+        <div style={updatePanelStyle}>
+          <div style={panelTitleStyle}>{t("settings.update_recent_title", { v: release.version })}</div>
+          {release.notes
+            ? <pre style={notesStyle}>{release.notes.slice(0, 1200)}</pre>
+            : <div style={resultOkStyle}>✓ {t("settings.update_latest")}</div>}
+        </div>
+      )}
+
       {status === "newer" && release && (
         <div style={updatePanelStyle}>
+          <div style={panelTitleStyle}>{t("settings.update_new_title", { v: release.version })}</div>
           {/* Actions FIRST so the download CTA is always reachable without
               scrolling past the notes (which used to trap the touch scroll). */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -209,9 +238,6 @@ export function UpdateChecker() {
                 </a>
               )
             )}
-            <a href={release.url} target="_blank" rel="noreferrer" style={viewBtnStyle}>
-              ↗ {t("settings.update_view")}
-            </a>
           </div>
           {installState === "downloading" && (
             <div style={progressTrackStyle}>
@@ -340,13 +366,9 @@ const progressFillStyle = {
   transition: "width 0.2s ease",
 };
 
-const viewBtnStyle = {
-  background: "transparent",
+const panelTitleStyle = {
+  fontFamily: "var(--font-sans)",
+  fontSize: 14,
+  fontWeight: 600,
   color: "var(--ink-1)",
-  border: "1px solid var(--rule)",
-  borderRadius: 6,
-  padding: "8px 14px",
-  fontFamily: "var(--font-mono)",
-  fontSize: 12,
-  textDecoration: "none",
 };

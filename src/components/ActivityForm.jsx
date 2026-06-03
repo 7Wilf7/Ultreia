@@ -235,7 +235,9 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
             onChange={e => setForm({ ...form, date: e.target.value })}
             style={s.input} />
         </label>
-        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {/* div, not label — a label wrapping the Dropdown's button double-fires
+            the click (open→close) and the picker never opens. */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.type")}</span>
           <Dropdown
             ariaLabel={t("form.type")}
@@ -243,7 +245,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
             value={form.type}
             onChange={changeType}
           />
-        </label>
+        </div>
       </div>
 
       {/* Optional start time. Empty = "weather snapshot at the moment of save".

@@ -20,6 +20,7 @@
     "@capacitor/push-notifications": "^8.0.0",
     "@capawesome/capacitor-background-task": "^8.0.2",
     "@supabase/supabase-js": "^2.106.0",
+    "fflate": "^0.8.3",
     "fit-file-parser": "^3.0.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",

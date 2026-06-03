@@ -7,7 +7,7 @@ import {
   recommendRunType, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
-import { computeHRZones } from "../utils/profile";
+import { computeHRZones, calculateAge } from "../utils/profile";
 import { parseFitFile } from "../lib/fit";
 import { ActivityForm } from "./ActivityForm";
 import { Dropdown } from "./Dropdown";
@@ -157,13 +157,15 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     const f = e.target.files[0];
     if (!f) return;
     const name = f.name.toLowerCase();
+    const reader = new FileReader();
     if (name.endsWith(".csv")) {
-      const reader = new FileReader();
       reader.onload = (ev) => parseGarminCSV(ev.target.result);
       reader.readAsText(f);
     } else if (name.endsWith(".fit")) {
-      const reader = new FileReader();
-      reader.onload = (ev) => parseFitImport(ev.target.result);
+      reader.onload = (ev) => parseFitImport([ev.target.result]);
+      reader.readAsArrayBuffer(f);
+    } else if (name.endsWith(".zip")) {
+      reader.onload = (ev) => parseZipImport(ev.target.result);
       reader.readAsArrayBuffer(f);
     } else {
       setUploadMsg(t("activities.unsupported"));
@@ -171,35 +173,70 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     e.target.value = "";
   }
 
-  // FIT = one activity. Parse → reuse the SAME review / dedup / import pipeline
-  // as CSV by shaping one row identically (plus the FIT-only hrZoneSeconds /
-  // gpsTrack / startedAt extras, which ride through to the DB untouched).
-  async function parseFitImport(buf) {
+  // HR zones for the FIT zone-time calc: use the user's configured zones, else
+  // fall back to an age-based estimate (Max ≈ 220−age, Resting 60) so the
+  // distribution still works even if they haven't filled Resting/Max HR.
+  function fitHrZones() {
+    if (hrZones) return hrZones;
+    const age = calculateAge(profile?.birthDate);
+    if (!age) return null;
+    return computeHRZones(60, 220 - age, profile?.hrZoneMethod);
+  }
+
+  // Shape one parsed FIT summary into an import row — same shape as a CSV row,
+  // plus the FIT-only extras (startedAt / hrZoneSeconds / gpsTrack) that ride
+  // straight through to the DB.
+  function fitRow(d, idSeed) {
+    const mapped = mapGarminActivityType(d.sportStr);
+    const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
+    const pace = (!isAerobicLike && d.distance > 0) ? Math.round(d.duration / d.distance) : 0;
+    const subTypes = mapped.type === "Road Run" ? [recommendRunType(d.hr, false, hrZones)] : [];
+    return {
+      id: idSeed,
+      date: d.date,
+      type: mapped.type, subTypes,
+      distance: d.distance, duration: d.duration, pace,
+      hr: d.hr, maxHR: d.maxHR, ascent: d.ascent, cadence: d.cadence, aerobicTE: d.aerobicTE, gap: 0,
+      startedAt: d.startedAt,
+      hrZoneSeconds: d.hrZoneSeconds, gpsTrack: d.gpsTrack,
+      _selected: true,
+      _unknown: mapped.unknown,
+      _originalType: mapped.unknown ? (d.sportStr || "(empty)") : undefined,
+    };
+  }
+
+  // Parse one or more FIT ArrayBuffers → the shared review / dedup / import
+  // pipeline (FIT reuses everything the CSV path uses).
+  async function parseFitImport(buffers) {
+    setUploadMsg(t("activities.fit_parsing"));
+    const zones = fitHrZones();
+    const rows = [];
+    for (const buf of buffers) {
+      try {
+        const d = await parseFitFile(buf, zones);
+        if (!d.duration) continue;
+        rows.push(fitRow(d, Date.now() + rows.length));
+      } catch (err) { console.error("[FIT] parse failed:", err); }
+    }
+    if (!rows.length) { setUploadMsg(t("activities.fit_empty")); return; }
+    setUploadMsg("");
+    if (rows.some(r => r._unknown)) { setUnknownTypeRows(rows); return; }
+    finalizeParsedRows(rows);
+  }
+
+  // .zip of .fit files → unzip in-browser (lazy-loaded fflate), parse each.
+  async function parseZipImport(arrayBuffer) {
     setUploadMsg(t("activities.fit_parsing"));
     try {
-      const d = await parseFitFile(buf, hrZones);
-      if (!d.duration) { setUploadMsg(t("activities.fit_empty")); return; }
-      const mapped = mapGarminActivityType(d.sportStr);
-      const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
-      const pace = (!isAerobicLike && d.distance > 0) ? Math.round(d.duration / d.distance) : 0;
-      const subTypes = mapped.type === "Road Run" ? [recommendRunType(d.hr, false, hrZones)] : [];
-      const row = {
-        id: Date.now(),
-        date: d.date,
-        type: mapped.type, subTypes,
-        distance: d.distance, duration: d.duration, pace,
-        hr: d.hr, maxHR: d.maxHR, ascent: d.ascent, cadence: d.cadence, aerobicTE: d.aerobicTE, gap: 0,
-        startedAt: d.startedAt,
-        hrZoneSeconds: d.hrZoneSeconds, gpsTrack: d.gpsTrack,
-        _selected: true,
-        _unknown: mapped.unknown,
-        _originalType: mapped.unknown ? (d.sportStr || "(empty)") : undefined,
-      };
-      setUploadMsg("");
-      if (mapped.unknown) { setUnknownTypeRows([row]); return; }
-      finalizeParsedRows([row]);
+      const { unzipSync } = await import("fflate");
+      const files = unzipSync(new Uint8Array(arrayBuffer));
+      const fits = Object.entries(files)
+        .filter(([n]) => n.toLowerCase().endsWith(".fit") && !n.startsWith("__MACOSX"))
+        .map(([, bytes]) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+      if (!fits.length) { setUploadMsg(t("activities.zip_no_fit")); return; }
+      await parseFitImport(fits);
     } catch (err) {
-      console.error("[FIT] parse failed:", err);
+      console.error("[ZIP] failed:", err);
       setUploadMsg(t("activities.fit_failed"));
     }
   }
@@ -377,7 +414,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <UploadIcon size={13} />
           <span>{t("activities.upload_short")}</span>
         </button>
-        <input ref={fileRef} type="file" accept=".csv,.fit" style={{ display: "none" }} onChange={handleFileSelect} />
+        <input ref={fileRef} type="file" accept=".csv,.fit,.zip" style={{ display: "none" }} onChange={handleFileSelect} />
         <button onClick={toggleSelectMode}
           style={{ ...(selectMode ? s.btn : s.btnGhost), ...actionBtnStyle }}>
           <CheckSquareIcon size={13} />
@@ -462,7 +499,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
             {t("activities.unknown_type_body", { n: unknownTypeRows.filter(r => r._unknown).length })}
           </div>
-          <div style={{ maxHeight: 320, overflowY: "auto", marginBottom: 10 }}>
+          {/* No inner scroll — it clipped the type Dropdown's menu. The page
+              scrolls instead. */}
+          <div style={{ marginBottom: 10 }}>
             {unknownTypeRows.filter(r => r._unknown).map(r => (
               <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 11, color: "#888", minWidth: 60 }}>{formatDateShort(r.date)}</div>
@@ -505,7 +544,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>{t("activities.import")}</button>
             </div>
           </div>
-          <div style={{ maxHeight: 320, overflowY: "auto" }}>
+          {/* No inner scroll — it clipped the run-type Dropdown's menu (it had
+              to be scrolled to). The page scrolls instead. */}
+          <div>
             {parsedRows.map(r => (
               <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16 }} />

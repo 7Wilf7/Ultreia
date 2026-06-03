@@ -52,12 +52,14 @@ export async function parseFitFile(arrayBuffer, hrZones) {
   const avgHr = session.avg_heart_rate ? Math.round(session.avg_heart_rate) : 0;
   const maxHr = session.max_heart_rate ? Math.round(session.max_heart_rate) : 0;
   const ascent = session.total_ascent ? Math.round(session.total_ascent) : 0;
-  // FIT stores running cadence per-leg (rpm); watches/CSV show steps-per-minute
-  // (both legs) — double it so it matches the rest of the app. Non-running uses
-  // avg_cadence as-is.
-  const cadence = session.avg_running_cadence
-    ? Math.round(session.avg_running_cadence * 2)
-    : (session.avg_cadence ? Math.round(session.avg_cadence) : 0);
+  // FIT stores foot cadence per-leg (rpm); watches/CSV show steps-per-minute
+  // (both legs) → double it for running/walking/hiking. avg_fractional_cadence
+  // (Garmin) carries the .5. Cycling-type rpm would stay as-is.
+  const isFoot = /run|walk|hik/.test(`${session.sport || ""} ${session.sub_sport || ""}`.toLowerCase());
+  const rawCad = session.avg_cadence != null
+    ? session.avg_cadence + (session.avg_fractional_cadence || 0)
+    : (session.avg_running_cadence || 0);
+  const cadence = rawCad ? Math.round(isFoot ? rawCad * 2 : rawCad) : 0;
   const aerobicTE = session.total_training_effect ? +Number(session.total_training_effect).toFixed(1) : 0;
 
   const sportStr = `${session.sport || ""} ${session.sub_sport || ""}`

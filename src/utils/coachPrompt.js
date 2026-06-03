@@ -76,6 +76,16 @@ function formatWeatherInline(w) {
   return out;
 }
 
+// Time-in-HR-zone (FIT imports only) → compact "Z1-5 40/30/15/10/5%" so the
+// coach can judge whether an "easy" run was actually easy. Empty when absent.
+function formatHrZones(z) {
+  if (!Array.isArray(z) || z.length < 5) return "";
+  const total = z.reduce((a, b) => a + (Number(b) || 0), 0);
+  if (total <= 0) return "";
+  const pct = z.map((s) => Math.round((Number(s) || 0) / total * 100));
+  return ` HRzones Z1-5 ${pct.join("/")}%`;
+}
+
 // Realtime — slightly more verbose than the inline form because this is
 // the headline "what's it like right now" block.
 function formatCurrentWeather(w) {
@@ -287,7 +297,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   // training time. Skip the suffix entirely when missing — never write
   // "weather: null", that confuses the LLM more than it helps.
   const recentLogs = logs.filter(l => !l.isPlanned).slice(0, 10).map(l =>
-    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`
+    `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.aerobicTE ? " TE" + l.aerobicTE : ""}${l.gap ? " GAP" + formatPaceFromSec(l.gap) : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`
   ).join("\n");
   // Day-level recovery/context flags (sick / travel / poor sleep / massage /
   // stretching) from the Calendar, last 21 days only, oldest→newest. Tag slugs

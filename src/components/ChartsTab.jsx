@@ -178,6 +178,19 @@ export function ChartsTab({ filteredAllLogs, filter }) {
     return Object.entries(durations);
   }, [chartRangeLogs]);
 
+  // HR-zone time distribution — sums each run's per-zone seconds (FIT imports
+  // only; CSV/manual rows have no per-zone data). Shown only when the period
+  // actually has zone data, so it appears once the user imports FIT files.
+  const hrZoneDist = useMemo(() => {
+    const z = [0, 0, 0, 0, 0];
+    for (const l of chartRangeLogs) {
+      if (Array.isArray(l.hrZoneSeconds) && l.hrZoneSeconds.length >= 5) {
+        for (let i = 0; i < 5; i++) z[i] += Number(l.hrZoneSeconds[i]) || 0;
+      }
+    }
+    return { z, total: z.reduce((a, b) => a + b, 0) };
+  }, [chartRangeLogs]);
+
   // Optional secondary trend — ascent buckets, mirrors `chartData` shape but
   // sums `ascent` per period. Only computed (and rendered) when config.showAscent.
   const ascentData = useMemo(() => {
@@ -381,6 +394,38 @@ export function ChartsTab({ filteredAllLogs, filter }) {
           </div>
         </>
       )}
+
+      {/* HR-zone time distribution (FIT imports only) */}
+      {hrZoneDist.total > 0 && (
+        <>
+          <div style={{ ...s.section, marginTop: 22 }}>{t("charts.hr_zone_title", { label: chartPeriodLabel() })}</div>
+          <div style={s.card}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {["Z1", "Z2", "Z3", "Z4", "Z5"].map((zid, i) => {
+                const sec = hrZoneDist.z[i];
+                const pct = hrZoneDist.total ? (sec / hrZoneDist.total) * 100 : 0;
+                const shade = HR_ZONE_COLORS[i];
+                return (
+                  <div key={zid}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, alignItems: "baseline" }}>
+                      <span style={{ color: "var(--ink-1)" }}>{zid} <span style={{ ...s.muted }}>{t(`charts.hr_zone.${zid}`)}</span></span>
+                      <span style={{ color: "var(--ink-3)", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+                        {sec > 0 ? formatDuration(sec) : "—"} · {pct.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div style={{ background: "var(--bg-sunken)", height: 5, overflow: "hidden" }}>
+                      <div style={{ background: shade, height: "100%", width: `${pct}%`, transition: "width 0.3s" }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+// Z1 (easy) → Z5 (max): cool green ramping to hot red.
+const HR_ZONE_COLORS = ["var(--moss-light)", "var(--moss)", "var(--moss-deep)", "var(--warn)", "var(--danger)"];

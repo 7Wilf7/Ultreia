@@ -20,6 +20,8 @@ const FIELD_MAP = {
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
   startedAt:  'started_at',    // timestamptz — when the activity actually started; null = unknown
   weather:    'weather',       // jsonb — snapshot from src/lib/weather.js (tempC, apparentC, humidity, skycon, ...)
+  hrZoneSeconds: 'hr_zone_seconds', // jsonb — [z1,z2,z3,z4,z5] seconds in each HR zone (FIT import only)
+  gpsTrack:   'gps_track',     // jsonb — downsampled [[lat,lng],...] route (FIT import only)
   createdAt:  'created_at',
   updatedAt:  'updated_at',
 };
@@ -33,7 +35,7 @@ const ARRAY_FIELDS = new Set(['subTypes', 'tags']);
 const BOOL_FIELDS  = new Set(['isPlanned']);
 // JSONB columns: arrive as parsed objects, write through unchanged. Do NOT
 // run them through the "missing → '' default" path in fromRow.
-const JSON_FIELDS  = new Set(['weather']);
+const JSON_FIELDS  = new Set(['weather', 'hrZoneSeconds', 'gpsTrack']);
 // Timestamps come back as ISO strings; preserve null when unset rather than
 // coercing to '' (the down-stream weather logic does Number(new Date(v))).
 const TS_FIELDS    = new Set(['startedAt']);

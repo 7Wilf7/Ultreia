@@ -8,6 +8,7 @@ import {
   formatDuration, formatPaceFromSec, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
 import { computeHRZones } from "../utils/profile";
+import { parseFitFile } from "../lib/fit";
 import { ActivityForm } from "./ActivityForm";
 import { Dropdown } from "./Dropdown";
 import { ItemActionModal } from "./ItemActionModal";
@@ -160,10 +161,47 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       const reader = new FileReader();
       reader.onload = (ev) => parseGarminCSV(ev.target.result);
       reader.readAsText(f);
+    } else if (name.endsWith(".fit")) {
+      const reader = new FileReader();
+      reader.onload = (ev) => parseFitImport(ev.target.result);
+      reader.readAsArrayBuffer(f);
     } else {
       setUploadMsg(t("activities.unsupported"));
     }
     e.target.value = "";
+  }
+
+  // FIT = one activity. Parse → reuse the SAME review / dedup / import pipeline
+  // as CSV by shaping one row identically (plus the FIT-only hrZoneSeconds /
+  // gpsTrack / startedAt extras, which ride through to the DB untouched).
+  async function parseFitImport(buf) {
+    setUploadMsg(t("activities.fit_parsing"));
+    try {
+      const d = await parseFitFile(buf, hrZones);
+      if (!d.duration) { setUploadMsg(t("activities.fit_empty")); return; }
+      const mapped = mapGarminActivityType(d.sportStr);
+      const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
+      const pace = (!isAerobicLike && d.distance > 0) ? Math.round(d.duration / d.distance) : 0;
+      const subTypes = mapped.type === "Road Run" ? [recommendRunType(d.hr, false, hrZones)] : [];
+      const row = {
+        id: Date.now(),
+        date: d.date,
+        type: mapped.type, subTypes,
+        distance: d.distance, duration: d.duration, pace,
+        hr: d.hr, maxHR: d.maxHR, ascent: d.ascent, cadence: d.cadence, aerobicTE: d.aerobicTE, gap: 0,
+        startedAt: d.startedAt,
+        hrZoneSeconds: d.hrZoneSeconds, gpsTrack: d.gpsTrack,
+        _selected: true,
+        _unknown: mapped.unknown,
+        _originalType: mapped.unknown ? (d.sportStr || "(empty)") : undefined,
+      };
+      setUploadMsg("");
+      if (mapped.unknown) { setUnknownTypeRows([row]); return; }
+      finalizeParsedRows([row]);
+    } catch (err) {
+      console.error("[FIT] parse failed:", err);
+      setUploadMsg(t("activities.fit_failed"));
+    }
   }
 
   function parseGarminCSV(text) {
@@ -339,7 +377,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <UploadIcon size={13} />
           <span>{t("activities.upload_short")}</span>
         </button>
-        <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleFileSelect} />
+        <input ref={fileRef} type="file" accept=".csv,.fit" style={{ display: "none" }} onChange={handleFileSelect} />
         <button onClick={toggleSelectMode}
           style={{ ...(selectMode ? s.btn : s.btnGhost), ...actionBtnStyle }}>
           <CheckSquareIcon size={13} />

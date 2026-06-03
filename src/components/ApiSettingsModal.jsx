@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { s } from "../styles";
 import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPUT_TOKENS, FREE_DEEPSEEK_LIMIT } from "../constants";
 import { useT } from "../i18n/LanguageContext";
@@ -51,9 +51,17 @@ export function ApiSettingsModal({
   const isMobile = useIsMobile();
   const [keyDraft, setKeyDraft] = useState("");
   const [tutId, setTutId] = useState(null);
-  // Pricing comparison starts expanded on open; collapsing animates it back
-  // into the "!" info button next to the title. Re-open by tapping that button.
-  const [pricingOpen, setPricingOpen] = useState(true);
+  // The info block (provider blurb + pricing + model note) auto-expands ONLY the
+  // first time this account opens API settings; after that it stays collapsed
+  // into the "!" button unless the user taps it. `firstTime` also drives a
+  // one-shot "tap to collapse" hint by the "!".
+  const [firstTime] = useState(() => {
+    try { return !localStorage.getItem("ts-api-info-seen"); } catch { return false; }
+  });
+  const [pricingOpen, setPricingOpen] = useState(firstTime);
+  useEffect(() => {
+    try { localStorage.setItem("ts-api-info-seen", "1"); } catch { /* private mode */ }
+  }, []);
 
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS.deepseek;
   const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
@@ -87,7 +95,7 @@ export function ApiSettingsModal({
         style={s.modalCard(isMobile, { maxWidth: 600, float: true })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, position: "relative" }}>
             <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>
             <button
               onClick={() => setPricingOpen(o => !o)}
@@ -103,22 +111,32 @@ export function ApiSettingsModal({
                 display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "background 160ms, color 160ms, border-color 160ms",
               }}>!</button>
+            {/* One-shot hint on the very first open: tell the user the "!" both
+                collapses this info and reopens it later. */}
+            {firstTime && pricingOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", left: 0,
+                background: "var(--ink-1)", color: "var(--ink-inv)",
+                fontSize: 11, lineHeight: 1.4, padding: "6px 9px", borderRadius: 6,
+                maxWidth: 200, zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,0.2)",
+              }}>
+                {t("api.collapse_hint")}
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
-        <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6 }}>{t("api.desc_pick_provider")}</p>
 
-        {/* Pricing comparison — collapses into the "!" button by the title so it
-            doesn't dominate the modal. Animated via max-height/opacity/scale
-            with the origin at the top-left (where the "!" sits). */}
+        {/* Info block (provider blurb + pricing + model note) — collapses into
+            the "!" button. Auto-open only on first-ever open (see firstTime). */}
         <div style={{
           overflow: "hidden",
-          maxHeight: pricingOpen ? 600 : 0,
+          maxHeight: pricingOpen ? 700 : 0,
           opacity: pricingOpen ? 1 : 0,
           transform: pricingOpen ? "scale(1)" : "scale(0.92)",
           transformOrigin: "top left",
           transition: "max-height 300ms ease, opacity 220ms ease, transform 300ms ease",
-          marginBottom: pricingOpen ? 22 : 0,
+          marginBottom: pricingOpen ? 22 : 4,
         }}>
         <div style={{
           border: "1px solid var(--rule)", borderRadius: 6,
@@ -132,6 +150,7 @@ export function ApiSettingsModal({
               background: "none", border: "none", color: "var(--ink-3)",
               fontSize: 18, lineHeight: 1, cursor: "pointer", padding: 2,
             }}>×</button>
+          <p style={{ ...s.muted, margin: "0 0 12px", lineHeight: 1.6, paddingRight: 18 }}>{t("api.desc_pick_provider")}</p>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("api.pricing_title")}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {Object.values(API_PROVIDERS).map(p => {
@@ -164,6 +183,9 @@ export function ApiSettingsModal({
             {ratio && ratio > 1.5 && (
               <> {t("api.pricing_ratio", { ratio: ratio.toFixed(0) })}</>
             )}
+          </div>
+          <div style={{ ...s.muted, fontSize: 11, marginTop: 10, lineHeight: 1.55, borderTop: "1px solid var(--rule)", paddingTop: 10 }}>
+            {t("api.model_locked_hint")}
           </div>
         </div>
         </div>
@@ -259,9 +281,9 @@ export function ApiSettingsModal({
           </>
         )}
 
-        {/* Active model — informational only, locked per provider. */}
+        {/* Active model — informational only, locked per provider. (The
+            "why locked" note now lives in the "!" info block.) */}
         <div style={{ ...s.label, marginBottom: 6, marginTop: 4 }}>{t("api.model_label")}</div>
-        <div style={{ ...s.muted, marginBottom: 6, lineHeight: 1.5 }}>{t("api.model_locked_hint")}</div>
         <div style={{
           fontFamily: "var(--font-mono)", fontSize: 13,
           padding: "8px 12px",

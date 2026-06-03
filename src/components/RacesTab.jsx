@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
-import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR } from "../constants";
+import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR, HYROX_SUBTYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { forwardGeocode, fetchRaceDayWeather, fetchHistoryRaceWeather, skyconMeta } from "../lib/weather";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
@@ -780,7 +780,7 @@ export function RacesTab({
             )}
             {renderCategoryTag(r.category)}
             {r.subtype && (
-              <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{r.subtype}</span>
+              <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{r.category === "Hyrox" ? t(`enum.hyrox.${r.subtype}`) : r.subtype}</span>
             )}
             {countdown}
             <div style={{ flex: 1 }} />
@@ -887,7 +887,7 @@ export function RacesTab({
               />
             </span>
           )}
-          {r.subtype && <span style={spartanTierStyle(r.subtype)}>{r.subtype}</span>}
+          {r.subtype && <span style={spartanTierStyle(r.subtype)}>{r.category === "Hyrox" ? t(`enum.hyrox.${r.subtype}`) : r.subtype}</span>}
         </div>
 
         {/* name — fills remaining space, truncates */}
@@ -1064,6 +1064,21 @@ export function RacesTab({
                     }}>{t(`enum.spartan.${st}`)}</button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {isHyrox && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ ...s.label, marginBottom: 6 }}>{t("races.hyrox_division")}</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {HYROX_SUBTYPES.map(st => (
+                <button key={st} type="button"
+                  onClick={() => setNewRace({ ...newRace, subtype: newRace.subtype === st ? "" : st })}
+                  style={s.chip(newRace.subtype === st)}>
+                  {t(`enum.hyrox.${st}`)}
+                </button>
+              ))}
             </div>
           </div>
         )}

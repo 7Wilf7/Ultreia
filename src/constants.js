@@ -211,6 +211,15 @@ export const SPARTAN_TIER_COLOR = {
   Ultra:  "#6b3fa0",   /* spartan purple */
 };
 
+// Hyrox official divisions — stored in races.subtype (same column Spartan tiers
+// use). Canonical English values; the picker + tags localize via enum.hyrox.*.
+export const HYROX_SUBTYPES = [
+  "Men Open", "Women Open",
+  "Men Pro", "Women Pro",
+  "Men Doubles", "Women Doubles", "Mixed Doubles",
+  "Relay",
+];
+
 // Race categories — used for PR auto-aggregation and as a list-view tag.
 // Order matters: PR bar + form dropdowns iterate this array, so this is the
 // canonical display order (10K shortest road → progressively bigger / more

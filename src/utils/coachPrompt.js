@@ -13,28 +13,28 @@ export const DATA_LABELS = {
   en: {
     currentDate: "[Current Date]",
     currentWeather: "[Current Weather]",
-    weeklyForecast: "[7-Day Weather Forecast — use this when planning ANY upcoming session]",
-    raceWeather: "[Next Race — Race-Day Weather. 'forecast' = a real ≤2-week forecast; 'typical' = a multi-year climate normal for that date/place. Tailor race-day pacing, hydration and kit to this; flag heat/humidity risk early.]",
+    weeklyForecast: "[7-Day Forecast]",
+    raceWeather: "[Next Race Weather — forecast=real ≤2wk; typical=climate normal]",
     targets: "[Target Races]",
-    history: "[Race History]",
-    weeklyTrend: "[Weekly Training Load — last 8 weeks of run-group volume (distance + ascent + session count). Watch week-over-week jumps as an injury-risk signal.]",
-    recent: "[Recent Activities (last 10) — RPE is the runner's 1–10 perceived exertion; note is their own comment. Weather at training time appended when available]",
-    dayNotes: "[Recent Day Notes — recovery/context flags the runner logged (sick, travel, poor sleep, massage, stretching). Factor these into load assessment and planning.]",
-    upcoming: "[Upcoming Planned Sessions — next 7 days, with daily forecast]",
+    history: "[Race History — recent + PR per type]",
+    weeklyTrend: "[Weekly Load — last 8 wks: run distance + ascent + count; watch week-over-week spikes]",
+    recent: "[Recent Activities (last 10) — RPE=1–10 effort; note=runner's comment; weather=at training time]",
+    dayNotes: "[Day Notes — recovery/context flags]",
+    upcoming: "[Upcoming Planned Sessions — next 7 days + forecast]",
     none: "None",
     priorityTag: (p) => `[Priority ${p}]`,
   },
   zh: {
     currentDate: "[当前时间]",
     currentWeather: "[当前天气]",
-    weeklyForecast: "[未来 7 天天气预报 —— 排任何未来训练时都参考这里]",
-    raceWeather: "[下一场比赛 —— 比赛日天气。'forecast' = 两周内的真实预报；'typical' = 该地点该日期的多年气候常态。据此给比赛日配速 / 补水 / 装备建议，提前提示高温高湿风险。]",
+    weeklyForecast: "[未来 7 天预报]",
+    raceWeather: "[下一场比赛日天气 —— forecast=两周内真实预报；typical=多年气候常态]",
     targets: "[目标比赛]",
-    history: "[比赛历史]",
-    weeklyTrend: "[周训练量 —— 最近 8 周跑步类训练量（距离 + 爬升 + 次数）。关注周环比突增带来的伤病风险。]",
-    recent: "[近期活动（最近 10 条）—— RPE 是跑者 1–10 的自觉用力评分，note 是他自己的备注。行尾附该次训练当时的天气（如有）]",
-    dayNotes: "[近期当日标记 —— 跑者记录的恢复/状态标记（生病、出差、睡眠差、按摩、拉伸）。评估负荷和排计划时要考虑。]",
-    upcoming: "[未来计划训练 —— 接下来 7 天，附当日天气预报]",
+    history: "[比赛历史 —— 每类最近一场 + PR]",
+    weeklyTrend: "[周训练量 —— 最近 8 周：跑步距离 + 爬升 + 次数；关注周环比突增]",
+    recent: "[近期活动（最近 10 条）—— RPE=1–10 自觉用力；note=跑者备注；weather=训练当时天气]",
+    dayNotes: "[当日标记 —— 恢复/状态标记]",
+    upcoming: "[未来计划训练 —— 接下来 7 天 + 预报]",
     none: "无",
     priorityTag: (p) => `[${p} 级目标]`,
   },
@@ -131,13 +131,13 @@ const SPARTAN_RANK = SPARTAN_SUBTYPES.reduce((acc, name, i) => {
   return acc;
 }, {});
 
-// Pick a representative subset of history races to send to the coach.
-// Per category:
-//   • 10K / HM / Marathon / Hyrox / Other / Uncategorized → latest 3 by date
-//   • Trail   → latest 3 + longest by distance (if not already in the 3)
-//   • Spartan → latest 3 + toughest by subtype rank (if not already in the 3)
-// Goal: keep the prompt focused on recent form, while always anchoring trail
-// and Spartan signal with the user's peak performance for each.
+// Pick a tight subset of history races for the prompt: per category, the MOST
+// RECENT race (current form) + the PR / best race (peak ability). Keeps the
+// prompt focused — two anchor points per event type instead of a long list.
+// "Best" per category:
+//   • 10K / HM / Marathon / Hyrox / Other / Uncategorized → fastest finish time
+//   • Trail   → highest ITRA score, else longest distance
+//   • Spartan → toughest tier (Sprint < Super < Beast < Ultra)
 export function selectHistoryForPrompt(historyRaces) {
   const groups = {};
   for (const r of historyRaces) {
@@ -146,17 +146,22 @@ export function selectHistoryForPrompt(historyRaces) {
   }
   const picked = new Set();
   for (const [cat, group] of Object.entries(groups)) {
-    const byDate = [...group].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-    byDate.slice(0, 3).forEach(r => picked.add(r.id));
+    // Most recent by date.
+    const latest = [...group].sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
+    if (latest) picked.add(latest.id);
+    // PR / best for the category.
+    let best;
     if (cat === "Trail") {
-      const longest = [...group].filter(r => r.distance > 0)
-        .sort((a, b) => b.distance - a.distance)[0];
-      if (longest) picked.add(longest.id);
+      best = [...group].filter(r => r.itraScore > 0).sort((a, b) => b.itraScore - a.itraScore)[0]
+          || [...group].filter(r => r.distance > 0).sort((a, b) => b.distance - a.distance)[0];
     } else if (cat === "Spartan") {
-      const toughest = [...group].filter(r => SPARTAN_RANK[r.subtype])
+      best = [...group].filter(r => SPARTAN_RANK[r.subtype])
         .sort((a, b) => SPARTAN_RANK[b.subtype] - SPARTAN_RANK[a.subtype])[0];
-      if (toughest) picked.add(toughest.id);
+    } else {
+      best = [...group].filter(r => r.resultSeconds > 0)
+        .sort((a, b) => a.resultSeconds - b.resultSeconds)[0];
     }
+    if (best) picked.add(best.id);
   }
   return historyRaces
     .filter(r => picked.has(r.id))

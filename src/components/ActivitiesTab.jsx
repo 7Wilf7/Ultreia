@@ -14,7 +14,7 @@ import { Dropdown } from "./Dropdown";
 import { ItemActionModal } from "./ItemActionModal";
 import { ModalRoot } from "./ModalRoot";
 import {
-  ClockIcon, HeartIcon, PeakIcon, FootIcon, BoltIcon, GaugeIcon, RouteIcon, RunnerIcon,
+  ClockIcon, HeartIcon, PeakIcon, FootIcon, RouteIcon, RunnerIcon,
   PlusIcon, UploadIcon, CheckSquareIcon, SortIcon,
 } from "./Icons";
 
@@ -196,7 +196,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       date: d.date,
       type: mapped.type, subTypes,
       distance: d.distance, duration: d.duration, pace,
-      hr: d.hr, maxHR: d.maxHR, ascent: d.ascent, cadence: d.cadence, aerobicTE: d.aerobicTE, gap: 0,
+      hr: d.hr, maxHR: d.maxHR, ascent: d.ascent, cadence: d.cadence,
       startedAt: d.startedAt,
       hrZoneSeconds: d.hrZoneSeconds, gpsTrack: d.gpsTrack,
       _selected: true,
@@ -270,8 +270,6 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     const iAvgHR = idx("Avg HR"), iMaxHR = idx("Max HR");
     const iAscent = idx("Total Ascent");
     const iCadence = idx("Avg Run Cadence");
-    const iTE = idx("Aerobic TE");
-    const iGAP = idx("Avg GAP");
 
     if (iTime < 0) {
       console.warn("[CSV] No duration column found. Headers were:", header);
@@ -297,8 +295,6 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       const maxHR = iMaxHR >= 0 ? Math.round(num(c[iMaxHR])) : 0;
       const ascent = Math.round(num(c[iAscent]));
       const cadence = iCadence >= 0 ? Math.round(num(c[iCadence])) : 0;
-      const aerobicTE = iTE >= 0 ? +num(c[iTE]).toFixed(1) : 0;
-      const gap = iGAP >= 0 ? parseTimeToSeconds(c[iGAP]) : 0;
       // pace only meaningful for activities with real distance (Run/Trail/Hiking/Stair); placeholder Running for unknowns is overridden later
       const isAerobicLike = mapped.type === "Strength" || mapped.type === "HIIT";
       const pace = (!isAerobicLike && distance > 0) ? Math.round(duration / distance) : 0;
@@ -308,7 +304,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       rows.push({
         id: Date.now() + i, date,
         type: mapped.type, subTypes,
-        distance, duration, pace, hr, maxHR, ascent, cadence, aerobicTE, gap,
+        distance, duration, pace, hr, maxHR, ascent, cadence,
         _selected: true,
         _unknown: mapped.unknown,
         _originalType: mapped.unknown ? (c[iType] || "(empty)") : undefined,
@@ -554,7 +550,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                 <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
                 <div style={{ fontSize: 12, flex: 1 }}>
                   {r.distance > 0 && <span>{r.distance}km · </span>}
-                  {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`} {r.aerobicTE > 0 && `· TE ${r.aerobicTE}`}
+                  {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`}
                 </div>
                 {r.type === "Road Run" && (
                   <div style={{ width: 130 }}>
@@ -872,25 +868,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </span>
                   )}
                 </div>
-                {/* 6. GAP — grade-adjusted pace, sits right after the regular pace */}
-                <div>
-                  {l.gap > 0 && (
-                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={13} /></span>
-                      {formatPaceFromSec(l.gap)}
-                    </span>
-                  )}
-                </div>
-                {/* 7. TE */}
-                <div>
-                  {l.aerobicTE > 0 && (
-                    <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ color: "var(--warn)" }}><BoltIcon size={12} /></span>
-                      {l.aerobicTE}
-                    </span>
-                  )}
-                </div>
-                {/* 8. Cadence (SPM) — Road Run only */}
+                {/* Cadence (SPM) — Road Run only */}
                 <div>
                   {l.cadence > 0 && l.type === "Road Run" && (
                     <span style={{ fontSize: 13, color: "var(--ink-2)", display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -1001,22 +979,6 @@ function MetricHR({ hr, maxHR }) {
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
       <span style={{ color: "var(--danger)" }}><HeartIcon size={11} /></span>
       {hr}{maxHR > 0 ? <span style={{ color: "var(--ink-3)" }}>/{maxHR}</span> : null}
-    </span>
-  );
-}
-function MetricGAP({ p }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-      <span style={{ color: "var(--ink-3)" }}><GaugeIcon size={12} /></span>
-      {formatPaceFromSec(p)}
-    </span>
-  );
-}
-function MetricTE({ te }) {
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-      <span style={{ color: "var(--warn)" }}><BoltIcon size={11} /></span>
-      {te}
     </span>
   );
 }
@@ -1167,7 +1129,6 @@ function ExpandedMetrics({ log: l }) {
       }}>
         {/* Road Run extras */}
         {isRoad && l.ascent > 0 && <MetricAscent m={l.ascent} />}
-        {isRoad && l.gap > 0 && <MetricGAP p={l.gap} />}
         {isRoad && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
         {isRoad && l.cadence > 0 && <MetricCadence spm={l.cadence} />}
         {/* Trail / Hiking extras */}
@@ -1180,8 +1141,6 @@ function ExpandedMetrics({ log: l }) {
         {isFloor && l.hr > 0 && <MetricHR hr={l.hr} maxHR={l.maxHR} />}
         {/* Strength / HIIT extras */}
         {isStrengthLike && l.distance > 0 && <MetricDistance km={l.distance} />}
-        {/* Universal: TE if present */}
-        {l.aerobicTE > 0 && <MetricTE te={l.aerobicTE} />}
       </div>
       {/* Full weather chip on its OWN line — raw air temp + humidity / wind /
           AQI. The compact chip in the header shows only the apparent ("feels

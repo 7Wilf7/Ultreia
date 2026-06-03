@@ -60,7 +60,6 @@ export async function parseFitFile(arrayBuffer, hrZones) {
     ? session.avg_cadence + (session.avg_fractional_cadence || 0)
     : (session.avg_running_cadence || 0);
   const cadence = rawCad ? Math.round(isFoot ? rawCad * 2 : rawCad) : 0;
-  const aerobicTE = session.total_training_effect ? +Number(session.total_training_effect).toFixed(1) : 0;
 
   const sportStr = `${session.sport || ""} ${session.sub_sport || ""}`
     .toLowerCase().replace(/_/g, " ").trim();
@@ -105,7 +104,6 @@ export async function parseFitFile(arrayBuffer, hrZones) {
     maxHR: maxHr,
     ascent,
     cadence,
-    aerobicTE,
     hrZoneSeconds,
     gpsTrack,
   };

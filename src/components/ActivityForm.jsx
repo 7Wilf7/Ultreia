@@ -47,11 +47,6 @@ function buildEmpty() {
     hr: "", maxHR: "",
     ascent: "",
     cadence: "",
-    aerobicTE: "",
-    // GAP is stored as two parts: minutes (single digit, 0–9) and seconds
-    // (two digits, 0–59). Combined at save time. The split avoids forcing
-    // the user to type a colon on a mobile numeric keyboard.
-    gapMin: "", gapSec: "",
     rpe: "",
     note: "",
   };
@@ -59,11 +54,6 @@ function buildEmpty() {
 
 function fromLog(log) {
   const d = splitDuration(log.duration || 0);
-  // GAP is stored in seconds (e.g. 390 = "6:30/km"). Split back into
-  // mm/ss for the two-input UI; empty strings when no GAP recorded.
-  const gapSec = log.gap || 0;
-  const gapMm = gapSec > 0 ? Math.floor(gapSec / 60) : "";
-  const gapSs = gapSec > 0 ? gapSec % 60 : "";
   return {
     date: normalizeDate(log.date),
     startedAtLocal: formatLocalDateTimeForInput(log.startedAt),
@@ -75,9 +65,6 @@ function fromLog(log) {
     maxHR:     log.maxHR     ? String(log.maxHR)     : "",
     ascent:    log.ascent    ? String(log.ascent)    : "",
     cadence:   log.cadence   ? String(log.cadence)   : "",
-    aerobicTE: log.aerobicTE ? String(log.aerobicTE) : "",
-    gapMin:    gapMm === "" ? "" : String(gapMm),
-    gapSec:    gapSs === "" ? "" : String(gapSs).padStart(2, "0"),
     rpe:       log.rpe ? String(log.rpe) : "",
     note:      log.note || "",
   };
@@ -129,8 +116,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const isRace = isRun && form.subTypes.includes("Race");
   // Only road Running uses pace types (Easy/Aerobic/Tempo/Interval). Trail / Hiking / Floor just track time + climb.
   const showPaceTypes = isRoadRun && !isRace;
-  // GAP + cadence make sense for road running only. Trail/hiking pace is dominated by terrain, strength has no distance.
-  const showCadenceAndGap = isRoadRun;
+  // Cadence makes sense for road running only. Trail/hiking pace is dominated by terrain, strength has no distance.
+  const showCadence = isRoadRun;
   // Floor Climbing tracks vertical only — no horizontal distance. Other Run-group types do track distance.
   const showDistance = isRun && form.type !== "Floor Climbing";
   // All Run-group types track ascent (Floor Climbing is essentially pure ascent).
@@ -210,11 +197,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       hr:        parseInt(form.hr)         || 0,
       maxHR:     parseInt(form.maxHR)      || 0,
       ascent:    showAscent ? (parseInt(form.ascent) || 0) : 0,
-      cadence:   showCadenceAndGap ? (parseInt(form.cadence) || 0) : 0,
-      aerobicTE: parseFloat(form.aerobicTE)|| 0,
-      gap:       showCadenceAndGap
-        ? ((parseInt(form.gapMin) || 0) * 60 + (parseInt(form.gapSec) || 0))
-        : 0,
+      cadence:   showCadence ? (parseInt(form.cadence) || 0) : 0,
       // RPE: keep only a valid 1–10 integer; anything else (empty / out of
       // range) → null so the DB CHECK (rpe BETWEEN 1 AND 10) never rejects.
       rpe:       (() => { const n = parseInt(form.rpe, 10); return n >= 1 && n <= 10 ? n : null; })(),
@@ -364,79 +347,11 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           <LabeledInput label={t("form.ascent")} unit="m" placeholder="0"
             value={form.ascent} onChange={e => setForm({ ...form, ascent: e.target.value })} />
         )}
-        {showCadenceAndGap && (
+        {showCadence && (
           <LabeledInput label={t("form.cadence")} unit="spm" placeholder="0"
             value={form.cadence} onChange={e => setForm({ ...form, cadence: e.target.value })} />
         )}
-        <LabeledInput label={t("form.te")} unit="1–5" placeholder="0" step="0.1"
-          value={form.aerobicTE} onChange={e => setForm({ ...form, aerobicTE: e.target.value })} />
       </div>
-
-      {/* GAP — road running only. Two number inputs split by a fixed colon
-          so the user types digits only (mobile keyboard never has to flip
-          to symbols for ":"). Minutes: 1 digit (0–9); seconds: 2 digits
-          (0–59). Combined back to seconds at save time. */}
-      {showCadenceAndGap && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginBottom: 14 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
-              {t("form.gap")}<span style={{ color: "#aaa", fontWeight: 400 }}> (min/km)</span>
-            </span>
-            <div style={{
-              display: "flex", alignItems: "stretch",
-              border: "1px solid var(--rule)",
-              borderRadius: 2,
-              background: "var(--bg-elevated)",
-              overflow: "hidden",
-            }}>
-              <input
-                type="number" inputMode="numeric" min="0" max="9" maxLength={1}
-                placeholder="6" value={form.gapMin}
-                onChange={e => {
-                  // Keep at most 1 digit; allow empty so the field clears
-                  const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 1);
-                  setForm({ ...form, gapMin: v });
-                }}
-                aria-label={t("form.minutes")}
-                style={{
-                  flex: 1, width: "100%", boxSizing: "border-box",
-                  border: "none", background: "transparent",
-                  padding: "10px 8px", fontSize: 14,
-                  textAlign: "center", outline: "none",
-                  fontFamily: "var(--font-sans)",
-                  fontVariantNumeric: "tabular-nums",
-                }} />
-              <span style={{
-                display: "inline-flex", alignItems: "center", padding: "0 6px",
-                fontSize: 16, fontWeight: 600, color: "var(--ink-2)",
-                fontFamily: "var(--font-mono)", userSelect: "none",
-              }}>:</span>
-              <input
-                type="number" inputMode="numeric" min="0" max="59" maxLength={2}
-                placeholder="30" value={form.gapSec}
-                onChange={e => {
-                  const v = e.target.value.replace(/[^0-9]/g, "").slice(0, 2);
-                  setForm({ ...form, gapSec: v });
-                }}
-                onBlur={e => {
-                  // Pad to 2 digits on blur so it reads as "06" not "6".
-                  if (e.target.value && e.target.value.length === 1) {
-                    setForm({ ...form, gapSec: e.target.value.padStart(2, "0") });
-                  }
-                }}
-                aria-label={t("form.seconds")}
-                style={{
-                  flex: 1, width: "100%", boxSizing: "border-box",
-                  border: "none", background: "transparent",
-                  padding: "10px 8px", fontSize: 14,
-                  textAlign: "center", outline: "none",
-                  fontFamily: "var(--font-sans)",
-                  fontVariantNumeric: "tabular-nums",
-                }} />
-            </div>
-          </label>
-        </div>
-      )}
 
       {/* RPE — optional, every activity type. Drives the training-load (sRPE)
           calculation. Kept narrow so it doesn't read like a required metric;

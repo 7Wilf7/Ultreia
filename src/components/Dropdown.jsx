@@ -97,7 +97,10 @@ export function Dropdown({
           left: align === "right" ? "auto" : 0,
           right: align === "right" ? 0 : "auto",
           marginTop: 2,
-          minWidth: variant === "field" ? "100%" : 160,
+          // Match the trigger width (so the menu lines up under the control box),
+          // growing only if an option is wider than the trigger.
+          minWidth: "100%",
+          width: variant === "field" ? "100%" : "max-content",
           maxHeight: 280, overflowY: "auto",
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)", borderRadius: 4,

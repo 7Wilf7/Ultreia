@@ -12,45 +12,74 @@ const STEPS = [
   {
     tab: 0,
     title: { zh: "训练 Training", en: "Training" },
-    body: {
-      zh: "记录每一次训练 —— 路跑、越野、徒步、力量、HIIT。可手动添加，或从 Garmin 导出的 CSV 批量导入。顶部能切到图表看距离 / 强度 / 心率趋势。",
-      en: "Log every session — road, trail, hiking, strength, HIIT. Add manually or bulk-import a Garmin CSV. Switch to the charts up top for distance / intensity / HR trends.",
-    },
+    lead: { zh: "记录每一次训练 —— 数据越全，AI 教练越懂你。", en: "Log every session — the more data, the better the AI coach knows you." },
+    bullets: [
+      { zh: "支持路跑、越野、徒步、爬楼、力量、HIIT 六类活动", en: "Six activity types: road, trail, hiking, stair-climb, strength, HIIT." },
+      { zh: "手动添加，或从 Garmin 导出的 CSV 一次性批量导入", en: "Add manually, or bulk-import a Garmin CSV in one go." },
+      { zh: "每条可记距离、时长、心率、RPE、备注；户外训练自动配上当时天气", en: "Each entry: distance, duration, HR, RPE, notes; outdoor sessions auto-tag the weather." },
+      { zh: "顶部切到「图表」看周/月距离、强度分布、心率区间趋势", en: "Switch to Charts for weekly/monthly distance, intensity split, HR-zone trends." },
+    ],
   },
   {
     tab: 1,
     title: { zh: "日历 Calendar", en: "Calendar" },
-    body: {
-      zh: "月历一眼看清每天练了什么、还安排了什么。点某天可以加训练或加计划；长按某条活动能改或删；上下滑动切换月份。",
-      en: "A month grid of what you did and what's planned. Tap a day to add a workout or a plan; long-press an activity to edit or delete; swipe up/down to change month.",
-    },
+    lead: { zh: "一眼看清练了什么、还安排了什么。", en: "See what you've done and what's planned at a glance." },
+    bullets: [
+      { zh: "月历同时显示已完成训练和未来计划（虚线 = 计划）", en: "Month grid shows completed sessions + future plans (dashed = planned)." },
+      { zh: "点某天加训练或加计划；长按某条能改 / 删", en: "Tap a day to add a workout or plan; long-press one to edit / delete." },
+      { zh: "上下滑动日历切换月份", en: "Swipe the calendar up/down to change month." },
+      { zh: "下方 7 天天气卡，帮你挑合适的训练日", en: "A 7-day weather strip below helps you pick the right day to train." },
+    ],
   },
   {
     tab: 2,
     title: { zh: "比赛 Races", en: "Races" },
-    body: {
-      zh: "管理目标比赛和历史成绩。给目标赛标 A/B/C 优先级，顶部 PR 栏会自动展示你每个项目（10K / 半马 / 全马 / 越野…）的最好成绩。",
-      en: "Manage target races and past results. Tag goals A/B/C; the PR bar up top auto-shows your best result per event type (10K / Half / Marathon / Trail…).",
-    },
+    lead: { zh: "管理目标赛和历史成绩。", en: "Manage target races and past results." },
+    bullets: [
+      { zh: "给目标赛标 A/B/C 优先级，自动显示倒计时", en: "Tag goal races A/B/C; a countdown shows automatically." },
+      { zh: "顶部 PR 栏自动列出每个项目（10K / 半马 / 全马 / 越野 / 斯巴达 / Hyrox）的最好成绩", en: "The PR bar lists your best per event type (10K / Half / Marathon / Trail / Spartan / Hyrox)." },
+      { zh: "填了地点的赛事会带上比赛日天气", en: "Add a location and the race shows its race-day weather." },
+      { zh: "这些都会喂给 AI 教练，围绕你的目标赛来规划", en: "All of this feeds the AI coach so it plans around your goal race." },
+    ],
   },
   {
     tab: 3,
+    emphasis: true,
     title: { zh: "AI 教练 AI Coach", en: "AI Coach" },
-    body: {
-      zh: "你的私人 AI 跑步教练。它能看到你的资料、近期训练和目标赛，给个性化建议，还能把训练计划一键放进日历。使用前先在设置里填好 AI 的 API key。",
-      en: "Your personal AI running coach. It sees your profile, recent training and goal races, gives tailored advice, and can drop a plan straight into your calendar. Add an AI API key in Settings first.",
+    lead: {
+      zh: "这是 Training Studio 的核心 —— 一个真正「懂你」的 AI 跑步教练，不是泛泛而谈的聊天机器人。",
+      en: "This is the heart of Training Studio — an AI running coach that actually knows YOU, not a generic chatbot.",
     },
+    bullets: [
+      { zh: "它实时看到你的资料、近期训练、目标赛、长期记忆，给出**个性化**建议", en: "It sees your profile, recent training, goal races and long-term memory — and gives personalized advice." },
+      { zh: "直接问它：今天该怎么练？这周量合理吗？赛前怎么调整？", en: "Just ask: what should I run today? Is this week's load OK? How do I taper?" },
+      { zh: "一键把它给的训练建议**导入到日历**", en: "One tap imports its suggested plan straight into your calendar." },
+      { zh: "长期记忆：它会记住你的持久偏好，越聊越懂你", en: "Long-term memory: it remembers your durable preferences and gets to know you over time." },
+      { zh: "信息填得越全（资料 / 训练 / 目标赛），回复越定制", en: "The more you fill in (profile / training / goal races), the more tailored the replies." },
+      { zh: "首次使用先在设置里填 API key —— 新账号有免费额度可直接体验", en: "Add an API key in Settings to start — new accounts get a free allowance to try it right away." },
+    ],
   },
   {
     tab: 4,
     mobileOnly: true,
     title: { zh: "设置 Settings", en: "Settings" },
-    body: {
-      zh: "在这里填 AI 和天气的 API key、开关每日推送、修改个人资料和切换语言。",
-      en: "Set your AI and weather API keys, toggle the daily push, edit your profile, and switch language here.",
-    },
+    lead: { zh: "账号、密钥和各种开关都在这里。", en: "Account, keys and all the switches live here." },
+    bullets: [
+      { zh: "填 AI / 天气的 API key，查看剩余免费额度", en: "Set AI / weather API keys; check remaining free allowance." },
+      { zh: "开关每日推送、修改个人资料、切换中 / 英", en: "Toggle the daily push, edit your profile, switch 中 / EN." },
+      { zh: "邀请注册、删除账号、查看使用手册也在这里", en: "Invites, account deletion and the user guide are here too." },
+    ],
   },
 ];
+
+// Render **bold** spans inside the tour copy (no full markdown needed).
+function renderRich(text) {
+  return String(text).split(/\*\*/).map((seg, idx) =>
+    idx % 2 === 1
+      ? <strong key={idx} style={{ color: "var(--ink-1)", fontWeight: 700 }}>{seg}</strong>
+      : <span key={idx}>{seg}</span>
+  );
+}
 
 export const TOUR_FLAG = "ts-tour-done-v1";
 
@@ -94,22 +123,41 @@ export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
           borderRadius: 10,
           boxShadow: "0 18px 50px rgba(0,0,0,0.28)",
           width: "100%", maxWidth: 380,
+          maxHeight: isMobile ? "calc(100dvh - 86px - env(safe-area-inset-bottom) - 32px)" : "calc(100dvh - 32px)",
+          overflowY: "auto",
           padding: "20px 22px 18px",
           boxSizing: "border-box",
           fontFamily: "var(--font-sans)",
         }}>
           <div style={{
+            display: "flex", alignItems: "center", gap: 8,
             fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)",
             letterSpacing: "0.06em", marginBottom: 8,
           }}>
-            {i + 1} / {steps.length}
+            <span>{i + 1} / {steps.length}</span>
+            {step.emphasis && (
+              <span style={{
+                fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.04em", color: "var(--ink-inv)", background: "var(--moss)",
+                padding: "2px 7px", borderRadius: 10,
+              }}>{lang === "en" ? "CORE" : "核心功能"}</span>
+            )}
           </div>
-          <h2 style={{ fontSize: 19, fontWeight: 600, margin: "0 0 8px", color: "var(--ink-1)" }}>
+          <h2 style={{ fontSize: 19, fontWeight: 600, margin: "0 0 8px", color: step.emphasis ? "var(--moss-deep)" : "var(--ink-1)" }}>
             {pick(step.title)}
           </h2>
-          <p style={{ fontSize: 13.5, lineHeight: 1.65, color: "var(--ink-2)", margin: 0 }}>
-            {pick(step.body)}
-          </p>
+          {step.lead && (
+            <p style={{ fontSize: 13.5, lineHeight: 1.6, color: "var(--ink-1)", margin: "0 0 10px", fontWeight: step.emphasis ? 600 : 400 }}>
+              {renderRich(pick(step.lead))}
+            </p>
+          )}
+          <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 7 }}>
+            {step.bullets.map((b, bi) => (
+              <li key={bi} style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
+                {renderRich(pick(b))}
+              </li>
+            ))}
+          </ul>
 
           {/* Progress dots */}
           <div style={{ display: "flex", gap: 6, justifyContent: "center", margin: "16px 0 14px" }}>

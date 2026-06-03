@@ -553,6 +553,7 @@ const dict = {
   "activities.unsupported":   { en: "Unsupported file. Use .fit (Garmin / Coros / most watches), a .zip of .fit files, or a .csv (Garmin Connect bulk export).", zh: "不支持的文件。请用 .fit（佳明 / 高驰 / 多数手表）、装有多个 .fit 的 .zip，或 .csv（佳明 Connect 批量导出）。" },
   "activities.zip_no_fit":    { en: "No .fit files found in that .zip.", zh: "这个 .zip 里没有找到 .fit 文件。" },
   "activities.fit_parsing":   { en: "Reading file…",        zh: "正在读取…" },
+  "activities.parsing_progress": { en: "Parsing {done} / {total} files…", zh: "正在解析 {done} / {total} 个文件…" },
   "activities.fit_empty":     { en: "Couldn't read activity data from this .fit.", zh: "没能从这个 .fit 里读到活动数据。" },
   "activities.fit_failed":    { en: "Failed to parse this .fit file.", zh: ".fit 文件解析失败。" },
   "activities.unknown_type_title": { en: "⚠ Unknown Activity Types", zh: "⚠ 无法识别的活动类型" },

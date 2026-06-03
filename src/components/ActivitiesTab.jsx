@@ -70,6 +70,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
   const [durMin, setDurMin] = useState(""); // duration filter (minutes); "" = no bound
   const [durMax, setDurMax] = useState("");
+  const [showDurFilter, setShowDurFilter] = useState(false); // duration-filter inputs toggled by the toolbar icon
+  const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
   const fileRef = useRef();
 
   // Distinct unknown-type groups (by original sport name) + their row counts,
@@ -235,16 +237,26 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   // Parse one or more FIT ArrayBuffers → the shared review / dedup / import
   // pipeline (FIT reuses everything the CSV path uses).
   async function parseFitImport(buffers) {
-    setUploadMsg(t("activities.fit_parsing"));
+    const total = buffers.length;
+    const batch = total > 1;
+    if (batch) { setParseProgress({ done: 0, total }); setUploadMsg(""); }
+    else setUploadMsg(t("activities.fit_parsing"));
     const zones = fitHrZones();
     const rows = [];
-    for (const buf of buffers) {
+    for (let i = 0; i < buffers.length; i++) {
       try {
-        const d = await parseFitFile(buf, zones);
-        if (!d.duration) continue;
-        rows.push(fitRow(d, Date.now() + rows.length));
+        const d = await parseFitFile(buffers[i], zones);
+        if (d.duration) rows.push(fitRow(d, Date.now() + rows.length));
       } catch (err) { console.error("[FIT] parse failed:", err); }
+      // Update progress + yield to the event loop every few files so the bar
+      // actually repaints during a long batch (awaiting the parser alone only
+      // flushes microtasks, which don't paint).
+      if (batch && (i % 5 === 4 || i === buffers.length - 1)) {
+        setParseProgress({ done: i + 1, total });
+        await new Promise(r => setTimeout(r, 0));
+      }
     }
+    setParseProgress(null);
     if (!rows.length) { setUploadMsg(t("activities.fit_empty")); return; }
     setUploadMsg("");
     if (rows.some(r => r._unknown)) { setUnknownChoices({}); setUnknownTypeRows(rows); return; }
@@ -418,37 +430,54 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     }
   }
 
-  const actionBtnStyle = {
+  // Icon-only toolbar buttons (labels dropped — the watch-file Upload flow is
+  // now the primary path, so the bar is glyphs + a black-filled Upload first).
+  const iconBtnStyle = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    padding: isMobile ? "6px 9px" : "6px 12px",
-    fontSize: 12,
+    gap: 4,
+    position: "relative",
+    padding: isMobile ? "0 11px" : "0 12px",
     flexShrink: 0,
-    minHeight: isMobile ? 36 : undefined,
+    minHeight: isMobile ? 36 : 32,
   };
+  const durActive = !!(durMin || durMax);
 
   return (
     <div>
-      {/* Compact single-row action bar — short labels so all four (Add /
-          Upload / Select / Sort) fit on a 360-wide phone without wrapping. */}
+      {/* Icon-only action bar. Upload (black-filled) leads since uploading a
+          .fit / .zip / .csv is the main way activities get in; Add stays as a
+          glyph for the occasional manual entry. Fits a 360-wide phone easily. */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
-        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }}
-          style={{ ...s.btn, ...actionBtnStyle }}>
-          <PlusIcon size={13} />
-          <span>{t("activities.add_short")}</span>
-        </button>
-        <button onClick={() => fileRef.current.click()}
-          style={{ ...s.btnGhost, ...actionBtnStyle }}>
-          <UploadIcon size={13} />
-          <span>{t("activities.upload_short")}</span>
+        <button onClick={() => fileRef.current.click()} title={t("activities.upload_short")}
+          aria-label={t("activities.upload_short")} style={{ ...s.btn, ...iconBtnStyle }}>
+          <UploadIcon size={15} />
         </button>
         <input ref={fileRef} type="file" accept=".csv,.fit,.zip" style={{ display: "none" }} onChange={handleFileSelect} />
-        <button onClick={toggleSelectMode}
-          style={{ ...(selectMode ? s.btn : s.btnGhost), ...actionBtnStyle }}>
-          <CheckSquareIcon size={13} />
-          <span>{selectMode ? selectedIds.size : t("activities.select_short")}</span>
+        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} title={t("activities.add_short")}
+          aria-label={t("activities.add_short")} style={{ ...s.btnGhost, ...iconBtnStyle }}>
+          <PlusIcon size={15} />
+        </button>
+        <button onClick={toggleSelectMode} title={t("activities.select_short")}
+          aria-label={t("activities.select_short")} style={{ ...(selectMode ? s.btn : s.btnGhost), ...iconBtnStyle }}>
+          <CheckSquareIcon size={15} />
+          {selectMode && selectedIds.size > 0 && (
+            <span style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{selectedIds.size}</span>
+          )}
+        </button>
+        {/* Duration filter — icon toggle; reveals the min/max inputs below.
+            A dot marks an active filter so it's discoverable when collapsed. */}
+        <button onClick={() => setShowDurFilter(v => !v)} title={t("activities.dur_filter")}
+          aria-label={t("activities.dur_filter")}
+          style={{ ...(showDurFilter || durActive ? s.btn : s.btnGhost), ...iconBtnStyle }}>
+          <ClockIcon size={15} />
+          {durActive && (
+            <span style={{
+              position: "absolute", top: 5, right: 5, width: 6, height: 6,
+              borderRadius: "50%", background: "var(--warn, #d4a017)",
+            }} />
+          )}
         </button>
         {/* Was a <label> — but it wraps the Dropdown's <button>, and a label
             re-dispatches clicks to its labelable descendant, so every tap fired
@@ -484,29 +513,30 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         </div>
       </div>
 
-      {/* Duration range filter (minutes) — thin secondary row. Handy for
-          post-import cleanup (e.g. isolate "HIIT under 45 min" to recategorize)
-          and a permanent way to slice the list by session length. */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
-        fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
-        flexWrap: "wrap",
-      }}>
-        <span style={{ flexShrink: 0 }}>{t("activities.dur_filter")}</span>
-        <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_min")}
-          value={durMin} onChange={e => setDurMin(e.target.value)}
-          style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
-        <span style={{ flexShrink: 0 }}>–</span>
-        <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_max")}
-          value={durMax} onChange={e => setDurMax(e.target.value)}
-          style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
-        {(durMin || durMax) && (
-          <button onClick={() => { setDurMin(""); setDurMax(""); }}
-            style={{ ...s.btnGhost, fontSize: 11, padding: "3px 8px", minHeight: 0 }}>
-            {t("activities.dur_clear")}
-          </button>
-        )}
-      </div>
+      {/* Duration range filter (minutes) — revealed by the clock icon above.
+          Handy for post-import cleanup (e.g. isolate "HIIT under 45 min"). */}
+      {showDurFilter && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
+          fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+          flexWrap: "wrap",
+        }}>
+          <span style={{ flexShrink: 0 }}>{t("activities.dur_filter")}</span>
+          <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_min")}
+            value={durMin} onChange={e => setDurMin(e.target.value)}
+            style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
+          <span style={{ flexShrink: 0 }}>–</span>
+          <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_max")}
+            value={durMax} onChange={e => setDurMax(e.target.value)}
+            style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
+          {durActive && (
+            <button onClick={() => { setDurMin(""); setDurMax(""); }}
+              style={{ ...s.btnGhost, fontSize: 11, padding: "3px 8px", minHeight: 0 }}>
+              {t("activities.dur_clear")}
+            </button>
+          )}
+        </div>
+      )}
 
       {selectMode && (
         // Select All / Clear / Delete share one row. The "N selected" label
@@ -531,6 +561,21 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
 
       {uploadMsg && (
         <div style={{ fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 6, padding: "8px 12px", marginBottom: 14, lineHeight: 1.6 }}>{uploadMsg}</div>
+      )}
+
+      {parseProgress && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, color: "#555", marginBottom: 6, fontFamily: "var(--font-mono)" }}>
+            {t("activities.parsing_progress", { done: parseProgress.done, total: parseProgress.total })}
+          </div>
+          <div style={{ height: 6, background: "var(--bg-sunken, #eee)", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{
+              height: "100%",
+              width: `${Math.round((parseProgress.done / parseProgress.total) * 100)}%`,
+              background: "var(--ink-1)", transition: "width 0.15s ease",
+            }} />
+          </div>
+        </div>
       )}
 
       {duplicateWarning && (

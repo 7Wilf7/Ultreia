@@ -106,6 +106,9 @@ function filterToLabel(filter, t) {
 export function GlobalFilter({ filter, setFilter, compact = false }) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  // Which top-level group's children show in the right column of the two-level
+  // menu. Derived from the current filter when the panel opens.
+  const [activeGroup, setActiveGroup] = useState(null);
   const wrapRef = useRef(null);
 
   // Close on outside click. Cheap implementation — listens to mousedown +
@@ -130,26 +133,38 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
     setOpen(false);
   }
 
-  // Flat option list with three peer section headers. HIIT lives under its
-  // own "Conditioning" section to make clear it's not a Strength child.
-  const sections = [
-    { kind: "option", value: "all", label: t("filter.all_activities") },
-    { kind: "header", label: t("filter.group.run") },
-    { kind: "option", value: "run-all",            label: t("filter.run_all") },
-    { kind: "option", value: "run-Road Run",       label: t("filter.child.Road Run") },
-    { kind: "option", value: "run-Trail Run",      label: t("filter.child.Trail Run") },
-    { kind: "option", value: "run-Hiking",         label: t("filter.child.Hiking") },
-    { kind: "option", value: "run-Floor Climbing", label: t("filter.child.Floor Climbing") },
-    { kind: "option", value: "run-Cycling",        label: t("filter.child.Cycling") },
-    { kind: "option", value: "run-Swimming",       label: t("filter.child.Swimming") },
-    { kind: "header", label: t("filter.group.strength") },
-    { kind: "option", value: "strength-all",         label: t("filter.strength_all") },
-    { kind: "option", value: "strength-Upper Body",  label: t("filter.child.Upper Body") },
-    { kind: "option", value: "strength-Lower Body",  label: t("filter.child.Lower Body") },
-    { kind: "option", value: "strength-Core",        label: t("filter.child.Core") },
-    { kind: "header", label: t("filter.group.conditioning") },
-    { kind: "option", value: "hiit", label: t("filter.group.hiit") },
+  // Two-level menu tree. Left column = "All Types" + 3 group headers; tapping a
+  // group reveals its children in the right column. Keeps the list short now
+  // that Run / Endurance has 7 children.
+  const groups = [
+    { id: "run", label: t("filter.group.run"), children: [
+      { value: "run-all",            label: t("filter.run_all") },
+      { value: "run-Road Run",       label: t("filter.child.Road Run") },
+      { value: "run-Trail Run",      label: t("filter.child.Trail Run") },
+      { value: "run-Hiking",         label: t("filter.child.Hiking") },
+      { value: "run-Floor Climbing", label: t("filter.child.Floor Climbing") },
+      { value: "run-Cycling",        label: t("filter.child.Cycling") },
+      { value: "run-Swimming",       label: t("filter.child.Swimming") },
+    ] },
+    { id: "strength", label: t("filter.group.strength"), children: [
+      { value: "strength-all",        label: t("filter.strength_all") },
+      { value: "strength-Upper Body", label: t("filter.child.Upper Body") },
+      { value: "strength-Lower Body", label: t("filter.child.Lower Body") },
+      { value: "strength-Core",       label: t("filter.child.Core") },
+    ] },
+    { id: "conditioning", label: t("filter.group.conditioning"), children: [
+      { value: "hiit", label: t("filter.group.hiit") },
+    ] },
   ];
+  // Which group a dropdown value belongs to (to pre-open the right column).
+  const groupIdOf = (v) =>
+    v.startsWith("run") ? "run" : v.startsWith("strength") ? "strength" : v === "hiit" ? "conditioning" : null;
+  const shownGroup = groups.find(g => g.id === (activeGroup || groupIdOf(currentValue) || "run"));
+
+  function openPanel() {
+    if (!open) setActiveGroup(groupIdOf(currentValue));
+    setOpen(o => !o);
+  }
 
   return (
     <div data-global-filter ref={wrapRef}
@@ -161,7 +176,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
       {/* Borderless trigger. Plain text + ▼ — no chip frame. Tapping opens the
           dropdown panel below. Compact (single-row desktop header) left-aligns
           and trims the font so it sits inline with the toggle + period bar. */}
-      <button onClick={() => setOpen(o => !o)}
+      <button onClick={openPanel}
         style={{
           background: "transparent", border: "none", cursor: "pointer",
           padding: compact ? "6px 8px 6px 0" : "8px 14px",
@@ -179,37 +194,64 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
           position: "absolute", top: "100%",
           left: compact ? 0 : "50%",
           transform: compact ? "none" : "translateX(-50%)",
-          marginTop: 2, minWidth: 220,
+          marginTop: 2,
+          display: "flex", alignItems: "stretch",
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)", borderRadius: 4,
-          padding: "4px 0",
           boxShadow: "0 8px 24px rgba(20,20,19,0.08)",
-          zIndex: 50,
+          zIndex: 50, overflow: "hidden",
         }}>
-          {sections.map((row, i) =>
-            row.kind === "header" ? (
-              <div key={`h-${i}`} style={{
-                padding: "8px 14px 4px",
-                fontFamily: "var(--font-mono)", fontSize: 10,
-                color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em",
-                borderTop: i > 0 ? "1px solid var(--rule-soft)" : "none",
-                marginTop: i > 0 ? 4 : 0,
-              }}>{row.label}</div>
-            ) : (
-              <button key={row.value} onClick={() => pick(row.value)}
+          {/* Left column — All Types + the 3 top-level groups. Narrow so the
+              two columns fit side by side on a phone. */}
+          <div style={{ width: 116, flexShrink: 0, borderRight: "1px solid var(--rule-soft)", padding: "4px 0" }}>
+            <button onClick={() => pick("all")}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                background: currentValue === "all" ? "var(--bg-sunken)" : "transparent",
+                border: "none", padding: "9px 12px",
+                fontFamily: "var(--font-sans)", fontSize: 13,
+                color: "var(--ink-1)", cursor: "pointer",
+                fontWeight: currentValue === "all" ? 600 : 400,
+              }}>
+              {t("filter.all_activities")}
+            </button>
+            {groups.map(g => {
+              const isActive = shownGroup && shownGroup.id === g.id;
+              const isSelected = groupIdOf(currentValue) === g.id;
+              return (
+                <button key={g.id} onClick={() => setActiveGroup(g.id)}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
+                    width: "100%", textAlign: "left",
+                    background: isActive ? "var(--bg-sunken)" : "transparent",
+                    border: "none", padding: "9px 12px",
+                    fontFamily: "var(--font-sans)", fontSize: 13,
+                    color: "var(--ink-1)", cursor: "pointer",
+                    fontWeight: isSelected ? 600 : 400,
+                  }}>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
+                  <span style={{ fontSize: 10, color: "var(--ink-3)", flexShrink: 0 }}>›</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* Right column — children of the active group. */}
+          <div style={{ minWidth: 150, padding: "4px 0" }}>
+            {shownGroup && shownGroup.children.map(c => (
+              <button key={c.value} onClick={() => pick(c.value)}
                 style={{
                   display: "block", width: "100%", textAlign: "left",
-                  background: currentValue === row.value ? "var(--bg-sunken)" : "transparent",
-                  border: "none", padding: "8px 14px",
+                  background: currentValue === c.value ? "var(--bg-sunken)" : "transparent",
+                  border: "none", padding: "9px 14px",
                   fontFamily: "var(--font-sans)", fontSize: 14,
                   color: "var(--ink-1)", cursor: "pointer",
-                  fontWeight: currentValue === row.value ? 600 : 400,
-                  borderRadius: 0,
+                  fontWeight: currentValue === c.value ? 600 : 400,
+                  whiteSpace: "nowrap",
                 }}>
-                {row.label}
+                {c.label}
               </button>
-            )
-          )}
+            ))}
+          </div>
         </div>
       )}
     </div>

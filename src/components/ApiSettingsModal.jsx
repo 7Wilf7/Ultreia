@@ -59,9 +59,18 @@ export function ApiSettingsModal({
     try { return !localStorage.getItem("ts-api-info-seen"); } catch { return false; }
   });
   const [pricingOpen, setPricingOpen] = useState(firstTime);
+  // The "tap to collapse" tooltip is a brief one-shot — it would otherwise sit
+  // over the content. Show it only on the first-ever open, and auto-hide after a
+  // few seconds (or the moment the user taps "!").
+  const [showHint, setShowHint] = useState(firstTime);
   useEffect(() => {
     try { localStorage.setItem("ts-api-info-seen", "1"); } catch { /* private mode */ }
   }, []);
+  useEffect(() => {
+    if (!showHint) return;
+    const id = setTimeout(() => setShowHint(false), 4500);
+    return () => clearTimeout(id);
+  }, [showHint]);
 
   const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS.deepseek;
   const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
@@ -98,7 +107,7 @@ export function ApiSettingsModal({
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, position: "relative" }}>
             <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>
             <button
-              onClick={() => setPricingOpen(o => !o)}
+              onClick={() => { setShowHint(false); setPricingOpen(o => !o); }}
               title={t("api.pricing_title")} aria-label={t("api.pricing_title")}
               style={{
                 width: 20, height: 20, minHeight: 0, minWidth: 0,
@@ -112,9 +121,10 @@ export function ApiSettingsModal({
                 transition: "background 160ms, color 160ms, border-color 160ms",
               }}>!</button>
             {/* One-shot hint on the very first open: tell the user the "!" both
-                collapses this info and reopens it later. */}
-            {firstTime && pricingOpen && (
-              <div style={{
+                collapses this info and reopens it later. Auto-hides after a few
+                seconds so it never sits over the content. */}
+            {showHint && (
+              <div onClick={() => setShowHint(false)} style={{
                 position: "absolute", top: "calc(100% + 6px)", left: 0,
                 background: "var(--ink-1)", color: "var(--ink-inv)",
                 fontSize: 11, lineHeight: 1.4, padding: "6px 9px", borderRadius: 6,

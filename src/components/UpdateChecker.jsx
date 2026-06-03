@@ -51,6 +51,23 @@ function pickApkAsset(assets) {
   return assets.find((a) => /\.apk$/i.test(a?.name)) || null;
 }
 
+// The release notes come from raw git commit subjects, which sometimes mention
+// version numbers ("reset version to 0.6.2"). The version already shows as the
+// panel title, so strip stray version tokens from the body to avoid the dupe.
+function cleanNotes(notes) {
+  if (!notes) return "";
+  return notes
+    .split("\n")
+    .map((l) => l
+      .replace(/[;,]?\s*reset version to\s*v?\d+\.\d+\.\d+/gi, "")
+      .replace(/\bv?\d+\.\d+\.\d+\b/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export function UpdateChecker() {
   const t = useT();
   // __APP_VERSION__ is injected by vite (see vite.config.js -> define).
@@ -206,8 +223,8 @@ export function UpdateChecker() {
       {status === "latest" && showNotes && release && (
         <div style={updatePanelStyle}>
           <div style={panelTitleStyle}>{t("settings.update_recent_title", { v: release.version })}</div>
-          {release.notes
-            ? <pre style={notesStyle}>{release.notes.slice(0, 1200)}</pre>
+          {cleanNotes(release.notes)
+            ? <pre style={notesStyle}>{cleanNotes(release.notes).slice(0, 1200)}</pre>
             : <div style={resultOkStyle}>✓ {t("settings.update_latest")}</div>}
         </div>
       )}
@@ -260,8 +277,8 @@ export function UpdateChecker() {
           )}
           {/* This release's changes, below the actions. No internal scroll
               (see notesStyle) so it never traps the page scroll. */}
-          {release.notes
-            ? <pre style={notesStyle}>{release.notes.slice(0, 800)}</pre>
+          {cleanNotes(release.notes)
+            ? <pre style={notesStyle}>{cleanNotes(release.notes).slice(0, 800)}</pre>
             : <div style={{ ...secondaryStyle, marginTop: 0 }}>v{release.version}</div>}
         </div>
       )}

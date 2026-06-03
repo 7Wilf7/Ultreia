@@ -207,8 +207,11 @@ export function AICoachTab({
   logs = [], races = [],
   setConfirmDelete,
   apiProvider, onEditProfile,
-  // Jump to other tabs from the first-send guidance nudge.
+  // Jump to other tabs from the first-send guidance nudge. coachHintsPending
+  // (lifted to AppShell so it survives a tab switch) re-opens the nudge when the
+  // user comes back from a setting, so multi-item nudges can be worked through.
   onGoToTraining, onGoToRaces,
+  coachHintsPending, setCoachHintsPending,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
@@ -462,6 +465,17 @@ export function AICoachTab({
   function markHintsSeen() {
     try { localStorage.setItem(HINTS_FLAG, "1"); } catch { /* private mode */ }
   }
+  // After the user handles one nudge item (jumps to a setting), bring the nudge
+  // back when they return — recomputed, so resolved items drop off. Waits until
+  // the coach-config sub-modal is closed (config is handled in-place).
+  useEffect(() => {
+    if (!coachHintsPending || coachHints || showCoachConfig) return;
+    const hints = computeCoachHints();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (hints.length) setCoachHints({ msg: coachHintsPending, hints });
+    setCoachHintsPending?.(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachHintsPending, coachHints, showCoachConfig]);
 
   async function handleSend() {
     const userMsg = chatInput.trim();
@@ -1080,18 +1094,23 @@ export function AICoachTab({
         const proceed = () => {
           markHintsSeen();
           const m = coachHints.msg;
+          setCoachHintsPending?.(null);
           setCoachHints(null);
           setChatInput("");
           sendChat(m);
         };
+        const dismiss = () => { markHintsSeen(); setCoachHintsPending?.(null); setCoachHints(null); };
+        // Jump to a setting WITHOUT marking seen: stash the message as pending so
+        // the nudge re-opens (recomputed) when the user comes back.
+        const jumpTo = (action) => { setCoachHintsPending?.(coachHints.msg); setCoachHints(null); action(); };
         const META = {
-          config:   { text: t("coach.hint_config"),   jump: () => { markHintsSeen(); setCoachHints(null); setShowCoachConfig(true); } },
-          workouts: { text: t("coach.hint_workouts"), jump: () => { markHintsSeen(); setCoachHints(null); onGoToTraining?.(); } },
-          races:    { text: t("coach.hint_races"),    jump: () => { markHintsSeen(); setCoachHints(null); onGoToRaces?.(); } },
+          config:   { text: t("coach.hint_config"),   jump: () => jumpTo(() => setShowCoachConfig(true)) },
+          workouts: { text: t("coach.hint_workouts"), jump: () => jumpTo(() => onGoToTraining?.()) },
+          races:    { text: t("coach.hint_races"),    jump: () => jumpTo(() => onGoToRaces?.()) },
         };
         return (
-          <ModalRoot onClose={() => { markHintsSeen(); setCoachHints(null); }}>
-            <div onClick={() => { markHintsSeen(); setCoachHints(null); }} className="ts-overlay-in" style={{
+          <ModalRoot onClose={dismiss}>
+            <div onClick={dismiss} className="ts-overlay-in" style={{
               position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
               backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
               display: "flex", alignItems: "center", justifyContent: "center",

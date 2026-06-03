@@ -362,7 +362,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           color: "var(--ink-2)",
           flexShrink: 0,
           minWidth: 0,
-          overflow: "hidden",
+          // NOT overflow:hidden — it clipped the Dropdown's absolutely-positioned
+          // menu so the sort options opened but were invisible ("can't sort").
+          overflow: "visible",
         }}>
           {!isMobile && <SortIcon size={13} />}
           <Dropdown

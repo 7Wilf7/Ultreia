@@ -1069,17 +1069,15 @@ export function RacesTab({
         )}
 
         {isHyrox && (
-          <div style={{ marginBottom: 10 }}>
+          <div style={{ marginBottom: 10, maxWidth: 260 }}>
             <div style={{ ...s.label, marginBottom: 6 }}>{t("races.hyrox_division")}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {HYROX_SUBTYPES.map(st => (
-                <button key={st} type="button"
-                  onClick={() => setNewRace({ ...newRace, subtype: newRace.subtype === st ? "" : st })}
-                  style={s.chip(newRace.subtype === st)}>
-                  {t(`enum.hyrox.${st}`)}
-                </button>
-              ))}
-            </div>
+            <Dropdown
+              ariaLabel={t("races.hyrox_division")}
+              placeholder="—"
+              options={HYROX_SUBTYPES.map(st => ({ value: st, label: t(`enum.hyrox.${st}`) }))}
+              value={newRace.subtype || ""}
+              onChange={(v) => setNewRace({ ...newRace, subtype: v })}
+            />
           </div>
         )}
 

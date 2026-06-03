@@ -805,6 +805,9 @@ function AppShell({
   const [chatLoading, setChatLoading] = useState(false);
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
+  // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
+  // so it survives a tab switch — the nudge re-opens when the user returns.
+  const [coachHintsPending, setCoachHintsPending] = useState(null);
   // ── Memory-update state, LIFTED here so it survives leaving the AI Coach
   //    tab. The user can hit "Update" in the Memory modal, walk away, and the
   //    request keeps running; when the proposal is ready a top banner invites
@@ -1367,6 +1370,8 @@ Rules:
           onEditProfile={goToProfileSettings}
           onGoToTraining={() => setTab(0)}
           onGoToRaces={() => setTab(2)}
+          coachHintsPending={coachHintsPending}
+          setCoachHintsPending={setCoachHintsPending}
           /* Lifted state + handlers — see AppShell top for definitions. */
           chatLoading={chatLoading}
           extractingForMsgId={extractingForMsgId}

@@ -120,6 +120,8 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 
 每次重要功能变更**同步在 `docs/changelog.md` 加一条**（日期 + 改了什么）。
 
+**changelog 格式约定**：按日期分组，**一个日期一个 `## YYYY-MM-DD` 标题**——不要周几、不要「批 N」、不要标题后缀（如「—— xxx」）。同一天的多次改动**全部合并**在该日期下，平铺成 bullet 列表即可。
+
 ## 常用命令
 - `npm.cmd run dev` —— 启动开发服务器 (默认 http://localhost:5173)
 - `npm.cmd run build` —— 生产构建 (输出到 dist/)

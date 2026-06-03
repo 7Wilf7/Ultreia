@@ -303,7 +303,7 @@ export function AICoachTab({
     hideJumpTimer.current = setTimeout(() => {
       setShowJumpTop(false);
       setShowJumpBottom(false);
-    }, 1000);
+    }, 350);
   }, []);
   const updateJumpButtons = useCallback(() => {
     const el = chatScrollRef.current;

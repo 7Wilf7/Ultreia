@@ -369,6 +369,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           {!isMobile && <SortIcon size={13} />}
           <Dropdown
             variant="inline"
+            align="right"
             fontSize={12}
             ariaLabel="Sort activities"
             options={SORT_OPTIONS.map(o => ({ value: o.id, label: t(`activities.sort.${o.id}`) }))}

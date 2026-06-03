@@ -22,6 +22,8 @@ export function Dropdown({
   fontSize,
   disabled = false,
   ariaLabel,
+  align = "left", // "right" anchors the menu to the trigger's right edge so an
+                  // inline dropdown near the screen edge doesn't overflow off-screen
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -91,9 +93,11 @@ export function Dropdown({
       </button>
       {open && (
         <div style={{
-          position: "absolute", top: "100%", left: 0,
+          position: "absolute", top: "100%",
+          left: align === "right" ? "auto" : 0,
+          right: align === "right" ? 0 : "auto",
           marginTop: 2,
-          minWidth: variant === "field" ? "100%" : 200,
+          minWidth: variant === "field" ? "100%" : 160,
           maxHeight: 280, overflowY: "auto",
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)", borderRadius: 4,

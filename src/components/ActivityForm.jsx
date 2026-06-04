@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES } from "../constants";
+import { ACTIVITY_TYPES, RUN_PACE_TYPES, RUN_FLAGS, STRENGTH_SUBS, RUN_GROUP_TYPES, WEATHER_RELEVANT_TYPES } from "../constants";
 import { Dropdown } from "./Dropdown";
 import { useT } from "../i18n/LanguageContext";
 import { recommendRunType } from "../utils/format";
@@ -49,6 +49,7 @@ function buildEmpty() {
     cadence: "",
     rpe: "",
     note: "",
+    fetchWeather: true, // Road Run default (outdoor); changeType resets per type
   };
 }
 
@@ -161,7 +162,9 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   function changeType(t) {
     // Only road Running auto-picks a pace type; everything else starts blank.
     const nextSubTypes = t === "Road Run" ? ["Easy Run"] : [];
-    setForm({ ...form, type: t, subTypes: nextSubTypes });
+    // Default the weather toggle to on for outdoor types, off for indoor
+    // (Strength / Floor / Swimming) — user can still override.
+    setForm({ ...form, type: t, subTypes: nextSubTypes, fetchWeather: WEATHER_RELEVANT_TYPES.includes(t) });
   }
 
   function handleSave() {
@@ -211,6 +214,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       // range) → null so the DB CHECK (rpe BETWEEN 1 AND 10) never rejects.
       rpe:       (() => { const n = parseInt(form.rpe, 10); return n >= 1 && n <= 10 ? n : null; })(),
       note:      form.note.trim() || null,
+      // Only consulted by addLog (manual add). Edit/import ignore it.
+      fetchWeather: form.fetchWeather,
     });
   }
 
@@ -393,6 +398,17 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
             style={{ ...s.input, resize: "vertical", fontFamily: "var(--font-sans)", lineHeight: 1.45 }} />
         </label>
       </div>
+
+      {/* Weather toggle — manual add only (edit/import don't capture weather).
+          Defaults on for outdoor types, off for indoor; user decides. */}
+      {mode !== "edit" && (
+        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer" }}>
+          <input type="checkbox" checked={form.fetchWeather}
+            onChange={e => setForm({ ...form, fetchWeather: e.target.checked })}
+            style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
+          <span style={{ fontSize: 12, color: "#666" }}>{t("form.fetch_weather")}</span>
+        </label>
+      )}
 
       <div style={{ display: "flex", gap: 8 }}>
         <button onClick={handleSave} style={s.btn}>{mode === "edit" ? t("common.save_changes") : t("common.save")}</button>

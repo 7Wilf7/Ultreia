@@ -615,6 +615,7 @@ const dict = {
   "form.rpe_hint":            { en: "Rate of Perceived Exertion — how hard the session felt, 1 = very easy, 10 = all-out. Used to estimate training load. Leave empty if unsure.", zh: "自觉用力程度 —— 这次训练有多累，1 = 很轻松，10 = 拼尽全力。用来估算训练负荷，拿不准就留空。" },
   "form.note":                { en: "Note",                 zh: "备注" },
   "form.note_placeholder":    { en: "e.g. new shoes, knee felt tight, slept badly", zh: "例如：换了新鞋、膝盖有点紧、昨晚没睡好" },
+  "form.fetch_weather":       { en: "Fetch weather on save", zh: "保存时获取天气" },
 
   // ===== Races tab =====
   "races.tab_pr":             { en: "Personal Records",     zh: "个人纪录" },

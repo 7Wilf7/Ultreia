@@ -448,7 +448,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     (async () => {
       try {
         let payload = workoutData;
-        if (source === "manual" && !workoutData.weather && !workoutData.isPlanned) {
+        // fetchWeather is the user's per-entry choice (default on for outdoor,
+        // off for indoor). Undefined (older callers) → treat as on for back-compat.
+        const wantWeather = workoutData.fetchWeather !== false;
+        if (source === "manual" && wantWeather && !workoutData.weather && !workoutData.isPlanned) {
           const weather = await captureWeatherForNewWorkout(workoutData);
           if (weather) payload = { ...workoutData, weather };
         }

@@ -44,7 +44,9 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
   const mainRef = useRef(null);
   // Pull-to-refresh gesture state. pull = current indicator offset in px.
   const [pull, setPull] = useState(0);
-  const pullState = useRef(null); // { startY } while a top-pull is in progress
+  const pullState = useRef(null); // { startY } once a top-pull has engaged
+  const pullRef = useRef(0);      // mirror of `pull` for the release-threshold check (avoids stale closure)
+  function setPullPx(px) { pullRef.current = px; setPull(px); }
   // Double-tap the active Training tab to scroll its list back to the top.
   const lastTabTap = useRef({ idx: -1, at: 0 });
 
@@ -77,29 +79,38 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
     setTab(nextTab);
   }
   function onTouchStart(e) {
-    if (e.touches.length !== 1) { touch.current = null; pullState.current = null; return; }
+    if (e.touches.length !== 1) { touch.current = null; pullState.current = null; setPullPx(0); return; }
     const p = e.touches[0];
     touch.current = { x: p.clientX, y: p.clientY, skip: inHorizontalScroller(e.target) };
-    // Arm pull-to-refresh only when enabled and the scroller is already at the top.
-    const atTop = (mainRef.current?.scrollTop || 0) <= 0;
-    pullState.current = (onRefresh && !refreshing && atTop) ? { startY: p.clientY } : null;
+    pullState.current = null;
+    if (pullRef.current) setPullPx(0);
   }
   function onTouchMove(e) {
-    if (!pullState.current || e.touches.length !== 1) return;
-    const dy = e.touches[0].clientY - pullState.current.startY;
-    // Only react to a downward drag that starts at the very top.
-    if (dy > 0 && (mainRef.current?.scrollTop || 0) <= 0) {
-      setPull(Math.min(dy * PULL_RESIST, PULL_MAX));
-    } else if (pull !== 0) {
-      setPull(0);
+    if (!onRefresh || refreshing || e.touches.length !== 1) return;
+    const st = touch.current;
+    if (!st || st.skip) return;
+    const y = e.touches[0].clientY;
+    const atTop = (mainRef.current?.scrollTop || 0) <= 0;
+    // Left the top (scrolled into history) → not a pull; drop any engaged pull.
+    if (!atTop) {
+      if (pullState.current) pullState.current = null;
+      if (pullRef.current) setPullPx(0);
+      return;
     }
+    // At the top: arm on the first frame here (so a continuous up-then-down
+    // gesture engages the moment the list reaches the latest record), then
+    // track the downward drag from that baseline.
+    if (!pullState.current) pullState.current = { startY: y };
+    const dy = y - pullState.current.startY;
+    if (dy > 0) setPullPx(Math.min(dy * PULL_RESIST, PULL_MAX));
+    else { pullState.current.startY = y; if (pullRef.current) setPullPx(0); }
   }
   function onTouchEnd(e) {
     // Pull-to-refresh release.
     if (pullState.current) {
-      const triggered = pull >= PULL_TRIGGER;
+      const triggered = pullRef.current >= PULL_TRIGGER;
       pullState.current = null;
-      setPull(0);
+      setPullPx(0);
       if (triggered && onRefresh) { onRefresh(); return; }
     }
     const st = touch.current;

@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { s } from "../styles";
-import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, RUN_GROUP_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR, WEATHER_RELEVANT_TYPES } from "../constants";
+import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, RUN_GROUP_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
 import {
@@ -9,6 +9,7 @@ import {
 } from "../utils/format";
 import { computeHRZones, calculateAge } from "../utils/profile";
 import { parseFitFile } from "../lib/fit";
+import { weatherWindowEligible } from "../lib/weather";
 import { ActivityForm } from "./ActivityForm";
 import { Dropdown } from "./Dropdown";
 import { ItemActionModal } from "./ItemActionModal";
@@ -69,6 +70,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [unknownTypeRows, setUnknownTypeRows] = useState(null); // staged rows until user maps unknown types
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
   const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
+  const [importWeather, setImportWeather] = useState(true); // fetch weather for import rows inside Caiyun's 24h window
   // Cap how many rows render at once. With hundreds of activities, rendering
   // them all builds a huge DOM (each card has several SVG icons) → slow tab
   // switch + janky pull-to-refresh. Show a page at a time via "load more".
@@ -428,7 +430,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       return out;
     });
     try {
-      await bulkAddLogs(toAdd);
+      await bulkAddLogs(toAdd, { fetchWeather: importWeather });
       setParsedRows(null);
       setUploadMsg(t("activities.import_done", { n: toAdd.length }));
       setTimeout(() => setUploadMsg(""), 4000);
@@ -607,6 +609,17 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>{t("activities.import")}</button>
             </div>
           </div>
+          {/* Weather toggle — only when at least one selected row falls inside
+              Caiyun's 24h window (older rows can't get weather). Uses the FIT's
+              own GPS for location; default on. */}
+          {parsedRows.some(r => r._selected && weatherWindowEligible({ startedAt: r.startedAt, date: r.date })) && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0", cursor: "pointer" }}>
+              <input type="checkbox" checked={importWeather}
+                onChange={e => setImportWeather(e.target.checked)}
+                style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
+              <span style={{ fontSize: 12, color: "#666" }}>{t("activities.import_weather")}</span>
+            </label>
+          )}
           {/* No inner scroll — it clipped the run-type Dropdown's menu (it had
               to be scrolled to). The page scrolls instead. */}
           <div>
@@ -1152,12 +1165,12 @@ function MetricWeather({ w, full = false }) {
     </span>
   );
 }
-// Outdoor-only filter — weather is irrelevant for indoor gym sessions
-// (Strength) and stair-machine workouts (Floor Climbing). The capture
-// still happens silently (no harm in storing the data), we just don't
-// show it for these types.
+// Show the weather chip whenever a row actually has weather. Indoor sessions
+// normally carry none (the add form defaults the toggle off for them), so this
+// stays clean — but if the user deliberately captured weather for, say, an
+// outdoor strength session, we honor it and show the chip.
 function showWeather(log) {
-  return !!log.weather && WEATHER_RELEVANT_TYPES.includes(log.type);
+  return !!log.weather;
 }
 // Whether tapping a mobile card would reveal anything beyond the compact row —
 // mirrors what ExpandedMetrics actually renders (+ the weather line). When

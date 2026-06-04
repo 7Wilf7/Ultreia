@@ -41,7 +41,7 @@ import {
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
-import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
+import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
 import { postJson } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
 
@@ -464,7 +464,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         let payload = workoutData;
         // fetchWeather is the user's per-entry choice (default on for outdoor,
         // off for indoor). Undefined (older callers) → treat as on for back-compat.
-        const wantWeather = workoutData.fetchWeather !== false;
+        // Only fetch when (a) the user left the toggle on and (b) Caiyun has
+        // data for this moment (now / past 24h / future). A >24h-old session
+        // would otherwise get current weather wrongly stamped on it.
+        const wantWeather = workoutData.fetchWeather !== false && weatherWindowEligible(workoutData);
         if (source === "manual" && wantWeather && !workoutData.weather && !workoutData.isPlanned) {
           const weather = await captureWeatherForNewWorkout(workoutData);
           if (weather) payload = { ...workoutData, weather };
@@ -504,7 +507,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return Promise.resolve();
   }
 
-  function bulkAddLogs(workouts, { source = "garmin_csv" } = {}) {
+  function bulkAddLogs(workouts, { source = "garmin_csv", fetchWeather = false } = {}) {
     const optimistics = workouts.map(w => ({
       id: makeTempId("bulk"),
       ...w,
@@ -518,7 +521,32 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
     (async () => {
       try {
-        const created = await db.workouts.bulkInsertWorkouts(workouts, { source });
+        let toInsert = workouts;
+        // FIT import can request weather for rows that fall inside Caiyun's
+        // window (now / past 24h). Use the FIT's own GPS start point for the
+        // location (more accurate than current GPS — you may upload from home a
+        // run done elsewhere); fall back to the saved default location when a
+        // row has no GPS (e.g. pool swim). Rows older than 24h are skipped by
+        // weatherWindowEligible, so a bulk historical import does no fetching.
+        if (fetchWeather) {
+          toInsert = await Promise.all(workouts.map(async (w) => {
+            if (w.weather || !weatherWindowEligible(w)) return w;
+            const start = Array.isArray(w.gpsTrack) && w.gpsTrack.length ? w.gpsTrack[0] : null;
+            const lng = start ? start[1] : defaultLocation.lng;
+            const lat = start ? start[0] : defaultLocation.lat;
+            try {
+              const weather = await captureSnapshotForWorkout({
+                date: w.date, startedAt: w.startedAt, durationSec: w.duration || 0,
+                lng, lat, caiyunToken: caiyunApiKey,
+              });
+              return weather ? { ...w, weather } : w;
+            } catch (err) {
+              console.warn("[bulkAddLogs] weather skipped:", err.message);
+              return w;
+            }
+          }));
+        }
+        const created = await db.workouts.bulkInsertWorkouts(toInsert, { source });
         const tempIds = new Set(optimistics.map(o => o.id));
         // Replace all temp rows with the persisted ones in one pass.
         setLogs(prev => [...created, ...prev.filter(l => !tempIds.has(l.id))]);

@@ -344,16 +344,45 @@ async function captureWeatherSeries({ lng, lat, startMs, durationSec, now, caiyu
   return out;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Whether Caiyun can return weather that actually matches a workout's moment.
+// Caiyun's only data windows are: future → daily forecast, past 24h → hourly
+// historical, now → realtime. Anything older than 24h has no usable data, so
+// capturing it would silently stamp *current* weather onto an old session.
+//   • startedAt in the future            → eligible (forecast)
+//   • startedAt within the past 24h      → eligible (historical)
+//   • startedAt older than 24h           → NOT eligible
+//   • no startedAt → captured as "now"   → eligible only when the date is today
+//     (a past-dated entry with no time would otherwise get current weather)
+export function weatherWindowEligible({ startedAt, date } = {}, now = Date.now()) {
+  if (startedAt) {
+    const ts = new Date(startedAt).getTime();
+    if (Number.isFinite(ts)) {
+      if (ts > now) return true;          // future → forecast
+      return now - ts < DAY_MS;           // past → only within the 24h window
+    }
+  }
+  if (date) {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    const todayKey = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    return date === todayKey;
+  }
+  return true; // brand-new entry, no date yet → assume "now"
+}
+
 // Pick the right fetch path for a given workout: future plan → daily forecast,
 // past with timestamp → historical, otherwise realtime (= "now"). Returns
-// the snapshot or null if location is unavailable. For long past sessions the
-// returned snapshot also carries a `series` array (see captureWeatherSeries).
+// the snapshot or null if Caiyun has no data for that moment. For long past
+// sessions the returned snapshot also carries a `series` array (see
+// captureWeatherSeries).
 export async function captureSnapshotForWorkout({ date, startedAt, durationSec = 0, lng, lat, caiyunToken }) {
   // Future / today-with-no-time → use daily forecast for that date.
   // Else if startedAt is in the past 24h → historical at that timestamp.
   // Else → realtime (now).
   const now = Date.now();
-  const dayMs = 24 * 60 * 60 * 1000;
+  const dayMs = DAY_MS;
   if (startedAt) {
     const tsMs = new Date(startedAt).getTime();
     if (Number.isFinite(tsMs)) {
@@ -372,6 +401,10 @@ export async function captureSnapshotForWorkout({ date, startedAt, durationSec =
         }
         return start;
       }
+      // Past, but older than Caiyun's 24h historical window → no accurate data.
+      // Don't fall through to realtime: that would stamp *current* weather on an
+      // old session. Return null so the row simply has no weather.
+      if (now - tsMs >= dayMs) return null;
     }
   }
   return await fetchRealtimeSnapshot({ lng, lat, caiyunToken });

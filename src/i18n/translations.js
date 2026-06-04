@@ -548,6 +548,7 @@ const dict = {
   "activities.add_anyway":    { en: "Add Anyway",           zh: "仍然添加" },
   "activities.review":        { en: "Review ({sel} of {total} selected)", zh: "审核 (已选 {sel} / {total} 条)" },
   "activities.import":        { en: "Import",               zh: "导入" },
+  "activities.import_weather": { en: "Fetch weather for activities within the last 24h", zh: "为 24 小时内的活动获取天气" },
   "activities.import_done":   { en: "✓ Imported {n} activities.", zh: "✓ 已导入 {n} 条活动。" },
   "activities.parsed":        { en: "Parsed {n} activities. Review and import.", zh: "已解析 {n} 条活动。请审核后导入。" },
   "activities.ready":         { en: "Ready to import {n} activities.", zh: "准备导入 {n} 条活动。" },

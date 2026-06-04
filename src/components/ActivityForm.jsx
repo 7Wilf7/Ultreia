@@ -6,6 +6,7 @@ import { useT } from "../i18n/LanguageContext";
 import { recommendRunType } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { weatherWindowEligible } from "../lib/weather";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -128,6 +129,12 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const showDistance = (isRun && form.type !== "Floor Climbing") || isCycling || isSwimming;
   // Ascent: all Run-group types + Cycling (road climbing). Swimming has none.
   const showAscent = isRun || isCycling;
+
+  // Weather toggle is offered ONLY when Caiyun could actually return weather for
+  // this moment: now / past 24h / future. A session older than 24h has no
+  // usable Caiyun data, so we hide the toggle entirely (any type — strength
+  // done outdoors counts too). No start time + today's date counts as "now".
+  const weatherEligible = weatherWindowEligible({ startedAt: form.startedAtLocal, date: form.date });
 
   const pickedPace = isRoadRun ? (form.subTypes.find(t => RUN_PACE_TYPES.includes(t)) || "") : "";
   const pickedFlags = isRun ? form.subTypes.filter(t => RUN_FLAGS.includes(t)) : [];
@@ -400,8 +407,9 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       </div>
 
       {/* Weather toggle — manual add only (edit/import don't capture weather).
-          Defaults on for outdoor types, off for indoor; user decides. */}
-      {mode !== "edit" && (
+          Defaults on for outdoor types, off for indoor; user decides. Hidden
+          when the session is older than Caiyun's 24h window (no data to fetch). */}
+      {mode !== "edit" && weatherEligible && (
         <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer" }}>
           <input type="checkbox" checked={form.fetchWeather}
             onChange={e => setForm({ ...form, fetchWeather: e.target.checked })}

@@ -16,6 +16,7 @@ import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
 import { parseBilingualMemory } from "./utils/memory";
 import { reportError } from "./lib/errorOverlay";
+import { pickGreeting, timeGreeting } from "./data/greetings";
 import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
@@ -44,17 +45,32 @@ import { getCurrentLocation, captureSnapshotForWorkout, useWeatherContext, fetch
 import { postJson } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
 
+// One random sport line per launch, stable across the auth→data loading remounts.
+const BOOT_GREETING = pickGreeting();
+
 // Boot screen — deliberately mirrors the native Android splash (logo +
 // "Training Studio" on the cream background) so on the APK the native splash →
 // web-view handoff is visually seamless: the user sees ONE logo screen, then
-// the app. No spinner / "Loading…" text — the logo IS the loading state.
+// the app. Now also a warm time-of-day greeting + a random sport line.
 // Logo + text use vmin units so they track the stretched native splash size.
 function LoadingScreen() {
+  // Read directly from localStorage — this renders before LanguageProvider /
+  // profile are available (during auth + first data load). Name is cached when
+  // the profile loads; absent on a first-ever launch (greeting just omits it).
+  let lang = "en", name = "";
+  try {
+    const l = localStorage.getItem("ts-lang");
+    if (l === "zh" || l === "en") lang = l;
+    name = localStorage.getItem("ts-display-name") || "";
+  } catch { /* private mode */ }
+  const hello = timeGreeting(lang) + (name ? `，${name}` : "");
+  const line = BOOT_GREETING[lang === "zh" ? "zh" : "en"];
+
   return (
     <div style={{
       position: "fixed", inset: 0,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: "5vmin", background: "var(--bg)",
+      gap: "5vmin", background: "var(--bg)", padding: "0 24px",
     }}>
       {/* Pre-rounded, transparent-corner logo (favicon center-cropped to drop
           the dark frame) — identical asset to the native splash so the
@@ -75,7 +91,18 @@ function LoadingScreen() {
         color: "var(--ink-1)",
         letterSpacing: "0.02em",
       }}>
-        Training Studio
+        {hello}
+      </div>
+      <div style={{
+        fontFamily: "var(--font-sans)",
+        fontSize: "min(3.6vmin, 15px)",
+        color: "var(--ink-3)",
+        textAlign: "center",
+        maxWidth: 360,
+        lineHeight: 1.5,
+        marginTop: "-2vmin",
+      }}>
+        {line}
       </div>
     </div>
   );
@@ -181,6 +208,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const mergedProfile = { ...DEFAULT_PROFILE, ...(profileData || {}) };
         setProfileState(mergedProfile);
         setItraPIState(mergedProfile.itraPI ?? "");
+        // Cache the name so the next launch's splash greeting can show it before
+        // the profile finishes loading.
+        try { localStorage.setItem("ts-display-name", mergedProfile.displayName || ""); } catch { /* private mode */ }
 
         // Settings — same defensive merge.
         if (settingsData) {

@@ -7,6 +7,7 @@ import { ModalRoot } from "./ModalRoot";
 
 const POSTER_W = 1080;
 const POSTER_H = 1920;
+const TEMPLATES = ["classic", "bib", "topo"];
 
 function fmtNum(n, digits = 0) {
   return Number(n || 0).toLocaleString(undefined, {
@@ -24,28 +25,12 @@ function buildMonthlyStats(logs, lang) {
   const now = new Date();
   const start = new Date(now.getFullYear(), now.getMonth(), 1);
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
 
   const monthLogs = logs.filter(l => {
     if (l.isPlanned || !RUN_GROUP_TYPES.includes(l.type)) return false;
     const d = new Date(l.date);
     return d >= start && d < end;
   });
-
-  const daily = Array.from({ length: days }, (_, i) => ({ day: i + 1, km: 0 }));
-  for (const l of monthLogs) {
-    const d = new Date(l.date);
-    daily[d.getDate() - 1].km += Number(l.distance) || 0;
-  }
-
-  const weeks = [];
-  for (let i = 0; i < daily.length; i += 7) {
-    const chunk = daily.slice(i, i + 7);
-    weeks.push({
-      label: `${chunk[0].day}-${chunk[chunk.length - 1].day}`,
-      km: chunk.reduce((sum, d) => sum + d.km, 0),
-    });
-  }
 
   const totalKm = monthLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
   const totalSec = monthLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
@@ -62,115 +47,247 @@ function buildMonthlyStats(logs, lang) {
     totalSec,
     totalAscent,
     longestKm: Number(longest?.distance) || 0,
-    weeks,
-    maxWeekKm: Math.max(...weeks.map(w => w.km), 1),
   };
 }
 
-function PosterSvg({ stats, t, svgRef }) {
-  const bars = stats.weeks.map((w, i) => {
-    const h = Math.max(12, (w.km / stats.maxWeekKm) * 260);
-    return { ...w, x: 142 + i * 150, y: 1370 - h, h };
-  });
+function brandMark({ x = 832, y = 118, ink = "#141413", muted = "#74736b", dark = false }) {
+  const bg = dark ? "#f4f0e4" : "none";
+  return (
+    <g transform={`translate(${x} ${y})`}>
+      <rect x="0" y="0" width="54" height="54" rx="0" fill={bg} stroke={ink} strokeWidth="4" />
+      <path d="M16 36 L27 13 L38 36 M21 28 H33" fill="none" stroke={ink} strokeWidth="5" strokeLinecap="square" strokeLinejoin="miter" />
+      <text x="68" y="22" fill={ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="20" fontWeight="800" letterSpacing="2.4">
+        AI TRAIN
+      </text>
+      <text x="68" y="48" fill={muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="18" fontWeight="700" letterSpacing="2.1">
+        STUDIO
+      </text>
+    </g>
+  );
+}
+
+function signature({ y = 1792, ink = "#141413", opacity = 0.78 }) {
+  return (
+    <text
+      x="540"
+      y={y}
+      textAnchor="middle"
+      fill={ink}
+      opacity={opacity}
+      fontFamily="Brush Script MT, Segoe Script, Georgia, serif"
+      fontSize="68"
+      fontStyle="italic"
+    >
+      Training Studio
+    </text>
+  );
+}
+
+function metricCards(stats, t, palette, x = 110, y = 790) {
+  const items = [
+    [t("poster.sessions"), fmtNum(stats.sessions)],
+    [t("poster.time"), formatDurationShort(stats.totalSec)],
+    [t("poster.longest"), `${fmtNum(stats.longestKm, 1)} km`],
+    [t("poster.ascent"), `+${fmtNum(stats.totalAscent)} m`],
+  ];
 
   return (
-    <svg
-      viewBox={`0 0 ${POSTER_W} ${POSTER_H}`}
-      width={POSTER_W}
-      height={POSTER_H}
-      xmlns="http://www.w3.org/2000/svg"
-      ref={svgRef}
-      role="img"
-      aria-label={t("poster.monthly_title")}
-      style={{ width: "100%", height: "auto", display: "block", background: "#f2f1ec" }}
-    >
+    <g transform={`translate(${x} ${y})`}>
+      {items.map(([label, value], i) => (
+        <g key={label} transform={`translate(${(i % 2) * 430} ${Math.floor(i / 2) * 170})`}>
+          <rect x="0" y="0" width="388" height="130" fill={palette.card} stroke={palette.rule} strokeWidth="2" />
+          <text x="28" y="43" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24" fontWeight="700" letterSpacing="2">
+            {label}
+          </text>
+          <text x="28" y="100" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="44" fontWeight="800">
+            {value}
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+function monthLine(stats, t, palette, y = 1288) {
+  return (
+    <g>
+      <rect x="110" y={y - 74} width="860" height="2" fill={palette.ruleStrong} />
+      <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800">
+        {t("poster.active_days")} {fmtNum(stats.activeDays)}
+      </text>
+      <text x="970" y={y} textAnchor="end" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28">
+        {t("poster.monthly_note")}
+      </text>
+    </g>
+  );
+}
+
+function ClassicPoster({ stats, t, svgRef }) {
+  const palette = {
+    ink: "#141413",
+    muted: "#74736b",
+    rule: "#d1cfc6",
+    ruleStrong: "#141413",
+    card: "#fafaf7",
+  };
+
+  return (
+    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
+      role="img" aria-label={t("poster.monthly_title")} style={{ width: "100%", height: "auto", display: "block", background: "#f2f1ec" }}>
       <rect width={POSTER_W} height={POSTER_H} fill="#f2f1ec" />
       <circle cx="160" cy="180" r="360" fill="#4a5e3a" opacity="0.055" />
       <circle cx="1040" cy="120" r="420" fill="#141413" opacity="0.035" />
-      <g fill="none" stroke="#141413" strokeWidth="1.2" opacity="0.07">
+      <g fill="none" stroke="#141413" strokeWidth="1.2" opacity="0.06">
         <path d="M-80 420 C 160 300, 320 520, 540 390 S 900 250, 1180 380" />
-        <path d="M-80 480 C 180 360, 360 590, 570 455 S 910 330, 1180 455" />
-        <path d="M-80 545 C 200 430, 370 650, 600 520 S 930 410, 1180 530" />
-        <path d="M-80 1280 C 220 1110, 390 1360, 650 1190 S 900 1110, 1180 1260" />
-        <path d="M-80 1360 C 240 1190, 420 1450, 700 1270 S 960 1210, 1180 1350" />
+        <path d="M-80 500 C 190 370, 360 600, 600 455 S 930 340, 1180 455" />
+        <path d="M-80 1260 C 220 1110, 390 1360, 650 1190 S 900 1110, 1180 1260" />
+        <path d="M-80 1350 C 240 1190, 420 1450, 700 1270 S 960 1210, 1180 1350" />
       </g>
       <rect x="58" y="58" width="964" height="1804" fill="none" stroke="#141413" strokeWidth="3" />
       <rect x="82" y="82" width="916" height="1756" fill="none" stroke="#d1cfc6" strokeWidth="2" />
 
-      <text x="110" y="178" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="600" letterSpacing="4">
+      {brandMark({})}
+      <text x="110" y="178" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="700" letterSpacing="4">
         {t("poster.monthly_title")}
       </text>
-      <text x="110" y="232" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" letterSpacing="2">
+      <text x="110" y="234" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" letterSpacing="2">
         {stats.monthLabel}
       </text>
-      <text x="970" y="178" textAnchor="end" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="600">
-        TRAINING STUDIO
-      </text>
 
-      <line x1="110" y1="308" x2="970" y2="308" stroke="#141413" strokeWidth="3" />
-      <text x="110" y="560" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="220" fontWeight="600" letterSpacing="-3">
+      <line x1="110" y1="318" x2="970" y2="318" stroke="#141413" strokeWidth="3" />
+      <text x="110" y="590" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="245" fontWeight="800">
         {fmtNum(stats.totalKm, 1)}
       </text>
-      <text x="820" y="548" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="62" fontWeight="600">
+      <text x="824" y="570" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="62" fontWeight="800">
         km
       </text>
-      <text x="112" y="638" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="32">
+      <text x="112" y="666" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="32" fontWeight="700">
         {t("poster.monthly_subtitle")}
       </text>
 
-      <g transform="translate(110 760)">
-        {[
-          [t("poster.sessions"), fmtNum(stats.sessions)],
-          [t("poster.time"), formatDurationShort(stats.totalSec)],
-          [t("poster.ascent"), `+${fmtNum(stats.totalAscent)} m`],
-          [t("poster.longest"), `${fmtNum(stats.longestKm, 1)} km`],
-        ].map(([label, value], i) => (
-          <g key={label} transform={`translate(${(i % 2) * 430} ${Math.floor(i / 2) * 172})`}>
-            <rect x="0" y="0" width="390" height="132" fill="#fafaf7" stroke="#d1cfc6" strokeWidth="2" />
-            <text x="28" y="45" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="25" letterSpacing="2">
-              {label}
-            </text>
-            <text x="28" y="102" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="45" fontWeight="600">
-              {value}
-            </text>
-          </g>
-        ))}
-      </g>
-
-      <text x="110" y="1196" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="38" fontWeight="600">
-        {t("poster.weekly_bars")}
-      </text>
-      <line x1="110" y1="1400" x2="970" y2="1400" stroke="#d1cfc6" strokeWidth="2" />
-      {bars.map((b) => (
-        <g key={b.label}>
-          <rect x={b.x} y={b.y} width="86" height={b.h} fill="#4a5e3a" />
-          <text x={b.x + 43} y={b.y - 20} textAnchor="middle" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="600">
-            {fmtNum(b.km, 1)}
-          </text>
-          <text x={b.x + 43} y="1452" textAnchor="middle" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24">
-            {b.label}
-          </text>
-        </g>
-      ))}
-
-      <rect x="110" y="1548" width="860" height="2" fill="#141413" />
-      <text x="110" y="1618" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30">
-        {t("poster.active_days")}  {fmtNum(stats.activeDays)}
-      </text>
-      <text x="110" y="1672" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24">
-        {t("poster.monthly_note")}
-      </text>
-      <text x="970" y="1765" textAnchor="end" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="600">
+      {metricCards(stats, t, palette)}
+      {monthLine(stats, t, palette)}
+      <text x="540" y="1518" textAnchor="middle" fill="#4a5e3a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="38" fontWeight="800" letterSpacing="2">
         www.aitrainstudio.com
       </text>
+      {signature({ y: 1718 })}
     </svg>
   );
+}
+
+function BibPoster({ stats, t, svgRef }) {
+  const palette = {
+    ink: "#11100d",
+    muted: "#756b55",
+    rule: "#11100d",
+    ruleStrong: "#11100d",
+    card: "#fff9e6",
+  };
+
+  return (
+    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
+      role="img" aria-label={t("poster.monthly_title")} style={{ width: "100%", height: "auto", display: "block", background: "#d84a32" }}>
+      <rect width={POSTER_W} height={POSTER_H} fill="#d84a32" />
+      <rect x="82" y="92" width="916" height="1736" fill="#fff9e6" stroke="#11100d" strokeWidth="7" />
+      <rect x="116" y="126" width="848" height="1668" fill="none" stroke="#11100d" strokeWidth="3" strokeDasharray="16 14" />
+      {[0, 1, 2, 3, 4, 5].map(i => (
+        <circle key={i} cx={164 + i * 150} cy="210" r="19" fill="#d84a32" stroke="#11100d" strokeWidth="5" />
+      ))}
+      {[0, 1, 2, 3, 4, 5].map(i => (
+        <circle key={i} cx={164 + i * 150} cy="1710" r="19" fill="#d84a32" stroke="#11100d" strokeWidth="5" />
+      ))}
+
+      {brandMark({ x: 765, y: 160, ink: "#11100d", muted: "#756b55" })}
+      <text x="150" y="190" fill="#11100d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="42" fontWeight="900" letterSpacing="3">
+        {t("poster.template_bib")}
+      </text>
+      <text x="150" y="250" fill="#756b55" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800" letterSpacing="3">
+        {stats.monthLabel}
+      </text>
+
+      <rect x="150" y="344" width="780" height="118" fill="#11100d" />
+      <text x="540" y="424" textAnchor="middle" fill="#fff9e6" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="900" letterSpacing="5">
+        MONTHLY RUNNER
+      </text>
+
+      <text x="540" y="780" textAnchor="middle" fill="#11100d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="278" fontWeight="900">
+        {fmtNum(stats.totalKm, 1)}
+      </text>
+      <text x="540" y="872" textAnchor="middle" fill="#11100d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="76" fontWeight="900" letterSpacing="9">
+        KILOMETERS
+      </text>
+
+      {metricCards(stats, t, palette, 150, 1010)}
+      {monthLine(stats, t, palette, 1478)}
+      <text x="540" y="1588" textAnchor="middle" fill="#11100d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="36" fontWeight="900" letterSpacing="3">
+        www.aitrainstudio.com
+      </text>
+      {signature({ y: 1718, ink: "#11100d", opacity: 0.82 })}
+    </svg>
+  );
+}
+
+function TopoPoster({ stats, t, svgRef }) {
+  const palette = {
+    ink: "#f7f0dc",
+    muted: "#b9c0a2",
+    rule: "#5d6b45",
+    ruleStrong: "#dce8a8",
+    card: "#253119",
+  };
+
+  return (
+    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
+      role="img" aria-label={t("poster.monthly_title")} style={{ width: "100%", height: "auto", display: "block", background: "#172014" }}>
+      <rect width={POSTER_W} height={POSTER_H} fill="#172014" />
+      <rect x="0" y="0" width="1080" height="1920" fill="#172014" />
+      <g fill="none" stroke="#dce8a8" strokeWidth="1.5" opacity="0.14">
+        {Array.from({ length: 18 }, (_, i) => (
+          <path key={i} d={`M-120 ${250 + i * 84} C 110 ${145 + i * 48}, 290 ${360 + i * 68}, 520 ${250 + i * 58} S 840 ${90 + i * 72}, 1200 ${250 + i * 52}`} />
+        ))}
+      </g>
+      <rect x="58" y="58" width="964" height="1804" fill="none" stroke="#dce8a8" strokeWidth="2" opacity="0.75" />
+      <rect x="94" y="94" width="892" height="1732" fill="none" stroke="#5d6b45" strokeWidth="2" />
+
+      {brandMark({ x: 760, y: 142, ink: "#f7f0dc", muted: "#b9c0a2", dark: false })}
+      <text x="112" y="192" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800" letterSpacing="5">
+        {t("poster.template_topo")}
+      </text>
+      <text x="112" y="250" fill="#b9c0a2" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="3">
+        {stats.monthLabel}
+      </text>
+
+      <text x="112" y="620" fill="#f7f0dc" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="238" fontWeight="900">
+        {fmtNum(stats.totalKm, 1)}
+      </text>
+      <text x="824" y="602" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="900">
+        km
+      </text>
+      <text x="116" y="700" fill="#b9c0a2" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="33" fontWeight="700">
+        {t("poster.monthly_subtitle")}
+      </text>
+
+      {metricCards(stats, t, palette, 112, 840)}
+      {monthLine(stats, t, palette, 1320)}
+      <text x="540" y="1540" textAnchor="middle" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="36" fontWeight="900" letterSpacing="3">
+        www.aitrainstudio.com
+      </text>
+      {signature({ y: 1730, ink: "#f7f0dc", opacity: 0.8 })}
+    </svg>
+  );
+}
+
+function PosterSvg({ template, stats, t, svgRef }) {
+  if (template === "bib") return <BibPoster stats={stats} t={t} svgRef={svgRef} />;
+  if (template === "topo") return <TopoPoster stats={stats} t={t} svgRef={svgRef} />;
+  return <ClassicPoster stats={stats} t={t} svgRef={svgRef} />;
 }
 
 export function MonthlyPosterModal({ logs, onClose }) {
   const t = useT();
   const { lang } = useLanguage();
   const svgRef = useRef(null);
+  const [template, setTemplate] = useState("classic");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const stats = useMemo(() => buildMonthlyStats(logs || [], lang), [logs, lang]);
@@ -205,7 +322,7 @@ export function MonthlyPosterModal({ logs, onClose }) {
       const pngUrl = URL.createObjectURL(pngBlob);
       const a = document.createElement("a");
       a.href = pngUrl;
-      a.download = `training-studio-monthly-${stats.fileLabel}.png`;
+      a.download = `training-studio-monthly-${stats.fileLabel}-${template}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -231,6 +348,27 @@ export function MonthlyPosterModal({ logs, onClose }) {
             <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">x</button>
           </div>
 
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
+            {TEMPLATES.map(id => {
+              const active = template === id;
+              return (
+                <button key={id} onClick={() => setTemplate(id)}
+                  style={{
+                    ...s.chip(active),
+                    minHeight: 36,
+                    minWidth: 0,
+                    padding: "0 8px",
+                    fontSize: 12,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                  {t(`poster.template_${id}`)}
+                </button>
+              );
+            })}
+          </div>
+
           <div style={{
             width: "100%",
             maxWidth: 360,
@@ -238,7 +376,7 @@ export function MonthlyPosterModal({ logs, onClose }) {
             border: "1px solid var(--rule)",
             background: "var(--bg-elevated)",
           }}>
-            <PosterSvg svgRef={svgRef} stats={stats} t={t} />
+            <PosterSvg template={template} svgRef={svgRef} stats={stats} t={t} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

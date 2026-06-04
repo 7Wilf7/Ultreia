@@ -496,7 +496,11 @@ export function RacesTab({
           <button onClick={() => startAdd(kind)}
             style={{
               ...(addingMode === kind ? s.btn : s.btnGhost),
-              padding: "6px 12px", fontSize: 12, flexShrink: 0,
+              padding: "6px 10px", fontSize: 12, flexShrink: 0,
+              maxWidth: "44%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
             }}>
             + {kind === "target" ? t("races.add_target_short") : t("races.add_history_short")}
           </button>
@@ -761,6 +765,8 @@ export function RacesTab({
             ...s.card, cursor: "pointer",
             display: "flex", flexDirection: "column",
             gap: 5, padding: "10px 14px",
+            overflow: "hidden",
+            touchAction: "manipulation",
           }}>
           {/* Row 1: date · priority · category · subtype · countdown.
               Edit/Delete moved to a long-press action modal (no inline ✕). */}
@@ -783,7 +789,7 @@ export function RacesTab({
               <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{r.category === "Hyrox" ? t(`enum.hyrox.${r.subtype}`) : r.subtype}</span>
             )}
             {countdown}
-            <div style={{ flex: 1 }} />
+            <div style={{ flex: 1, minWidth: 0 }} />
           </div>
           {/* Row 2: name (truncate) + time/ascent suffix (right-aligned) */}
           <div style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>

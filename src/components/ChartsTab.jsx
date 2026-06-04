@@ -6,6 +6,7 @@ import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
 import { getPeriodLabel } from "../utils/period";
+import { MonthlyPosterModal } from "./MonthlyPosterModal";
 
 // Compact week-bucket label like "5-18~24" (same month) or "5-30~6-5" (cross-month).
 // Uses LOCAL date components — going through toISOString() would shift the date
@@ -49,6 +50,7 @@ function getChartConfig(filter) {
 export function ChartsTab({ filteredAllLogs, filter }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const [showMonthlyPoster, setShowMonthlyPoster] = useState(false);
   // Persisted to localStorage so the chosen period survives tab switches (and
   // reloads) instead of snapping back to the 4-week default every time.
   const [chartPeriod, setChartPeriod] = useState(() => {
@@ -267,31 +269,35 @@ export function ChartsTab({ filteredAllLogs, filter }) {
   // and Hiking. `data` is the bucket list shaped as { label, rangeText, value },
   // `axisLabel` is the unit shown in the top-left corner.
   function renderTrendSvg(data, max, axisLabel) {
+    const plotLeft = 52;
+    const plotRight = 654;
+    const plotBottom = 206;
+    const plotHeight = 152;
     return (
       <svg viewBox="0 0 700 250" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
         {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
-          const y = 195 - p * 160;
+          const y = plotBottom - p * plotHeight;
           const val = (max * p).toFixed(0);
           return (
             <g key={i}>
-              <line x1="50" y1={y} x2="680" y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
+              <line x1={plotLeft - 10} y1={y} x2={plotRight + 8} y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
               <text x="44" y={y + 5} fontSize="14" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.02em">{val}</text>
             </g>
           );
         })}
         <text x="22" y="18" fontSize="13" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">{axisLabel}</text>
         {(() => {
-          const xStep = data.length > 1 ? 620 / (data.length - 1) : 0;
+          const xStep = data.length > 1 ? (plotRight - plotLeft) / (data.length - 1) : 0;
           const points = data.map((w, i) => ({
-            x: 60 + i * xStep,
-            y: 195 - (w.value / max) * 160,
+            x: plotLeft + i * xStep,
+            y: plotBottom - (w.value / max) * plotHeight,
             w,
           }));
           if (points.length === 0) return null;
           const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
           return (
             <>
-              <path d={`${path} L ${points[points.length - 1].x} 195 L ${points[0].x} 195 Z`} fill="var(--moss)" opacity="0.08" />
+              <path d={`${path} L ${points[points.length - 1].x} ${plotBottom} L ${points[0].x} ${plotBottom} Z`} fill="var(--moss)" opacity="0.08" />
               <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth="1.5" />
               {points.map((p, i) => (
                 <g key={i}>
@@ -314,7 +320,7 @@ export function ChartsTab({ filteredAllLogs, filter }) {
       {/* Period selector. Mobile: single native dropdown (less vertical space).
           Desktop: chips for direct toggling. */}
       {isMobile ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <span style={{ ...s.muted, fontSize: 11, flexShrink: 0 }}>{t("charts.show")}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <Dropdown
@@ -327,6 +333,10 @@ export function ChartsTab({ filteredAllLogs, filter }) {
               }}
             />
           </div>
+          <button onClick={() => setShowMonthlyPoster(true)}
+            style={{ ...s.btnGhost, padding: "0 10px", minHeight: 36, fontSize: 12, flexShrink: 0 }}>
+            {t("poster.share_short")}
+          </button>
         </div>
       ) : (
         <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -338,7 +348,15 @@ export function ChartsTab({ filteredAllLogs, filter }) {
                 style={s.chip(active)}>{opt.label}</button>
             );
           })}
+          <button onClick={() => setShowMonthlyPoster(true)}
+            style={{ ...s.btnGhost, marginLeft: "auto", padding: "7px 12px", fontSize: 12 }}>
+            {t("poster.share_monthly")}
+          </button>
         </div>
+      )}
+
+      {showMonthlyPoster && (
+        <MonthlyPosterModal logs={filteredAllLogs} onClose={() => setShowMonthlyPoster(false)} />
       )}
 
       {/* Primary trend chart — metric varies by filter (distance / ascent / duration) */}

@@ -212,6 +212,7 @@ export function TrainingTab({
                 padding: isMobile ? "8px 6px 10px" : "20px 22px 24px",
                 borderRight: i < 3 ? "1px solid var(--rule)" : "none",
                 minHeight: isMobile ? undefined : 110,
+                minWidth: 0,
                 ...(isMobile ? {} : CONTOUR_BG),
               }}>
                 {/* Corner position number — desktop only (no room on mobile) */}
@@ -232,16 +233,19 @@ export function TrainingTab({
                 }}>{c.label}</div>
                 <div style={{
                   ...s.metricVal,
-                  fontSize: isMobile ? 17 : 32,
+                  fontSize: isMobile ? "clamp(13px, 4.5vw, 17px)" : 32,
                   marginTop: 0,
                   display: "flex", alignItems: "baseline", gap: 3,
                   lineHeight: 1.1,
+                  minWidth: 0,
+                  overflow: "hidden",
                 }}>
-                  <span>{c.val}</span>
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{c.val}</span>
                   {c.unit && (
                     <span style={{
                       fontSize: isMobile ? 10 : 13,
                       color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+                      flexShrink: 0,
                     }}>
                       {c.unit}
                     </span>

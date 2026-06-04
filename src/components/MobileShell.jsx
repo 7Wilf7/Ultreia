@@ -166,6 +166,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
         overflowY: "auto",
         overflowX: "hidden",
         overscrollBehavior: "contain",
+        touchAction: "pan-y",
         WebkitOverflowScrolling: "touch",
         position: "relative",
         // Explicit background — without it the padding-top area is transparent
@@ -245,6 +246,8 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
         paddingBottom: "env(safe-area-inset-bottom)",
         display: "grid",
         gridTemplateColumns: "repeat(5, 1fr)",
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
       }}>
         {TABS.map(({ key, idx, Icon }) => {
           const active = tab === idx;
@@ -272,6 +275,8 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
                 borderRadius: 0,
                 cursor: "pointer",
                 WebkitTapHighlightColor: "transparent",
+                touchAction: "manipulation",
+                minWidth: 0,
               }}
             >
               <span style={{
@@ -296,7 +301,12 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
                   </span>
                 )}
               </span>
-              <span>{t(key)}</span>
+              <span style={{
+                maxWidth: "100%",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}>{t(key)}</span>
             </button>
           );
         })}

@@ -240,7 +240,13 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             placeholder={t("profile.injury_older_placeholder")}
             value={draft.injuriesNote}
             onChange={e => setDraft({ ...draft, injuriesNote: e.target.value })}
-            style={{ ...s.input, resize: "vertical" }} />
+            style={{
+              ...s.input,
+              resize: "vertical",
+              fontSize: 12,
+              lineHeight: 1.35,
+              "--mobile-input-fs": "13px",
+            }} />
         </div>
 
         {/* Equipment */}

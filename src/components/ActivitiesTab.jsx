@@ -470,7 +470,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           aria-label={t("activities.upload_short")} style={{ ...s.btn, ...iconBtnStyle }}>
           <UploadIcon size={15} />
         </button>
-        <input ref={fileRef} type="file" accept=".csv,.fit,.zip" style={{ display: "none" }} onChange={handleFileSelect} />
+        {/* No accept filter: Android greys out .fit (no registered MIME for the
+            extension), making them unselectable. We validate by extension in
+            handleFileSelect instead, so any picked non-.fit/.csv/.zip is rejected
+            there with a message. */}
+        <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileSelect} />
         <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} title={t("activities.add_short")}
           aria-label={t("activities.add_short")} style={{ ...s.btnGhost, ...iconBtnStyle }}>
           <PlusIcon size={15} />

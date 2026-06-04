@@ -195,29 +195,36 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
             so the spinner peeks in from the top. */}
         {(pull > 0 || refreshing) && (
           <div style={{
-            // Offset below the safe-area / front-camera cutout so the spinner
+            // Offset below the safe-area / front-camera cutout so the indicator
             // isn't hidden under it — sits down near the content's top controls.
             position: "absolute",
             top: "calc(max(env(safe-area-inset-top), 14px) + 8px)",
             left: 0, right: 0,
-            height: refreshing ? 40 : pull,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--ink-3)", pointerEvents: "none",
+            height: refreshing ? 44 : pull,
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            color: "var(--ink-2)", pointerEvents: "none", zIndex: 11,
+            fontFamily: "var(--font-sans)", fontSize: 13,
             transition: pull === 0 ? "height 0.2s ease" : "none",
           }}>
-            {refreshing
-              ? <Spinner size={18} thickness={2} color="var(--moss)" />
-              : <span style={{
-                  fontSize: 16,
-                  transform: `rotate(${pull >= PULL_TRIGGER ? 180 : 0}deg)`,
-                  transition: "transform 0.15s ease", opacity: Math.min(pull / PULL_TRIGGER, 1),
-                }}>↓</span>}
+            {refreshing ? (
+              <>
+                <Spinner size={16} thickness={2} color="var(--moss)" />
+                <span>{t("sync.syncing")}</span>
+              </>
+            ) : pull >= PULL_TRIGGER ? (
+              <>
+                <Spinner size={16} thickness={2} color="var(--moss)" />
+                <span>{t("sync.release")}</span>
+              </>
+            ) : (
+              <span style={{ opacity: Math.min(pull / PULL_TRIGGER, 1) }}>↓ {t("sync.pull")}</span>
+            )}
           </div>
         )}
         <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}
           style={{
             height: tab === 3 ? "100%" : undefined,
-            transform: refreshing ? "translateY(40px)" : (pull > 0 ? `translateY(${pull}px)` : undefined),
+            transform: refreshing ? "translateY(44px)" : (pull > 0 ? `translateY(${pull}px)` : undefined),
             transition: pull === 0 ? "transform 0.2s ease" : "none",
             // Promote to its own compositing layer during the gesture so the
             // translate is GPU-cheap (no per-frame repaint of the list).

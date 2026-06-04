@@ -69,6 +69,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [unknownTypeRows, setUnknownTypeRows] = useState(null); // staged rows until user maps unknown types
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
   const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
+  // Cap how many rows render at once. With hundreds of activities, rendering
+  // them all builds a huge DOM (each card has several SVG icons) → slow tab
+  // switch + janky pull-to-refresh. Show a page at a time via "load more".
+  const PAGE = 60;
+  const [shown, setShown] = useState(PAGE);
   const fileRef = useRef();
 
   // Distinct unknown-type groups (by original sport name) + their row counts,
@@ -642,7 +647,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             {t("activities.empty")}
           </div>
         )}
-        {displayedLogs.map(l => {
+        {displayedLogs.slice(0, shown).map(l => {
           const isSelected = selectedIds.has(l.id);
 
           // Mobile compact card — fixed-height two-row layout. Tap expands to
@@ -963,6 +968,12 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             </div>
           );
         })}
+        {displayedLogs.length > shown && (
+          <button onClick={() => setShown(n => n + PAGE)}
+            style={{ ...s.btnGhost, alignSelf: "center", marginTop: 4, fontSize: 13, padding: "8px 18px" }}>
+            {t("activities.load_more", { n: displayedLogs.length - shown })}
+          </button>
+        )}
       </div>
 
       {/* Long-press actions — Edit / Delete (replaces the inline ✕ on cards). */}

@@ -294,9 +294,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   }, [loadData]);
 
   // Pull-to-refresh handler — re-fetch everything, no full-screen takeover.
+  // Hold the spinner for at least 600ms (loadData is fast now) so the refresh
+  // is actually visible instead of flashing by.
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    try { await loadData(); }
+    try { await Promise.all([loadData(), new Promise(r => setTimeout(r, 600))]); }
     catch (err) { reportError(`Refresh failed: ${err?.message || String(err)}`); }
     finally { setRefreshing(false); }
   }, [loadData]);

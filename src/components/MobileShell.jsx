@@ -219,6 +219,9 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
             height: tab === 3 ? "100%" : undefined,
             transform: refreshing ? "translateY(40px)" : (pull > 0 ? `translateY(${pull}px)` : undefined),
             transition: pull === 0 ? "transform 0.2s ease" : "none",
+            // Promote to its own compositing layer during the gesture so the
+            // translate is GPU-cheap (no per-frame repaint of the list).
+            willChange: (pull > 0 || refreshing) ? "transform" : undefined,
           }}>
           {children}
         </div>

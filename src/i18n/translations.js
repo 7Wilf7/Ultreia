@@ -538,6 +538,7 @@ const dict = {
   "activities.clear_sel":     { en: "Clear",                zh: "清除" },
   "activities.delete_sel":    { en: "Delete Selected",      zh: "删除所选" },
   "activities.empty":         { en: "No activities match your filters", zh: "没有符合筛选条件的活动" },
+  "activities.load_more":     { en: "Load more ({n})", zh: "加载更多（还有 {n} 条）" },
   "activities.duplicate_title":{ en: "⚠ Possible Duplicates", zh: "⚠ 可能的重复记录" },
   "activities.duplicate_csv": { en: "{dups} of {total} activities match existing entries.", zh: "{total} 条活动中有 {dups} 条与已有记录重复。" },
   "activities.skip_dups":     { en: "Skip Duplicates",      zh: "跳过重复" },

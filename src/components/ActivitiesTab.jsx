@@ -38,7 +38,7 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
-export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0 }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
   // ActivityForm for the chip "recommended" badge, and used inline below for
@@ -448,8 +448,19 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     <div>
       {/* Icon-only action bar. Upload (black-filled) leads since uploading a
           .fit / .zip / .csv is the main way activities get in; Add stays as a
-          glyph for the occasional manual entry. Fits a 360-wide phone easily. */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, alignItems: "center" }}>
+          glyph for the occasional manual entry. Fits a 360-wide phone easily.
+          Sticky: pins right below the (sticky) stats row so upload/add/select/
+          sort stay reachable while the list scrolls. Page bg + a top gap; on
+          mobile the negative side margins let the bg cover the 14px gutter so
+          scrolled list rows don't peek through at the edges. */}
+      <div style={{
+        display: "flex", gap: 6, alignItems: "center",
+        position: "sticky", top: toolbarStickyTop, zIndex: 8,
+        background: "var(--bg)",
+        marginLeft: isMobile ? -14 : 0, marginRight: isMobile ? -14 : 0,
+        paddingLeft: isMobile ? 14 : 0, paddingRight: isMobile ? 14 : 0,
+        paddingTop: 10, marginBottom: 14,
+      }}>
         <button onClick={() => fileRef.current.click()} title={t("activities.upload_short")}
           aria-label={t("activities.upload_short")} style={{ ...s.btn, ...iconBtnStyle }}>
           <UploadIcon size={15} />

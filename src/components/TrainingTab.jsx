@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -57,6 +57,35 @@ export function TrainingTab({
   const t = useT();
   const isMobile = useIsMobile();
 
+  // Sticky stacking for the Activities view: nav rows (existing sticky) → stats
+  // row → toolbar row all stay pinned at the top while only the list scrolls.
+  // We measure each element's pinned bottom and feed the next one's `top`.
+  //   statsTop    = nav pinned-bottom  = navStickyTop + navHeight
+  //   toolbarTop  = stats pinned-bottom = statsTop + statsHeight
+  // Mobile lifts the nav by its paddingTop (the negative-top trick); desktop
+  // pins at 0.
+  const headerRef = useRef(null);   // the nav-rows sticky block
+  const statsRef = useRef(null);    // the stats grid
+  const [statsTop, setStatsTop] = useState(0);
+  const [toolbarTop, setToolbarTop] = useState(0);
+  useEffect(() => {
+    const navEl = headerRef.current;
+    if (!navEl) { setStatsTop(0); setToolbarTop(0); return; }
+    const measure = () => {
+      const padTop = parseFloat(getComputedStyle(navEl).paddingTop) || 0;
+      const navStickyTop = isMobile ? -(padTop - 4) : 0;
+      const sTop = Math.round(navEl.offsetHeight + navStickyTop);
+      setStatsTop(sTop);
+      const statsEl = statsRef.current;
+      setToolbarTop(statsEl ? sTop + Math.round(statsEl.offsetHeight) : sTop);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(navEl);
+    if (statsRef.current) ro.observe(statsRef.current);
+    return () => ro.disconnect();
+  }, [isMobile, view]);
+
   // Activities / Charts must NOT include planned workouts (those live on the
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
   const actualLogs = useMemo(() => logs.filter(l => !l.isPlanned), [logs]);
@@ -114,7 +143,7 @@ export function TrainingTab({
 
   return (
     <div>
-      <div style={stickyHeaderStyle}>
+      <div ref={headerRef} style={stickyHeaderStyle}>
         {isMobile ? (
           /* Mobile: compress to TWO rows (was three).
              Row 1 — type filter (left) + Activities/Charts toggle (right),
@@ -157,9 +186,9 @@ export function TrainingTab({
         <>
 
           {/* Instrument-readout stats — four cells in a single row, each like a
-              meter on a control panel. Hairline rules between cells, contour
-              decoration on the bottom-right, position number in the corner. */}
-          <div style={{
+              meter on a control panel. Sticks just below the nav header so the
+              period totals stay visible while the list scrolls. */}
+          <div ref={statsRef} style={{
             display: "grid",
             // Mobile: force a single 4-col row so all stats fit above the
             // fold; drop the contour decoration + position number to save
@@ -167,9 +196,10 @@ export function TrainingTab({
             // panel feel.
             gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
             gap: 0,
-            marginBottom: isMobile ? 16 : 28,
+            marginBottom: 0,
             border: "1px solid var(--rule)",
             background: "var(--bg-elevated)",
+            position: "sticky", top: statsTop, zIndex: 9,
           }}>
             {[
               { label: t("training.sessions"),       val: String(periodSessions),                                    unit: "" },
@@ -229,6 +259,7 @@ export function TrainingTab({
             periodLogs={periodLogs}
             setConfirmDelete={setConfirmDelete}
             profile={profile}
+            toolbarStickyTop={toolbarTop}
           />
         </>
       )}

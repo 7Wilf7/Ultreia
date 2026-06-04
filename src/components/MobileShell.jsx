@@ -195,7 +195,11 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
             so the spinner peeks in from the top. */}
         {(pull > 0 || refreshing) && (
           <div style={{
-            position: "absolute", top: 0, left: 0, right: 0,
+            // Offset below the safe-area / front-camera cutout so the spinner
+            // isn't hidden under it — sits down near the content's top controls.
+            position: "absolute",
+            top: "calc(max(env(safe-area-inset-top), 14px) + 8px)",
+            left: 0, right: 0,
             height: refreshing ? 40 : pull,
             display: "flex", alignItems: "center", justifyContent: "center",
             color: "var(--ink-3)", pointerEvents: "none",

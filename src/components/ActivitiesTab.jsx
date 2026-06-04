@@ -15,7 +15,7 @@ import { ItemActionModal } from "./ItemActionModal";
 import { ModalRoot } from "./ModalRoot";
 import {
   ClockIcon, HeartIcon, PeakIcon, FootIcon, RouteIcon, RunnerIcon,
-  PlusIcon, UploadIcon, CheckSquareIcon, SortIcon,
+  PlusIcon, UploadIcon, CheckSquareIcon,
 } from "./Icons";
 
 // Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
@@ -68,9 +68,6 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [duplicateWarning, setDuplicateWarning] = useState(null);
   const [unknownTypeRows, setUnknownTypeRows] = useState(null); // staged rows until user maps unknown types
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
-  const [durMin, setDurMin] = useState(""); // duration filter (minutes); "" = no bound
-  const [durMax, setDurMax] = useState("");
-  const [showDurFilter, setShowDurFilter] = useState(false); // duration-filter inputs toggled by the toolbar icon
   const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
   const fileRef = useRef();
 
@@ -89,12 +86,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }, [unknownTypeRows]);
 
   const displayedLogs = useMemo(() => {
-    // Duration range filter (minutes → seconds). Empty bound = open-ended.
-    const lo = durMin ? parseFloat(durMin) * 60 : 0;
-    const hi = durMax ? parseFloat(durMax) * 60 : Infinity;
-    const sorted = (lo > 0 || hi < Infinity)
-      ? periodLogs.filter(l => (l.duration || 0) >= lo && (l.duration || 0) <= hi)
-      : [...periodLogs];
+    const sorted = [...periodLogs];
     sorted.sort((a, b) => {
       switch (sortBy) {
         case "date_desc": return new Date(b.date) - new Date(a.date);
@@ -109,7 +101,17 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       }
     });
     return sorted;
-  }, [periodLogs, sortBy, durMin, durMax]);
+  }, [periodLogs, sortBy]);
+
+  // Live selected count — only ids that still exist in the current list. After
+  // a bulk delete the removed ids linger in selectedIds; counting against the
+  // live list keeps the "N selected" badge correct (was: deleted 17 + 1 = 18).
+  const selectedCount = useMemo(() => {
+    if (selectedIds.size === 0) return 0;
+    let n = 0;
+    for (const l of periodLogs) if (selectedIds.has(l.id)) n++;
+    return n;
+  }, [periodLogs, selectedIds]);
 
   function deleteLog(id) {
     setConfirmDelete({ type: "log", id });
@@ -442,8 +444,6 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     flexShrink: 0,
     minHeight: isMobile ? 36 : 32,
   };
-  const durActive = !!(durMin || durMax);
-
   return (
     <div>
       {/* Icon-only action bar. Upload (black-filled) leads since uploading a
@@ -462,81 +462,25 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         <button onClick={toggleSelectMode} title={t("activities.select_short")}
           aria-label={t("activities.select_short")} style={{ ...(selectMode ? s.btn : s.btnGhost), ...iconBtnStyle }}>
           <CheckSquareIcon size={15} />
-          {selectMode && selectedIds.size > 0 && (
-            <span style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{selectedIds.size}</span>
+          {selectMode && selectedCount > 0 && (
+            <span style={{ fontSize: 12, fontFamily: "var(--font-mono)" }}>{selectedCount}</span>
           )}
         </button>
-        {/* Duration filter — icon toggle; reveals the min/max inputs below.
-            A dot marks an active filter so it's discoverable when collapsed. */}
-        <button onClick={() => setShowDurFilter(v => !v)} title={t("activities.dur_filter")}
-          aria-label={t("activities.dur_filter")}
-          style={{ ...(showDurFilter || durActive ? s.btn : s.btnGhost), ...iconBtnStyle }}>
-          <ClockIcon size={15} />
-          {durActive && (
-            <span style={{
-              position: "absolute", top: 5, right: 5, width: 6, height: 6,
-              borderRadius: "50%", background: "var(--warn, #d4a017)",
-            }} />
-          )}
-        </button>
-        {/* Was a <label> — but it wraps the Dropdown's <button>, and a label
-            re-dispatches clicks to its labelable descendant, so every tap fired
-            twice (open→close) and the sort menu never stayed open. A plain div
-            is just the styled container we want. */}
-        <div style={{
-          marginLeft: "auto",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: isMobile ? 4 : 6,
-          border: "1px solid var(--rule)",
-          borderRadius: 2,
-          padding: isMobile ? "0 8px 0 8px" : "0 10px",
-          minHeight: isMobile ? 36 : 32,
-          background: "var(--bg-elevated)",
-          color: "var(--ink-2)",
-          flexShrink: 0,
-          minWidth: 0,
-          // NOT overflow:hidden — it clipped the Dropdown's absolutely-positioned
-          // menu so the sort options opened but were invisible ("can't sort").
-          overflow: "visible",
-        }}>
-          {!isMobile && <SortIcon size={13} />}
+        {/* Sort — a fixed-width field dropdown so the menu lines up under the
+            box (same width, right-anchored) and the box height matches the
+            icon buttons on its left. */}
+        <div style={{ marginLeft: "auto", width: isMobile ? 118 : 132, flexShrink: 0 }}>
           <Dropdown
-            variant="inline"
+            variant="field"
             align="right"
-            fontSize={12}
             ariaLabel="Sort activities"
+            triggerStyle={{ minHeight: isMobile ? 36 : 32, padding: "0 10px", fontSize: 13 }}
             options={SORT_OPTIONS.map(o => ({ value: o.id, label: t(`activities.sort.${o.id}`) }))}
             value={sortBy}
             onChange={setSortBy}
           />
         </div>
       </div>
-
-      {/* Duration range filter (minutes) — revealed by the clock icon above.
-          Handy for post-import cleanup (e.g. isolate "HIIT under 45 min"). */}
-      {showDurFilter && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
-          fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
-          flexWrap: "wrap",
-        }}>
-          <span style={{ flexShrink: 0 }}>{t("activities.dur_filter")}</span>
-          <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_min")}
-            value={durMin} onChange={e => setDurMin(e.target.value)}
-            style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
-          <span style={{ flexShrink: 0 }}>–</span>
-          <input type="number" inputMode="numeric" min="0" placeholder={t("activities.dur_max")}
-            value={durMax} onChange={e => setDurMax(e.target.value)}
-            style={{ ...s.input, width: 64, minHeight: 0, padding: "4px 6px", fontSize: 12 }} />
-          {durActive && (
-            <button onClick={() => { setDurMin(""); setDurMax(""); }}
-              style={{ ...s.btnGhost, fontSize: 11, padding: "3px 8px", minHeight: 0 }}>
-              {t("activities.dur_clear")}
-            </button>
-          )}
-        </div>
-      )}
 
       {selectMode && (
         // Select All / Clear / Delete share one row. The "N selected" label
@@ -552,8 +496,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             {t("activities.clear_sel")}
           </button>
           <div style={{ flex: 1 }} />
-          <button onClick={bulkDeleteSelected} disabled={selectedIds.size === 0}
-            style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "#c0392b", borderColor: "#c0392b", opacity: selectedIds.size === 0 ? 0.5 : 1 }}>
+          <button onClick={bulkDeleteSelected} disabled={selectedCount === 0}
+            style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "#c0392b", borderColor: "#c0392b", opacity: selectedCount === 0 ? 0.5 : 1 }}>
             {t("activities.delete_sel")}
           </button>
         </div>
@@ -693,10 +637,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           // Mobile compact card — fixed-height two-row layout. Tap expands to
           // reveal all metrics + an Edit button. Tap again to collapse.
           if (isMobile) {
-            const isExpanded = expandedId === l.id;
+            const expandable = hasExpandableMetrics(l);
+            const isExpanded = expandedId === l.id && expandable;
             const onMobileCardClick = () => {
               if (selectMode) toggleSelected(l.id);
-              else setExpandedId(isExpanded ? null : l.id);
+              // Nothing extra to reveal (e.g. an indoor Strength/HIIT with just
+              // duration + HR) → no expand animation, the chip stays put.
+              else if (expandable) setExpandedId(isExpanded ? null : l.id);
             };
             // NB: explicit per-side borders. The `border` shorthand combined
             // with a separate `borderLeft` longhand was inconsistently re-
@@ -1186,6 +1133,23 @@ function MetricWeather({ w, full = false }) {
 function showWeather(log) {
   return !!log.weather && WEATHER_RELEVANT_TYPES.includes(log.type);
 }
+// Whether tapping a mobile card would reveal anything beyond the compact row —
+// mirrors what ExpandedMetrics actually renders (+ the weather line). When
+// false we skip the expand entirely so the card doesn't open to a blank panel.
+function hasExpandableMetrics(l) {
+  if (showWeather(l)) return true;
+  switch (l.type) {
+    case "Road Run":       return l.ascent > 0 || l.hr > 0 || l.cadence > 0;
+    case "Trail Run":
+    case "Hiking":         return l.pace > 0 || l.hr > 0 || l.cadence > 0;
+    case "Floor Climbing": return l.distance > 0 || l.pace > 0 || l.hr > 0;
+    case "Cycling":        return l.ascent > 0 || l.hr > 0;
+    case "Swimming":       return l.hr > 0;
+    case "Strength":
+    case "HIIT":           return l.distance > 0;
+    default:               return false;
+  }
+}
 // Tiny inline lookup avoiding a circular import — duplicates the SKYCON_MAP
 // names/icons from src/lib/weather.js. Keep this small list in sync if you
 // add new entries there; adding a Caiyun skycon enum on this side is cheap
@@ -1276,16 +1240,13 @@ function ExpandedMetrics({ log: l }) {
 
   return (
     <>
-      {/* Metric data on its own row (weather goes on the line below). Road Run
-          has the most metrics, so ONLY there do we tighten the gap + spread
-          with space-between to fit them on one line on narrow phones. Other
-          types (Trail / Hiking / etc.) have few metrics, so they keep the
-          normal left-packed gap — space-between would leave 3 items awkwardly
-          spaced edge-to-edge. */}
+      {/* Metric data on its own row (weather goes on the line below). All types
+          left-pack now — Road Run lost GAP/TE so it no longer needs the
+          space-between spread to fit on one line. */}
       <div style={{
         display: "flex", flexWrap: "wrap",
-        gap: isRoad ? "6px 10px" : 14,
-        justifyContent: isRoad ? "space-between" : "flex-start",
+        gap: 14,
+        justifyContent: "flex-start",
         fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
         fontSize: 12, color: "var(--ink-2)",
       }}>

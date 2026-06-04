@@ -22,6 +22,7 @@ export function Dropdown({
   fontSize,
   disabled = false,
   ariaLabel,
+  triggerStyle, // optional style overrides merged into the trigger (e.g. height)
   align = "left", // "right" anchors the menu to the trigger's right edge so an
                   // inline dropdown near the screen edge doesn't overflow off-screen
 }) {
@@ -60,7 +61,7 @@ export function Dropdown({
     }
   }
 
-  const triggerStyle = variant === "inline"
+  const triggerStyleBase = variant === "inline"
     ? {
         background: "transparent", border: "none",
         cursor: disabled ? "default" : "pointer",
@@ -84,7 +85,7 @@ export function Dropdown({
       display: variant === "field" ? "block" : "inline-block",
     }}>
       <button type="button" disabled={disabled} aria-label={ariaLabel}
-        onClick={() => setOpen(o => !o)} style={triggerStyle}>
+        onClick={() => setOpen(o => !o)} style={{ ...triggerStyleBase, ...triggerStyle }}>
         <span style={{
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           color: isEmpty ? "var(--ink-3)" : "var(--ink-1)",

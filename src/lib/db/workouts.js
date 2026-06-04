@@ -41,6 +41,14 @@ const JSON_FIELDS  = new Set(['weather', 'hrZoneSeconds', 'gpsTrack']);
 const TS_FIELDS    = new Set(['startedAt']);
 const WRITE_SKIP = new Set(['createdAt', 'updatedAt']);  // server-managed
 
+// Columns to fetch for the activity list. Deliberately EXCLUDES gps_track —
+// the downsampled route (~300 points/row) is only needed for the future
+// share-poster, never for the list / charts / AI prompt. With hundreds of
+// FIT-imported rows it's several MB; pulling it on every boot was the main
+// cause of the slow / watchdog-tripping startup. fromRow defends the missing
+// column (→ null). Fetch gps_track on demand per-row when posters land.
+const LIST_COLUMNS = ['id', ...Object.values(FIELD_MAP).filter(c => c !== 'gps_track')].join(', ');
+
 // Columns the DB stores as INTEGER. Garmin CSV occasionally hands us floats
 // (e.g. cadence "173.4", duration "435.9") which Postgres rejects. Round
 // defensively in toRow. NUMERIC columns — distance / pace / ascent / aerobic_te
@@ -93,7 +101,7 @@ function toRow(patch) {
 export async function listMyWorkouts() {
   const { data, error } = await supabase
     .from('workouts')
-    .select('*')
+    .select(LIST_COLUMNS)
     .order('date', { ascending: false })
     .order('created_at', { ascending: false });
   if (error) {

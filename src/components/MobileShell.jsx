@@ -33,8 +33,24 @@ function inHorizontalScroller(node) {
  * import), the AI Coach tab cell shows a small spinner badge. The state
  * lives in AppShell so it stays alive across tab switches.
  */
-export function MobileShell({ children, tab, setTab, coachBusy = false }) {
+// Pull distance (px of finger travel) needed to trigger a refresh, and how far
+// the indicator can stretch. Resistance makes the pull feel rubbery.
+const PULL_TRIGGER = 70;
+const PULL_MAX = 110;
+const PULL_RESIST = 0.5;
+
+export function MobileShell({ children, tab, setTab, coachBusy = false, onRefresh = null, refreshing = false }) {
   const t = useT();
+  const mainRef = useRef(null);
+  // Pull-to-refresh gesture state. pull = current indicator offset in px.
+  const [pull, setPull] = useState(0);
+  const pullState = useRef(null); // { startY } while a top-pull is in progress
+  // Double-tap the active Training tab to scroll its list back to the top.
+  const lastTabTap = useRef({ idx: -1, at: 0 });
+
+  function scrollMainToTop() {
+    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -61,11 +77,31 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
     setTab(nextTab);
   }
   function onTouchStart(e) {
-    if (e.touches.length !== 1) { touch.current = null; return; }
+    if (e.touches.length !== 1) { touch.current = null; pullState.current = null; return; }
     const p = e.touches[0];
     touch.current = { x: p.clientX, y: p.clientY, skip: inHorizontalScroller(e.target) };
+    // Arm pull-to-refresh only when enabled and the scroller is already at the top.
+    const atTop = (mainRef.current?.scrollTop || 0) <= 0;
+    pullState.current = (onRefresh && !refreshing && atTop) ? { startY: p.clientY } : null;
+  }
+  function onTouchMove(e) {
+    if (!pullState.current || e.touches.length !== 1) return;
+    const dy = e.touches[0].clientY - pullState.current.startY;
+    // Only react to a downward drag that starts at the very top.
+    if (dy > 0 && (mainRef.current?.scrollTop || 0) <= 0) {
+      setPull(Math.min(dy * PULL_RESIST, PULL_MAX));
+    } else if (pull !== 0) {
+      setPull(0);
+    }
   }
   function onTouchEnd(e) {
+    // Pull-to-refresh release.
+    if (pullState.current) {
+      const triggered = pull >= PULL_TRIGGER;
+      pullState.current = null;
+      setPull(0);
+      if (triggered && onRefresh) { onRefresh(); return; }
+    }
     const st = touch.current;
     touch.current = null;
     if (!st || st.skip) return;
@@ -76,6 +112,20 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
     if (dx < 0 && tab < TABS.length - 1) go(tab + 1);
     else if (dx > 0 && tab > 0) go(tab - 1);
+  }
+
+  // Tab tap: double-tapping the already-active Training tab scrolls its list to
+  // the top (smooth). Other taps just switch tabs. Time comes from the event
+  // (pure) rather than Date.now() so it's safe in component scope.
+  function onTabTap(idx, e) {
+    const now = e?.timeStamp ?? 0;
+    const prev = lastTabTap.current;
+    lastTabTap.current = { idx, at: now };
+    if (idx === 0 && tab === 0 && prev.idx === 0 && now - prev.at < 320) {
+      scrollMainToTop();
+      return;
+    }
+    go(idx);
   }
 
   return (
@@ -95,7 +145,9 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
           flex layouts and never overflow. overscroll-behavior: contain
           keeps drag gestures from bouncing the page. */}
       <main
+        ref={mainRef}
         onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         style={{
         flex: 1,
@@ -104,6 +156,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
         overflowX: "hidden",
         overscrollBehavior: "contain",
         WebkitOverflowScrolling: "touch",
+        position: "relative",
         // Explicit background — without it the padding-top area is transparent
         // and on some mobile Chromium builds scrolled content can be seen
         // through it (the "thin gap above sticky" complaint).
@@ -126,8 +179,32 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
             viewport, so `main`'s scrollHeight never exceeded its clientHeight
             and the taller tabs (Settings, Calendar…) couldn't scroll at all.
             That was a regression; this restores their normal page scroll. */}
+        {/* Pull-to-refresh indicator — sits above the content; the content
+            wrapper shifts down by `pull` (or a fixed amount while refreshing)
+            so the spinner peeks in from the top. */}
+        {(pull > 0 || refreshing) && (
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            height: refreshing ? 40 : pull,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "var(--ink-3)", pointerEvents: "none",
+            transition: pull === 0 ? "height 0.2s ease" : "none",
+          }}>
+            {refreshing
+              ? <Spinner size={18} thickness={2} color="var(--moss)" />
+              : <span style={{
+                  fontSize: 16,
+                  transform: `rotate(${pull >= PULL_TRIGGER ? 180 : 0}deg)`,
+                  transition: "transform 0.15s ease", opacity: Math.min(pull / PULL_TRIGGER, 1),
+                }}>↓</span>}
+          </div>
+        )}
         <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}
-          style={{ height: tab === 3 ? "100%" : undefined }}>
+          style={{
+            height: tab === 3 ? "100%" : undefined,
+            transform: refreshing ? "translateY(40px)" : (pull > 0 ? `translateY(${pull}px)` : undefined),
+            transition: pull === 0 ? "transform 0.2s ease" : "none",
+          }}>
           {children}
         </div>
       </main>
@@ -150,7 +227,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false }) {
           return (
             <button
               key={key}
-              onClick={() => go(idx)}
+              onClick={(e) => onTabTap(idx, e)}
               style={{
                 background: "transparent",
                 border: "none",

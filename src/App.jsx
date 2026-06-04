@@ -179,17 +179,13 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [weatherUsed, setWeatherUsed] = useState(0);
   const [dataLoading, setDataLoading] = useState(true);
 
-  // Fetch profile + user_settings + workouts once the auth'd user is known.
-  useEffect(() => {
-    let cancelled = false;
-    // Watchdog: if the initial data load doesn't settle, the app sits on the
-    // LoadingScreen (which looks identical to the native splash) forever. Surface
-    // it so a hang is diagnosable on the device instead of a silent stuck-splash.
-    const watchdog = setTimeout(() => {
-      if (!cancelled) reportError("Boot watchdog: data load still pending after 25s (stuck on splash). Likely one of profiles/settings/workouts/races/messages/notes/usage never resolved.");
-    }, 25000);
-    (async () => {
-      try {
+  // Pull-to-refresh in flight (Training tab). Separate from dataLoading so a
+  // refresh shows a small top spinner instead of the full LoadingScreen.
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Fetch + apply all user data. Reused by the boot effect AND pull-to-refresh.
+  // Throws on error so each caller can handle it (boot alerts; refresh is quiet).
+  const loadData = useCallback(async () => {
         const [profileData, settingsData, workoutsData, racesData, messagesData, notesData, usageData] = await Promise.all([
           db.profiles.getMyProfile(),
           db.userSettings.getMySettings(),
@@ -199,7 +195,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           db.dailyNotes.listMyDailyNotes(),
           db.usage.getMyUsage(),
         ]);
-        if (cancelled) return;
 
         // Profile — null means no row yet (handle_new_user trigger should
         // prevent this, but defend against it). DEFAULT_PROFILE keeps shape
@@ -275,19 +270,36 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Free-tier usage counters.
         setDeepseekUsed(usageData?.deepseekUsed ?? 0);
         setWeatherUsed(usageData?.weatherUsed ?? 0);
-      } catch (err) {
-        console.error("Failed to load user data:", err);
-        if (!cancelled) {
-          reportError(`Data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
-          window.alert("Failed to load your data, please refresh.");
-        }
-      } finally {
-        clearTimeout(watchdog);
-        if (!cancelled) setDataLoading(false);
-      }
-    })();
-    return () => { cancelled = true; clearTimeout(watchdog); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
+
+  // Initial load on mount / user change. Owns the full-screen LoadingScreen +
+  // the stuck-boot watchdog.
+  useEffect(() => {
+    let cancelled = false;
+    const watchdog = setTimeout(() => {
+      if (!cancelled) reportError("Boot watchdog: data load still pending after 25s (stuck on splash). Likely one of profiles/settings/workouts/races/messages/notes/usage never resolved.");
+    }, 25000);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setDataLoading(true);
+    loadData()
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Failed to load user data:", err);
+        reportError(`Data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
+        window.alert("Failed to load your data, please refresh.");
+      })
+      .finally(() => { clearTimeout(watchdog); if (!cancelled) setDataLoading(false); });
+    return () => { cancelled = true; clearTimeout(watchdog); };
+  }, [loadData]);
+
+  // Pull-to-refresh handler — re-fetch everything, no full-screen takeover.
+  const refresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await loadData(); }
+    catch (err) { reportError(`Refresh failed: ${err?.message || String(err)}`); }
+    finally { setRefreshing(false); }
+  }, [loadData]);
 
   // Register this device for push (Android APK only; no-op on web). Fires once
   // the user is known so the FCM token is stored against their account. Guarded
@@ -718,7 +730,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppShell
         user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount}
-        logs={logs} refreshLogs={refreshLogs}
+        logs={logs} refreshLogs={refreshLogs} refresh={refresh} refreshing={refreshing}
         addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
         races={races}
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
@@ -751,7 +763,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
 function AppShell({
   user, signOut, changePassword, deleteAccount,
-  logs, refreshLogs, addLog, updateLog, bulkAddLogs, deleteLogs,
+  logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags,
@@ -1619,7 +1631,8 @@ Rules:
     ) : tabContent;
     return (
       <>
-        <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}>
+        <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}
+          onRefresh={tab === 0 ? refresh : null} refreshing={refreshing}>
           {mobileContent}
         </MobileShell>
         {modals}

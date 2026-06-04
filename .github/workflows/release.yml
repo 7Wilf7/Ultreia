@@ -106,6 +106,29 @@ jobs:
           mv android/app/build/outputs/apk/release/app-release.apk \
              "training-studio-${GITHUB_REF_NAME}.apk"
 
+      - name: Mirror APK to Supabase Storage (fast download in CN)
+        # Uploads the signed APK to a PUBLIC bucket "releases" as a stable name
+        # so the app can fetch it without GitHub's CN-throttled asset CDN. The
+        # app falls back to the GitHub asset if this is missing, so a failure
+        # here must NOT block the release.
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SERVICE_ROLE" ]; then
+            echo "Supabase secrets missing — skipping mirror upload."
+            exit 0
+          fi
+          curl -fSL -X POST \
+            "$SUPABASE_URL/storage/v1/object/releases/training-studio-latest.apk" \
+            -H "Authorization: Bearer $SERVICE_ROLE" \
+            -H "apikey: $SERVICE_ROLE" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @"training-studio-${GITHUB_REF_NAME}.apk"
+          echo "Mirror upload done."
+
       - name: Build release notes from commits since last tag
         # The in-app "Check for updates" dialog shows this body verbatim, so
         # keep it to just THIS release's changes — no install boilerplate, no

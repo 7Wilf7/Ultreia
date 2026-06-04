@@ -1,16 +1,26 @@
 import { useState, useEffect } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { Filesystem, Directory } from "@capacitor/filesystem";
 import { useT } from "../i18n/LanguageContext";
 
-// Native bridge declared in android/.../ApkInstallerPlugin.java. On web this
-// is a no-op stub (we never call it off-native).
+// Native bridges (android/.../*.java). On web these are no-op stubs.
+//   ApkInstaller  — hands a downloaded APK to the system package installer.
+//   ApkDownloader — system DownloadManager: survives backgrounding / screen-off
+//                   and shows progress in the notification tray.
 const ApkInstaller = registerPlugin("ApkInstaller");
+const ApkDownloader = registerPlugin("ApkDownloader");
 
 const isNative = () => Capacitor.isNativePlatform?.() === true;
 
 const GITHUB_RELEASES_API =
   "https://api.github.com/repos/7Wilf7/training-studio/releases/latest";
+
+// China-friendly mirror of the latest APK on Supabase Storage (public bucket),
+// uploaded by the release workflow. GitHub's asset CDN is throttled in mainland
+// China; the Supabase object isn't, so we try it first.
+const SUPABASE_URL = (import.meta.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "");
+const MIRROR_APK_URL = SUPABASE_URL
+  ? `${SUPABASE_URL}/storage/v1/object/public/releases/training-studio-latest.apk`
+  : null;
 
 // Strip leading "v" so "v0.2.1" → "0.2.1"
 function stripV(tag) {
@@ -111,77 +121,60 @@ export function UpdateChecker() {
     }
   }
 
-  // Native path: download the APK into the app cache, then hand it to the
-  // system installer via the ApkInstaller plugin. Any failure (download
-  // error, plugin missing, installer refused) falls back to opening the
-  // APK URL in the browser — the always-works path — so the button never
-  // dead-ends.
-  async function downloadAndInstall(apkUrl) {
+  // Native path: download the APK via the system DownloadManager (survives
+  // backgrounding / screen-off, shows a tray notification), then hand it to the
+  // system installer. Tries the Supabase mirror first (fast in CN), then the
+  // GitHub asset. If every native path fails, open the GitHub URL in the
+  // browser — the always-works fallback — so the button never dead-ends.
+  async function downloadAndInstall(githubUrl) {
     if (!isNative()) {
-      window.open(apkUrl, "_blank", "noreferrer");
+      window.open(githubUrl, "_blank", "noreferrer");
       return;
     }
     setInstallMsg("");
     setDownloadPct(null);
-    let progressHandle = null;
-    try {
-      setInstallState("downloading");
-      // Live byte-progress from the native download. contentLength is 0 when
-      // the server omits Content-Length — keep pct null so the UI falls back
-      // to an indeterminate bar rather than a stuck "0%".
-      progressHandle = await Filesystem.addListener("progress", (p) => {
-        if (p.contentLength > 0) {
-          setDownloadPct(Math.min(100, Math.round((p.bytes / p.contentLength) * 100)));
-        }
-      });
-      // Download with one retry. The common failure is a transient DNS hiccup
-      // ("Unable to resolve host github.com") — the asset URL 302-redirects
-      // github.com → objects.githubusercontent.com, and a momentary network
-      // blip on either lookup aborts the whole download. A short backoff +
-      // single retry recovers most of those without bothering the user.
-      let res = null, lastErr = null;
-      for (let attempt = 0; attempt < 2 && !res; attempt++) {
-        try {
-          res = await Filesystem.downloadFile({
-            url: apkUrl,
-            path: "ts-update.apk",
-            directory: Directory.Cache,
-            progress: true,
-          });
-        } catch (e) {
-          lastErr = e;
-          if (attempt === 0) {
-            setDownloadPct(null);
-            await new Promise((r) => setTimeout(r, 1500));
-          }
-        }
+    const candidates = [MIRROR_APK_URL, githubUrl].filter(Boolean);
+    let lastErr = null;
+    for (const url of candidates) {
+      let poll = null;
+      try {
+        setInstallState("downloading");
+        // Poll the native download for the in-app progress bar (the tray
+        // notification shows it too). total is -1 until Content-Length is known.
+        poll = setInterval(async () => {
+          try {
+            const p = await ApkDownloader.getProgress();
+            if (p && p.total > 0) {
+              setDownloadPct(Math.min(100, Math.round((p.bytes / p.total) * 100)));
+            }
+          } catch { /* ignore poll errors */ }
+        }, 700);
+        const res = await ApkDownloader.download({ url, fileName: "ts-update.apk" });
+        clearInterval(poll); poll = null;
+        const path = res?.path;
+        if (!path) throw new Error("download returned no path");
+        setInstallState("installing");
+        await ApkInstaller.install({ path });
+        setInstallState("idle");
+        setDownloadPct(null);
+        return; // success
+      } catch (err) {
+        console.error("[update] download attempt failed:", url, err);
+        lastErr = err;
+        if (poll) clearInterval(poll);
+        setDownloadPct(null);
       }
-      if (!res) throw lastErr || new Error("download failed");
-      const path = res?.path;
-      if (!path) throw new Error("download returned no path");
-      setInstallState("installing");
-      await ApkInstaller.install({ path });
-      // Installer launched in a separate task; reset our button state.
-      setInstallState("idle");
-    } catch (err) {
-      console.error("[update] in-app install failed:", err);
-      setInstallState("idle");
-      // Surface the actual reason (so a failure is diagnosable) AND still fall
-      // back to the browser download so the button never dead-ends. The message
-      // persists in-app when the user returns from the browser.
-      const reason = err?.message || String(err);
-      // DNS / host-resolution failures are the common transient case — add a
-      // "check your network" hint so the user knows a retry will likely work.
-      const isNetwork = /resolve host|No address|network|timeout|unable to|failed to connect/i.test(reason);
-      setInstallMsg(
-        `${t("settings.update_install_failed")} (${reason})` +
-        (isNetwork ? ` ${t("settings.update_network_hint")}` : "")
-      );
-      window.open(apkUrl, "_blank", "noreferrer");
-    } finally {
-      progressHandle?.remove?.();
-      setDownloadPct(null);
     }
+    // Every native attempt failed — surface the reason and fall back to the
+    // browser (which uses the system download stack and always works).
+    setInstallState("idle");
+    const reason = lastErr?.message || String(lastErr);
+    const isNetwork = /resolve host|No address|network|timeout|unable to|failed to connect/i.test(reason);
+    setInstallMsg(
+      `${t("settings.update_install_failed")} (${reason})` +
+      (isNetwork ? ` ${t("settings.update_network_hint")}` : "")
+    );
+    window.open(githubUrl, "_blank", "noreferrer");
   }
 
   return (

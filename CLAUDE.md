@@ -49,11 +49,17 @@ npx supabase link --project-ref ihibmkfgfznqwzavaeiq   # 一次性；状态存 s
 npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 ```
 
-- **`--no-verify-jwt` 必须加**：`daily-coach-dispatch` 由 pg_cron 定时调用、靠 header `x-cron-secret` 鉴权，不是登录用户的 JWT；不加会被网关挡掉。
+- **`--no-verify-jwt` 看函数加不加**：靠登录用户 JWT 鉴权的（`coach-proxy` / `weather-proxy` / `delete-account`）部署时**不要**加；不靠用户 JWT 的（`daily-coach-dispatch` 由 pg_cron 定时调用、靠 header `x-cron-secret` 鉴权；`register-with-invite` 注册前调用、还没 JWT）**必须加** `--no-verify-jwt`，否则被网关挡掉。
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
-- 函数：`daily-coach-dispatch`（定时生成 AI 打卡 → FCM 推送 → 写 `push_inbox`）、`push-test`（早期冒烟测试，可退役）。
+- 函数：
+  - `daily-coach-dispatch`（pg_cron 定时生成 AI 打卡 → FCM 推送 → 写 `push_inbox`；部署加 `--no-verify-jwt`）
+  - `coach-proxy`（免费额度 AI Coach 代理，DeepSeek；新用户体验额度从 owner 的 key 走，查/记 `usage_quota`，超额返 402 提示用户填自己的 key）
+  - `weather-proxy`（免费额度天气代理，彩云；`mode=bundle` 实时+7天预报算一次额度，`mode=single` 单端点；超额返 402）
+  - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
+  - `delete-account`（自助注销；清各用户表数据 → 删 auth 用户）
+  - `push-test`（早期冒烟测试，可退役）
 
-**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（coach-proxy 免费额度用的 owner DeepSeek key）、`SHARED_CAIYUN_TOKEN`（weather-proxy 免费额度用的 owner 彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
 
 ### 历史教训（避免重蹈）
 
@@ -162,12 +168,17 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 
 不要静默改 DAL 假设数据库已经同步——前端跑通 + 数据库列缺失 = 静默写入失败或 NULL 漂移，后果难定位。
 
-## Supabase 表清单（截至 3.3 接入完成）
+## Supabase 表清单
 
 - `profiles` — 一行一用户，主键 `id = auth.uid()`
 - `user_settings` — 一行一用户，外键 `user_id`
 - `workouts` — 训练记录
 - `races` — 赛事（target + history 共表，`is_target` 区分）
 - `coach_messages` — AI Coach 对话历史，append-only
+- `daily_notes` — 每日笔记 / 打卡
+- `push_subscriptions` — 设备推送订阅（FCM token）
+- `push_inbox` — 推送收件箱（每日打卡等推送落库）
+- `invite_codes` — 一次性邀请码（注册用，service_role 烧码）
+- `usage_quota` — 免费额度计数（coach-proxy / weather-proxy 按用户记）
 
 公共字段约定：`id uuid PK`、`user_id uuid → auth.users(id)`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤。

@@ -50,7 +50,7 @@ function StatTile({ label, val, unit, isMobile }) {
   return (
     <div style={{
       position: "relative",
-      padding: isMobile ? "8px 9px" : "20px 22px 24px",
+      padding: isMobile ? "7px 8px" : "20px 22px 24px",
       borderRight: isMobile ? "none" : "1px solid var(--rule)",
       minHeight: isMobile ? 42 : 110,
       minWidth: 0,
@@ -62,8 +62,9 @@ function StatTile({ label, val, unit, isMobile }) {
     }}>
       {isMobile ? (
         <div style={{
-          display: "flex", alignItems: "baseline", justifyContent: "space-between",
-          gap: 8, minWidth: 0,
+          height: "100%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 6, minWidth: 0,
         }}>
           <div style={{
             fontFamily: "var(--font-sans)",
@@ -77,7 +78,7 @@ function StatTile({ label, val, unit, isMobile }) {
           }}>{label}</div>
           <div style={{
             ...s.metricVal,
-            fontSize: "clamp(15px, 4.2vw, 18px)",
+            fontSize: "clamp(18px, 5vw, 21px)",
             marginTop: 0,
             display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 3,
             lineHeight: 1.05,
@@ -165,7 +166,7 @@ export function TrainingTab({
     ro.observe(navEl);
     return () => ro.disconnect();
   }, [isMobile, view]);
-  const statsStickyHeight = isMobile ? 100 : 112;
+  const statsStickyHeight = isMobile ? 104 : 112;
   const statsTop = summaryTop;
   const toolbarTop = summaryTop + statsStickyHeight;
 

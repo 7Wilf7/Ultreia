@@ -102,9 +102,10 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - `docs/README.md` —— 应用整体介绍
 - `docs/training-log.md` —— 训练记录（Run / Strength / HIIT）
 - `docs/running.md` —— 跑步分类 + 心率自动分类规则
-- `docs/data-import.md` —— Garmin CSV 导入
+- `docs/data-import.md` —— FIT / CSV 导入
 - `docs/races.md` —— 赛事 + PR bar
 - `docs/ai-coach.md` —— AI Coach 全流程
+- `docs/weather.md` —— 天气（实时 / 预报 / 训练快照、24h 窗口、彩云 token）
 - `docs/charts.md` —— 图表
 - `docs/SUMMARY.md` —— GitBook 目录
 - `docs/changelog.md` —— 版本变更

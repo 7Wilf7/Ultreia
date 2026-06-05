@@ -182,11 +182,7 @@ export function TrainingTab({
     marginLeft: -14, marginRight: -14, paddingLeft: 14, paddingRight: 14,
     marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",
     paddingTop: "calc(max(env(safe-area-inset-top), 14px) + 4px)",
-    // The last child (period selector / view toggle) already carries its own
-    // 14px marginBottom. Keep the header's own bottom spacing minimal (2px) so
-    // the gap to the stats card matches the 16px rhythm everywhere else —
-    // previously 14 + 4 + 6 = 24px made this one gap visibly wider.
-    paddingBottom: 2,
+    paddingBottom: 0,
     marginBottom: 0,
   } : {
     position: "sticky", top: 0, zIndex: 10,
@@ -250,9 +246,7 @@ export function TrainingTab({
             border: isMobile ? "none" : "1px solid var(--rule)",
             background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
             position: "sticky", top: statsTop, zIndex: 9,
-            marginLeft: isMobile ? -14 : 0,
-            marginRight: isMobile ? -14 : 0,
-            padding: isMobile ? "9px 14px 10px" : 0,
+            padding: isMobile ? "4px 0 8px" : 0,
             borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
           }}>
             {statItems.map((c, i) => (

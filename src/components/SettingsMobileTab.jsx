@@ -61,7 +61,7 @@ export function SettingsMobileTab({
   }
 
   return (
-    <div style={{ paddingBottom: 8 }}>
+    <div style={{ paddingTop: 8, paddingBottom: 8 }}>
       <button type="button" onClick={() => setHeaderOpen(v => !v)} style={{
         display: "flex", alignItems: "center", gap: 14,
         width: "100%",
@@ -70,7 +70,7 @@ export function SettingsMobileTab({
         border: "1px solid var(--rule)",
         background: "var(--bg-elevated)",
         borderRadius: 10,
-        marginBottom: headerOpen ? 0 : 18,
+        marginBottom: headerOpen ? 0 : 10,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
         cursor: "pointer",
         color: "var(--ink-1)",
@@ -125,7 +125,7 @@ export function SettingsMobileTab({
           borderLeft: "1px solid var(--rule-soft)",
           borderRight: "1px solid var(--rule-soft)",
           borderBottom: "1px solid var(--rule-soft)",
-          marginBottom: 18,
+          marginBottom: 10,
         }}>
           <SubCell
             primary={t("settings.profile")}
@@ -181,7 +181,6 @@ export function SettingsMobileTab({
       )}
 
       {/* ── 其他 ──────────────────────────────────────────────────────────── */}
-      <SectionHeader label={t("settings.section_other")} />
       <Cell
         flash={pushFlash}
         primary={t("settings.daily_push")}
@@ -272,22 +271,6 @@ function LangSwitch({ lang, onToggle }) {
           color: isEn ? "var(--ink-inv)" : "var(--ink-3)",
         }}>EN</span>
       </div>
-    </div>
-  );
-}
-
-function SectionHeader({ label }) {
-  return (
-    <div style={{
-      fontFamily: "var(--font-mono)",
-      fontSize: 11,
-      color: "var(--ink-3)",
-      textTransform: "uppercase",
-      letterSpacing: "0.06em",
-      padding: "20px 4px 8px",
-      minHeight: label ? undefined : 12,
-    }}>
-      {label}
     </div>
   );
 }

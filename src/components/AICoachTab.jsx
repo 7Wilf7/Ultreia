@@ -372,9 +372,10 @@ export function AICoachTab({
     if (!isMobile) return;
     const el = chatInputRef.current;
     if (!el) return;
-    el.style.height = "44px";
-    const maxHeight = Math.round(14 * 1.45 * 7 + 22);
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), maxHeight)}px`;
+    const minHeight = 40;
+    const maxHeight = Math.round(13 * 1.35 * 7 + 18);
+    el.style.height = `${minHeight}px`;
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
   }, [chatInput, isMobile]);
 
   // Small circular jump button, vertically pinned to top/bottom of the window.
@@ -1068,23 +1069,25 @@ export function AICoachTab({
             resize: isMobile ? "none" : "vertical",
             fontFamily: "var(--font-sans)",
             flex: 1,
-            lineHeight: 1.45,
-            minHeight: isMobile ? 44 : undefined,
-            maxHeight: isMobile ? "calc(14px * 1.45 * 7 + 22px)" : undefined,
+            lineHeight: isMobile ? 1.35 : 1.45,
+            padding: isMobile ? "9px 12px" : undefined,
+            minHeight: isMobile ? 40 : undefined,
+            height: isMobile ? 40 : undefined,
+            maxHeight: isMobile ? "calc(13px * 1.35 * 7 + 18px)" : undefined,
             overflowY: isMobile ? "auto" : undefined,
-            "--mobile-input-fs": isMobile ? "14px" : undefined,
+            "--mobile-input-fs": isMobile ? "13px" : undefined,
           }} />
         {isMobile ? (
           <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
             aria-label={t("coach.send")}
             style={{
               ...s.btn,
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               padding: 0,
               fontSize: 20,
               lineHeight: 1,
-              minHeight: 44,
+              minHeight: 40,
               flexShrink: 0,
               opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center",

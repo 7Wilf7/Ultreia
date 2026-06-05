@@ -473,7 +473,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           ? (isMobile ? "calc(max(env(safe-area-inset-top), 14px) + 4px)" : 8)
           : (isMobile ? 6 : 8),
         paddingBottom: stickyHeader ? 0 : (isMobile ? 8 : 6),
-        marginBottom: stickyHeader && isMobile ? 10 : 14,
+        marginBottom: stickyHeader && isMobile ? 6 : 14,
         boxSizing: "border-box",
       }}>
         {stickyHeader}

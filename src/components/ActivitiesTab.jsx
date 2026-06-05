@@ -464,11 +464,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         display: stickyHeader ? "block" : "flex",
         gap: stickyHeader ? 0 : 6,
         alignItems: "center",
-        position: "sticky", top: toolbarStickyTop, zIndex: 8,
+        position: "sticky", top: toolbarStickyTop, zIndex: stickyHeader ? 10 : 8,
         background: "var(--bg)",
         marginLeft: isMobile ? -14 : 0, marginRight: isMobile ? -14 : 0,
+        marginTop: stickyHeader && isMobile ? "calc(-1 * max(env(safe-area-inset-top), 14px))" : 0,
         paddingLeft: isMobile ? 14 : 0, paddingRight: isMobile ? 14 : 0,
-        paddingTop: stickyHeader ? 0 : (isMobile ? 6 : 8),
+        paddingTop: stickyHeader
+          ? (isMobile ? "calc(max(env(safe-area-inset-top), 14px) + 4px)" : 8)
+          : (isMobile ? 6 : 8),
         paddingBottom: stickyHeader ? 0 : (isMobile ? 8 : 6),
         marginBottom: 14,
         boxSizing: "border-box",

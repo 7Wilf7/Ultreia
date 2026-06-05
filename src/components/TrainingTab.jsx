@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -159,28 +159,10 @@ export function TrainingTab({
 
   // Sticky stacking for the Activities view: nav rows (existing sticky) → stats
   // row → toolbar row all stay pinned at the top while only the list scrolls.
-  // We measure each element's pinned bottom and feed the next one's `top`.
-  //   statsTop    = nav pinned-bottom  = navStickyTop + navHeight
-  //   toolbarTop  = stats pinned-bottom = statsTop + statsHeight
-  // Mobile lifts the nav by its paddingTop (the negative-top trick); desktop
-  // pins at 0.
-  const headerRef = useRef(null);   // the nav-rows sticky block
-  const [summaryTop, setSummaryTop] = useState(0);
-  useEffect(() => {
-    const navEl = headerRef.current;
-    if (!navEl) { setSummaryTop(0); return; }
-    const measure = () => {
-      const padTop = parseFloat(getComputedStyle(navEl).paddingTop) || 0;
-      const navStickyTop = isMobile ? -(padTop - 4) : 0;
-      setSummaryTop(Math.round(navEl.offsetHeight + navStickyTop));
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(navEl);
-    return () => ro.disconnect();
-  }, [isMobile, view]);
+  // Activities keeps its controls, stats, and toolbar in one sticky block so
+  // the four top rows do not move relative to each other while the list scrolls.
   const statsStickyHeight = isMobile ? 106 : 112;
-  const toolbarTop = summaryTop;
+  const toolbarTop = isMobile ? "calc(-1 * max(env(safe-area-inset-top), 14px))" : 0;
 
   // Activities / Charts must NOT include planned workouts (those live on the
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
@@ -247,9 +229,68 @@ export function TrainingTab({
     marginBottom: 8,
   };
 
+  const activitiesStickyHeader = (
+    <>
+      {isMobile ? (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+            <div style={{ flexShrink: 0 }}>
+              <GlobalFilter filter={filter} setFilter={setFilter} compact />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <ViewToggle view={view} setView={setView} t={t} />
+            </div>
+          </div>
+          <PeriodSelector
+            period={period} setPeriod={setPeriod}
+            periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+            dense
+            style={{ marginBottom: 8 }}
+          />
+        </>
+      ) : (
+        <>
+          <GlobalFilter filter={filter} setFilter={setFilter} />
+          <ViewToggle view={view} setView={setView} t={t} style={{ marginBottom: 14 }} />
+          <PeriodSelector
+            period={period} setPeriod={setPeriod}
+            periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+          />
+        </>
+      )}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
+        gap: isMobile ? "6px 8px" : 0,
+        marginBottom: 0,
+        border: isMobile ? "none" : "1px solid var(--rule)",
+        background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
+        height: isMobile ? statsStickyHeight : undefined,
+        padding: isMobile ? "5px 0" : 0,
+        boxSizing: "border-box",
+        borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
+      }}>
+        {statItems.map((c, i) => (
+          <div key={c.key} style={{
+            position: "relative",
+            display: "block",
+          }}>
+            {!isMobile && (
+              <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
+                {String(i + 1).padStart(2, "0")} / 04
+              </div>
+            )}
+            <StatTile {...c} isMobile={isMobile} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
   return (
     <div>
-      <div ref={headerRef} style={stickyHeaderStyle}>
+      {view !== "activities" && (
+      <div style={stickyHeaderStyle}>
         {isMobile ? (
           /* Mobile: compress to TWO rows (was three).
              Row 1 — type filter (left) + Activities/Charts toggle (right),
@@ -289,6 +330,7 @@ export function TrainingTab({
           </>
         )}
       </div>
+      )}
 
       {view === "activities" && (
         <>
@@ -302,34 +344,7 @@ export function TrainingTab({
             setConfirmDelete={setConfirmDelete}
             profile={profile}
             toolbarStickyTop={toolbarTop}
-            stickyHeader={(
-              <div style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
-                gap: isMobile ? "6px 8px" : 0,
-                marginBottom: 0,
-                border: isMobile ? "none" : "1px solid var(--rule)",
-                background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
-                height: isMobile ? statsStickyHeight : undefined,
-                padding: isMobile ? "5px 0" : 0,
-                boxSizing: "border-box",
-                borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
-              }}>
-                {statItems.map((c, i) => (
-                  <div key={c.key} style={{
-                    position: "relative",
-                    display: "block",
-                  }}>
-                    {!isMobile && (
-                      <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
-                        {String(i + 1).padStart(2, "0")} / 04
-                      </div>
-                    )}
-                    <StatTile {...c} isMobile={isMobile} />
-                  </div>
-                ))}
-              </div>
-            )}
+            stickyHeader={activitiesStickyHeader}
           />
         </>
       )}

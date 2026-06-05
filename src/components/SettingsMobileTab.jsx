@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
+import { CoachIcon, CloudIcon } from "./Icons";
 
 /**
  * Mobile-only settings page — three sections, top-down:
@@ -109,8 +110,8 @@ export function SettingsMobileTab({
             </div>
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-            <StatusChip label={apiKey ? t("settings.api_set") : t("settings.api_missing")} warn={!apiKey} />
-            <StatusChip label={caiyunApiKey ? t("settings.api_set") : t("settings.weather_api_default")} warn={!caiyunApiKey} />
+            <StatusChip icon={<CoachIcon size={12} />} label={apiKey ? t("settings.api_set") : t("settings.api_missing")} warn={!apiKey} />
+            <StatusChip icon={<CloudIcon size={12} />} label={caiyunApiKey ? t("settings.api_set") : t("settings.weather_api_default")} warn={!caiyunApiKey} />
           </div>
         </div>
         <div style={{ color: "var(--ink-3)", fontSize: 15, marginLeft: 4, flexShrink: 0 }}>
@@ -214,11 +215,12 @@ export function SettingsMobileTab({
 // Rendered inside the language Cell as its right-hand control. Uses a div
 // (not a button) to stay valid nested inside the Cell's <button>, and stops
 // propagation so it toggles exactly once.
-function StatusChip({ label, warn }) {
+function StatusChip({ icon, label, warn }) {
   return (
     <span style={{
       display: "inline-flex",
       alignItems: "center",
+      gap: 5,
       minHeight: 22,
       padding: "3px 8px",
       border: `1px solid ${warn ? "rgba(181,78,26,0.32)" : "rgba(74,92,55,0.28)"}`,
@@ -233,6 +235,11 @@ function StatusChip({ label, warn }) {
       overflow: "hidden",
       textOverflow: "ellipsis",
     }}>
+      {icon && (
+        <span style={{ display: "inline-flex", color: warn ? "var(--warn)" : "var(--moss-deep)" }}>
+          {icon}
+        </span>
+      )}
       {label}
     </span>
   );

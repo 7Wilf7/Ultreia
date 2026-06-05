@@ -372,10 +372,13 @@ export function AICoachTab({
     if (!isMobile) return;
     const el = chatInputRef.current;
     if (!el) return;
-    const minHeight = 40;
+    const minHeight = 32;
     const maxHeight = Math.round(13 * 1.35 * 7 + 18);
+    const hasText = chatInput.trim().length > 0;
     el.style.height = `${minHeight}px`;
-    el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
+    if (hasText) {
+      el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
+    }
   }, [chatInput, isMobile]);
 
   // Small circular jump button, vertically pinned to top/bottom of the window.
@@ -1070,9 +1073,9 @@ export function AICoachTab({
             fontFamily: "var(--font-sans)",
             flex: 1,
             lineHeight: isMobile ? 1.35 : 1.45,
-            padding: isMobile ? "9px 12px" : undefined,
-            minHeight: isMobile ? 40 : undefined,
-            height: isMobile ? 40 : undefined,
+            padding: isMobile ? "6px 9px" : undefined,
+            minHeight: isMobile ? 32 : undefined,
+            height: isMobile ? 32 : undefined,
             maxHeight: isMobile ? "calc(13px * 1.35 * 7 + 18px)" : undefined,
             overflowY: isMobile ? "auto" : undefined,
             "--mobile-input-fs": isMobile ? "13px" : undefined,
@@ -1083,11 +1086,11 @@ export function AICoachTab({
             style={{
               ...s.btn,
               width: 40,
-              height: 40,
+              height: 32,
               padding: 0,
               fontSize: 20,
               lineHeight: 1,
-              minHeight: 40,
+              minHeight: 32,
               flexShrink: 0,
               opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center",

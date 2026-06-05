@@ -805,7 +805,7 @@ const dict = {
   "coach.no_response":        { en: "No response.",         zh: "无响应。" },
   "coach.network_error":      { en: "Network request failed ({msg}). If you switched apps while waiting, the browser may have paused the connection — tap Resend below your message to try again.", zh: "网络请求失败（{msg}）。如果在等待回复时切换了 app，浏览器可能暂停了连接 —— 点击消息下方的「重新发送」再试一次。" },
   "coach.endpoint_error":     { en: "The API endpoint returned a page instead of an API response (HTTP {status}). The endpoint URL is probably wrong, or the provider's service is down.\n\nURL: {url}\nResponse start: {snippet}", zh: "API 端点返回了一个网页而不是 API 响应（HTTP {status}）。最可能的原因：endpoint URL 不对，或者 provider 服务出问题了。\n\nURL：{url}\n返回内容开头：{snippet}" },
-  "coach.input_placeholder":  { en: "Type your message — daily check-in, training question, or anything you want the coach to see.", zh: "输入你想和教练说的话 —— 今日打卡、训练疑问，或任何想让 ta 看到的内容。" },
+  "coach.input_placeholder":  { en: "Type anything you want the coach to see here", zh: "Type anything you want the coach to see here" },
   "coach.send":               { en: "Send",                 zh: "发送" },
   "coach.tip":                { en: "",                     zh: "" },
   "coach.long_chat_hint":     { en: "Chat is getting long ({n} messages). Older turns start competing with the system prompt for the model's attention — consider distilling the takeaways into Memory, then clearing the chat for a clean slate.", zh: "对话已有 {n} 条，开始变长。旧消息会与系统提示词争夺模型注意力 —— 建议把要点固化到 Memory，再清空对话从新开始。" },

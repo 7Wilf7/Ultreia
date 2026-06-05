@@ -50,10 +50,12 @@ function StatTile({ label, val, unit, isMobile }) {
   return (
     <div style={{
       position: "relative",
-      padding: isMobile ? "7px 8px" : "20px 22px 24px",
+      padding: isMobile ? "0 12px" : "20px 22px 24px",
       borderRight: isMobile ? "none" : "1px solid var(--rule)",
-      minHeight: isMobile ? 42 : 110,
+      minHeight: isMobile ? 44 : 110,
+      height: isMobile ? 44 : undefined,
       minWidth: 0,
+      boxSizing: "border-box",
       ...(isMobile ? {
         border: "1px solid rgba(74,92,55,0.2)",
         background: "var(--moss-bg)",
@@ -63,8 +65,12 @@ function StatTile({ label, val, unit, isMobile }) {
       {isMobile ? (
         <div style={{
           height: "100%",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          gap: 6, minWidth: 0,
+          display: "grid",
+          gridTemplateColumns: "minmax(62px, auto) minmax(0, max-content)",
+          alignItems: "center",
+          justifyContent: "center",
+          columnGap: 12,
+          minWidth: 0,
         }}>
           <div style={{
             fontFamily: "var(--font-sans)",
@@ -80,7 +86,7 @@ function StatTile({ label, val, unit, isMobile }) {
             ...s.metricVal,
             fontSize: "clamp(18px, 5vw, 21px)",
             marginTop: 0,
-            display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 3,
+            display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 4,
             lineHeight: 1.05,
             minWidth: 0,
             overflow: "hidden",
@@ -166,7 +172,7 @@ export function TrainingTab({
     ro.observe(navEl);
     return () => ro.disconnect();
   }, [isMobile, view]);
-  const statsStickyHeight = isMobile ? 104 : 112;
+  const statsStickyHeight = isMobile ? 106 : 112;
   const statsTop = summaryTop;
   const toolbarTop = summaryTop + statsStickyHeight;
 
@@ -278,13 +284,13 @@ export function TrainingTab({
           <div style={{
             display: "grid",
             gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: isMobile ? 8 : 0,
+            gap: isMobile ? "6px 8px" : 0,
             marginBottom: 0,
             border: isMobile ? "none" : "1px solid var(--rule)",
             background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
             position: "sticky", top: statsTop, zIndex: 9,
             height: isMobile ? statsStickyHeight : undefined,
-            padding: isMobile ? "4px 0 8px" : 0,
+            padding: isMobile ? "5px 0" : 0,
             boxSizing: "border-box",
             borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
           }}>

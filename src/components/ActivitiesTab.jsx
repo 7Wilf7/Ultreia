@@ -471,6 +471,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         <button onClick={() => fileRef.current.click()} title={t("activities.upload_short")}
           aria-label={t("activities.upload_short")} style={{ ...s.btn, ...iconBtnStyle }}>
           <UploadIcon size={15} />
+          {isMobile && <span style={{ fontSize: 12 }}>{t("activities.upload_short")}</span>}
         </button>
         {/* No accept filter: Android greys out .fit (no registered MIME for the
             extension), making them unselectable. We validate by extension in
@@ -491,7 +492,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         {/* Sort — a fixed-width field dropdown so the menu lines up under the
             box (same width, right-anchored) and the box height matches the
             icon buttons on its left. */}
-        <div style={{ marginLeft: "auto", width: isMobile ? 118 : 132, flexShrink: 0 }}>
+        <div style={{ marginLeft: "auto", width: isMobile ? 112 : 132, flexShrink: 0 }}>
           <Dropdown
             variant="field"
             align="right"

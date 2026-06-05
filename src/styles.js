@@ -14,13 +14,14 @@ export const s = {
   card: {
     background: "var(--bg-elevated)",
     border: "1px solid var(--rule)",
-    borderRadius: 2,
+    borderRadius: 4,
     padding: "16px 18px",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
   },
   cardDark: {
     background: "var(--bg)",
     border: "1px solid var(--rule)",
-    borderRadius: 2,
+    borderRadius: 4,
     padding: "16px 18px",
   },
 

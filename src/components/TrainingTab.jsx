@@ -46,6 +46,56 @@ function ViewToggle({ view, setView, t, style }) {
   );
 }
 
+function StatTile({ label, val, unit, primary, isMobile }) {
+  return (
+    <div style={{
+      position: "relative",
+      padding: isMobile ? (primary ? "10px 12px 11px" : "9px 10px 10px") : "20px 22px 24px",
+      borderRight: isMobile ? "none" : "1px solid var(--rule)",
+      minHeight: isMobile ? undefined : 110,
+      minWidth: isMobile ? (primary ? 112 : 92) : 0,
+      flex: isMobile ? "0 0 auto" : undefined,
+      ...(isMobile ? {
+        border: "1px solid var(--rule)",
+        background: primary ? "var(--moss-bg)" : "var(--bg-elevated)",
+        borderRadius: 8,
+        boxShadow: primary ? "inset 0 1px 0 rgba(255,255,255,0.65)" : "none",
+      } : CONTOUR_BG),
+    }}>
+      <div style={{
+        fontFamily: "var(--font-sans)",
+        fontSize: isMobile ? 10 : 13,
+        color: "var(--ink-2)",
+        marginBottom: isMobile ? 4 : 10,
+        fontWeight: 500,
+        textTransform: isMobile ? "uppercase" : "none",
+        letterSpacing: isMobile ? "0.04em" : "normal",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{label}</div>
+      <div style={{
+        ...s.metricVal,
+        fontSize: isMobile ? (primary ? "clamp(18px, 6vw, 24px)" : "clamp(14px, 4.8vw, 18px)") : 32,
+        marginTop: 0,
+        display: "flex", alignItems: "baseline", gap: 3,
+        lineHeight: 1.05,
+        minWidth: 0,
+        overflow: "hidden",
+      }}>
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{val}</span>
+        {unit && (
+          <span style={{
+            fontSize: isMobile ? 10 : 13,
+            color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+            flexShrink: 0,
+          }}>
+            {unit}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter,
@@ -108,6 +158,12 @@ export function TrainingTab({
     .reduce((sum, l) => sum + (l.distance || 0), 0);
   const periodAscent = periodLogs.reduce((sum, l) => sum + (l.ascent || 0), 0);
   const periodDurationSec = periodLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
+  const statItems = [
+    { key: "distance", label: t("training.total_distance"), val: periodKm.toFixed(1), unit: "km", primary: true },
+    { key: "time", label: t("training.total_time"), val: periodDurationSec ? (isMobile ? formatDurationShort(periodDurationSec) : formatDuration(periodDurationSec)) : t("common.no_data"), unit: "", primary: true },
+    { key: "sessions", label: t("training.sessions"), val: String(periodSessions), unit: "" },
+    { key: "ascent", label: t("training.total_ascent"), val: periodAscent.toLocaleString(), unit: "m" },
+  ];
 
   // Sticky header for the three navigation rows: All activities ▼ /
   // Activities-Charts toggle / period selector (when in activities view).
@@ -189,31 +245,29 @@ export function TrainingTab({
               meter on a control panel. Sticks just below the nav header so the
               period totals stay visible while the list scrolls. */}
           <div ref={statsRef} style={{
-            display: "grid",
+            display: isMobile ? "flex" : "grid",
             // Mobile: force a single 4-col row so all stats fit above the
             // fold; drop the contour decoration + position number to save
             // every available pixel. Desktop keeps the original instrument
             // panel feel.
-            gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: 0,
+            gridTemplateColumns: isMobile ? undefined : "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: isMobile ? 8 : 0,
             marginBottom: 0,
-            border: "1px solid var(--rule)",
-            background: "var(--bg-elevated)",
+            border: isMobile ? "none" : "1px solid var(--rule)",
+            background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
             position: "sticky", top: statsTop, zIndex: 9,
+            overflowX: isMobile ? "auto" : "visible",
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: isMobile ? "none" : undefined,
+            marginLeft: isMobile ? -14 : 0,
+            marginRight: isMobile ? -14 : 0,
+            padding: isMobile ? "9px 14px 10px" : 0,
+            borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
           }}>
-            {[
-              { label: t("training.sessions"),       val: String(periodSessions),                                    unit: "" },
-              { label: t("training.total_time"),     val: periodDurationSec ? (isMobile ? formatDurationShort(periodDurationSec) : formatDuration(periodDurationSec)) : t("common.no_data"), unit: "" },
-              { label: t("training.total_distance"), val: periodKm.toFixed(1),                                       unit: "km" },
-              { label: t("training.total_ascent"),   val: periodAscent.toLocaleString(),                             unit: "m" },
-            ].map((c, i) => (
-              <div key={c.label} style={{
+            {statItems.map((c, i) => (
+              <div key={c.key} style={{
                 position: "relative",
-                padding: isMobile ? "8px 6px 10px" : "20px 22px 24px",
-                borderRight: i < 3 ? "1px solid var(--rule)" : "none",
-                minHeight: isMobile ? undefined : 110,
-                minWidth: 0,
-                ...(isMobile ? {} : CONTOUR_BG),
+                display: isMobile ? "contents" : "block",
               }}>
                 {/* Corner position number — desktop only (no room on mobile) */}
                 {!isMobile && (
@@ -221,36 +275,7 @@ export function TrainingTab({
                     {String(i + 1).padStart(2, "0")} / 04
                   </div>
                 )}
-                <div style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: isMobile ? 10 : 13,
-                  color: "var(--ink-2)",
-                  marginBottom: isMobile ? 3 : 10,
-                  fontWeight: 500,
-                  textTransform: isMobile ? "uppercase" : "none",
-                  letterSpacing: isMobile ? "0.04em" : "normal",
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>{c.label}</div>
-                <div style={{
-                  ...s.metricVal,
-                  fontSize: isMobile ? "clamp(13px, 4.5vw, 17px)" : 32,
-                  marginTop: 0,
-                  display: "flex", alignItems: "baseline", gap: 3,
-                  lineHeight: 1.1,
-                  minWidth: 0,
-                  overflow: "hidden",
-                }}>
-                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{c.val}</span>
-                  {c.unit && (
-                    <span style={{
-                      fontSize: isMobile ? 10 : 13,
-                      color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
-                      flexShrink: 0,
-                    }}>
-                      {c.unit}
-                    </span>
-                  )}
-                </div>
+                <StatTile {...c} isMobile={isMobile} />
               </div>
             ))}
           </div>

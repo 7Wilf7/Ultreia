@@ -63,6 +63,53 @@ export function SettingsMobileTab({
 
   return (
     <div style={{ paddingBottom: 8 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 14,
+        padding: "14px 14px 16px",
+        border: "1px solid var(--rule)",
+        background: "var(--bg-elevated)",
+        borderRadius: 10,
+        marginBottom: 18,
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
+      }}>
+        <img
+          src="/splash-logo.png"
+          alt=""
+          aria-hidden="true"
+          style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 17,
+            fontWeight: 600,
+            color: "var(--ink-1)",
+            lineHeight: 1.15,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {displayName}
+          </div>
+          {email && (
+            <div style={{
+              marginTop: 4,
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              color: "var(--ink-3)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}>
+              {email}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+            <StatusChip label={apiKey ? t("settings.api_set") : t("settings.api_missing")} warn={!apiKey} />
+            <StatusChip label={caiyunApiKey ? t("settings.weather_api_set") : t("settings.weather_api_default")} warn={!caiyunApiKey} />
+          </div>
+        </div>
+      </div>
       {/* ── 账号 ────────────────────────────────────────────────────────── */}
       <SectionHeader label={t("settings.account")} />
       <Cell
@@ -166,6 +213,30 @@ export function SettingsMobileTab({
 // Rendered inside the language Cell as its right-hand control. Uses a div
 // (not a button) to stay valid nested inside the Cell's <button>, and stops
 // propagation so it toggles exactly once.
+function StatusChip({ label, warn }) {
+  return (
+    <span style={{
+      display: "inline-flex",
+      alignItems: "center",
+      minHeight: 22,
+      padding: "3px 8px",
+      border: `1px solid ${warn ? "rgba(181,78,26,0.32)" : "rgba(74,92,55,0.28)"}`,
+      background: warn ? "rgba(181,78,26,0.07)" : "var(--moss-bg)",
+      color: warn ? "var(--warn)" : "var(--moss-deep)",
+      borderRadius: 999,
+      fontFamily: "var(--font-sans)",
+      fontSize: 11,
+      fontWeight: 600,
+      whiteSpace: "nowrap",
+      maxWidth: "100%",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+    }}>
+      {label}
+    </span>
+  );
+}
+
 function LangSwitch({ lang, onToggle }) {
   const isEn = lang === "en";
   return (

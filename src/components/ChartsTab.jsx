@@ -51,6 +51,7 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [showMonthlyPoster, setShowMonthlyPoster] = useState(false);
+  const [selectedTrendIndex, setSelectedTrendIndex] = useState(null);
   // Persisted to localStorage so the chosen period survives tab switches (and
   // reloads) instead of snapping back to the 4-week default every time.
   const [chartPeriod, setChartPeriod] = useState(() => {
@@ -268,24 +269,27 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   // ascent / duration) and for the optional ascent secondary chart on Trail
   // and Hiking. `data` is the bucket list shaped as { label, rangeText, value },
   // `axisLabel` is the unit shown in the top-left corner.
-  function renderTrendSvg(data, max, axisLabel) {
-    const plotLeft = 52;
-    const plotRight = 654;
-    const plotBottom = 206;
-    const plotHeight = 152;
+  function renderTrendSvg(data, max, axisLabel, selectedIndex, setSelectedIndex) {
+    const width = isMobile ? 360 : 700;
+    const height = isMobile ? 220 : 250;
+    const plotLeft = isMobile ? 34 : 52;
+    const plotRight = isMobile ? 332 : 654;
+    const plotBottom = isMobile ? 174 : 206;
+    const plotHeight = isMobile ? 118 : 152;
+    const ticks = isMobile ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
     return (
-      <svg viewBox="0 0 700 250" style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)" }}>
-        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)", touchAction: "manipulation" }}>
+        {ticks.map((p, i) => {
           const y = plotBottom - p * plotHeight;
           const val = (max * p).toFixed(0);
           return (
             <g key={i}>
-              <line x1={plotLeft - 10} y1={y} x2={plotRight + 8} y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
-              <text x="44" y={y + 5} fontSize="14" fill="var(--ink-3)" textAnchor="end" letterSpacing="0.02em">{val}</text>
+              <line x1={plotLeft - 6} y1={y} x2={plotRight + 4} y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
+              <text x={plotLeft - 10} y={y + 4} fontSize={isMobile ? 9 : 14} fill="var(--ink-3)" textAnchor="end" letterSpacing="0.02em">{val}</text>
             </g>
           );
         })}
-        <text x="22" y="18" fontSize="13" fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">{axisLabel}</text>
+        <text x={isMobile ? 12 : 22} y={isMobile ? 15 : 18} fontSize={isMobile ? 9 : 13} fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">{axisLabel}</text>
         {(() => {
           const xStep = data.length > 1 ? (plotRight - plotLeft) / (data.length - 1) : 0;
           const points = data.map((w, i) => ({
@@ -298,14 +302,18 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
           return (
             <>
               <path d={`${path} L ${points[points.length - 1].x} ${plotBottom} L ${points[0].x} ${plotBottom} Z`} fill="var(--moss)" opacity="0.08" />
-              <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth="1.5" />
+              <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth={isMobile ? 2 : 1.5} />
               {points.map((p, i) => (
-                <g key={i}>
-                  <rect x={p.x - 3} y={p.y - 3} width="6" height="6" fill="var(--ink-1)">
+                <g key={i} onClick={() => setSelectedIndex?.(i)} style={{ cursor: "pointer" }}>
+                  <rect x={p.x - (isMobile ? 5 : 3)} y={p.y - (isMobile ? 5 : 3)} width={isMobile ? 10 : 6} height={isMobile ? 10 : 6} fill={selectedIndex === i ? "var(--warn)" : "var(--ink-1)"}>
                     <title>{p.w.rangeText}: {p.w.value} {axisLabel}</title>
                   </rect>
-                  {p.w.value > 0 && <text x={p.x} y={p.y - 12} fontSize="15" fill="var(--ink-1)" textAnchor="middle" letterSpacing="0.02em" fontWeight="500">{p.w.value}</text>}
-                  <text x={p.x} y="218" fontSize="13" fill="var(--ink-3)" textAnchor="middle" letterSpacing="0.02em">{p.w.label}</text>
+                  {p.w.value > 0 && (!isMobile || data.length <= 6 || i === selectedIndex) && (
+                    <text x={p.x} y={p.y - 12} fontSize={isMobile ? 10 : 15} fill="var(--ink-1)" textAnchor="middle" letterSpacing="0.02em" fontWeight="500">{p.w.value}</text>
+                  )}
+                  <text x={p.x} y={isMobile ? 194 : 218} fontSize={isMobile ? 9 : 13} fill="var(--ink-3)" textAnchor="middle" letterSpacing="0.02em">
+                    {isMobile && data.length > 6 ? (i % 2 === 0 ? p.w.label : "") : p.w.label}
+                  </text>
                 </g>
               ))}
             </>
@@ -367,7 +375,22 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
         )}
       </div>
       <div style={{ ...s.card, marginBottom: 22, padding: isMobile ? "10px 6px 12px" : undefined }}>
-        {renderTrendSvg(chartData, chartMax, trendMeta.axis)}
+        {renderTrendSvg(chartData, chartMax, trendMeta.axis, selectedTrendIndex, setSelectedTrendIndex)}
+        {isMobile && chartData.length > 0 && (() => {
+          const idx = selectedTrendIndex ?? chartData.length - 1;
+          const item = chartData[idx] || chartData[chartData.length - 1];
+          return (
+            <div style={{
+              marginTop: 8,
+              display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+              borderTop: "1px solid var(--rule-soft)", paddingTop: 9,
+              fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--ink-2)",
+            }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.rangeText}</span>
+              <span style={{ ...s.dataNum, color: "var(--ink-1)", fontSize: 15 }}>{item.value} {trendMeta.axis}</span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Secondary ascent trend — only on Trail Run / Hiking filters */}

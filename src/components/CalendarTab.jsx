@@ -447,8 +447,12 @@ function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile, lastUpdated
       </div>
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? "1fr" : "repeat(7, minmax(0, 1fr))",
+        gridTemplateColumns: isMobile ? `repeat(${days.length}, minmax(118px, 1fr))` : "repeat(7, minmax(0, 1fr))",
         gap: isMobile ? 6 : 6,
+        overflowX: isMobile ? "auto" : "visible",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: isMobile ? "none" : undefined,
+        paddingBottom: isMobile ? 4 : 0,
       }}>
         {days.map(({ date, key, forecast }) => (
           <WeatherCard

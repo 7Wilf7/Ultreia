@@ -746,10 +746,16 @@ export function AICoachTab({
       <div style={{
         display: "flex",
         gap: 6,
-        flexWrap: "wrap",
+        flexWrap: isMobile ? "nowrap" : "wrap",
         alignItems: "center",
         marginBottom: 10,
-        paddingBottom: isMobile ? 8 : 0,
+        padding: isMobile ? "7px 8px" : 0,
+        border: isMobile ? "1px solid var(--rule)" : "none",
+        background: isMobile ? "var(--bg-elevated)" : "transparent",
+        borderRadius: isMobile ? 8 : 0,
+        overflowX: isMobile ? "auto" : "visible",
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: isMobile ? "none" : undefined,
       }}>
         {statusPill(<CoachIcon size={12} />, "Provider", providerLabel)}
         {/* Mode / Memory / Import pills crowd the mobile header — the same

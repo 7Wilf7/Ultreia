@@ -243,6 +243,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
         zIndex: 20,
         background: "var(--bg-elevated)",
         borderTop: "1px solid var(--rule)",
+        boxShadow: "0 -10px 28px rgba(20,20,19,0.08)",
         paddingBottom: "env(safe-area-inset-bottom)",
         display: "grid",
         gridTemplateColumns: "repeat(5, 1fr)",
@@ -259,12 +260,11 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
               style={{
                 background: "transparent",
                 border: "none",
-                borderTop: active ? "2px solid var(--ink-1)" : "2px solid transparent",
-                marginTop: -1,
-                padding: "10px 4px 12px",
+                marginTop: 0,
+                padding: "8px 4px 10px",
                 minHeight: 64,
                 fontFamily: "var(--font-sans)",
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: active ? 600 : 500,
                 color: active ? "var(--ink-1)" : "var(--ink-3)",
                 display: "flex",
@@ -284,7 +284,14 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
+                width: 38,
+                height: 28,
+                borderRadius: 999,
+                background: active ? "var(--moss-bg)" : "transparent",
+                border: active ? "1px solid rgba(74,92,55,0.28)" : "1px solid transparent",
                 color: active ? "var(--ink-1)" : "var(--ink-3)",
+                transform: active ? "translateY(-1px)" : "none",
+                transition: "background-color 160ms cubic-bezier(0.2,0.7,0.3,1), border-color 160ms cubic-bezier(0.2,0.7,0.3,1), transform 160ms cubic-bezier(0.2,0.7,0.3,1)",
               }}>
                 <Icon size={20} />
                 {showSpinner && (

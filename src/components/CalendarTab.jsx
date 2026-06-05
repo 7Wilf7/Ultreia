@@ -447,12 +447,8 @@ function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile, lastUpdated
       </div>
       <div style={{
         display: "grid",
-        gridTemplateColumns: isMobile ? `repeat(${days.length}, minmax(118px, 1fr))` : "repeat(7, minmax(0, 1fr))",
-        gap: isMobile ? 6 : 6,
-        overflowX: isMobile ? "auto" : "visible",
-        WebkitOverflowScrolling: "touch",
-        scrollbarWidth: isMobile ? "none" : undefined,
-        paddingBottom: isMobile ? 4 : 0,
+        gridTemplateColumns: isMobile ? "1fr" : "repeat(7, minmax(0, 1fr))",
+        gap: isMobile ? 8 : 6,
       }}>
         {days.map(({ date, key, forecast }) => (
           <WeatherCard
@@ -511,9 +507,9 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
   const cardStyle = {
     border: "1px solid " + (isToday ? "var(--moss)" : "var(--rule)"),
     background: isToday ? "var(--moss-bg)" : "var(--bg-elevated)",
-    padding: "8px 10px",
+    padding: isMobile ? "10px 12px" : "8px 10px",
     borderRadius: 2,
-    height: WEATHER_CARD_HEIGHT,
+    height: isMobile ? 76 : WEATHER_CARD_HEIGHT,
     boxSizing: "border-box",
     display: "flex",
     flexDirection: "column",
@@ -582,7 +578,7 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
         <span style={{
           fontFamily: "var(--font-mono)",
           fontVariantNumeric: "tabular-nums",
-          fontSize: isMobile ? 14 : 13,
+          fontSize: isMobile ? 16 : 13,
           fontWeight: 600, color: "var(--ink-1)",
           flexShrink: 0,
         }}>{tempReadout}</span>
@@ -591,7 +587,7 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
       {/* Row 2: feels · RH · wind · AQI. Small mono, one line, ellipsised
           if it overflows (rare — usually 2–3 short tokens). */}
       <div style={{
-        fontFamily: "var(--font-mono)", fontSize: 10,
+        fontFamily: "var(--font-mono)", fontSize: isMobile ? 11 : 10,
         color: "var(--ink-3)",
         fontVariantNumeric: "tabular-nums",
         whiteSpace: "nowrap",

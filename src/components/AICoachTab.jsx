@@ -287,6 +287,7 @@ export function AICoachTab({
   // inside the (sticky) message window so the provider pills above and the
   // input row below never move while the user scrolls messages.
   const chatScrollRef = useRef(null);
+  const chatInputRef = useRef(null);
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const hideJumpTimer = useRef(null);
@@ -366,6 +367,15 @@ export function AICoachTab({
   }, [chatMessages.length, chatLoading, muteAndHideJumps]);
   // Drop the pending hide timer if the tab unmounts mid-countdown.
   useEffect(() => () => clearTimeout(hideJumpTimer.current), []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const el = chatInputRef.current;
+    if (!el) return;
+    el.style.height = "44px";
+    const maxHeight = Math.round(14 * 1.45 * 7 + 22);
+    el.style.height = `${Math.min(Math.max(el.scrollHeight, 44), maxHeight)}px`;
+  }, [chatInput, isMobile]);
 
   // Small circular jump button, vertically pinned to top/bottom of the window.
   const jumpBtnStyle = (edge) => ({
@@ -529,7 +539,7 @@ export function AICoachTab({
       : wStatus === 'error' ? 'error'
       : '—');
   const weatherActive = wStatus === 'ready';
-  const statusPill = (icon, label, value, active = true) => (
+  const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
       alignItems: "center",
@@ -545,7 +555,7 @@ export function AICoachTab({
       whiteSpace: "nowrap",
     }}>
       <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}>{icon}</span>
-      <span style={{ color: "var(--ink-3)" }}>{label}</span>
+      {!compact && <span style={{ color: "var(--ink-3)" }}>{label}</span>}
       <span style={{ color: active ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{value}</span>
     </span>
   );
@@ -757,7 +767,7 @@ export function AICoachTab({
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
-        {statusPill(<CoachIcon size={12} />, "Provider", providerLabel)}
+        {statusPill(<CoachIcon size={12} />, "Provider", providerLabel, true, isMobile)}
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has
             room so it keeps all four. */}
@@ -780,17 +790,15 @@ export function AICoachTab({
               cursor: "pointer", whiteSpace: "nowrap",
             }}>
             <span>☁</span>
-            <span>Weather</span>
             <span style={{ fontWeight: 600 }}>{weatherLabel}</span>
           </button>
-        ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive)}
+        ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
 
-        {/* Inbox — pinned to the right edge of the header. Opens the inbox of
-            delivered coach pushes; badge shows unread count. */}
+        <span style={{ flex: 1, minWidth: 6 }} />
         {onOpenInbox && (
           <button onClick={onOpenInbox} title={t("inbox.title")} aria-label={t("inbox.title")}
             style={{
-              marginLeft: "auto", position: "relative",
+              position: "relative",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               minHeight: 26, width: 34, padding: 0,
               border: "1px solid var(--rule)", borderRadius: 2,
@@ -806,6 +814,26 @@ export function AICoachTab({
                 fontSize: 9, fontWeight: 700, lineHeight: "16px", textAlign: "center",
                 fontFamily: "var(--font-mono)",
               }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+            )}
+          </button>
+        )}
+        {isMobile && (
+          <button onClick={() => setShowCoachMenu(true)} aria-label={t("coach.menu_open")}
+            style={{
+              position: "relative",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              minHeight: 26, width: 34, padding: 0,
+              border: "1px solid var(--rule)", borderRadius: 2,
+              background: "var(--bg-elevated)", color: "var(--ink-2)",
+              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            }}>
+            <SettingsIcon size={15} />
+            {coachMemory && (
+              <span style={{
+                position: "absolute", top: 4, right: 4,
+                width: 5, height: 5, borderRadius: 999,
+                background: "var(--moss)",
+              }} />
             )}
           </button>
         )}
@@ -1023,13 +1051,14 @@ export function AICoachTab({
           lets this specific textarea drop below 16px without breaking the
           iOS-zoom-prevention rule for every other input. */}
       <div style={{
-        display: "flex", gap: 8, alignItems: "stretch",
+        display: "flex", gap: 8, alignItems: "flex-end",
         paddingTop: isMobile ? 10 : 0,
         borderTop: isMobile ? "1px solid var(--rule)" : "none",
         flexShrink: 0,
       }}>
         <textarea
-          rows={isMobile ? 3 : 9}
+          ref={chatInputRef}
+          rows={isMobile ? 1 : 9}
           placeholder={t("coach.input_placeholder")}
           value={chatInput}
           onChange={e => setChatInput(e.target.value)}
@@ -1040,36 +1069,28 @@ export function AICoachTab({
             fontFamily: "var(--font-sans)",
             flex: 1,
             lineHeight: 1.45,
+            minHeight: isMobile ? 44 : undefined,
+            maxHeight: isMobile ? "calc(14px * 1.45 * 7 + 22px)" : undefined,
+            overflowY: isMobile ? "auto" : undefined,
             "--mobile-input-fs": isMobile ? "14px" : undefined,
           }} />
         {isMobile ? (
-          // align-items: stretch on the parent row already matches the column
-          // height to the textarea. flex: 1 on each button splits that evenly
-          // so ⚙ and ⏎ are exactly the same height — no more visual jitter.
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 44 }}>
-            <button onClick={() => setShowCoachMenu(true)} aria-label={t("coach.menu_open")}
-              style={{
-                ...s.btnGhost,
-                flex: 1, width: "100%",
-                padding: 0, fontSize: 14, lineHeight: 1,
-                minHeight: 0,
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-              }}>
-              ⚙{coachMemory ? " ●" : ""}
-            </button>
-            <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
-              aria-label={t("coach.send")}
-              style={{
-                ...s.btn,
-                flex: 1, width: "100%",
-                padding: 0, fontSize: 20, lineHeight: 1,
-                minHeight: 0,
-                opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-              }}>
-              ⏎
-            </button>
-          </div>
+          <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
+            aria-label={t("coach.send")}
+            style={{
+              ...s.btn,
+              width: 44,
+              height: 44,
+              padding: 0,
+              fontSize: 20,
+              lineHeight: 1,
+              minHeight: 44,
+              flexShrink: 0,
+              opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>
+            ⏎
+          </button>
         ) : (
           // Desktop: ⚙ stacked above Send in a slim column, mirroring mobile.
           // ⚙ opens the unified hub modal (vertical tabs on left, content on right).

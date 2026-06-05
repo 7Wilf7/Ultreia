@@ -32,7 +32,6 @@ export function SettingsMobileTab({
   pushHours,
   pushTimes,
   pushFlash,
-  profileFlash,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -42,7 +41,7 @@ export function SettingsMobileTab({
   signOut,
 }) {
   const t = useT();
-  const [accountOpen, setAccountOpen] = useState(false);
+  const [headerOpen, setHeaderOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   const displayName = profile?.displayName || "—";
@@ -63,14 +62,19 @@ export function SettingsMobileTab({
 
   return (
     <div style={{ paddingBottom: 8 }}>
-      <div style={{
+      <button type="button" onClick={() => setHeaderOpen(v => !v)} style={{
         display: "flex", alignItems: "center", gap: 14,
+        width: "100%",
+        textAlign: "left",
         padding: "14px 14px 16px",
         border: "1px solid var(--rule)",
         background: "var(--bg-elevated)",
         borderRadius: 10,
-        marginBottom: 18,
+        marginBottom: headerOpen ? 0 : 18,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
+        cursor: "pointer",
+        color: "var(--ink-1)",
+        WebkitTapHighlightColor: "transparent",
       }}>
         <img
           src="/splash-logo.png"
@@ -106,29 +110,56 @@ export function SettingsMobileTab({
           )}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
             <StatusChip label={apiKey ? t("settings.api_set") : t("settings.api_missing")} warn={!apiKey} />
-            <StatusChip label={caiyunApiKey ? t("settings.weather_api_set") : t("settings.weather_api_default")} warn={!caiyunApiKey} />
+            <StatusChip label={caiyunApiKey ? t("settings.api_set") : t("settings.weather_api_default")} warn={!caiyunApiKey} />
           </div>
         </div>
-      </div>
+        <div style={{ color: "var(--ink-3)", fontSize: 15, marginLeft: 4, flexShrink: 0 }}>
+          {headerOpen ? "⌃" : "⌄"}
+        </div>
+      </button>
       {/* ── 账号 ────────────────────────────────────────────────────────── */}
-      <SectionHeader label={t("settings.account")} />
-      <Cell
-        primary={displayName}
-        secondary={email}
-        rightValue={accountOpen ? "▴" : "▾"}
-        onClick={() => setAccountOpen(o => !o)}
-        ariaLabel={t("settings.email_actions")}
-      />
-      {accountOpen && (
-        <div style={{ paddingLeft: 14, background: "var(--bg)" }}>
+      {headerOpen && (
+        <div style={{
+          paddingLeft: 14,
+          background: "var(--bg)",
+          borderLeft: "1px solid var(--rule-soft)",
+          borderRight: "1px solid var(--rule-soft)",
+          borderBottom: "1px solid var(--rule-soft)",
+          marginBottom: 18,
+        }}>
+          <SubCell
+            primary={t("settings.profile")}
+            secondary={t("settings.profile_desc")}
+            onClick={onOpenProfile}
+          />
+          <SubCell
+            primary={t("settings.ai_api")}
+            secondary={apiKey
+              ? t("settings.api_set")
+              : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
+                  ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
+                  : t("settings.api_missing"))}
+            warn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
+            onClick={onOpenApiSettings}
+          />
+          <SubCell
+            primary={t("settings.weather_api")}
+            secondary={caiyunApiKey
+              ? t("settings.api_set")
+              : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
+                  ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
+                  : t("settings.weather_api_default"))}
+            warn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
+            onClick={onOpenWeatherApiSettings}
+          />
           <SubCell
             primary={t("settings.change_password")}
-            onClick={() => { setAccountOpen(false); onChangePassword(); }}
+            onClick={onChangePassword}
           />
           {isAdmin && (
             <SubCell
               primary={t("settings.generate_invite")}
-              onClick={() => { setAccountOpen(false); onGenerateInvite(); }}
+              onClick={onGenerateInvite}
             />
           )}
           <SubCell
@@ -144,39 +175,10 @@ export function SettingsMobileTab({
           <SubCell
             primary={t("settings.delete_account")}
             danger
-            onClick={() => { setAccountOpen(false); onDeleteAccount(); }}
+            onClick={onDeleteAccount}
           />
         </div>
       )}
-      <Cell
-        flash={profileFlash}
-        primary={t("settings.profile")}
-        secondary={t("settings.profile_desc")}
-        onClick={onOpenProfile}
-      />
-
-      {/* ── API ──────────────────────────────────────────────────────────── */}
-      <SectionHeader label={t("settings.section_api")} />
-      <Cell
-        primary={t("settings.ai_api")}
-        secondary={apiKey
-          ? t("settings.api_set")
-          : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
-              ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
-              : t("settings.api_missing"))}
-        secondaryWarn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
-        onClick={onOpenApiSettings}
-      />
-      <Cell
-        primary={t("settings.weather_api")}
-        secondary={caiyunApiKey
-          ? t("settings.weather_api_set")
-          : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
-              ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
-              : t("settings.weather_api_default"))}
-        secondaryWarn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
-        onClick={onOpenWeatherApiSettings}
-      />
 
       {/* ── 其他 ──────────────────────────────────────────────────────────── */}
       <SectionHeader label={t("settings.section_other")} />
@@ -376,7 +378,7 @@ function Cell({ primary, secondary, secondaryWarn, rightValue, onClick, href, ex
 
 // Secondary cells — slightly indented + lower density, used inside the
 // expanded account menu so the user reads them as "options under email".
-function SubCell({ primary, danger, onClick }) {
+function SubCell({ primary, secondary, warn, danger, onClick }) {
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", width: "100%",
@@ -392,7 +394,24 @@ function SubCell({ primary, danger, onClick }) {
       cursor: "pointer", borderRadius: 0,
       WebkitTapHighlightColor: "transparent",
     }}>
-      <span style={{ flex: 1 }}>{primary}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span>{primary}</span>
+        {secondary && (
+          <span style={{
+            display: "block",
+            marginTop: 3,
+            fontSize: 12,
+            color: warn ? "var(--warn)" : "var(--ink-3)",
+            fontWeight: 400,
+            lineHeight: 1.35,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {secondary}
+          </span>
+        )}
+      </span>
       <span style={{ color: "var(--ink-3)", fontSize: 14 }}>›</span>
     </button>
   );

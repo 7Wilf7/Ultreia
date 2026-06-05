@@ -111,6 +111,20 @@ export async function listMyWorkouts() {
   return (data ?? []).map(fromRow);
 }
 
+export async function getWorkoutGpsTrack(id) {
+  if (!id) return null;
+  const { data, error } = await supabase
+    .from('workouts')
+    .select('gps_track')
+    .eq('id', id)
+    .single();
+  if (error) {
+    console.error('getWorkoutGpsTrack failed:', error);
+    throw new Error(error.message);
+  }
+  return Array.isArray(data?.gps_track) ? data.gps_track : null;
+}
+
 export async function createWorkout(workout, { source = 'manual' } = {}) {
   const userId = await getCurrentUserId();
   const row = { ...toRow(workout), user_id: userId, source };

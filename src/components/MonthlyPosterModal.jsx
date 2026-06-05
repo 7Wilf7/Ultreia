@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { RACE_CATEGORIES, RUN_GROUP_TYPES, SPARTAN_SUBTYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
-import { formatDurationShort } from "../utils/format";
+import { workouts as workoutsDb } from "../lib/db";
+import { formatDurationShort, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "../utils/format";
 import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
 import iconOnlyUrl from "../../resources/icon-only-poster.png";
@@ -9,7 +10,9 @@ import iconOnlyUrl from "../../resources/icon-only-poster.png";
 const POSTER_W = 1080;
 const POSTER_H = 1920;
 const TEMPLATES = ["classic", "bib", "topo"];
-const POSTER_MODES = ["week", "month", "year", "pr"];
+const POSTER_MODES = ["single", "week", "month", "year", "pr"];
+const RANGE_MODES = new Set(["week", "month", "year"]);
+const PR_RANGES = ["all", "this_year", "last_year", "last_12m"];
 
 function fmtNum(n, digits = 0) {
   return Number(n || 0).toLocaleString(undefined, {
@@ -42,6 +45,71 @@ function labelDate(d) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function workoutLabel(log) {
+  if (!log) return "";
+  const typeLabel = log.type || "Workout";
+  const dateLabel = log.date || "";
+  const dist = Number(log.distance) > 0 ? ` · ${fmtNum(log.distance, 1)} km` : "";
+  return `${dateLabel} · ${typeLabel}${dist}`;
+}
+
+function startedLabel(log) {
+  if (log?.startedAt) {
+    const d = new Date(log.startedAt);
+    if (!Number.isNaN(d.getTime())) return labelDate(d);
+  }
+  if (log?.date) {
+    const d = new Date(log.date);
+    if (!Number.isNaN(d.getTime())) return labelDate(d);
+  }
+  return "";
+}
+
+function paceValue(log) {
+  const distance = Number(log?.distance) || 0;
+  const duration = Number(log?.duration) || 0;
+  if (log?.type === "Cycling") return `${formatSpeedKmh(distance, duration)} km/h`;
+  if (log?.type === "Swimming") return `${formatSwimPace(distance, duration)} /100m`;
+  if (Number(log?.pace) > 0) return `${formatPaceFromSec(log.pace)} /km`;
+  if (distance > 0 && duration > 0) return `${formatPaceFromSec(Math.round(duration / distance))} /km`;
+  return "-";
+}
+
+function normalizeGpsTrack(track) {
+  if (!Array.isArray(track)) return [];
+  return track
+    .map(pt => {
+      if (Array.isArray(pt)) return [Number(pt[0]), Number(pt[1])];
+      if (pt && typeof pt === "object") return [Number(pt.lat ?? pt.latitude), Number(pt.lng ?? pt.lon ?? pt.longitude)];
+      return [NaN, NaN];
+    })
+    .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
+}
+
+function gpsPath(track, x, y, w, h) {
+  const pts = normalizeGpsTrack(track);
+  if (pts.length < 2) return "";
+  const lats = pts.map(p => p[0]);
+  const lngs = pts.map(p => p[1]);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = maxLat - minLat || 1;
+  const lngSpan = maxLng - minLng || 1;
+  const pad = 44;
+  const scale = Math.min((w - pad * 2) / lngSpan, (h - pad * 2) / latSpan);
+  const routeW = lngSpan * scale;
+  const routeH = latSpan * scale;
+  const ox = x + (w - routeW) / 2;
+  const oy = y + (h - routeH) / 2;
+  return pts.map(([lat, lng], i) => {
+    const px = ox + (lng - minLng) * scale;
+    const py = oy + (maxLat - lat) * scale;
+    return `${i === 0 ? "M" : "L"} ${px.toFixed(1)} ${py.toFixed(1)}`;
+  }).join(" ");
+}
+
 function getRange(mode, offset) {
   const now = new Date();
   if (mode === "week") {
@@ -67,6 +135,33 @@ function getRange(mode, offset) {
   };
 }
 
+function buildSingleStats(log, gpsTrack, t) {
+  const route = normalizeGpsTrack(gpsTrack);
+  const distance = Number(log?.distance) || 0;
+  const duration = Number(log?.duration) || 0;
+  const typeLabel = log?.type || "Workout";
+  return {
+    mode: "single",
+    title: t("poster.single_title"),
+    periodLabel: startedLabel(log),
+    fileLabel: `single-${log?.date || "workout"}`,
+    primaryValue: fmtNum(distance, distance >= 100 ? 0 : 1),
+    primaryUnit: distance > 0 ? "km" : "",
+    primaryLabel: typeLabel.toUpperCase(),
+    note: route.length >= 2 ? t("poster.single_route_note") : t("poster.single_no_route"),
+    routeLabel: route.length >= 2 ? t("poster.route_map") : t("poster.single_no_route"),
+    activeDaysLabel: t("poster.route_points"),
+    activeDays: route.length >= 2 ? route.length : null,
+    gpsTrack: route,
+    metrics: [
+      { label: t("poster.time"), value: formatDurationShort(duration) },
+      { label: t("poster.pace"), value: paceValue(log) },
+      { label: t("poster.ascent"), value: `+${fmtNum(Number(log?.ascent) || 0)} m` },
+      { label: t("poster.avg_hr"), value: Number(log?.hr) > 0 ? fmtNum(log.hr) : "-" },
+    ],
+  };
+}
+
 function rangeLabel(mode, range, lang) {
   if (mode === "year") return String(range.start.getFullYear());
   if (mode === "month") {
@@ -76,6 +171,29 @@ function rangeLabel(mode, range, lang) {
   const endDisplay = new Date(range.end);
   endDisplay.setDate(endDisplay.getDate() - 1);
   return `${labelDate(range.start)} - ${labelDate(endDisplay)}`;
+}
+
+function getPRRange(id) {
+  if (id === "all") return null;
+  const now = new Date();
+  if (id === "last_12m") {
+    const start = new Date(now);
+    start.setFullYear(start.getFullYear() - 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setDate(end.getDate() + 1);
+    end.setHours(0, 0, 0, 0);
+    return { start, end };
+  }
+  const year = now.getFullYear() + (id === "last_year" ? -1 : 0);
+  return {
+    start: new Date(year, 0, 1),
+    end: new Date(year + 1, 0, 1),
+  };
+}
+
+function prRangeLabel(id, t) {
+  return t(`poster.pr_range_${id}`);
 }
 
 function buildPeriodStats(logs, mode, offset, lang, t) {
@@ -163,13 +281,20 @@ function buildPRRecords(races) {
   return out;
 }
 
-function buildPRStats(races, t) {
-  const records = buildPRRecords(races);
+function buildPRStats(races, rangeId, t) {
+  const range = getPRRange(rangeId);
+  const filtered = range
+    ? (races || []).filter(r => {
+      const d = new Date(r.date);
+      return !Number.isNaN(d.getTime()) && d >= range.start && d < range.end;
+    })
+    : races;
+  const records = buildPRRecords(filtered);
   return {
     mode: "pr",
     title: t("poster.pr_title"),
-    periodLabel: t("poster.pr_all_time"),
-    fileLabel: "pr-all-time",
+    periodLabel: prRangeLabel(rangeId, t),
+    fileLabel: `pr-${rangeId}`,
     primaryValue: fmtNum(records.length),
     primaryUnit: "PR",
     primaryLabel: t("poster.pr_subtitle"),
@@ -249,6 +374,34 @@ function periodLine(stats, palette, y = 1288) {
   );
 }
 
+function RoutePanel({ stats, palette, x = 110, y = 720, w = 860, h = 470 }) {
+  const path = gpsPath(stats.gpsTrack, x, y, w, h);
+  const hasRoute = Boolean(path);
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} fill={palette.card} stroke={palette.rule} strokeWidth="2" />
+      <g fill="none" stroke={palette.ruleStrong} strokeWidth="1" opacity="0.13">
+        {Array.from({ length: 8 }, (_, i) => (
+          <path key={i} d={`M${x + 28} ${y + 60 + i * 45} C ${x + 220} ${y + 5 + i * 40}, ${x + 410} ${y + 105 + i * 24}, ${x + 620} ${y + 58 + i * 46} S ${x + 780} ${y + 10 + i * 42}, ${x + w - 28} ${y + 76 + i * 34}`} />
+        ))}
+      </g>
+      <text x={x + 34} y={y + 56} fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="800" letterSpacing="3">
+        {stats.routeLabel}
+      </text>
+      {hasRoute ? (
+        <>
+          <path d={path} fill="none" stroke={palette.ruleStrong} strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />
+          <path d={path} fill="none" stroke={palette.ink} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+        </>
+      ) : (
+        <text x={x + w / 2} y={y + h / 2 + 20} textAnchor="middle" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="700">
+          {stats.note}
+        </text>
+      )}
+    </g>
+  );
+}
+
 function ClassicPoster({ stats, svgRef, logoSrc }) {
   const palette = {
     ink: "#141413",
@@ -292,8 +445,18 @@ function ClassicPoster({ stats, svgRef, logoSrc }) {
         {stats.primaryLabel}
       </text>
 
-      {metricCards(stats, palette)}
-      {periodLine(stats, palette)}
+      {stats.mode === "single" ? (
+        <>
+          <RoutePanel stats={stats} palette={palette} y={720} />
+          {metricCards(stats, palette, 110, 1240)}
+          {periodLine(stats, palette, 1600)}
+        </>
+      ) : (
+        <>
+          {metricCards(stats, palette)}
+          {periodLine(stats, palette)}
+        </>
+      )}
       {signature({ y: 1718 })}
     </svg>
   );
@@ -350,8 +513,17 @@ function BibPoster({ stats, svgRef, logoSrc }) {
         {stats.primaryUnit}
       </text>
 
-      {metricCards(stats, palette, 150, 1010)}
-      {periodLine(stats, palette, 1478)}
+      {stats.mode === "single" ? (
+        <>
+          <RoutePanel stats={stats} palette={palette} x={150} y={950} w={780} h={330} />
+          {metricCards(stats, palette, 150, 1330)}
+        </>
+      ) : (
+        <>
+          {metricCards(stats, palette, 150, 1010)}
+          {periodLine(stats, palette, 1478)}
+        </>
+      )}
       {signature({ y: 1698, ink: "#f4ead0", urlInk: "#d2bc78", opacity: 0.78 })}
     </svg>
   );
@@ -396,8 +568,17 @@ function TopoPoster({ stats, svgRef, logoSrc }) {
         {stats.primaryLabel}
       </text>
 
-      {metricCards(stats, palette, 112, 840)}
-      {periodLine(stats, palette, 1320)}
+      {stats.mode === "single" ? (
+        <>
+          <RoutePanel stats={stats} palette={palette} x={112} y={780} w={856} h={510} />
+          {metricCards(stats, palette, 112, 1360)}
+        </>
+      ) : (
+        <>
+          {metricCards(stats, palette, 112, 840)}
+          {periodLine(stats, palette, 1320)}
+        </>
+      )}
       {signature({ y: 1730, ink: "#f7f0dc", urlInk: "#dce8a8", opacity: 0.8 })}
     </svg>
   );
@@ -415,15 +596,29 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const svgRef = useRef(null);
   const [mode, setMode] = useState("month");
   const [rangeOffset, setRangeOffset] = useState(0);
+  const [prRange, setPrRange] = useState("all");
+  const singleOptions = useMemo(() => (logs || [])
+    .filter(l => !l.isPlanned && (Number(l.distance) > 0 || Number(l.duration) > 0))
+    .slice()
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")))
+    .slice(0, 80), [logs]);
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
+  const [singleGpsTrack, setSingleGpsTrack] = useState(null);
+  const [routeLoading, setRouteLoading] = useState(false);
   const [template, setTemplate] = useState("classic");
   const [logoSrc, setLogoSrc] = useState(iconOnlyUrl);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  const selectedWorkout = useMemo(() => (
+    singleOptions.find(l => l.id === selectedWorkoutId) || singleOptions[0] || null
+  ), [singleOptions, selectedWorkoutId]);
   const stats = useMemo(() => (
-    mode === "pr"
-      ? buildPRStats(races, t)
+    mode === "single"
+      ? buildSingleStats(selectedWorkout, singleGpsTrack, t)
+      : mode === "pr"
+      ? buildPRStats(races, prRange, t)
       : buildPeriodStats(logs || [], mode, rangeOffset, lang, t)
-  ), [logs, races, mode, rangeOffset, lang, t]);
+  ), [logs, races, selectedWorkout, singleGpsTrack, mode, rangeOffset, prRange, lang, t]);
 
   useEffect(() => {
     let alive = true;
@@ -444,14 +639,37 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     };
   }, []);
 
+  useEffect(() => {
+    let alive = true;
+    async function loadTrack() {
+      if (mode !== "single" || !selectedWorkout?.id) {
+        setSingleGpsTrack(null);
+        return;
+      }
+      setRouteLoading(true);
+      try {
+        const track = await workoutsDb.getWorkoutGpsTrack(selectedWorkout.id);
+        if (alive) setSingleGpsTrack(track);
+      } catch {
+        if (alive) setSingleGpsTrack(null);
+      } finally {
+        if (alive) setRouteLoading(false);
+      }
+    }
+    loadTrack();
+    return () => {
+      alive = false;
+    };
+  }, [mode, selectedWorkout?.id]);
+
   function switchMode(nextMode) {
     setMode(nextMode);
     setMsg("");
-    if (nextMode === "pr") setRangeOffset(0);
+    if (!RANGE_MODES.has(nextMode)) setRangeOffset(0);
   }
 
   async function downloadPoster() {
-    if (!svgRef.current || busy) return;
+    if (!svgRef.current || busy || (mode === "single" && !selectedWorkout)) return;
     setBusy(true);
     setMsg("");
     try {
@@ -506,7 +724,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">x</button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, marginBottom: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6, marginBottom: 8 }}>
             {POSTER_MODES.map(id => (
               <button key={id} onClick={() => switchMode(id)}
                 style={{ ...s.chip(mode === id), minHeight: 34, minWidth: 0, padding: "0 6px", fontSize: 12 }}>
@@ -515,7 +733,34 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             ))}
           </div>
 
-          {mode !== "pr" && (
+          {mode === "single" && (
+            <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+              <select
+                value={selectedWorkout?.id || ""}
+                onChange={e => {
+                  setSelectedWorkoutId(e.target.value);
+                  setMsg("");
+                }}
+                style={{
+                  ...s.input,
+                  minHeight: 38,
+                  fontSize: 12,
+                  padding: "0 10px",
+                }}
+              >
+                {singleOptions.length ? singleOptions.map(l => (
+                  <option key={l.id} value={l.id}>{workoutLabel(l)}</option>
+                )) : (
+                  <option value="">{t("poster.no_single_workout")}</option>
+                )}
+              </select>
+              <div style={{ ...s.muted, fontSize: 12 }}>
+                {routeLoading ? t("poster.route_loading") : stats.note}
+              </div>
+            </div>
+          )}
+
+          {RANGE_MODES.has(mode) && (
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <button onClick={() => setRangeOffset(v => v - 1)} style={{ ...s.btnGhost, minHeight: 34, padding: "0 10px" }}>
                 {t("poster.prev_range")}
@@ -525,6 +770,20 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
                 style={{ ...s.btnGhost, minHeight: 34, padding: "0 10px", opacity: rangeOffset >= 0 ? 0.45 : 1 }}>
                 {t("poster.next_range")}
               </button>
+            </div>
+          )}
+
+          {mode === "pr" && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
+              {PR_RANGES.map(id => (
+                <button key={id} onClick={() => {
+                  setPrRange(id);
+                  setMsg("");
+                }}
+                  style={{ ...s.chip(prRange === id), minHeight: 34, minWidth: 0, padding: "0 6px", fontSize: 12 }}>
+                  {t(`poster.pr_range_${id}`)}
+                </button>
+              ))}
             </div>
           )}
 
@@ -562,8 +821,8 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
             {msg && <span style={{ ...s.muted, marginRight: "auto" }}>{msg}</span>}
             <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
-            <button onClick={downloadPoster} disabled={busy}
-              style={{ ...s.btn, opacity: busy ? 0.6 : 1 }}>
+            <button onClick={downloadPoster} disabled={busy || (mode === "single" && !selectedWorkout)}
+              style={{ ...s.btn, opacity: busy || (mode === "single" && !selectedWorkout) ? 0.6 : 1 }}>
               {busy ? t("poster.saving") : t("poster.save_png")}
             </button>
           </div>

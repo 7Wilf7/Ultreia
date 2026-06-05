@@ -17,6 +17,7 @@ const FIELD_MAP = {
   note:       'note',          // text — optional free-text note ("new shoes", "knee tight")
   rpe:        'rpe',           // smallint 1–10 — optional session RPE (perceived exertion)
   isPlanned:  'is_planned',    // boolean — future plan (true) vs completed (false)
+  planStatus: 'plan_status',   // text 'pending'|'done'|'skipped' (planned rows only; null=pending)
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
   startedAt:  'started_at',    // timestamptz — when the activity actually started; null = unknown
   weather:    'weather',       // jsonb — snapshot from src/lib/weather.js (tempC, apparentC, humidity, skycon, ...)
@@ -39,6 +40,9 @@ const JSON_FIELDS  = new Set(['weather', 'hrZoneSeconds', 'gpsTrack']);
 // Timestamps come back as ISO strings; preserve null when unset rather than
 // coercing to '' (the down-stream weather logic does Number(new Date(v))).
 const TS_FIELDS    = new Set(['startedAt']);
+// Nullable text columns with a DB CHECK constraint: an empty string would
+// violate the constraint, so '' / null must always write through as null.
+const NULLABLE_TEXT_FIELDS = new Set(['planStatus']);
 const WRITE_SKIP = new Set(['createdAt', 'updatedAt']);  // server-managed
 
 // Columns to fetch for the activity list. Deliberately EXCLUDES gps_track —
@@ -91,6 +95,8 @@ function toRow(patch) {
         const n = typeof v === 'number' ? v : Number(v);
         out[snake] = Number.isFinite(n) ? Math.round(n) : null;
       }
+    } else if (NULLABLE_TEXT_FIELDS.has(camel)) {
+      out[snake] = (v === '' || v == null) ? null : v;
     } else {
       out[snake] = v;
     }
@@ -170,6 +176,26 @@ export async function deleteWorkouts(ids) {
   const { error } = await supabase.from('workouts').delete().in('id', ids);
   if (error) {
     console.error('deleteWorkouts failed:', error);
+    throw new Error(error.message);
+  }
+}
+
+// Delete the PLANNED rows on the given dates (completed workouts untouched).
+// Used by the coach calendar-import so re-importing a plan REPLACES the day's
+// plan instead of stacking a second row on top. RLS scopes to the user; we add
+// an explicit user_id filter as belt-and-braces.
+export async function deletePlannedOnDates(dates) {
+  const unique = [...new Set((dates || []).filter(Boolean))];
+  if (unique.length === 0) return;
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('workouts')
+    .delete()
+    .eq('user_id', userId)
+    .eq('is_planned', true)
+    .in('date', unique);
+  if (error) {
+    console.error('deletePlannedOnDates failed:', error);
     throw new Error(error.message);
   }
 }

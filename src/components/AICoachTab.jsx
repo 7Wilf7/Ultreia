@@ -951,11 +951,14 @@ export function AICoachTab({
                     alignItems: isUser ? "flex-end" : "flex-start",
                     gap: 6, minWidth: 0,
                   }}>
-                    <div style={{
+                    <div className="selectable" style={{
                       // On-token bubbles: user = stamped ink block (echoes the
                       // s.tag stamp), coach = sunken panel with a hairline (the
                       // app's borders-not-fills rule). Soft 10px radius kept on
                       // purpose — chat reads warmer than the sharp 2px cards.
+                      // `.selectable` re-enables long-press select + copy (the
+                      // app disables text selection globally) so the runner can
+                      // copy the coach's advice.
                       background: isUser ? "var(--ink-1)" : "var(--bg-sunken)",
                       color: isUser ? "var(--ink-inv)" : "var(--ink-1)",
                       border: `1px solid ${isUser ? "var(--ink-1)" : "var(--rule)"}`,

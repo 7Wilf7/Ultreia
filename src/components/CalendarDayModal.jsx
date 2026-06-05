@@ -75,12 +75,30 @@ const navBtn = {
 };
 
 export function CalendarDayModal({
-  dateKey, isFuture, logs, note, weather, onClose, onPrev, onNext,
-  addLog, updateLog, setConfirmDelete, setDailyTags,
+  dateKey, isFuture, isToday, logs, note, weather, onClose, onPrev, onNext,
+  addLog, updateLog, setConfirmDelete, setDailyTags, setReadiness,
 }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  const isPast = !isFuture && !isToday;
+  // A planned session counts as DONE when explicitly marked done, or when any
+  // completed workout exists on the same day (auto-reconciliation).
+  const dayHasCompleted = logs.some(l => !l.isPlanned);
+  function planOutcome(l) {
+    if (!l.isPlanned) return null;
+    if (l.planStatus === "skipped") return "skipped";
+    if (l.planStatus === "done" || dayHasCompleted) return "done";
+    return isPast ? "missed" : "pending";
+  }
+  function setPlanStatus(id, status) {
+    updateLog(id, { planStatus: status }).catch(() => {});
+  }
+  const readiness = note?.readiness || null;
+  function setReadinessField(field, val) {
+    const cur = readiness || {};
+    setReadiness(dateKey, { sleep: cur.sleep ?? null, legs: cur.legs ?? null, energy: cur.energy ?? null, [field]: val });
+  }
 
   // Single open panel — keeps the modal short.
   // null | 'plan'
@@ -320,6 +338,29 @@ export function CalendarDayModal({
                         {logHeadline(l)}
                       </div>
                     </div>
+                    {/* Plan reconciliation — past plans show their outcome and a
+                        one-tap resolve, so the user never has to delete a past
+                        plan to keep the calendar clean. */}
+                    {(() => {
+                      const outcome = planOutcome(l);
+                      if (!outcome || outcome === "pending") return null;
+                      const badge = (color, txt) => (
+                        <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color, letterSpacing: "0.04em" }}>{txt}</span>
+                      );
+                      const miniBtn = (txt, onClick) => (
+                        <button onClick={onClick} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11 }}>{txt}</button>
+                      );
+                      return (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
+                          {outcome === "done" && badge("var(--moss)", `✓ ${t("calendar.plan_done")}`)}
+                          {outcome === "skipped" && badge("var(--ink-3)", t("calendar.plan_skipped"))}
+                          {outcome === "missed" && badge("#b07a3e", t("calendar.plan_missed"))}
+                          {outcome === "missed" && miniBtn(`✓ ${t("calendar.plan_mark_done")}`, () => setPlanStatus(l.id, "done"))}
+                          {outcome === "missed" && miniBtn(t("calendar.plan_mark_skip"), () => setPlanStatus(l.id, "skipped"))}
+                          {(l.planStatus === "done" || l.planStatus === "skipped") && miniBtn(t("calendar.plan_reset"), () => setPlanStatus(l.id, "pending"))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
@@ -392,6 +433,29 @@ export function CalendarDayModal({
                 />
               </div>
             )}
+          </div>
+        )}
+
+        {/* Morning readiness self-check — only for today / past (future hasn't
+            happened). One tap per field; tapping the active level clears it.
+            Feeds the coach so it can judge "push or back off today". */}
+        {!isFuture && (
+          <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14, marginBottom: 14 }}>
+            <div style={{ ...s.label, marginBottom: 8 }}>{t("calendar.readiness_title")}</div>
+            {[["sleep", "calendar.readiness_sleep"], ["legs", "calendar.readiness_legs"], ["energy", "calendar.readiness_energy"]].map(([field, key]) => (
+              <div key={field} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ ...s.muted, fontSize: 12, width: 64, flexShrink: 0 }}>{t(key)}</span>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, flex: 1 }}>
+                  {[1, 2, 3].map(v => (
+                    <button key={v}
+                      onClick={() => setReadinessField(field, (readiness?.[field] === v) ? null : v)}
+                      style={{ ...s.chip((readiness?.[field] || null) === v), minHeight: 0, padding: "6px 4px", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {t(`calendar.readiness_lvl_${v}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 

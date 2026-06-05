@@ -23,6 +23,11 @@ function fromRow(row) {
     // Free-text destination for a day tagged "travel" (where the user is
     // going) — feeds local running tips to the coach + push.
     travelDest: row.travel_dest ?? '',
+    // Morning readiness self-check (1=poor 2=ok 3=good), null when not logged.
+    // Feeds the coach so it can judge "push or back off today".
+    readiness: (row.readiness_sleep != null || row.readiness_legs != null || row.readiness_energy != null)
+      ? { sleep: row.readiness_sleep ?? null, legs: row.readiness_legs ?? null, energy: row.readiness_energy ?? null }
+      : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -50,19 +55,20 @@ export async function setDailyTags(date, tags, travelDest = '') {
   const dest = cleanTags.includes('travel') ? (travelDest || '').trim() : '';
 
   if (cleanTags.length === 0) {
-    // Delete-by-date instead of upsert-with-empty. RLS already scopes to the
-    // logged-in user but we add an explicit user_id filter as belt-and-braces.
+    // Clear tags but DON'T delete the row — a readiness check-in may live on
+    // the same (user, date) row and must survive clearing the day's tags.
+    // Upsert only the tag columns; readiness columns are left untouched.
     const userId = await getCurrentUserId();
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('daily_notes')
-      .delete()
-      .eq('user_id', userId)
-      .eq('date', date);
+      .upsert({ user_id: userId, date, tags: [], travel_dest: null }, { onConflict: 'user_id,date' })
+      .select('*')
+      .single();
     if (error) {
-      console.error('setDailyTags (delete) failed:', error);
+      console.error('setDailyTags (clear) failed:', error);
       throw new Error(error.message);
     }
-    return null;
+    return fromRow(data);
   }
 
   const userId = await getCurrentUserId();
@@ -76,6 +82,28 @@ export async function setDailyTags(date, tags, travelDest = '') {
     .single();
   if (error) {
     console.error('setDailyTags (upsert) failed:', error);
+    throw new Error(error.message);
+  }
+  return fromRow(data);
+}
+
+// Upsert the morning readiness check-in for a date (1–3 each, or null to clear
+// a field). Only touches the readiness columns — tags / travel on the same row
+// are preserved. Returns the resulting row.
+export async function setReadiness(date, { sleep = null, legs = null, energy = null } = {}) {
+  if (!date) throw new Error('setReadiness: date is required');
+  const clamp = (v) => (v == null ? null : Math.max(1, Math.min(3, Math.round(Number(v)))) || null);
+  const userId = await getCurrentUserId();
+  const { data, error } = await supabase
+    .from('daily_notes')
+    .upsert(
+      { user_id: userId, date, readiness_sleep: clamp(sleep), readiness_legs: clamp(legs), readiness_energy: clamp(energy) },
+      { onConflict: 'user_id,date' }
+    )
+    .select('*')
+    .single();
+  if (error) {
+    console.error('setReadiness failed:', error);
     throw new Error(error.message);
   }
   return fromRow(data);

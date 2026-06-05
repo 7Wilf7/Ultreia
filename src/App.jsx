@@ -507,7 +507,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return Promise.resolve();
   }
 
-  function bulkAddLogs(workouts, { source = "garmin_csv", fetchWeather = false } = {}) {
+  function bulkAddLogs(workouts, { source = "garmin_csv", fetchWeather = false, replacePlannedDates = false } = {}) {
     const optimistics = workouts.map(w => ({
       id: makeTempId("bulk"),
       ...w,
@@ -517,10 +517,18 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       createdAt: new Date().toISOString(),
       isOptimistic: true,
     }));
-    setLogs(prev => [...optimistics, ...prev]);
+    // When replacing (coach plan import), the imported plan supersedes any
+    // existing PLANNED rows on those same dates — drop them optimistically so
+    // the calendar doesn't briefly show two plans (old 5km + new 8km).
+    const planDates = replacePlannedDates ? [...new Set(workouts.map(w => w.date).filter(Boolean))] : [];
+    setLogs(prev => [
+      ...optimistics,
+      ...(replacePlannedDates ? prev.filter(l => !(l.isPlanned && planDates.includes(l.date))) : prev),
+    ]);
 
     (async () => {
       try {
+        if (replacePlannedDates) await db.workouts.deletePlannedOnDates(planDates);
         let toInsert = workouts;
         // FIT import can request weather for rows that fall inside Caiyun's
         // window (now / past 24h). Use the FIT's own GPS start point for the
@@ -554,6 +562,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         console.error("[bulkAddLogs] background save failed:", err);
         const tempIds = new Set(optimistics.map(o => o.id));
         setLogs(prev => prev.filter(l => !tempIds.has(l.id)));
+        // A replace import may have already deleted the old plan rows before
+        // failing — resync from server truth so the calendar isn't left wrong.
+        if (replacePlannedDates) refreshLogs().catch(() => {});
         window.alert(err.message);
       }
     })();
@@ -741,6 +752,41 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return Promise.resolve();
   }
 
+  // Morning readiness check-in — same optimistic pattern as setDailyTags but
+  // writes the readiness columns on the (user, date) daily_notes row. Tags on
+  // the same row are preserved (the DAL upserts only the readiness columns).
+  function setReadiness(date, vals) {
+    let snapshot = null;
+    setDailyNotes(prev => {
+      snapshot = prev.find(n => n.date === date) || null;
+      const without = prev.filter(n => n.date !== date);
+      const optimistic = {
+        ...(snapshot || { date, tags: [] }),
+        date,
+        readiness: { sleep: vals.sleep ?? null, legs: vals.legs ?? null, energy: vals.energy ?? null },
+        isOptimistic: true,
+      };
+      return [optimistic, ...without];
+    });
+    (async () => {
+      try {
+        const updated = await db.dailyNotes.setReadiness(date, vals);
+        setDailyNotes(prev => {
+          const without = prev.filter(n => n.date !== date);
+          return updated ? [updated, ...without] : without;
+        });
+      } catch (err) {
+        console.error("[setReadiness] background save failed:", err);
+        setDailyNotes(prev => {
+          const without = prev.filter(n => n.date !== date);
+          return snapshot ? [snapshot, ...without] : without;
+        });
+        window.alert("Failed to save readiness: " + err.message);
+      }
+    })();
+    return Promise.resolve();
+  }
+
   // Transient, in-memory only — used for error fallback bubbles (API error,
   // network error, missing key). Refreshing the page clears them since they
   // never reach the DB. `isLocal` lets downstream code identify them.
@@ -769,7 +815,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         appendChatMessage={appendChatMessage}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
-        dailyNotes={dailyNotes} setDailyTags={setDailyTags}
+        dailyNotes={dailyNotes} setDailyTags={setDailyTags} setReadiness={setReadiness}
         apiProvider={apiProvider} setApiProvider={setApiProvider}
         apiKey={apiKey} setApiKey={setApiKey}
         claudeApiKey={claudeApiKey} setClaudeApiKey={setClaudeApiKey}
@@ -796,7 +842,7 @@ function AppShell({
   logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
-  dailyNotes, setDailyTags,
+  dailyNotes, setDailyTags, setReadiness,
   apiProvider, setApiProvider,
   apiKey, setApiKey,
   claudeApiKey, setClaudeApiKey,
@@ -1251,7 +1297,7 @@ Rules:
     // bulkAddLogs is optimistic — the rows appear on Calendar before this
     // returns. Close the review modal immediately and skip the "success"
     // alert (which used to compete with a possible later failure alert).
-    bulkAddLogs(workouts, { source: "ai_coach_plan" });
+    bulkAddLogs(workouts, { source: "ai_coach_plan", replacePlannedDates: true });
     setPlanProposal(null);
   }
 
@@ -1416,6 +1462,7 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
           setDailyTags={setDailyTags}
+          setReadiness={setReadiness}
           races={races}
           /* Shared weather context — same cache as AI Coach. Per-tab-mount
              fetch was wasteful; cache + visibility-change refresh in the

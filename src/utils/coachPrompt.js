@@ -4,6 +4,9 @@
 
 import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
 import { formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
+import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Locale-aware headers for the dynamic data block (current date / target races /
 // race history / recent activities). Numbers + race names stay as-is — only the
@@ -18,9 +21,13 @@ export const DATA_LABELS = {
     targets: "[Target Races]",
     history: "[Race History — recent + PR per type]",
     weeklyTrend: "[Weekly Load — last 8 wks: run distance + ascent + count; watch week-over-week spikes]",
+    trainingLoad: "[Training Load — session-RPE acute:chronic; ACWR sweet spot 0.8–1.3, >1.5 = spike/injury risk]",
+    readiness: "[Morning Readiness — runner self-rated, 1=poor 2=ok 3=good]",
     recent: "[Recent Activities (last 10) — RPE=1–10 effort; note=runner's comment; weather=at training time]",
     dayNotes: "[Day Notes — recovery/context flags]",
-    upcoming: "[Upcoming Planned Sessions — next 7 days + forecast]",
+    adherence: "[Plan Adherence — last 14d, planned vs done/missed/skipped]",
+    upcoming: "[Upcoming Planned Sessions — next ~21 days; assess feasibility; forecast attached when within 7d]",
+    focus: "[Coaching Focus This Message — conditions that fired right now; weight these in your reply]",
     none: "None",
     priorityTag: (p) => `[Priority ${p}]`,
   },
@@ -32,9 +39,13 @@ export const DATA_LABELS = {
     targets: "[目标比赛]",
     history: "[比赛历史 —— 每类最近一场 + PR]",
     weeklyTrend: "[周训练量 —— 最近 8 周：跑步距离 + 爬升 + 次数；关注周环比突增]",
+    trainingLoad: "[训练负荷 —— sRPE 急性:慢性；ACWR 安全区 0.8–1.3，>1.5 为骤增/伤病风险]",
+    readiness: "[晨间状态 —— 跑者自评，1=差 2=一般 3=好]",
     recent: "[近期活动（最近 10 条）—— RPE=1–10 自觉用力；note=跑者备注；weather=训练当时天气]",
     dayNotes: "[当日标记 —— 恢复/状态标记]",
-    upcoming: "[未来计划训练 —— 接下来 7 天 + 预报]",
+    adherence: "[计划依从 —— 近 14 天，计划 vs 完成/漏掉/主动跳过]",
+    upcoming: "[未来计划训练 —— 接下来约 21 天；评估可行性；7 天内附当天预报]",
+    focus: "[本次教练重点 —— 当前触发的条件，回复时重点权衡这些]",
     none: "无",
     priorityTag: (p) => `[${p} 级目标]`,
   },
@@ -282,6 +293,111 @@ export function buildWeeklyTrend(logs, now, weeks = 8) {
   }).join("\n");
 }
 
+// Plan adherence — reconcile PAST planned sessions (last 14 days) against what
+// was actually completed. Durable: reads structured plan rows + their status,
+// NOT the conversation, so it survives a chat clear. A plan counts as:
+//   • skipped  — user explicitly marked it skipped (intentional rest; not a miss)
+//   • done     — marked done, OR a completed workout exists on that date
+//   • missed   — past, pending, no completed workout that day
+// Returns null when the runner doesn't plan (nothing to reconcile).
+function buildPlanAdherence(logs, now) {
+  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+  const todayMs = startToday.getTime();
+  const planned = logs
+    .filter(l => l.isPlanned && l.date)
+    .filter(l => {
+      const ms = new Date(`${l.date}T00:00:00`).getTime();
+      return ms < todayMs && ms >= todayMs - 14 * DAY_MS;
+    })
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  if (!planned.length) return null;
+
+  const completedDates = new Set(logs.filter(l => !l.isPlanned && l.date).map(l => l.date));
+  let done = 0, missed = 0, skipped = 0;
+  const lines = planned.map(p => {
+    let outcome;
+    if (p.planStatus === "skipped") { outcome = "skipped"; skipped++; }
+    else if (p.planStatus === "done" || completedDates.has(p.date)) { outcome = "done"; done++; }
+    else { outcome = "missed"; missed++; }
+    const desc = `${p.type}${p.subTypes?.length ? "(" + p.subTypes.join(",") + ")" : ""}${p.distance > 0 ? " " + p.distance + "km" : ""}`;
+    return `${p.date} planned ${desc} → ${outcome}`;
+  });
+  const denom = done + missed;
+  const ratio = denom > 0 ? `completed ${done}/${denom}${skipped ? ` (+${skipped} skipped)` : ""}` : `${skipped} planned, all intentionally skipped`;
+  return { body: `${ratio}\n${lines.join("\n")}`, missed };
+}
+
+// Recent morning readiness check-ins (last ~6 days), oldest→newest. "" when none.
+function buildReadinessBlock(dailyNotes, now) {
+  if (!Array.isArray(dailyNotes) || !dailyNotes.length) return "";
+  const todayMs = now.getTime();
+  const lvl = (v) => (v == null ? null : v === 1 ? "poor" : v === 2 ? "ok" : "good");
+  return dailyNotes
+    .filter(n => n && n.readiness && n.date)
+    .filter(n => {
+      const ms = new Date(`${n.date}T00:00:00`).getTime();
+      return ms >= todayMs - 6 * DAY_MS && ms <= todayMs + 12 * 60 * 60 * 1000;
+    })
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+    .map(n => {
+      const r = n.readiness;
+      const parts = [];
+      if (lvl(r.sleep)) parts.push(`sleep ${lvl(r.sleep)}`);
+      if (lvl(r.legs)) parts.push(`legs ${lvl(r.legs)}`);
+      if (lvl(r.energy)) parts.push(`energy ${lvl(r.energy)}`);
+      return parts.length ? `${n.date}: ${parts.join(", ")}` : null;
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+// Nearest FUTURE target race (for periodization phase). null if none upcoming.
+function nearestTargetRace(races, now) {
+  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+  const future = (races || [])
+    .filter(r => r.isTarget && r.date)
+    .map(r => ({ r, ms: new Date(`${r.date}T00:00:00`).getTime() }))
+    .filter(x => Number.isFinite(x.ms) && x.ms >= startToday.getTime())
+    .sort((a, b) => a.ms - b.ms);
+  return future[0] || null;
+}
+
+// "[Coaching Focus]" — the conditional-directive layer. Base coaching
+// instructions stay fixed; THIS appends only the guidance whose trigger fired
+// this message (periodization phase, heat prep, load spike, missed sessions),
+// so the coach weights what's actually relevant right now. "" when nothing fires.
+function buildFocusDirectives({ races, now, load, raceDayWeather, missedCount }) {
+  const lines = [];
+  const near = nearestTargetRace(races, now);
+  let weeksToRace = null;
+  if (near) {
+    weeksToRace = Math.max(0, Math.ceil((near.ms - now.getTime()) / (7 * DAY_MS)));
+    let phase, intent;
+    if (weeksToRace >= 9) { phase = "Base"; intent = "build aerobic volume, mostly easy"; }
+    else if (weeksToRace >= 5) { phase = "Build"; intent = "add race-specific quality, volume near peak"; }
+    else if (weeksToRace >= 3) { phase = "Peak"; intent = "volume should plateau then begin easing"; }
+    else if (weeksToRace >= 1) { phase = "Taper"; intent = "cut volume ~40–60%, keep a little intensity, protect freshness"; }
+    else { phase = "Race week"; intent = "rest and sharpen, dial in pacing and logistics"; }
+    lines.push(`Periodization: ${weeksToRace} week(s) to ${near.r.name || "target race"} — ${phase} phase. ${intent}.`);
+  }
+  if (near && weeksToRace != null && weeksToRace <= 8 && raceDayWeather) {
+    const hot = (Number.isFinite(raceDayWeather.apparentAvgC) && raceDayWeather.apparentAvgC >= 28)
+      || (Number.isFinite(raceDayWeather.tempMaxC) && raceDayWeather.tempMaxC >= 30);
+    const rh = Number.isFinite(raceDayWeather.humidity)
+      ? (raceDayWeather.humidity > 1 ? raceDayWeather.humidity : raceDayWeather.humidity * 100) : 0;
+    if (hot || rh >= 70) {
+      lines.push("Race-day looks hot/humid — work in heat-acclimation guidance over the next couple of weeks (gradual heat exposure, hydration + electrolytes, realistic pace adjustment for the heat).");
+    }
+  }
+  if (load && (load.ramp === "high" || load.ramp === "danger")) {
+    lines.push(`Training load is ramping ${load.ramp === "danger" ? "sharply" : "fast"} (ACWR ${load.acwr}). Call out the spike and prefer holding or easing volume over piling more on.`);
+  }
+  if (missedCount > 0) {
+    lines.push(`The runner missed ${missedCount} planned session(s) in the last 2 weeks — ask what happened (fatigue, time, a niggle) before prescribing more; don't just re-stack the plan.`);
+  }
+  return lines.join("\n");
+}
+
 // Dynamic data block injected into the system prompt. Only the section titles
 // are localized; values (dates, race names, numbers) stay verbatim across
 // languages so the model receives consistent data.
@@ -333,29 +449,28 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   const historyRaces = selectHistoryForPrompt(races.filter(r => !r.isTarget))
     .map(formatHistoryRace).join("\n") || D.none;
 
-  // Upcoming planned sessions in the next 7 days, each annotated with the
-  // daily forecast for that date. Skipped entirely when no forecast or no
-  // planned sessions in range — keeps the prompt clean when neither applies.
+  // Upcoming planned sessions — next ~21 days, INDEPENDENT of weather (so the
+  // coach can analyze a plan's feasibility even with weather off / out of the
+  // 7-day forecast horizon). Forecast is attached only when available for that
+  // date (≤7d out). Decoupling this from forecastByDate fixed the old bug where
+  // the whole plan block vanished whenever weather was unavailable.
   const todayMs = now.getTime();
-  const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-  const upcomingPlans = forecastByDate
-    ? logs.filter(l => l.isPlanned && l.date)
-        .filter(l => {
-          const planMs = new Date(`${l.date}T00:00:00`).getTime();
-          return planMs >= todayMs - 12 * 60 * 60 * 1000 && planMs <= todayMs + sevenDaysMs;
-        })
-        .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
-        .map(l => {
-          const f = forecastByDate.get(l.date);
-          const planParts = [`${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`];
-          if (l.distance > 0) planParts.push(`${l.distance}km`);
-          if (l.duration > 0) planParts.push(formatDuration(l.duration));
-          const fcStr = formatDailyForecast(f);
-          if (fcStr) planParts.push(`forecast: ${fcStr}`);
-          return planParts.join(" ");
-        })
-        .join("\n")
-    : "";
+  const twentyOneDaysMs = 21 * DAY_MS;
+  const upcomingPlans = logs.filter(l => l.isPlanned && l.date)
+    .filter(l => {
+      const planMs = new Date(`${l.date}T00:00:00`).getTime();
+      return planMs >= todayMs - 12 * 60 * 60 * 1000 && planMs <= todayMs + twentyOneDaysMs;
+    })
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+    .map(l => {
+      const planParts = [`${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`];
+      if (l.distance > 0) planParts.push(`${l.distance}km`);
+      if (l.duration > 0) planParts.push(formatDuration(l.duration));
+      const fcStr = forecastByDate ? formatDailyForecast(forecastByDate.get(l.date)) : "";
+      if (fcStr) planParts.push(`forecast: ${fcStr}`);
+      return planParts.join(" ");
+    })
+    .join("\n");
 
   // Full 7-day weather forecast — emitted whenever we have ANY forecast
   // data, regardless of whether the user has planned sessions in those
@@ -405,9 +520,20 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   sections.push(`${D.history}\n${historyRaces}`);
   const weeklyTrend = buildWeeklyTrend(logs, now, 8);
   if (weeklyTrend) sections.push(`${D.weeklyTrend}\n${weeklyTrend}`);
+  const load = computeTrainingLoad(logs, now);
+  const loadLine = formatTrainingLoadLine(load);
+  if (loadLine) sections.push(`${D.trainingLoad}\n${loadLine}`);
+  const readinessBlock = buildReadinessBlock(dailyNotes, now);
+  if (readinessBlock) sections.push(`${D.readiness}\n${readinessBlock}`);
   sections.push(`${D.recent}\n${recentLogs}`);
   if (dayNotesBlock) sections.push(`${D.dayNotes}\n${dayNotesBlock}`);
+  const adherence = buildPlanAdherence(logs, now);
+  if (adherence) sections.push(`${D.adherence}\n${adherence.body}`);
   if (upcomingPlans) sections.push(`${D.upcoming}\n${upcomingPlans}`);
+  // Conditional directive layer goes LAST so it's the most salient thing the
+  // coach reads before replying.
+  const focus = buildFocusDirectives({ races, now, load, raceDayWeather, missedCount: adherence?.missed || 0 });
+  if (focus) sections.push(`${D.focus}\n${focus}`);
   return sections.join("\n\n");
 }
 
@@ -433,9 +559,13 @@ export function buildPromptSkeleton(lang = "en") {
       "【目标赛事 + 最近一场的比赛日天气】",
       "【比赛历史】（按类别精选）",
       "【最近 8 周周训练量】",
+      "【训练负荷】sRPE 急性:慢性 + ACWR 骤增风险",
+      "【晨间状态】最近几天的自评",
       "【最近 10 条训练】含 RPE / 备注 / 当时天气",
       "【最近当日标记】恢复 / 生病 / 出差 / 旅行等",
-      "【未来 7 天计划训练 + 当天预报】",
+      "【计划依从】近 14 天计划 vs 完成 / 漏 / 跳过",
+      "【未来约 21 天计划训练】（含当天预报，若有）",
+      "【本次教练重点】按当前情况触发的周期 / 热适应 / 负荷 / 漏练提醒",
     ].join("\n");
   }
   return [
@@ -450,10 +580,14 @@ export function buildPromptSkeleton(lang = "en") {
     "[Current Weather + 7-day forecast]",
     "[Target Races + next race's race-day weather]",
     "[Race History] (curated per category)",
-    "[Weekly Training Load — last 8 weeks]",
+    "[Weekly Trend — last 8 weeks]",
+    "[Training Load — sRPE acute:chronic + ACWR spike risk]",
+    "[Morning Readiness — recent self-ratings]",
     "[Recent Activities (last 10)] with RPE / notes / weather",
     "[Recent Day Notes] recovery / sick / travel",
-    "[Upcoming Planned Sessions — next 7 days + forecast]",
+    "[Plan Adherence — last 14d planned vs done/missed/skipped]",
+    "[Upcoming Planned Sessions — next ~21 days]",
+    "[Coaching Focus — periodization / heat / load / missed-session cues that fired]",
   ].join("\n");
 }
 

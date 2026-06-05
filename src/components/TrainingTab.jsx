@@ -3,6 +3,10 @@ import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
 import { formatDuration } from "../utils/format";
+import { computeTrainingLoad } from "../utils/trainingLoad";
+
+// ACWR ramp → restrained color cue (moss=good, ochre=watch, burnt=spike).
+const RAMP_COLOR = { optimal: "var(--moss)", low: "var(--ink-3)", high: "#b07a3e", danger: "#b54e1a", unknown: "var(--ink-3)" };
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
@@ -167,6 +171,10 @@ export function TrainingTab({
   // Activities / Charts must NOT include planned workouts (those live on the
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
   const actualLogs = useMemo(() => logs.filter(l => !l.isPlanned), [logs]);
+
+  // Whole-body training load (sRPE acute:chronic) — computed from ALL completed
+  // activities, not the type-filtered set, since load is total stress.
+  const load = useMemo(() => computeTrainingLoad(actualLogs, new Date()), [actualLogs]);
 
   const filteredAllLogs = useMemo(
     () => actualLogs.filter(l => logMatchesFilter(l, filter)),
@@ -350,7 +358,27 @@ export function TrainingTab({
       )}
 
       {view === "charts" && (
-        <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
+        <>
+          {load && (
+            <div title={t("training.load_hint")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 2px 12px", fontSize: 13, flexWrap: "wrap" }}>
+              <span style={{ ...s.muted, letterSpacing: "0.04em" }}>{t("training.load_label")}</span>
+              {load.building || load.acwr == null ? (
+                <span style={{ ...s.muted }}>{t("training.load_building")}</span>
+              ) : (
+                <>
+                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: RAMP_COLOR[load.ramp], flexShrink: 0 }} />
+                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)" }}>ACWR {load.acwr.toFixed(2)}</span>
+                  <span style={{ ...s.muted }}>· {t(`training.ramp_${load.ramp}`)}</span>
+                  <span style={{ ...s.muted, marginLeft: "auto", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+                    {t("training.load_ac", { a: load.acute, c: load.chronicWeekly })}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+          <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
+        </>
       )}
     </div>
   );

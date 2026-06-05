@@ -48,7 +48,7 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, weatherCtx, races }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, setReadiness, weatherCtx, races }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -348,6 +348,8 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
             updateLog={updateLog}
             setConfirmDelete={setConfirmDelete}
             setDailyTags={setDailyTags}
+            setReadiness={setReadiness}
+            isToday={k === todayKey}
           />
         );
       })()}
@@ -675,19 +677,27 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
             display: "flex", flexDirection: "column", gap: 1, alignItems: "center",
             width: "100%",
           }}>
-            {logs.slice(0, 3).map(l => {
-              const c = TYPE_COLOR[l.type] || "#57564f";
-              return (
-                <span key={l.id} style={{
-                  width: "76%", maxWidth: 26, height: 4,
-                  borderRadius: 1,
-                  background: l.isPlanned ? "transparent" : c,
-                  border: l.isPlanned ? `1px dashed ${c}` : "none",
-                  display: "inline-block",
-                  flexShrink: 0,
-                }} title={t(`enum.activity.${l.type}`)} />
-              );
-            })}
+            {(() => {
+              // Past PLANNED bars recede (auto-archive) so an old, unfulfilled
+              // plan stops cluttering the grid — the user no longer needs to
+              // delete it. Completed bars and future plans render at full strength.
+              const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
+              return logs.slice(0, 3).map(l => {
+                const c = TYPE_COLOR[l.type] || "#57564f";
+                const fade = l.isPlanned && cellPast;
+                return (
+                  <span key={l.id} style={{
+                    width: "76%", maxWidth: 26, height: 4,
+                    borderRadius: 1,
+                    background: l.isPlanned ? "transparent" : c,
+                    border: l.isPlanned ? `1px dashed ${c}` : "none",
+                    opacity: fade ? 0.3 : 1,
+                    display: "inline-block",
+                    flexShrink: 0,
+                  }} title={t(`enum.activity.${l.type}`)} />
+                );
+              });
+            })()}
             {logs.length > 3 && (
               <span style={{
                 fontSize: 8, color: "var(--ink-3)",

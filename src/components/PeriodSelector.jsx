@@ -46,7 +46,7 @@ function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownConte
 // Segmented 4-tab strip — Week / Month / Year / All — in a single row.
 // Each non-"All" tab carries its own ▾ caret that opens a popup for picking
 // past periods. Active cell gets a filled inverted background.
-export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown, compact = false }) {
+export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown, compact = false, style }) {
   const t = useT();
 
   function popupItem(key, label, selected, onClick) {
@@ -73,6 +73,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
       borderRadius: 2,
       overflow: "visible",
       background: "var(--bg-elevated)",
+      ...style,
     }}>
       <Cell
         compact={compact}

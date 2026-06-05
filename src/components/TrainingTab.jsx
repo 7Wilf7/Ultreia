@@ -50,9 +50,9 @@ function StatTile({ label, val, unit, isMobile }) {
   return (
     <div style={{
       position: "relative",
-      padding: isMobile ? "9px 8px 10px" : "20px 22px 24px",
+      padding: isMobile ? "8px 9px" : "20px 22px 24px",
       borderRight: isMobile ? "none" : "1px solid var(--rule)",
-      minHeight: isMobile ? undefined : 110,
+      minHeight: isMobile ? 42 : 110,
       minWidth: 0,
       ...(isMobile ? {
         border: "1px solid rgba(74,92,55,0.2)",
@@ -60,36 +60,74 @@ function StatTile({ label, val, unit, isMobile }) {
         borderRadius: 8,
       } : CONTOUR_BG),
     }}>
-      <div style={{
-        fontFamily: "var(--font-sans)",
-        fontSize: isMobile ? 10 : 13,
-        color: "var(--ink-2)",
-        marginBottom: isMobile ? 4 : 10,
-        fontWeight: 500,
-        textTransform: isMobile ? "uppercase" : "none",
-        letterSpacing: isMobile ? "0.04em" : "normal",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>{label}</div>
-      <div style={{
-        ...s.metricVal,
-        fontSize: isMobile ? "clamp(13px, 4.6vw, 18px)" : 32,
-        marginTop: 0,
-        display: "flex", alignItems: "baseline", gap: 3,
-        lineHeight: 1.05,
-        minWidth: 0,
-        overflow: "hidden",
-      }}>
-        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{val}</span>
-        {unit && (
-          <span style={{
-            fontSize: isMobile ? 10 : 13,
-            color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+      {isMobile ? (
+        <div style={{
+          display: "flex", alignItems: "baseline", justifyContent: "space-between",
+          gap: 8, minWidth: 0,
+        }}>
+          <div style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 10,
+            color: "var(--ink-2)",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.04em",
+            whiteSpace: "nowrap",
             flexShrink: 0,
+          }}>{label}</div>
+          <div style={{
+            ...s.metricVal,
+            fontSize: "clamp(15px, 4.2vw, 18px)",
+            marginTop: 0,
+            display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 3,
+            lineHeight: 1.05,
+            minWidth: 0,
+            overflow: "hidden",
           }}>
-            {unit}
-          </span>
-        )}
-      </div>
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{val}</span>
+            {unit && (
+              <span style={{
+                fontSize: 10,
+                color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+                flexShrink: 0,
+              }}>
+                {unit}
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: 13,
+            color: "var(--ink-2)",
+            marginBottom: 10,
+            fontWeight: 500,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{label}</div>
+          <div style={{
+            ...s.metricVal,
+            fontSize: 32,
+            marginTop: 0,
+            display: "flex", alignItems: "baseline", gap: 3,
+            lineHeight: 1.05,
+            minWidth: 0,
+            overflow: "hidden",
+          }}>
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{val}</span>
+            {unit && (
+              <span style={{
+                fontSize: 13,
+                color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+                flexShrink: 0,
+              }}>
+                {unit}
+              </span>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -113,26 +151,23 @@ export function TrainingTab({
   // Mobile lifts the nav by its paddingTop (the negative-top trick); desktop
   // pins at 0.
   const headerRef = useRef(null);   // the nav-rows sticky block
-  const statsRef = useRef(null);    // the stats grid
-  const [statsTop, setStatsTop] = useState(0);
-  const [toolbarTop, setToolbarTop] = useState(0);
+  const [summaryTop, setSummaryTop] = useState(0);
   useEffect(() => {
     const navEl = headerRef.current;
-    if (!navEl) { setStatsTop(0); setToolbarTop(0); return; }
+    if (!navEl) { setSummaryTop(0); return; }
     const measure = () => {
       const padTop = parseFloat(getComputedStyle(navEl).paddingTop) || 0;
       const navStickyTop = isMobile ? -(padTop - 4) : 0;
-      const sTop = Math.round(navEl.offsetHeight + navStickyTop);
-      setStatsTop(sTop);
-      const statsEl = statsRef.current;
-      setToolbarTop(statsEl ? sTop + Math.round(statsEl.offsetHeight) : sTop);
+      setSummaryTop(Math.round(navEl.offsetHeight + navStickyTop));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(navEl);
-    if (statsRef.current) ro.observe(statsRef.current);
     return () => ro.disconnect();
   }, [isMobile, view]);
+  const statsStickyHeight = isMobile ? 100 : 112;
+  const statsTop = summaryTop;
+  const toolbarTop = summaryTop + statsStickyHeight;
 
   // Activities / Charts must NOT include planned workouts (those live on the
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
@@ -200,7 +235,7 @@ export function TrainingTab({
              sharing one line to claw back vertical space.
              Row 2 — period bar, full width (activities view only). */
           <>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <div style={{ flexShrink: 0 }}>
                 <GlobalFilter filter={filter} setFilter={setFilter} compact />
               </div>
@@ -212,6 +247,7 @@ export function TrainingTab({
               <PeriodSelector
                 period={period} setPeriod={setPeriod}
                 periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+                style={{ marginBottom: 8 }}
               />
             )}
           </>
@@ -238,15 +274,17 @@ export function TrainingTab({
           {/* Instrument-readout stats — four cells in a single row, each like a
               meter on a control panel. Sticks just below the nav header so the
               period totals stay visible while the list scrolls. */}
-          <div ref={statsRef} style={{
+          <div style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
+            gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
             gap: isMobile ? 8 : 0,
             marginBottom: 0,
             border: isMobile ? "none" : "1px solid var(--rule)",
             background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
             position: "sticky", top: statsTop, zIndex: 9,
+            height: isMobile ? statsStickyHeight : undefined,
             padding: isMobile ? "4px 0 8px" : 0,
+            boxSizing: "border-box",
             borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
           }}>
             {statItems.map((c, i) => (

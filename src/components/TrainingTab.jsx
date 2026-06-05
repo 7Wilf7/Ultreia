@@ -46,12 +46,20 @@ function ViewToggle({ view, setView, t, style }) {
   );
 }
 
+function mobileStatValueFontSize(value) {
+  const digits = String(value).replace(/\D/g, "").length;
+  if (digits <= 3) return 22;
+  if (digits <= 4) return 20;
+  if (digits <= 5) return 18;
+  return 17;
+}
+
 function StatTile({ label, val, unit, isMobile }) {
-  const compactMobileValue = isMobile && unit;
+  const mobileValueFontSize = isMobile ? mobileStatValueFontSize(val) : 32;
   return (
     <div style={{
       position: "relative",
-      padding: isMobile ? "0 11px" : "20px 22px 24px",
+      padding: isMobile ? "0 10px" : "20px 22px 24px",
       borderRight: isMobile ? "none" : "1px solid var(--rule)",
       minHeight: isMobile ? 44 : 110,
       height: isMobile ? 44 : undefined,
@@ -67,42 +75,40 @@ function StatTile({ label, val, unit, isMobile }) {
         <div style={{
           height: "100%",
           display: "grid",
-          gridTemplateColumns: "60px minmax(0, 1fr)",
+          gridTemplateColumns: "58px 62px 14px",
           alignItems: "center",
-          columnGap: 9,
+          columnGap: 4,
           minWidth: 0,
         }}>
           <div style={{
             fontFamily: "var(--font-sans)",
-            fontSize: 10,
+            fontSize: 11,
             color: "var(--ink-2)",
-            fontWeight: 600,
+            fontWeight: 650,
             textTransform: "uppercase",
-            letterSpacing: "0.04em",
+            letterSpacing: "0.025em",
             whiteSpace: "nowrap",
             textAlign: "left",
           }}>{label}</div>
           <div style={{
             ...s.metricVal,
-            fontSize: compactMobileValue ? "clamp(16px, 4.35vw, 18px)" : "clamp(18px, 5vw, 21px)",
+            fontSize: mobileValueFontSize,
             marginTop: 0,
-            display: "flex", alignItems: "baseline", justifyContent: "flex-start", gap: 3,
+            display: "flex", alignItems: "baseline", justifyContent: "center",
             lineHeight: 1.05,
             letterSpacing: 0,
             minWidth: 0,
             overflow: "visible",
           }}>
             <span style={{ minWidth: 0, overflow: "visible", whiteSpace: "nowrap" }}>{val}</span>
-            {unit && (
-              <span style={{
-                fontSize: 9,
-                color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
-                flexShrink: 0,
-              }}>
-                {unit}
-              </span>
-            )}
           </div>
+          <div style={{
+            fontSize: 10,
+            color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
+            lineHeight: 1,
+            textAlign: "left",
+            whiteSpace: "nowrap",
+          }}>{unit}</div>
         </div>
       ) : (
         <>

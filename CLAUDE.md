@@ -80,6 +80,8 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - `docs/` —— 用户向中文文档（GitBook 格式，见下方约定）
 - 暂不引入路由，单页面即可；如后续需要再加 react-router
 
+**`项目结构导览.html`（根目录）—— 给非程序员（用户本人）看的可视化文件夹说明，纯介绍每个文件夹的含义。** 新增 / 删除 / 重命名顶层文件夹或目录结构有重大调整时，**必须同步更新这个 HTML**（对应卡片的路径、文件数、说明）。它只解惑用，不写"可删/保留"之类的价值判断。
+
 ## docs/ 维护纪律
 
 `docs/` 下是给**最终用户**看的中文使用手册（GitBook 风格，`SUMMARY.md` 是 TOC）。用户是中国跑者，**不是程序员**。正文用中文；UI 上能看到的标签和类别名（Road Run / Easy Run / Spartan 等）保留英文。

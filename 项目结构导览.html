@@ -10,7 +10,7 @@
     --moss:#5e6f4a; --moss-light:#849066; --line:#e2ded2;
     --card:#fffdf7; --shadow:0 1px 2px rgba(43,46,38,.05),0 6px 20px rgba(43,46,38,.06);
     --code:#eef0e7; --src:#5e6f4a; --cfg:#9a7b3f; --cloud:#3f7a86;
-    --android:#6a8c4f; --docs:#7a6aa0; --tool:#8a6f5a; --trash:#b05a4a;
+    --android:#6a8c4f; --docs:#7a6aa0; --tool:#8a6f5a; --auto:#9a8f7a;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{
@@ -54,11 +54,6 @@
   .path .slash{color:var(--moss-light)}
   .count{font-size:12px;color:var(--muted);background:var(--code);
     border-radius:20px;padding:2px 9px;font-weight:500}
-  .badge{font-size:11px;font-weight:600;border-radius:20px;padding:2px 9px;
-    letter-spacing:.02em}
-  .b-keep{background:#e7efe0;color:#4a6238}
-  .b-trash{background:#f6e2dd;color:#a8492f}
-  .b-auto{background:#e6e3da;color:#76705f}
   .desc{font-size:14.5px;color:#4a4d40;margin-top:8px}
   .desc b{color:var(--ink)}
   .sub{margin-top:12px;display:flex;flex-direction:column;gap:7px;
@@ -75,8 +70,6 @@
   footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
     font-size:13px;color:var(--muted)}
   footer b{color:var(--ink)}
-  .tag{display:inline-block;font-family:"SF Mono",Consolas,monospace;
-    font-size:12px;background:var(--code);border-radius:5px;padding:1px 6px;color:#4a6238}
 </style>
 </head>
 <body>
@@ -85,16 +78,14 @@
   <header>
     <div class="kicker">Training Studio · 文件夹导览</div>
     <h1>这个项目里每个文件夹都是干嘛的</h1>
-    <p class="lede">写给<b>看得懂产品、不一定看代码</b>的你。下面把项目拆成几大类，每个文件夹一句人话解释。
-    带 <span class="badge b-trash">可删</span> 的是能安全删掉的，带 <span class="badge b-auto">自动生成</span> 的删了也会自己长回来。</p>
+    <p class="lede">写给<b>看得懂产品、不一定看代码</b>的你。下面把项目按用途分成几大类，每个文件夹一句人话解释，帮你对着真实的文件夹找到自己心里的位置。</p>
   </header>
 
   <div class="callout">
     <h2>🤔 为什么根目录一堆"散装"文件，没装进文件夹？</h2>
-    <p>因为它们<b>必须待在最外层</b>——这是各种工具的硬规矩，不是乱放。打包工具、依赖管理器、安卓封装器启动时，
+    <p>因为它们<b>必须待在最外层</b>——这是各种工具的硬规矩。打包工具、依赖管理器、安卓封装器启动时，
     第一件事就是去项目根目录找自己那份"说明书"（比如 <code>package.json</code>、<code>vite.config.js</code>、<code>index.html</code>）。
-    你把它们塞进子文件夹，工具就找不到、整个项目跑不起来。<b>所以这些散文件是正常的，不用动。</b>
-    真正装"内容"的，都在下面那些文件夹里。</p>
+    塞进子文件夹工具就找不到、整个项目跑不起来。<b>所以这些散文件是规矩，不是乱放。</b>真正装"内容"的，都在下面那些文件夹里。</p>
   </div>
 
   <div class="legend">
@@ -104,7 +95,7 @@
     <span><i class="dot" style="background:var(--docs)"></i>文档</span>
     <span><i class="dot" style="background:var(--cfg)"></i>配置文件</span>
     <span><i class="dot" style="background:var(--tool)"></i>工具脚本</span>
-    <span><i class="dot" style="background:var(--trash)"></i>可删/自动生成</span>
+    <span><i class="dot" style="background:var(--auto)"></i>自动生成</span>
   </div>
 
   <!-- 应用本体 -->
@@ -114,7 +105,6 @@
       <div class="top">
         <span class="path">src<span class="slash">/</span></span>
         <span class="count">75 个文件</span>
-        <span class="badge b-keep">核心</span>
       </div>
       <div class="desc"><b>整个 App 的源代码就在这。</b>你在手机/网页上看到的每个页面、按钮、弹窗，都是这里的文件画出来的。下面是它的几个抽屉：</div>
       <div class="sub">
@@ -122,8 +112,8 @@
         <div class="row"><span class="n">components/Auth/</span><span class="t">登录、注册、账号徽章这几块单独放。</span></div>
         <div class="row"><span class="n">lib/</span><span class="t">"工具库"（20 个）——天气、对外请求、FIT 手表文件解析、推送这些幕后能力。</span></div>
         <div class="row"><span class="n">lib/db/</span><span class="t">和云数据库打交道的一层（13 个）——每张表（训练、赛事、对话…）一个文件，负责读写。</span></div>
-        <div class="row"><span class="n">data/</span><span class="t">写死的小数据（2 个）——开屏问候语、新手教程文案。</span></div>
-        <div class="row"><span class="n">i18n/</span><span class="t">中英文翻译（2 个）——切语言时用到的对照表。</span></div>
+        <div class="row"><span class="n">data/</span><span class="t">写死的小数据——开屏问候语、新手教程文案。</span></div>
+        <div class="row"><span class="n">i18n/</span><span class="t">中英文翻译——切语言时用到的对照表。</span></div>
         <div class="row"><span class="n">hooks/ · utils/</span><span class="t">复用的小逻辑和零碎工具函数（登录状态、时间格式、AI 提示词拼装等）。</span></div>
       </div>
     </div>
@@ -133,11 +123,11 @@
   <h2 class="section">🎨 图片资源 —— 原样发布的图标和图</h2>
   <div class="grid">
     <div class="card" style="--bar:var(--src)">
-      <div class="top"><span class="path">public<span class="slash">/</span></span><span class="count">3 个文件</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">public<span class="slash">/</span></span><span class="count">3 个文件</span></div>
       <div class="desc">网页用的图标、favicon、开屏 logo。这里的东西会<b>原封不动</b>出现在网站上。</div>
     </div>
     <div class="card" style="--bar:var(--src)">
-      <div class="top"><span class="path">resources<span class="slash">/</span></span><span class="count">3 个文件</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">resources<span class="slash">/</span></span><span class="count">3 个文件</span></div>
       <div class="desc">安卓 App 的<b>图标和启动图原图</b>（高清大图），打包工具拿它生成各种尺寸。海报功能的 logo 水印也在这。</div>
     </div>
   </div>
@@ -146,12 +136,12 @@
   <h2 class="section">☁️ 云端 / 服务端 —— 跑在别人服务器上的代码</h2>
   <div class="grid">
     <div class="card" style="--bar:var(--cloud)">
-      <div class="top"><span class="path">supabase<span class="slash">/</span></span><span class="count">6 个函数</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">supabase<span class="slash">/</span></span><span class="count">6 个函数</span></div>
       <div class="desc"><b>数据库后台的"云函数"。</b>这些不是在手机上跑，而是在 Supabase 云上跑的小程序：每日推送、邀请码注册、注销账号、免费额度的 AI/天气代理。
       <br><span style="color:var(--muted);font-size:13px">⚠ 改了这里的代码，前端发版不会自动带上，要单独手动部署（细节在 CLAUDE.md）。</span></div>
     </div>
     <div class="card" style="--bar:var(--cloud)">
-      <div class="top"><span class="path">api<span class="slash">/</span></span><span class="count">1 个文件</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">api<span class="slash">/</span></span><span class="count">1 个文件</span></div>
       <div class="desc">Vercel（部署网站那家）上的一个<b>小后端函数</b>——天气代理，让密钥不暴露在浏览器里。</div>
     </div>
   </div>
@@ -160,9 +150,9 @@
   <h2 class="section">🤖 安卓打包 —— 把网页装进手机 App 的壳</h2>
   <div class="grid">
     <div class="card" style="--bar:var(--android)">
-      <div class="top"><span class="path">android<span class="slash">/</span></span><span class="count">61 个文件</span><span class="badge b-keep">保留·别手改</span></div>
+      <div class="top"><span class="path">android<span class="slash">/</span></span><span class="count">61 个文件</span></div>
       <div class="desc"><b>安卓 App 工程</b>，由 Capacitor 这个工具自动生成的"壳"，把你的网页包成能装在手机上的 APK。
-      里面文件多、看着吓人，但<b>基本不用手碰</b>——大多是工具维护的。少数几个原生插件（下载安装包、保存海报到相册）是手写的。</div>
+      里面文件多、看着吓人，但大多是工具维护的。少数几个原生插件（下载安装包、保存海报到相册）是手写的。</div>
     </div>
   </div>
 
@@ -170,19 +160,19 @@
   <h2 class="section">📖 文档 —— 给人看的说明书</h2>
   <div class="grid">
     <div class="card" style="--bar:var(--docs)">
-      <div class="top"><span class="path">docs<span class="slash">/</span></span><span class="count">10 个文件</span><span class="badge b-keep">保留</span></div>
-      <div class="desc"><b>给最终用户看的中文使用手册</b>（就是那个 GitBook 网站）。每个功能一页，加一份更新日志。这是你刚让我精简的那批。</div>
+      <div class="top"><span class="path">docs<span class="slash">/</span></span><span class="count">10 个文件</span></div>
+      <div class="desc"><b>给最终用户看的中文使用手册</b>（就是那个 GitBook 网站）。每个功能一页，加一份更新日志。</div>
     </div>
     <div class="card" style="--bar:var(--docs)">
-      <div class="top"><span class="path">README.md</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">README.md</span></div>
       <div class="desc">项目门面简介（打开 GitHub 仓库第一眼看到的）。</div>
     </div>
     <div class="card" style="--bar:var(--docs)">
-      <div class="top"><span class="path">CLAUDE.md</span> <span class="path">AGENTS.md</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">CLAUDE.md</span> <span class="path">AGENTS.md</span></div>
       <div class="desc"><b>给 AI 助手（我）看的协作规则</b>——发版流程、踩过的坑、数据库约定都写在这。两份内容一样，给不同 AI 工具读。</div>
     </div>
     <div class="card" style="--bar:var(--docs)">
-      <div class="top"><span class="path">PRODUCT.md</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">PRODUCT.md</span></div>
       <div class="desc">产品层面的说明/定位。</div>
     </div>
   </div>
@@ -191,27 +181,27 @@
   <h2 class="section">⚙️ 配置文件 —— 工具的"说明书"，必须在最外层</h2>
   <div class="grid">
     <div class="card" style="--bar:var(--cfg)">
-      <div class="top"><span class="path">package.json</span> <span class="path">package-lock.json</span><span class="badge b-keep">命根子</span></div>
+      <div class="top"><span class="path">package.json</span> <span class="path">package-lock.json</span></div>
       <div class="desc">列出 App 用到的所有<b>第三方零件清单</b>，以及锁定每个的精确版本。版本号（你 bump 的那个）也在这。</div>
     </div>
     <div class="card" style="--bar:var(--cfg)">
-      <div class="top"><span class="path">vite.config.js</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">vite.config.js</span></div>
       <div class="desc"><b>打包工具的配置</b>——怎么把源代码压成能上线的成品、PWA 设置都在这。</div>
     </div>
     <div class="card" style="--bar:var(--cfg)">
-      <div class="top"><span class="path">index.html</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">index.html</span></div>
       <div class="desc">网页的<b>最外层骨架</b>（一个几乎空的壳），App 启动时往里填内容。</div>
     </div>
     <div class="card" style="--bar:var(--cfg)">
-      <div class="top"><span class="path">capacitor.config.json</span> · <span class="path">eslint.config.js</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">capacitor.config.json</span> · <span class="path">eslint.config.js</span></div>
       <div class="desc">分别是<b>安卓封装</b>配置和<b>代码体检规则</b>（lint）。</div>
     </div>
     <div class="card" style="--bar:var(--cfg)">
-      <div class="top"><span class="path">.env.local</span> · <span class="path">.env.example</span><span class="badge b-keep">别删·别外传</span></div>
-      <div class="desc"><b>密钥/网址</b>（连数据库用的）。<code style="font-family:monospace">.env.local</code> 是你本机真实的密钥，<b>不上传 git、删了本地就连不上</b>；<code style="font-family:monospace">.env.example</code> 是给别人看的"空模板"。</div>
+      <div class="top"><span class="path">.env.local</span> · <span class="path">.env.example</span></div>
+      <div class="desc"><b>密钥/网址</b>（连数据库用的）。<code style="font-family:monospace">.env.local</code> 是你本机真实的密钥，不上传 git；<code style="font-family:monospace">.env.example</code> 是给别人看的"空模板"。</div>
     </div>
     <div class="card" style="--bar:var(--cfg)">
-      <div class="top"><span class="path">.gitignore</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">.gitignore</span></div>
       <div class="desc">一张"<b>别上传名单</b>"，告诉 git 哪些文件/文件夹不要传到 GitHub（密钥、安装包、自动生成的东西都在名单上）。</div>
     </div>
   </div>
@@ -220,47 +210,39 @@
   <h2 class="section">🔧 工具脚本 / 自动化 —— 偶尔用一次的辅助</h2>
   <div class="grid">
     <div class="card" style="--bar:var(--tool)">
-      <div class="top"><span class="path">.github<span class="slash">/</span></span><span class="count">1 个文件</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">.github<span class="slash">/</span></span><span class="count">1 个文件</span></div>
       <div class="desc"><b>发版流水线</b>。你一推 tag，GitHub 就照这里的剧本自动构建、签名、发布安卓 APK。你那条"发 APK"的魔法就靠它。</div>
     </div>
     <div class="card" style="--bar:var(--tool)">
-      <div class="top"><span class="path">scripts<span class="slash">/</span></span><span class="count">4 个文件</span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">scripts<span class="slash">/</span></span><span class="count">4 个文件</span></div>
       <div class="desc">一次性<b>小工具脚本</b>——造测试数据、生成 App 图标/启动图、检查文件名大小写。平时不跑，需要时手动调。</div>
     </div>
     <div class="card" style="--bar:var(--tool)">
-      <div class="top"><span class="path">.claude<span class="slash">/</span></span><span class="badge b-keep">保留</span></div>
+      <div class="top"><span class="path">.claude<span class="slash">/</span></span></div>
       <div class="desc">Claude Code（我）的<b>本地配置</b>。不影响 App 本身。</div>
     </div>
   </div>
 
-  <!-- 可删 -->
-  <h2 class="section">🗑️ 自动生成 / 可删 —— 占地方但不珍贵</h2>
+  <!-- 自动生成 -->
+  <h2 class="section">📦 自动生成 —— 工具自己产出的，不用手管</h2>
   <div class="grid">
-    <div class="card" style="--bar:var(--trash)">
-      <div class="top"><span class="path">node_modules<span class="slash">/</span></span><span class="badge b-auto">自动生成·最占地方</span></div>
-      <div class="desc">下载下来的<b>几百个第三方零件</b>，通常几百 MB，是文件夹里最大的一坨。<b>不上传 git</b>。真删了也没事——一句 <code style="font-family:monospace">npm install</code> 就全装回来。</div>
+    <div class="card" style="--bar:var(--auto)">
+      <div class="top"><span class="path">node_modules<span class="slash">/</span></span></div>
+      <div class="desc">下载下来的<b>几百个第三方零件</b>，通常几百 MB，是文件夹里最大的一坨。不上传 git，由 <code style="font-family:monospace">npm install</code> 自动装。</div>
     </div>
-    <div class="card" style="--bar:var(--trash)">
-      <div class="top"><span class="path">dist<span class="slash">/</span></span><span class="badge b-auto">自动生成</span></div>
-      <div class="desc"><b>打包成品</b>（上线用的压缩版）。每次 build 都会重新生成，删了无所谓。</div>
+    <div class="card" style="--bar:var(--auto)">
+      <div class="top"><span class="path">dist<span class="slash">/</span></span></div>
+      <div class="desc"><b>打包成品</b>（上线用的压缩版）。每次 build 自动重新生成。</div>
     </div>
-    <div class="card" style="--bar:var(--trash)">
-      <div class="top"><span class="path">.git<span class="slash">/</span></span><span class="badge b-auto">别删</span></div>
-      <div class="desc">git 的<b>版本库内部</b>（所有历史记录都在这）。占地方但<b>千万别删</b>——删了就丢掉全部提交历史。</div>
+    <div class="card" style="--bar:var(--auto)">
+      <div class="top"><span class="path">.git<span class="slash">/</span></span></div>
+      <div class="desc">git 的<b>版本库内部</b>——你所有的提交历史都存在这里面。</div>
     </div>
-    <div class="card" style="--bar:var(--trash)">
-      <div class="top"><span class="path">启动.bat</span><span class="badge b-auto">你自己的·可留可删</span></div>
-      <div class="desc">你本地的一个<b>双击启动脚本</b>（跑本地预览）。不上传 git，纯属方便自己。用不上就删，没影响。</div>
+    <div class="card" style="--bar:var(--auto)">
+      <div class="top"><span class="path">启动.bat</span></div>
+      <div class="desc">你本地的一个<b>双击启动脚本</b>（跑本地预览），方便自己用，不上传 git。</div>
     </div>
   </div>
-
-  <footer>
-    <p><b>这次我顺手清理了什么：</b></p>
-    <p style="margin-top:8px">🗑️ 删了 <span class="tag">src/data/samples.js</span>（最早做 demo 时写死的假训练数据，全项目已经没人用了）<br>
-    🗑️ 删了 <span class="tag">src/App.css</span>（最初模板自带的样式，从没被引用过）<br>
-    📦 补装了本机缺的一个依赖（你从公司电脑拉来的新代码需要它，否则本地构建会报错）</p>
-    <p style="margin-top:14px;color:#8a8676">结论：这个项目其实<b>不乱</b>——根目录的散文件都是工具规定要放那的，文件夹分得也清楚。真正"冗余可删"的只有上面那两个死文件（已删）和自动生成的 <span class="tag" style="color:#a8492f;background:#f6e2dd">node_modules</span> / <span class="tag" style="color:#a8492f;background:#f6e2dd">dist</span>。</p>
-  </footer>
 
 </div>
 </body>

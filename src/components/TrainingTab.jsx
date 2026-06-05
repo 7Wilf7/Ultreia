@@ -52,7 +52,7 @@ export function TrainingTab({
   period, setPeriod, periodDropdown, setPeriodDropdown,
   view, setView,            // "activities" | "charts" — lifted to AppShell so
                             // it survives top-tab switches within a session
-  setConfirmDelete, profile,
+  setConfirmDelete, profile, races,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -269,7 +269,7 @@ export function TrainingTab({
       )}
 
       {view === "charts" && (
-        <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} />
+        <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
       )}
     </div>
   );

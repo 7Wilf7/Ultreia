@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RUN_GROUP_TYPES } from "../constants";
+import { RACE_CATEGORIES, RUN_GROUP_TYPES, SPARTAN_SUBTYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { formatDurationShort } from "../utils/format";
 import { s } from "../styles";
@@ -9,6 +9,7 @@ import iconOnlyUrl from "../../resources/icon-only-poster.png";
 const POSTER_W = 1080;
 const POSTER_H = 1920;
 const TEMPLATES = ["classic", "bib", "topo"];
+const POSTER_MODES = ["week", "month", "year", "pr"];
 
 function fmtNum(n, digits = 0) {
   return Number(n || 0).toLocaleString(undefined, {
@@ -17,37 +18,168 @@ function fmtNum(n, digits = 0) {
   });
 }
 
-function monthTitle(date, lang) {
-  if (lang === "zh") return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}`;
-  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+function resultSeconds(r) {
+  const h = parseInt(r?.resultH, 10) || 0;
+  const m = parseInt(r?.resultM, 10) || 0;
+  const sec = parseInt(r?.resultS, 10) || 0;
+  const total = h * 3600 + m * 60 + sec;
+  return total > 0 ? total : Infinity;
 }
 
-function buildMonthlyStats(logs, lang) {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+function formatHMS(sec) {
+  if (!isFinite(sec)) return "-";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s2 = Math.round(sec % 60);
+  return `${String(h).padStart(1, "0")}:${String(m).padStart(2, "0")}:${String(s2).padStart(2, "0")}`;
+}
 
-  const monthLogs = logs.filter(l => {
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function labelDate(d) {
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getRange(mode, offset) {
+  const now = new Date();
+  if (mode === "week") {
+    const start = new Date(now);
+    const dayOfWeek = (now.getDay() + 6) % 7;
+    start.setDate(now.getDate() - dayOfWeek + offset * 7);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 7);
+    return { start, end };
+  }
+  if (mode === "year") {
+    const year = now.getFullYear() + offset;
+    return {
+      start: new Date(year, 0, 1),
+      end: new Date(year + 1, 0, 1),
+    };
+  }
+  const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  return {
+    start,
+    end: new Date(start.getFullYear(), start.getMonth() + 1, 1),
+  };
+}
+
+function rangeLabel(mode, range, lang) {
+  if (mode === "year") return String(range.start.getFullYear());
+  if (mode === "month") {
+    if (lang === "zh") return `${range.start.getFullYear()}.${String(range.start.getMonth() + 1).padStart(2, "0")}`;
+    return range.start.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+  }
+  const endDisplay = new Date(range.end);
+  endDisplay.setDate(endDisplay.getDate() - 1);
+  return `${labelDate(range.start)} - ${labelDate(endDisplay)}`;
+}
+
+function buildPeriodStats(logs, mode, offset, lang, t) {
+  const range = getRange(mode, offset);
+  const periodLogs = logs.filter(l => {
     if (l.isPlanned || !RUN_GROUP_TYPES.includes(l.type)) return false;
     const d = new Date(l.date);
-    return d >= start && d < end;
+    return d >= range.start && d < range.end;
   });
 
-  const totalKm = monthLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
-  const totalSec = monthLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
-  const totalAscent = monthLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
-  const longest = monthLogs.reduce((best, l) => (Number(l.distance) || 0) > (Number(best?.distance) || 0) ? l : best, null);
-  const activeDays = new Set(monthLogs.map(l => l.date)).size;
+  const totalKm = periodLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+  const totalSec = periodLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
+  const totalAscent = periodLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
+  const longest = periodLogs.reduce((best, l) => (Number(l.distance) || 0) > (Number(best?.distance) || 0) ? l : best, null);
+  const activeDays = new Set(periodLogs.map(l => l.date)).size;
+  const label = rangeLabel(mode, range, lang);
 
   return {
-    monthLabel: monthTitle(now, lang),
-    fileLabel: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-    totalKm,
-    sessions: monthLogs.length,
+    mode,
+    title: t(`poster.${mode}_title`),
+    periodLabel: label,
+    fileLabel: `${mode}-${dateKey(range.start)}`,
+    primaryValue: fmtNum(totalKm, 1),
+    primaryUnit: "km",
+    primaryLabel: t(`poster.${mode}_subtitle`),
+    note: t("poster.monthly_note"),
+    activeDaysLabel: t("poster.active_days"),
     activeDays,
-    totalSec,
-    totalAscent,
-    longestKm: Number(longest?.distance) || 0,
+    metrics: [
+      { label: t("poster.sessions"), value: fmtNum(periodLogs.length) },
+      { label: t("poster.time"), value: formatDurationShort(totalSec) },
+      { label: t("poster.longest"), value: `${fmtNum(Number(longest?.distance) || 0, 1)} km` },
+      { label: t("poster.ascent"), value: `+${fmtNum(totalAscent)} m` },
+    ],
+  };
+}
+
+function buildPRRecords(races) {
+  const history = (races || []).filter(r => !r.isTarget);
+  const byCategory = {};
+  for (const r of history) {
+    const cat = r.category || "Other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(r);
+  }
+
+  const spartanRank = SPARTAN_SUBTYPES.reduce((acc, name, i) => {
+    acc[name] = i + 1;
+    return acc;
+  }, {});
+
+  const out = [];
+  for (const cat of RACE_CATEGORIES) {
+    const group = byCategory[cat];
+    if (!group || group.length === 0) continue;
+
+    let best;
+    let metric = "time";
+    if (cat === "Trail") {
+      metric = "distance";
+      best = [...group].sort((a, b) => (Number(b.distance) || 0) - (Number(a.distance) || 0))[0] || null;
+      if (!(Number(best?.distance) > 0)) best = null;
+    } else if (cat === "Spartan") {
+      metric = "difficulty";
+      best = [...group].sort((a, b) => (spartanRank[b.subtype] || 0) - (spartanRank[a.subtype] || 0))[0] || null;
+      if (!spartanRank[best?.subtype]) best = null;
+    } else {
+      best = [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b))[0] || null;
+      if (!isFinite(resultSeconds(best))) best = null;
+    }
+
+    if (best) {
+      out.push({
+        category: cat,
+        metric,
+        race: best,
+        value: metric === "distance"
+          ? `${fmtNum(best.distance, 1)} km`
+          : metric === "difficulty"
+            ? best.subtype
+            : formatHMS(resultSeconds(best)),
+      });
+    }
+  }
+  return out;
+}
+
+function buildPRStats(races, t) {
+  const records = buildPRRecords(races);
+  return {
+    mode: "pr",
+    title: t("poster.pr_title"),
+    periodLabel: t("poster.pr_all_time"),
+    fileLabel: "pr-all-time",
+    primaryValue: fmtNum(records.length),
+    primaryUnit: "PR",
+    primaryLabel: t("poster.pr_subtitle"),
+    note: t("poster.pr_note"),
+    activeDaysLabel: t("poster.active_days"),
+    activeDays: null,
+    metrics: (records.length ? records : [{ category: "-", value: "-" }]).slice(0, 4).map(rec => ({
+      label: rec.category,
+      value: rec.value,
+    })),
   };
 }
 
@@ -79,24 +211,17 @@ function signature({ y = 1664, ink = "#141413", urlInk = ink, opacity = 0.78 }) 
   );
 }
 
-function metricCards(stats, t, palette, x = 110, y = 790) {
-  const items = [
-    [t("poster.sessions"), fmtNum(stats.sessions)],
-    [t("poster.time"), formatDurationShort(stats.totalSec)],
-    [t("poster.longest"), `${fmtNum(stats.longestKm, 1)} km`],
-    [t("poster.ascent"), `+${fmtNum(stats.totalAscent)} m`],
-  ];
-
+function metricCards(stats, palette, x = 110, y = 790) {
   return (
     <g transform={`translate(${x} ${y})`}>
-      {items.map(([label, value], i) => (
-        <g key={label} transform={`translate(${(i % 2) * 430} ${Math.floor(i / 2) * 170})`}>
+      {stats.metrics.map((item, i) => (
+        <g key={`${item.label}-${i}`} transform={`translate(${(i % 2) * 430} ${Math.floor(i / 2) * 170})`}>
           <rect x="0" y="0" width="388" height="130" fill={palette.card} stroke={palette.rule} strokeWidth="2" />
           <text x="28" y="43" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24" fontWeight="700" letterSpacing="2">
-            {label}
+            {item.label}
           </text>
           <text x="28" y="100" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="44" fontWeight="800">
-            {value}
+            {item.value}
           </text>
         </g>
       ))}
@@ -104,21 +229,27 @@ function metricCards(stats, t, palette, x = 110, y = 790) {
   );
 }
 
-function monthLine(stats, t, palette, y = 1288) {
+function periodLine(stats, palette, y = 1288) {
   return (
     <g>
       <rect x="110" y={y - 74} width="860" height="2" fill={palette.ruleStrong} />
-      <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800">
-        {t("poster.active_days")} {fmtNum(stats.activeDays)}
-      </text>
+      {stats.activeDays == null ? (
+        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800">
+          {stats.periodLabel}
+        </text>
+      ) : (
+        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800">
+          {stats.activeDaysLabel} {fmtNum(stats.activeDays)}
+        </text>
+      )}
       <text x="970" y={y} textAnchor="end" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28">
-        {t("poster.monthly_note")}
+        {stats.note}
       </text>
     </g>
   );
 }
 
-function ClassicPoster({ stats, t, svgRef, logoSrc }) {
+function ClassicPoster({ stats, svgRef, logoSrc }) {
   const palette = {
     ink: "#141413",
     muted: "#74736b",
@@ -129,7 +260,7 @@ function ClassicPoster({ stats, t, svgRef, logoSrc }) {
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={t("poster.monthly_title")} style={{ width: "100%", height: "auto", display: "block", background: "#f2f1ec" }}>
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#f2f1ec" }}>
       <rect width={POSTER_W} height={POSTER_H} fill="#f2f1ec" />
       <circle cx="160" cy="180" r="360" fill="#4a5e3a" opacity="0.055" />
       <circle cx="1040" cy="120" r="420" fill="#141413" opacity="0.035" />
@@ -144,31 +275,31 @@ function ClassicPoster({ stats, t, svgRef, logoSrc }) {
 
       {brandMark({ logoSrc })}
       <text x="110" y="178" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="700" letterSpacing="4">
-        {t("poster.monthly_title")}
+        {stats.title}
       </text>
       <text x="110" y="234" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" letterSpacing="2">
-        {stats.monthLabel}
+        {stats.periodLabel}
       </text>
 
       <line x1="110" y1="318" x2="970" y2="318" stroke="#141413" strokeWidth="3" />
       <text x="110" y="590" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="245" fontWeight="800">
-        {fmtNum(stats.totalKm, 1)}
+        {stats.primaryValue}
       </text>
       <text x="824" y="570" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="62" fontWeight="800">
-        km
+        {stats.primaryUnit}
       </text>
       <text x="112" y="666" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="32" fontWeight="700">
-        {t("poster.monthly_subtitle")}
+        {stats.primaryLabel}
       </text>
 
-      {metricCards(stats, t, palette)}
-      {monthLine(stats, t, palette)}
+      {metricCards(stats, palette)}
+      {periodLine(stats, palette)}
       {signature({ y: 1718 })}
     </svg>
   );
 }
 
-function BibPoster({ stats, t, svgRef, logoSrc }) {
+function BibPoster({ stats, svgRef, logoSrc }) {
   const palette = {
     ink: "#f4ead0",
     muted: "#b8aa86",
@@ -179,7 +310,7 @@ function BibPoster({ stats, t, svgRef, logoSrc }) {
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={t("poster.monthly_title")} style={{ width: "100%", height: "auto", display: "block", background: "#0e0e0d" }}>
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#0e0e0d" }}>
       <rect width={POSTER_W} height={POSTER_H} fill="#0e0e0d" />
       <rect x="64" y="64" width="952" height="1792" fill="#111110" stroke="#d2bc78" strokeWidth="2" />
       <rect x="92" y="92" width="896" height="1736" fill="none" stroke="#3a3425" strokeWidth="2" />
@@ -203,30 +334,30 @@ function BibPoster({ stats, t, svgRef, logoSrc }) {
 
       {brandMark({ logoSrc, x: 856, y: 146, size: 92 })}
       <text x="150" y="190" fill="#d2bc78" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="900" letterSpacing="7">
-        CERTIFIED MONTHLY BIB
+        CERTIFIED FIELD REPORT
       </text>
       <text x="150" y="246" fill="#b8aa86" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="3">
-        {stats.monthLabel}
+        {stats.periodLabel}
       </text>
 
       <text x="540" y="442" textAnchor="middle" fill="#76684a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="900" letterSpacing="10">
-        RUNNING DISTANCE
+        {stats.primaryLabel}
       </text>
       <text x="540" y="800" textAnchor="middle" fill="#f4ead0" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="292" fontWeight="900">
-        {fmtNum(stats.totalKm, 1)}
+        {stats.primaryValue}
       </text>
       <text x="540" y="904" textAnchor="middle" fill="#d2bc78" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="70" fontWeight="900" letterSpacing="11">
-        KILOMETERS
+        {stats.primaryUnit}
       </text>
 
-      {metricCards(stats, t, palette, 150, 1010)}
-      {monthLine(stats, t, palette, 1478)}
+      {metricCards(stats, palette, 150, 1010)}
+      {periodLine(stats, palette, 1478)}
       {signature({ y: 1698, ink: "#f4ead0", urlInk: "#d2bc78", opacity: 0.78 })}
     </svg>
   );
 }
 
-function TopoPoster({ stats, t, svgRef, logoSrc }) {
+function TopoPoster({ stats, svgRef, logoSrc }) {
   const palette = {
     ink: "#f7f0dc",
     muted: "#b9c0a2",
@@ -237,9 +368,8 @@ function TopoPoster({ stats, t, svgRef, logoSrc }) {
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={t("poster.monthly_title")} style={{ width: "100%", height: "auto", display: "block", background: "#172014" }}>
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#172014" }}>
       <rect width={POSTER_W} height={POSTER_H} fill="#172014" />
-      <rect x="0" y="0" width="1080" height="1920" fill="#172014" />
       <g fill="none" stroke="#dce8a8" strokeWidth="1.5" opacity="0.14">
         {Array.from({ length: 18 }, (_, i) => (
           <path key={i} d={`M-120 ${250 + i * 84} C 110 ${145 + i * 48}, 290 ${360 + i * 68}, 520 ${250 + i * 58} S 840 ${90 + i * 72}, 1200 ${250 + i * 52}`} />
@@ -250,44 +380,50 @@ function TopoPoster({ stats, t, svgRef, logoSrc }) {
 
       {brandMark({ logoSrc, x: 874, y: 126, size: 96, opacity: 0.94 })}
       <text x="112" y="192" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800" letterSpacing="5">
-        {t("poster.template_topo")}
+        {stats.title}
       </text>
       <text x="112" y="250" fill="#b9c0a2" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="3">
-        {stats.monthLabel}
+        {stats.periodLabel}
       </text>
 
       <text x="112" y="620" fill="#f7f0dc" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="238" fontWeight="900">
-        {fmtNum(stats.totalKm, 1)}
+        {stats.primaryValue}
       </text>
       <text x="824" y="602" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="900">
-        km
+        {stats.primaryUnit}
       </text>
       <text x="116" y="700" fill="#b9c0a2" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="33" fontWeight="700">
-        {t("poster.monthly_subtitle")}
+        {stats.primaryLabel}
       </text>
 
-      {metricCards(stats, t, palette, 112, 840)}
-      {monthLine(stats, t, palette, 1320)}
+      {metricCards(stats, palette, 112, 840)}
+      {periodLine(stats, palette, 1320)}
       {signature({ y: 1730, ink: "#f7f0dc", urlInk: "#dce8a8", opacity: 0.8 })}
     </svg>
   );
 }
 
-function PosterSvg({ template, stats, t, svgRef, logoSrc }) {
-  if (template === "bib") return <BibPoster stats={stats} t={t} svgRef={svgRef} logoSrc={logoSrc} />;
-  if (template === "topo") return <TopoPoster stats={stats} t={t} svgRef={svgRef} logoSrc={logoSrc} />;
-  return <ClassicPoster stats={stats} t={t} svgRef={svgRef} logoSrc={logoSrc} />;
+function PosterSvg({ template, stats, svgRef, logoSrc }) {
+  if (template === "bib") return <BibPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
+  if (template === "topo") return <TopoPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
+  return <ClassicPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
 }
 
-export function MonthlyPosterModal({ logs, onClose }) {
+export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const t = useT();
   const { lang } = useLanguage();
   const svgRef = useRef(null);
+  const [mode, setMode] = useState("month");
+  const [rangeOffset, setRangeOffset] = useState(0);
   const [template, setTemplate] = useState("classic");
   const [logoSrc, setLogoSrc] = useState(iconOnlyUrl);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const stats = useMemo(() => buildMonthlyStats(logs || [], lang), [logs, lang]);
+  const stats = useMemo(() => (
+    mode === "pr"
+      ? buildPRStats(races, t)
+      : buildPeriodStats(logs || [], mode, rangeOffset, lang, t)
+  ), [logs, races, mode, rangeOffset, lang, t]);
 
   useEffect(() => {
     let alive = true;
@@ -307,6 +443,12 @@ export function MonthlyPosterModal({ logs, onClose }) {
       alive = false;
     };
   }, []);
+
+  function switchMode(nextMode) {
+    setMode(nextMode);
+    setMsg("");
+    if (nextMode === "pr") setRangeOffset(0);
+  }
 
   async function downloadPoster() {
     if (!svgRef.current || busy) return;
@@ -338,7 +480,7 @@ export function MonthlyPosterModal({ logs, onClose }) {
       const pngUrl = URL.createObjectURL(pngBlob);
       const a = document.createElement("a");
       a.href = pngUrl;
-      a.download = `training-studio-monthly-${stats.fileLabel}-${template}.png`;
+      a.download = `training-studio-${stats.fileLabel}-${template}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -359,10 +501,32 @@ export function MonthlyPosterModal({ logs, onClose }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
             <div>
               <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("poster.preview_title")}</h2>
-              <div style={{ ...s.muted, marginTop: 3 }}>{stats.monthLabel}</div>
+              <div style={{ ...s.muted, marginTop: 3 }}>{stats.periodLabel}</div>
             </div>
             <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">x</button>
           </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, marginBottom: 8 }}>
+            {POSTER_MODES.map(id => (
+              <button key={id} onClick={() => switchMode(id)}
+                style={{ ...s.chip(mode === id), minHeight: 34, minWidth: 0, padding: "0 6px", fontSize: 12 }}>
+                {t(`poster.mode_${id}`)}
+              </button>
+            ))}
+          </div>
+
+          {mode !== "pr" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setRangeOffset(v => v - 1)} style={{ ...s.btnGhost, minHeight: 34, padding: "0 10px" }}>
+                {t("poster.prev_range")}
+              </button>
+              <div style={{ ...s.muted, flex: 1, textAlign: "center", fontSize: 12 }}>{stats.periodLabel}</div>
+              <button onClick={() => setRangeOffset(v => Math.min(v + 1, 0))} disabled={rangeOffset >= 0}
+                style={{ ...s.btnGhost, minHeight: 34, padding: "0 10px", opacity: rangeOffset >= 0 ? 0.45 : 1 }}>
+                {t("poster.next_range")}
+              </button>
+            </div>
+          )}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
             {TEMPLATES.map(id => {
@@ -392,7 +556,7 @@ export function MonthlyPosterModal({ logs, onClose }) {
             border: "1px solid var(--rule)",
             background: "var(--bg-elevated)",
           }}>
-            <PosterSvg template={template} svgRef={svgRef} stats={stats} t={t} logoSrc={logoSrc} />
+            <PosterSvg template={template} svgRef={svgRef} stats={stats} logoSrc={logoSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

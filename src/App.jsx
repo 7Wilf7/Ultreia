@@ -1405,6 +1405,7 @@ Rules:
           setView={setTrainingView}
           setConfirmDelete={setConfirmDelete}
           profile={profile}
+          races={races}
         />
       )}
       {tab === 1 && (

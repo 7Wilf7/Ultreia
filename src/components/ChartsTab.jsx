@@ -47,7 +47,7 @@ function getChartConfig(filter) {
   return def;
 }
 
-export function ChartsTab({ filteredAllLogs, filter }) {
+export function ChartsTab({ filteredAllLogs, filter, races }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [showMonthlyPoster, setShowMonthlyPoster] = useState(false);
@@ -356,7 +356,7 @@ export function ChartsTab({ filteredAllLogs, filter }) {
       )}
 
       {showMonthlyPoster && (
-        <MonthlyPosterModal logs={filteredAllLogs} onClose={() => setShowMonthlyPoster(false)} />
+        <MonthlyPosterModal logs={filteredAllLogs} races={races} onClose={() => setShowMonthlyPoster(false)} />
       )}
 
       {/* Primary trend chart — metric varies by filter (distance / ascent / duration) */}

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
-import { formatDuration, formatDurationShort } from "../utils/format";
+import { formatDuration } from "../utils/format";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
@@ -67,9 +67,9 @@ function StatTile({ label, val, unit, isMobile }) {
         <div style={{
           height: "100%",
           display: "grid",
-          gridTemplateColumns: "68px minmax(0, 1fr)",
+          gridTemplateColumns: "60px minmax(0, 1fr)",
           alignItems: "center",
-          columnGap: 8,
+          columnGap: 9,
           minWidth: 0,
         }}>
           <div style={{
@@ -86,7 +86,7 @@ function StatTile({ label, val, unit, isMobile }) {
             ...s.metricVal,
             fontSize: compactMobileValue ? "clamp(16px, 4.35vw, 18px)" : "clamp(18px, 5vw, 21px)",
             marginTop: 0,
-            display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 3,
+            display: "flex", alignItems: "baseline", justifyContent: "flex-start", gap: 3,
             lineHeight: 1.05,
             letterSpacing: 0,
             minWidth: 0,
@@ -199,10 +199,18 @@ export function TrainingTab({
     .reduce((sum, l) => sum + (l.distance || 0), 0);
   const periodAscent = periodLogs.reduce((sum, l) => sum + (l.ascent || 0), 0);
   const periodDurationSec = periodLogs.reduce((sum, l) => sum + (l.duration || 0), 0);
+  const mobileTimeStat = (() => {
+    if (!periodDurationSec) return { val: t("common.no_data"), unit: "" };
+    const h = Math.floor(periodDurationSec / 3600);
+    if (h > 0) return { val: String(h), unit: "h" };
+    const m = Math.floor(periodDurationSec / 60);
+    if (m > 0) return { val: String(m), unit: "m" };
+    return { val: String(Math.round(periodDurationSec)), unit: "s" };
+  })();
   const statItems = [
     { key: "sessions", label: t("training.sessions"), val: String(periodSessions), unit: "" },
-    { key: "time", label: t("training.total_time"), val: periodDurationSec ? (isMobile ? formatDurationShort(periodDurationSec) : formatDuration(periodDurationSec)) : t("common.no_data"), unit: "" },
-    { key: "distance", label: t("training.total_distance"), val: periodKm.toFixed(1), unit: "km" },
+    { key: "time", label: t("training.total_time"), val: isMobile ? mobileTimeStat.val : (periodDurationSec ? formatDuration(periodDurationSec) : t("common.no_data")), unit: isMobile ? mobileTimeStat.unit : "" },
+    { key: "distance", label: t("training.total_distance"), val: isMobile ? Math.round(periodKm).toLocaleString() : periodKm.toFixed(1), unit: "km" },
     { key: "ascent", label: t("training.total_ascent"), val: periodAscent.toLocaleString(), unit: "m" },
   ];
 
@@ -255,6 +263,7 @@ export function TrainingTab({
               <PeriodSelector
                 period={period} setPeriod={setPeriod}
                 periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
+                dense
                 style={{ marginBottom: 8 }}
               />
             )}

@@ -5,7 +5,7 @@ import { useT } from "../i18n/LanguageContext";
 // of PeriodSelector, which re-created the component type every render and reset
 // its subtree state). `compact` is the only thing it used from the closure, now
 // a prop.
-function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownContent, compact }) {
+function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownContent, compact, dense }) {
   return (
     <div style={{ position: "relative", flex: compact ? "0 0 auto" : 1, minWidth: 0 }}>
       <button
@@ -13,13 +13,13 @@ function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownConte
         style={{
           display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
           width: "100%", minHeight: 36,
-          padding: "8px 6px",
+          padding: dense ? "8px 4px" : "8px 6px",
           background: active ? "var(--ink-1)" : "transparent",
           color: active ? "var(--ink-inv)" : "var(--ink-2)",
           border: "none",
           // No right divider on the rightmost cell (Year).
           borderRight: kind !== "year" ? "1px solid var(--rule)" : "none",
-          fontFamily: "var(--font-sans)", fontSize: 12,
+          fontFamily: "var(--font-sans)", fontSize: dense ? 11 : 12,
           fontWeight: active ? 600 : 500,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           cursor: "pointer", borderRadius: 0,
@@ -46,7 +46,7 @@ function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownConte
 // Segmented 4-tab strip — Week / Month / Year / All — in a single row.
 // Each non-"All" tab carries its own ▾ caret that opens a popup for picking
 // past periods. Active cell gets a filled inverted background.
-export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown, compact = false, style }) {
+export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown, compact = false, dense = false, style }) {
   const t = useT();
 
   function popupItem(key, label, selected, onClick) {
@@ -77,6 +77,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
     }}>
       <Cell
         compact={compact}
+        dense={dense}
         kind="all"
         active={period.type === "all"}
         label={t("period.all_time")}
@@ -85,6 +86,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
       />
       <Cell
         compact={compact}
+        dense={dense}
         kind="week"
         active={period.type === "week"}
         label={period.type === "week" ? getPeriodLabel(period, t) : t("period.this_week")}
@@ -105,6 +107,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
       />
       <Cell
         compact={compact}
+        dense={dense}
         kind="month"
         active={period.type === "month"}
         label={period.type === "month" ? getPeriodLabel(period, t) : t("period.this_month")}
@@ -129,6 +132,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
       />
       <Cell
         compact={compact}
+        dense={dense}
         kind="year"
         active={period.type === "year"}
         label={period.type === "year" ? getPeriodLabel(period, t) : t("period.this_year")}

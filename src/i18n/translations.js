@@ -571,7 +571,7 @@ const dict = {
   "poster.monthly_note":      { en: "Generated from your Training Studio activity log.", zh: "根据你的 Training Studio 训练记录生成。" },
   "poster.save_png":          { en: "Save PNG",                zh: "保存 PNG" },
   "poster.saving":            { en: "Saving…",                 zh: "保存中…" },
-  "poster.downloaded":        { en: "Saved.",                   zh: "已保存。" },
+  "poster.downloaded":        { en: "Saved to photos.",         zh: "已保存到相册。" },
   "poster.download_failed":   { en: "Save failed.",             zh: "保存失败。" },
 
   // ===== Activities tab =====

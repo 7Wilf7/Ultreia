@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { RACE_CATEGORIES, RUN_GROUP_TYPES, SPARTAN_SUBTYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { workouts as workoutsDb } from "../lib/db";
@@ -8,11 +9,13 @@ import { ModalRoot } from "./ModalRoot";
 import iconOnlyUrl from "../../resources/icon-only-poster.png";
 
 const POSTER_W = 1080;
-const POSTER_H = 1920;
-const TEMPLATES = ["classic", "bib", "topo"];
+const POSTER_H = 1350;
+const TEMPLATES = ["classic", "bib"];
 const POSTER_MODES = ["single", "week", "month", "year", "pr"];
 const RANGE_MODES = new Set(["week", "month", "year"]);
 const PR_RANGES = ["all", "this_year", "last_year", "last_12m"];
+const PosterSaver = registerPlugin("PosterSaver");
+const isNativeApp = () => Capacitor.isNativePlatform?.() === true;
 
 function fmtNum(n, digits = 0) {
   return Number(n || 0).toLocaleString(undefined, {
@@ -49,8 +52,8 @@ function workoutLabel(log) {
   if (!log) return "";
   const typeLabel = log.type || "Workout";
   const dateLabel = log.date || "";
-  const dist = Number(log.distance) > 0 ? ` · ${fmtNum(log.distance, 1)} km` : "";
-  return `${dateLabel} · ${typeLabel}${dist}`;
+  const dist = Number(log.distance) > 0 ? ` - ${fmtNum(log.distance, 1)} km` : "";
+  return `${dateLabel} - ${typeLabel}${dist}`;
 }
 
 function startedLabel(log) {
@@ -314,7 +317,7 @@ function brandMark({ logoSrc, x = 874, y = 118, size = 96, opacity = 1 }) {
   );
 }
 
-function signature({ y = 1664, ink = "#141413", urlInk = ink, opacity = 0.78 }) {
+function signature({ y = 1188, ink = "#141413", urlInk = ink, opacity = 0.72 }) {
   return (
     <g>
       <text
@@ -324,28 +327,28 @@ function signature({ y = 1664, ink = "#141413", urlInk = ink, opacity = 0.78 }) 
         fill={ink}
         opacity={opacity}
         fontFamily="Brush Script MT, Segoe Script, Georgia, serif"
-        fontSize="68"
+        fontSize="54"
         fontStyle="italic"
       >
         Training Studio
       </text>
-      <text x="540" y={y + 48} textAnchor="middle" fill={urlInk} opacity="0.72" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="22" fontWeight="700" letterSpacing="2">
+      <text x="540" y={y + 38} textAnchor="middle" fill={urlInk} opacity="0.62" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="18" fontWeight="700" letterSpacing="2">
         www.aitrainstudio.com
       </text>
     </g>
   );
 }
 
-function metricCards(stats, palette, x = 110, y = 790) {
+function metricCards(stats, palette, x = 110, y = 790, cardW = 388, cardH = 122, colGap = 430, rowGap = 152) {
   return (
     <g transform={`translate(${x} ${y})`}>
       {stats.metrics.map((item, i) => (
-        <g key={`${item.label}-${i}`} transform={`translate(${(i % 2) * 430} ${Math.floor(i / 2) * 170})`}>
-          <rect x="0" y="0" width="388" height="130" fill={palette.card} stroke={palette.rule} strokeWidth="2" />
-          <text x="28" y="43" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24" fontWeight="700" letterSpacing="2">
+        <g key={`${item.label}-${i}`} transform={`translate(${(i % 2) * colGap} ${Math.floor(i / 2) * rowGap})`}>
+          <rect x="0" y="0" width={cardW} height={cardH} fill={palette.card} stroke={palette.rule} strokeWidth="1.4" />
+          <text x="26" y="40" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="21" fontWeight="700" letterSpacing="2">
             {item.label}
           </text>
-          <text x="28" y="100" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="44" fontWeight="800">
+          <text x="26" y="94" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="42" fontWeight="800">
             {item.value}
           </text>
         </g>
@@ -354,47 +357,44 @@ function metricCards(stats, palette, x = 110, y = 790) {
   );
 }
 
-function periodLine(stats, palette, y = 1288) {
+function periodLine(stats, palette, y = 1120) {
   return (
     <g>
-      <rect x="110" y={y - 74} width="860" height="2" fill={palette.ruleStrong} />
+      <rect x="110" y={y - 58} width="860" height="1.5" fill={palette.ruleStrong} opacity="0.78" />
       {stats.activeDays == null ? (
-        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800">
+        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
           {stats.periodLabel}
         </text>
       ) : (
-        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800">
+        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
           {stats.activeDaysLabel} {fmtNum(stats.activeDays)}
         </text>
       )}
-      <text x="970" y={y} textAnchor="end" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28">
-        {stats.note}
-      </text>
     </g>
   );
 }
 
-function RoutePanel({ stats, palette, x = 110, y = 720, w = 860, h = 470 }) {
+function RoutePanel({ stats, palette, x = 110, y = 620, w = 860, h = 310 }) {
   const path = gpsPath(stats.gpsTrack, x, y, w, h);
   const hasRoute = Boolean(path);
   return (
     <g>
-      <rect x={x} y={y} width={w} height={h} fill={palette.card} stroke={palette.rule} strokeWidth="2" />
+      <rect x={x} y={y} width={w} height={h} fill={palette.card} stroke={palette.rule} strokeWidth="1.4" />
       <g fill="none" stroke={palette.ruleStrong} strokeWidth="1" opacity="0.13">
-        {Array.from({ length: 8 }, (_, i) => (
-          <path key={i} d={`M${x + 28} ${y + 60 + i * 45} C ${x + 220} ${y + 5 + i * 40}, ${x + 410} ${y + 105 + i * 24}, ${x + 620} ${y + 58 + i * 46} S ${x + 780} ${y + 10 + i * 42}, ${x + w - 28} ${y + 76 + i * 34}`} />
+        {Array.from({ length: 6 }, (_, i) => (
+          <path key={i} d={`M${x + 28} ${y + 58 + i * 38} C ${x + 220} ${y + 12 + i * 28}, ${x + 410} ${y + 98 + i * 20}, ${x + 620} ${y + 56 + i * 34} S ${x + 780} ${y + 16 + i * 30}, ${x + w - 28} ${y + 72 + i * 26}`} />
         ))}
       </g>
-      <text x={x + 34} y={y + 56} fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="800" letterSpacing="3">
+      <text x={x + 30} y={y + 46} fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="21" fontWeight="800" letterSpacing="3">
         {stats.routeLabel}
       </text>
       {hasRoute ? (
         <>
-          <path d={path} fill="none" stroke={palette.ruleStrong} strokeWidth="16" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />
-          <path d={path} fill="none" stroke={palette.ink} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={path} fill="none" stroke={palette.ruleStrong} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />
+          <path d={path} fill="none" stroke={palette.ink} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
         </>
       ) : (
-        <text x={x + w / 2} y={y + h / 2 + 20} textAnchor="middle" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="700">
+        <text x={x + w / 2} y={y + h / 2 + 16} textAnchor="middle" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700">
           {stats.note}
         </text>
       )}
@@ -404,189 +404,122 @@ function RoutePanel({ stats, palette, x = 110, y = 720, w = 860, h = 470 }) {
 
 function ClassicPoster({ stats, svgRef, logoSrc }) {
   const palette = {
-    ink: "#141413",
-    muted: "#74736b",
-    rule: "#d1cfc6",
-    ruleStrong: "#141413",
-    card: "#fafaf7",
+    ink: "#11110f",
+    muted: "#7a776e",
+    rule: "#ddd8ca",
+    ruleStrong: "#2f3327",
+    card: "#fbfaf5",
   };
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#f2f1ec" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#f2f1ec" />
-      <circle cx="160" cy="180" r="360" fill="#4a5e3a" opacity="0.055" />
-      <circle cx="1040" cy="120" r="420" fill="#141413" opacity="0.035" />
-      <g fill="none" stroke="#141413" strokeWidth="1.2" opacity="0.06">
-        <path d="M-80 420 C 160 300, 320 520, 540 390 S 900 250, 1180 380" />
-        <path d="M-80 500 C 190 370, 360 600, 600 455 S 930 340, 1180 455" />
-        <path d="M-80 1260 C 220 1110, 390 1360, 650 1190 S 900 1110, 1180 1260" />
-        <path d="M-80 1350 C 240 1190, 420 1450, 700 1270 S 960 1210, 1180 1350" />
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#f4f1e8" }}>
+      <rect width={POSTER_W} height={POSTER_H} fill="#f4f1e8" />
+      <rect x="46" y="46" width="988" height="1258" fill="#f9f7ef" stroke="#c9c2ae" strokeWidth="1.5" />
+      <rect x="86" y="86" width="908" height="1178" fill="none" stroke="#e5decf" strokeWidth="1.2" />
+      <path d="M86 312 H994" stroke="#25291f" strokeWidth="2.5" />
+      <path d="M86 1010 H994" stroke="#c9c2ae" strokeWidth="1.5" />
+      <g fill="none" stroke="#2f3327" strokeWidth="1" opacity="0.045">
+        <path d="M-120 492 C 160 390, 348 560, 560 462 S 892 348, 1190 472" />
+        <path d="M-120 565 C 190 455, 374 640, 615 520 S 910 452, 1190 548" />
+        <path d="M-120 862 C 186 744, 390 920, 640 794 S 948 732, 1190 846" />
       </g>
-      <rect x="58" y="58" width="964" height="1804" fill="none" stroke="#141413" strokeWidth="3" />
-      <rect x="82" y="82" width="916" height="1756" fill="none" stroke="#d1cfc6" strokeWidth="2" />
 
-      {brandMark({ logoSrc })}
-      <text x="110" y="178" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="700" letterSpacing="4">
+      {brandMark({ logoSrc, x: 846, y: 110, size: 128 })}
+      <text x="110" y="154" fill="#5c5a52" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="800" letterSpacing="4">
         {stats.title}
       </text>
-      <text x="110" y="234" fill="#9b9991" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" letterSpacing="2">
+      <text x="110" y="204" fill="#8b877c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="27" letterSpacing="2">
         {stats.periodLabel}
       </text>
 
-      <line x1="110" y1="318" x2="970" y2="318" stroke="#141413" strokeWidth="3" />
-      <text x="110" y="590" fill="#141413" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="245" fontWeight="800">
+      <text x="110" y="548" fill="#11110f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="230" fontWeight="850">
         {stats.primaryValue}
       </text>
-      <text x="824" y="570" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="62" fontWeight="800">
+      <text x="805" y="518" fill="#5b624c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="850">
         {stats.primaryUnit}
       </text>
-      <text x="112" y="666" fill="#57564f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="32" fontWeight="700">
+      <text x="114" y="612" fill="#5c5a52" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
         {stats.primaryLabel}
       </text>
 
       {stats.mode === "single" ? (
         <>
-          <RoutePanel stats={stats} palette={palette} y={720} />
-          {metricCards(stats, palette, 110, 1240)}
-          {periodLine(stats, palette, 1600)}
+          <RoutePanel stats={stats} palette={palette} y={660} h={260} />
+          {metricCards(stats, palette, 110, 956)}
+          {periodLine(stats, palette, 1210)}
         </>
       ) : (
         <>
-          {metricCards(stats, palette)}
-          {periodLine(stats, palette)}
+          {metricCards(stats, palette, 110, 710)}
+          {periodLine(stats, palette, 1138)}
         </>
       )}
-      {signature({ y: 1718 })}
+      {signature({ y: 1192, ink: "#272a21", urlInk: "#666257", opacity: 0.7 })}
     </svg>
   );
 }
 
 function BibPoster({ stats, svgRef, logoSrc }) {
   const palette = {
-    ink: "#f4ead0",
-    muted: "#b8aa86",
-    rule: "#76684a",
-    ruleStrong: "#d2bc78",
-    card: "#151515",
+    ink: "#f1ead8",
+    muted: "#9c947f",
+    rule: "#373226",
+    ruleStrong: "#bfa66b",
+    card: "#141411",
   };
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#0e0e0d" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#0e0e0d" />
-      <rect x="64" y="64" width="952" height="1792" fill="#111110" stroke="#d2bc78" strokeWidth="2" />
-      <rect x="92" y="92" width="896" height="1736" fill="none" stroke="#3a3425" strokeWidth="2" />
-      <rect x="124" y="124" width="832" height="1672" fill="none" stroke="#76684a" strokeWidth="1.5" strokeDasharray="2 10" opacity="0.7" />
-      <g fill="none" stroke="#d2bc78" strokeWidth="1.4" opacity="0.28">
-        <path d="M96 512 H984" />
-        <path d="M96 1328 H984" />
-        <path d="M184 92 V1828" />
-        <path d="M896 92 V1828" />
-      </g>
-      <g fill="#d2bc78" opacity="0.78">
-        <rect x="124" y="124" width="56" height="5" />
-        <rect x="124" y="124" width="5" height="56" />
-        <rect x="900" y="124" width="56" height="5" />
-        <rect x="951" y="124" width="5" height="56" />
-        <rect x="124" y="1791" width="56" height="5" />
-        <rect x="124" y="1740" width="5" height="56" />
-        <rect x="900" y="1791" width="56" height="5" />
-        <rect x="951" y="1740" width="5" height="56" />
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#0f100d" }}>
+      <rect width={POSTER_W} height={POSTER_H} fill="#0f100d" />
+      <rect x="48" y="48" width="984" height="1254" fill="#11120f" stroke="#5b5037" strokeWidth="1.4" />
+      <rect x="88" y="88" width="904" height="1174" fill="none" stroke="#252116" strokeWidth="1.2" />
+      <path d="M118 318 H962" stroke="#bfa66b" strokeWidth="2.2" opacity="0.82" />
+      <path d="M118 1012 H962" stroke="#363124" strokeWidth="1.4" />
+      <g fill="none" stroke="#bfa66b" strokeWidth="1" opacity="0.1">
+        <path d="M92 612 H988" />
+        <path d="M92 706 H988" />
+        <path d="M92 800 H988" />
+        <path d="M306 88 V1262" />
+        <path d="M774 88 V1262" />
       </g>
 
-      {brandMark({ logoSrc, x: 856, y: 146, size: 92 })}
-      <text x="150" y="190" fill="#d2bc78" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="900" letterSpacing="7">
-        CERTIFIED FIELD REPORT
+      {brandMark({ logoSrc, x: 840, y: 112, size: 132, opacity: 0.96 })}
+      <text x="118" y="164" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="25" fontWeight="900" letterSpacing="6">
+        TRAINING DOSSIER
       </text>
-      <text x="150" y="246" fill="#b8aa86" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="3">
+      <text x="118" y="214" fill="#9c947f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="27" fontWeight="700" letterSpacing="2">
         {stats.periodLabel}
       </text>
 
-      <text x="540" y="442" textAnchor="middle" fill="#76684a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="900" letterSpacing="10">
+      <text x="540" y="428" textAnchor="middle" fill="#74684a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="900" letterSpacing="9">
         {stats.primaryLabel}
       </text>
-      <text x="540" y="800" textAnchor="middle" fill="#f4ead0" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="292" fontWeight="900">
+      <text x="540" y="710" textAnchor="middle" fill="#f1ead8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="252" fontWeight="900">
         {stats.primaryValue}
       </text>
-      <text x="540" y="904" textAnchor="middle" fill="#d2bc78" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="70" fontWeight="900" letterSpacing="11">
+      <text x="540" y="792" textAnchor="middle" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="50" fontWeight="900" letterSpacing="9">
         {stats.primaryUnit}
       </text>
 
       {stats.mode === "single" ? (
         <>
-          <RoutePanel stats={stats} palette={palette} x={150} y={950} w={780} h={330} />
-          {metricCards(stats, palette, 150, 1330)}
+          <RoutePanel stats={stats} palette={palette} x={118} y={840} w={844} h={210} />
+          {metricCards(stats, palette, 118, 1084, 382, 106, 462, 128)}
         </>
       ) : (
         <>
-          {metricCards(stats, palette, 150, 1010)}
-          {periodLine(stats, palette, 1478)}
+          {metricCards(stats, palette, 118, 856, 382, 112, 462, 136)}
         </>
       )}
-      {signature({ y: 1698, ink: "#f4ead0", urlInk: "#d2bc78", opacity: 0.78 })}
-    </svg>
-  );
-}
-
-function TopoPoster({ stats, svgRef, logoSrc }) {
-  const palette = {
-    ink: "#f7f0dc",
-    muted: "#b9c0a2",
-    rule: "#5d6b45",
-    ruleStrong: "#dce8a8",
-    card: "#253119",
-  };
-
-  return (
-    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#172014" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#172014" />
-      <g fill="none" stroke="#dce8a8" strokeWidth="1.5" opacity="0.14">
-        {Array.from({ length: 18 }, (_, i) => (
-          <path key={i} d={`M-120 ${250 + i * 84} C 110 ${145 + i * 48}, 290 ${360 + i * 68}, 520 ${250 + i * 58} S 840 ${90 + i * 72}, 1200 ${250 + i * 52}`} />
-        ))}
-      </g>
-      <rect x="58" y="58" width="964" height="1804" fill="none" stroke="#dce8a8" strokeWidth="2" opacity="0.75" />
-      <rect x="94" y="94" width="892" height="1732" fill="none" stroke="#5d6b45" strokeWidth="2" />
-
-      {brandMark({ logoSrc, x: 874, y: 126, size: 96, opacity: 0.94 })}
-      <text x="112" y="192" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="34" fontWeight="800" letterSpacing="5">
-        {stats.title}
-      </text>
-      <text x="112" y="250" fill="#b9c0a2" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="3">
-        {stats.periodLabel}
-      </text>
-
-      <text x="112" y="620" fill="#f7f0dc" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="238" fontWeight="900">
-        {stats.primaryValue}
-      </text>
-      <text x="824" y="602" fill="#dce8a8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="900">
-        {stats.primaryUnit}
-      </text>
-      <text x="116" y="700" fill="#b9c0a2" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="33" fontWeight="700">
-        {stats.primaryLabel}
-      </text>
-
-      {stats.mode === "single" ? (
-        <>
-          <RoutePanel stats={stats} palette={palette} x={112} y={780} w={856} h={510} />
-          {metricCards(stats, palette, 112, 1360)}
-        </>
-      ) : (
-        <>
-          {metricCards(stats, palette, 112, 840)}
-          {periodLine(stats, palette, 1320)}
-        </>
-      )}
-      {signature({ y: 1730, ink: "#f7f0dc", urlInk: "#dce8a8", opacity: 0.8 })}
+      {signature({ y: 1192, ink: "#f1ead8", urlInk: "#bfa66b", opacity: 0.68 })}
     </svg>
   );
 }
 
 function PosterSvg({ template, stats, svgRef, logoSrc }) {
   if (template === "bib") return <BibPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
-  if (template === "topo") return <TopoPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
   return <ClassicPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
 }
 
@@ -695,10 +628,23 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       const pngBlob = await new Promise((resolve, reject) => {
         canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("PNG export failed")), "image/png");
       });
+      const fileName = `training-studio-${stats.fileLabel}-${template}.png`;
+      if (isNativeApp()) {
+        const dataUrl = canvas.toDataURL("image/png");
+        await PosterSaver.savePng({ fileName, data: dataUrl });
+        setMsg(t("poster.downloaded"));
+        return;
+      }
+      const file = new File([pngBlob], fileName, { type: "image/png" });
+      if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+        await navigator.share({ files: [file], title: "Training Studio" });
+        setMsg(t("poster.downloaded"));
+        return;
+      }
       const pngUrl = URL.createObjectURL(pngBlob);
       const a = document.createElement("a");
       a.href = pngUrl;
-      a.download = `training-studio-${stats.fileLabel}-${template}.png`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -787,7 +733,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
             {TEMPLATES.map(id => {
               const active = template === id;
               return (

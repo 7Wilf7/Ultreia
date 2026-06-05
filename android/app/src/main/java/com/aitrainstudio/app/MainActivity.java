@@ -8,9 +8,11 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // Register the custom native plugins before the bridge initializes so JS
-        // can call ApkInstaller.install({ path }) and ApkDownloader.download(...).
+        // can call ApkInstaller.install({ path }), ApkDownloader.download(...),
+        // and PosterSaver.savePng(...).
         registerPlugin(ApkInstallerPlugin.class);
         registerPlugin(ApkDownloaderPlugin.class);
+        registerPlugin(PosterSaverPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

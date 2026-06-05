@@ -47,10 +47,11 @@ function ViewToggle({ view, setView, t, style }) {
 }
 
 function StatTile({ label, val, unit, isMobile }) {
+  const compactMobileValue = isMobile && unit;
   return (
     <div style={{
       position: "relative",
-      padding: isMobile ? "0 12px" : "20px 22px 24px",
+      padding: isMobile ? "0 11px" : "20px 22px 24px",
       borderRight: isMobile ? "none" : "1px solid var(--rule)",
       minHeight: isMobile ? 44 : 110,
       height: isMobile ? 44 : undefined,
@@ -66,10 +67,9 @@ function StatTile({ label, val, unit, isMobile }) {
         <div style={{
           height: "100%",
           display: "grid",
-          gridTemplateColumns: "minmax(62px, auto) minmax(0, max-content)",
+          gridTemplateColumns: "68px minmax(0, 1fr)",
           alignItems: "center",
-          justifyContent: "center",
-          columnGap: 12,
+          columnGap: 8,
           minWidth: 0,
         }}>
           <div style={{
@@ -80,21 +80,22 @@ function StatTile({ label, val, unit, isMobile }) {
             textTransform: "uppercase",
             letterSpacing: "0.04em",
             whiteSpace: "nowrap",
-            flexShrink: 0,
+            textAlign: "left",
           }}>{label}</div>
           <div style={{
             ...s.metricVal,
-            fontSize: "clamp(18px, 5vw, 21px)",
+            fontSize: compactMobileValue ? "clamp(16px, 4.35vw, 18px)" : "clamp(18px, 5vw, 21px)",
             marginTop: 0,
-            display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 4,
+            display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: 3,
             lineHeight: 1.05,
+            letterSpacing: 0,
             minWidth: 0,
-            overflow: "hidden",
+            overflow: "visible",
           }}>
-            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>{val}</span>
+            <span style={{ minWidth: 0, overflow: "visible", whiteSpace: "nowrap" }}>{val}</span>
             {unit && (
               <span style={{
-                fontSize: 10,
+                fontSize: 9,
                 color: "var(--ink-3)", fontWeight: 400, fontFamily: "var(--font-mono)",
                 flexShrink: 0,
               }}>

@@ -39,7 +39,7 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
-export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0 }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
   // ActivityForm for the chip "recommended" badge, and used inline below for
@@ -461,17 +461,26 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           mobile the negative side margins let the bg cover the 14px gutter so
           scrolled list rows don't peek through at the edges. */}
       <div style={{
-        display: "flex", gap: 6, alignItems: "center",
+        display: stickyHeader ? "block" : "flex",
+        gap: stickyHeader ? 0 : 6,
+        alignItems: "center",
         position: "sticky", top: toolbarStickyTop, zIndex: 8,
         background: "var(--bg)",
         marginLeft: isMobile ? -14 : 0, marginRight: isMobile ? -14 : 0,
         paddingLeft: isMobile ? 14 : 0, paddingRight: isMobile ? 14 : 0,
-        minHeight: isMobile ? 50 : 46,
-        paddingTop: isMobile ? 6 : 8,
-        paddingBottom: isMobile ? 8 : 6,
+        paddingTop: stickyHeader ? 0 : (isMobile ? 6 : 8),
+        paddingBottom: stickyHeader ? 0 : (isMobile ? 8 : 6),
         marginBottom: 14,
         boxSizing: "border-box",
       }}>
+        {stickyHeader}
+        <div style={{
+          display: "flex", gap: 6, alignItems: "center",
+          minHeight: isMobile ? 50 : 46,
+          paddingTop: isMobile ? 6 : 8,
+          paddingBottom: isMobile ? 8 : 6,
+          boxSizing: "border-box",
+        }}>
         <button onClick={() => fileRef.current.click()} title={t("activities.upload_short")}
           aria-label={t("activities.upload_short")} style={{ ...s.btn, ...iconBtnStyle }}>
           <UploadIcon size={15} />
@@ -506,6 +515,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             value={sortBy}
             onChange={setSortBy}
           />
+        </div>
         </div>
       </div>
 

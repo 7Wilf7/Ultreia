@@ -180,8 +180,7 @@ export function TrainingTab({
     return () => ro.disconnect();
   }, [isMobile, view]);
   const statsStickyHeight = isMobile ? 106 : 112;
-  const statsTop = summaryTop;
-  const toolbarTop = summaryTop + statsStickyHeight;
+  const toolbarTop = summaryTop;
 
   // Activities / Charts must NOT include planned workouts (those live on the
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
@@ -294,38 +293,6 @@ export function TrainingTab({
       {view === "activities" && (
         <>
 
-          {/* Instrument-readout stats — four cells in a single row, each like a
-              meter on a control panel. Sticks just below the nav header so the
-              period totals stay visible while the list scrolls. */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: isMobile ? "6px 8px" : 0,
-            marginBottom: 0,
-            border: isMobile ? "none" : "1px solid var(--rule)",
-            background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
-            position: "sticky", top: statsTop, zIndex: 9,
-            height: isMobile ? statsStickyHeight : undefined,
-            padding: isMobile ? "5px 0" : 0,
-            boxSizing: "border-box",
-            borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
-          }}>
-            {statItems.map((c, i) => (
-              <div key={c.key} style={{
-                position: "relative",
-                display: "block",
-              }}>
-                {/* Corner position number — desktop only (no room on mobile) */}
-                {!isMobile && (
-                  <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
-                    {String(i + 1).padStart(2, "0")} / 04
-                  </div>
-                )}
-                <StatTile {...c} isMobile={isMobile} />
-              </div>
-            ))}
-          </div>
-
           <ActivitiesTab
             logs={logs}
             addLog={addLog}
@@ -335,6 +302,34 @@ export function TrainingTab({
             setConfirmDelete={setConfirmDelete}
             profile={profile}
             toolbarStickyTop={toolbarTop}
+            stickyHeader={(
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(auto-fit, minmax(180px, 1fr))",
+                gap: isMobile ? "6px 8px" : 0,
+                marginBottom: 0,
+                border: isMobile ? "none" : "1px solid var(--rule)",
+                background: isMobile ? "var(--bg)" : "var(--bg-elevated)",
+                height: isMobile ? statsStickyHeight : undefined,
+                padding: isMobile ? "5px 0" : 0,
+                boxSizing: "border-box",
+                borderBottom: isMobile ? "1px solid var(--rule)" : undefined,
+              }}>
+                {statItems.map((c, i) => (
+                  <div key={c.key} style={{
+                    position: "relative",
+                    display: "block",
+                  }}>
+                    {!isMobile && (
+                      <div style={{ position: "absolute", top: 10, right: 14, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)" }}>
+                        {String(i + 1).padStart(2, "0")} / 04
+                      </div>
+                    )}
+                    <StatTile {...c} isMobile={isMobile} />
+                  </div>
+                ))}
+              </div>
+            )}
           />
         </>
       )}

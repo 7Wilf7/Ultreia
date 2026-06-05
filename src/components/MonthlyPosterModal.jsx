@@ -225,12 +225,40 @@ function buildPeriodStats(logs, mode, offset, lang, t) {
     note: t("poster.monthly_note"),
     activeDaysLabel: t("poster.active_days"),
     activeDays,
+    heatmap: buildActivityHeatmap(periodLogs, range),
     metrics: [
       { label: t("poster.sessions"), value: fmtNum(periodLogs.length) },
       { label: t("poster.time"), value: formatDurationShort(totalSec) },
       { label: t("poster.longest"), value: `${fmtNum(Number(longest?.distance) || 0, 1)} km` },
       { label: t("poster.ascent"), value: `+${fmtNum(totalAscent)} m` },
     ],
+  };
+}
+
+function buildActivityHeatmap(logs, range) {
+  const byDate = new Map();
+  logs.forEach(log => {
+    const key = log.date;
+    if (!key) return;
+    byDate.set(key, (byDate.get(key) || 0) + (Number(log.distance) || 0));
+  });
+
+  const days = [];
+  for (const d = new Date(range.start); d < range.end; d.setDate(d.getDate() + 1)) {
+    const key = dateKey(d);
+    days.push({
+      key,
+      day: d.getDate(),
+      dow: (d.getDay() + 6) % 7,
+      km: byDate.get(key) || 0,
+    });
+  }
+
+  const maxKm = Math.max(...days.map(day => day.km), 0);
+  return {
+    days,
+    maxKm,
+    startDow: days[0]?.dow || 0,
   };
 }
 
@@ -339,16 +367,115 @@ function signature({ y = 1188, ink = "#141413", urlInk = ink, opacity = 0.72 }) 
   );
 }
 
+function heatOpacity(km, maxKm, min = 0.12) {
+  if (!(km > 0) || !(maxKm > 0)) return min;
+  return min + Math.sqrt(km / maxKm) * (1 - min);
+}
+
+function heatColor(km, maxKm, colors) {
+  if (!(km > 0)) return colors.empty;
+  const ratio = maxKm > 0 ? km / maxKm : 0;
+  if (ratio > 0.74) return colors.hot;
+  if (ratio > 0.42) return colors.mid;
+  return colors.low;
+}
+
+function calendarCells(heatmap) {
+  if (!heatmap?.days?.length) return [];
+  return heatmap.days.map((day, i) => {
+    const slot = heatmap.startDow + i;
+    return {
+      ...day,
+      col: Math.floor(slot / 7),
+      row: slot % 7,
+    };
+  });
+}
+
+function HeatmapField({ heatmap, x, y, cell = 42, gap = 12, maxWidth = 860, colors, opacity = 1, showLabels = false }) {
+  const cells = calendarCells(heatmap);
+  if (cells.length === 0) return null;
+  const cols = Math.max(...cells.map(day => day.col), 0) + 1;
+  const width = cols * cell + (cols - 1) * gap;
+  const height = 7 * cell + 6 * gap;
+  const scale = Math.min(1, maxWidth / width);
+
+  return (
+    <g transform={`translate(${x} ${y}) scale(${scale})`} opacity={opacity}>
+      {showLabels && ["M", "T", "W", "T", "F", "S", "S"].map((label, i) => (
+        <text key={`${label}-${i}`} x="-24" y={i * (cell + gap) + cell * 0.66} textAnchor="end" fill={colors.label} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="15" fontWeight="800">
+          {label}
+        </text>
+      ))}
+      <rect x="-18" y="-18" width={width + 36} height={height + 36} fill={colors.backdrop} opacity={colors.backdropOpacity || 0} />
+      {cells.map(day => {
+        const px = day.col * (cell + gap);
+        const py = day.row * (cell + gap);
+        return (
+          <g key={day.key}>
+            <rect
+              x={px}
+              y={py}
+              width={cell}
+              height={cell}
+              rx="6"
+              fill={heatColor(day.km, heatmap.maxKm, colors)}
+              opacity={heatOpacity(day.km, heatmap.maxKm, colors.emptyOpacity || 0.16)}
+            />
+            {day.km > 0 && cell >= 32 && (
+              <text x={px + cell / 2} y={py + cell * 0.62} textAnchor="middle" fill={colors.text} opacity="0.74" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize={cell > 40 ? 13 : 10} fontWeight="900">
+                {day.day}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function DataMist({ color = "#111", opacity = 0.08 }) {
+  return (
+    <g opacity={opacity}>
+      {Array.from({ length: 18 }, (_, i) => (
+        <path
+          key={i}
+          d={`M${-80 + i * 8} ${260 + i * 54} C ${160 + i * 13} ${162 + i * 38}, ${340 - i * 5} ${392 + i * 16}, ${570 + i * 4} ${288 + i * 39} S ${842 + i * 9} ${118 + i * 50}, ${1210} ${286 + i * 47}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.1"
+        />
+      ))}
+    </g>
+  );
+}
+
+function AlpinePosterScene({ tint = "#e9452d", glow = "#c9ff64" }) {
+  return (
+    <g>
+      <path d="M-40 1046 L142 842 L262 934 L418 696 L570 862 L692 654 L902 948 L1130 726 L1130 1350 L-40 1350 Z" fill={tint} opacity="0.2" />
+      <path d="M-40 1132 L128 940 L248 1004 L408 784 L560 916 L704 744 L898 1038 L1130 822 L1130 1350 L-40 1350 Z" fill={glow} opacity="0.12" />
+      <path d="M-40 1046 L142 842 L262 934 L418 696 L570 862 L692 654 L902 948 L1130 726" fill="none" stroke={tint} strokeWidth="7" opacity="0.78" />
+      <path d="M-40 1132 L128 940 L248 1004 L408 784 L560 916 L704 744 L898 1038 L1130 822" fill="none" stroke={glow} strokeWidth="3" opacity="0.58" />
+    </g>
+  );
+}
+
 function metricCards(stats, palette, x = 110, y = 790, cardW = 388, cardH = 122, colGap = 430, rowGap = 152) {
+  const compact = cardH < 100;
+  const labelY = compact ? 30 : 40;
+  const valueY = compact ? 70 : 94;
+  const labelSize = compact ? 17 : 21;
+  const valueSize = compact ? 31 : 42;
   return (
     <g transform={`translate(${x} ${y})`}>
       {stats.metrics.map((item, i) => (
         <g key={`${item.label}-${i}`} transform={`translate(${(i % 2) * colGap} ${Math.floor(i / 2) * rowGap})`}>
           <rect x="0" y="0" width={cardW} height={cardH} fill={palette.card} stroke={palette.rule} strokeWidth="1.4" />
-          <text x="26" y="40" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="21" fontWeight="700" letterSpacing="2">
+          <text x="26" y={labelY} fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize={labelSize} fontWeight="700" letterSpacing="2">
             {item.label}
           </text>
-          <text x="26" y="94" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="42" fontWeight="800">
+          <text x="26" y={valueY} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize={valueSize} fontWeight="800">
             {item.value}
           </text>
         </g>
@@ -404,116 +531,158 @@ function RoutePanel({ stats, palette, x = 110, y = 620, w = 860, h = 310 }) {
 
 function ClassicPoster({ stats, svgRef, logoSrc }) {
   const palette = {
-    ink: "#11110f",
-    muted: "#7a776e",
-    rule: "#ddd8ca",
-    ruleStrong: "#2f3327",
-    card: "#fbfaf5",
+    ink: "#10120e",
+    muted: "#606756",
+    rule: "#cfd8bd",
+    ruleStrong: "#264125",
+    card: "#eff4df",
+  };
+  const heatColors = {
+    empty: "#dfe7ce",
+    low: "#9bb16c",
+    mid: "#496c3b",
+    hot: "#102f1a",
+    text: "#f7f4e8",
+    label: "#6d735f",
+    backdrop: "#f4f6e9",
+    backdropOpacity: 0.72,
+    emptyOpacity: 0.48,
   };
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#f4f1e8" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#f4f1e8" />
-      <rect x="46" y="46" width="988" height="1258" fill="#f9f7ef" stroke="#c9c2ae" strokeWidth="1.5" />
-      <rect x="86" y="86" width="908" height="1178" fill="none" stroke="#e5decf" strokeWidth="1.2" />
-      <path d="M86 312 H994" stroke="#25291f" strokeWidth="2.5" />
-      <path d="M86 1010 H994" stroke="#c9c2ae" strokeWidth="1.5" />
-      <g fill="none" stroke="#2f3327" strokeWidth="1" opacity="0.045">
-        <path d="M-120 492 C 160 390, 348 560, 560 462 S 892 348, 1190 472" />
-        <path d="M-120 565 C 190 455, 374 640, 615 520 S 910 452, 1190 548" />
-        <path d="M-120 862 C 186 744, 390 920, 640 794 S 948 732, 1190 846" />
-      </g>
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#e9efdc" }}>
+      <defs>
+        <radialGradient id="classic-heat-glow" cx="22%" cy="18%" r="82%">
+          <stop offset="0%" stopColor="#f9f6d8" />
+          <stop offset="44%" stopColor="#e8f0d8" />
+          <stop offset="100%" stopColor="#cbd9b6" />
+        </radialGradient>
+        <linearGradient id="classic-panel" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stopColor="#f8f7ea" />
+          <stop offset="100%" stopColor="#dfe9cf" />
+        </linearGradient>
+      </defs>
+      <rect width={POSTER_W} height={POSTER_H} fill="url(#classic-heat-glow)" />
+      <DataMist color="#243721" opacity="0.075" />
+      <HeatmapField heatmap={stats.heatmap} x={114} y={642} cell={52} gap={14} colors={heatColors} opacity={0.98} showLabels />
+      <rect x="56" y="52" width="968" height="1246" fill="none" stroke="#314528" strokeWidth="1.4" opacity="0.54" />
+      <rect x="90" y="86" width="900" height="1178" fill="none" stroke="#f9f7e8" strokeWidth="1" opacity="0.66" />
+      <path d="M90 330 H990" stroke="#314528" strokeWidth="2.4" opacity="0.72" />
+      <path d="M90 1076 H990" stroke="#314528" strokeWidth="1.3" opacity="0.34" />
 
-      {brandMark({ logoSrc, x: 846, y: 110, size: 128 })}
-      <text x="110" y="154" fill="#5c5a52" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="800" letterSpacing="4">
+      <rect x="84" y="84" width="360" height="214" fill="url(#classic-panel)" stroke="#f7f4e5" strokeWidth="1.2" opacity="0.94" />
+      <text x="114" y="144" fill="#334128" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24" fontWeight="900" letterSpacing="3">
         {stats.title}
       </text>
-      <text x="110" y="204" fill="#8b877c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="27" letterSpacing="2">
+      <text x="114" y="194" fill="#6a725c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="700" letterSpacing="1.5">
         {stats.periodLabel}
       </text>
+      <text x="114" y="250" fill="#334128" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="19" fontWeight="800" letterSpacing="2">
+        ACTIVITY HEAT FIELD
+      </text>
 
-      <text x="110" y="548" fill="#11110f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="230" fontWeight="850">
+      {brandMark({ logoSrc, x: 842, y: 108, size: 140 })}
+      <text x="114" y="522" fill="#10120e" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="212" fontWeight="900">
         {stats.primaryValue}
       </text>
-      <text x="805" y="518" fill="#5b624c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="850">
+      <text x="790" y="494" fill="#264125" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="900">
         {stats.primaryUnit}
       </text>
-      <text x="114" y="612" fill="#5c5a52" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
+      <text x="118" y="586" fill="#4f5d43" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="29" fontWeight="900">
         {stats.primaryLabel}
       </text>
 
       {stats.mode === "single" ? (
         <>
-          <RoutePanel stats={stats} palette={palette} y={660} h={260} />
-          {metricCards(stats, palette, 110, 956)}
+          <RoutePanel stats={stats} palette={palette} y={668} h={250} />
+          {metricCards(stats, palette, 110, 956, 388, 106, 430, 128)}
           {periodLine(stats, palette, 1210)}
         </>
       ) : (
         <>
-          {metricCards(stats, palette, 110, 710)}
-          {periodLine(stats, palette, 1138)}
+          <rect x="96" y="934" width="888" height="156" fill="#f4f6e9" opacity="0.9" />
+          {metricCards(stats, palette, 110, 948, 388, 62, 430, 78)}
+          {periodLine(stats, palette, 1136)}
         </>
       )}
-      {signature({ y: 1192, ink: "#272a21", urlInk: "#666257", opacity: 0.7 })}
+      {signature({ y: 1194, ink: "#1f2e1d", urlInk: "#526045", opacity: 0.72 })}
     </svg>
   );
 }
 
 function BibPoster({ stats, svgRef, logoSrc }) {
   const palette = {
-    ink: "#f1ead8",
-    muted: "#9c947f",
-    rule: "#373226",
-    ruleStrong: "#bfa66b",
-    card: "#141411",
+    ink: "#f6f0df",
+    muted: "#b5aa8f",
+    rule: "#362b21",
+    ruleStrong: "#ff4f2e",
+    card: "#18130f",
+  };
+  const heatColors = {
+    empty: "#272018",
+    low: "#704632",
+    mid: "#ba4a2d",
+    hot: "#ff5b30",
+    text: "#1a100c",
+    label: "#9f947c",
+    backdrop: "#120f0c",
+    backdropOpacity: 0,
+    emptyOpacity: 0.42,
   };
 
   return (
     <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#0f100d" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#0f100d" />
-      <rect x="48" y="48" width="984" height="1254" fill="#11120f" stroke="#5b5037" strokeWidth="1.4" />
-      <rect x="88" y="88" width="904" height="1174" fill="none" stroke="#252116" strokeWidth="1.2" />
-      <path d="M118 318 H962" stroke="#bfa66b" strokeWidth="2.2" opacity="0.82" />
-      <path d="M118 1012 H962" stroke="#363124" strokeWidth="1.4" />
-      <g fill="none" stroke="#bfa66b" strokeWidth="1" opacity="0.1">
-        <path d="M92 612 H988" />
-        <path d="M92 706 H988" />
-        <path d="M92 800 H988" />
-        <path d="M306 88 V1262" />
-        <path d="M774 88 V1262" />
-      </g>
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#120f0c" }}>
+      <defs>
+        <radialGradient id="bib-flare" cx="70%" cy="28%" r="78%">
+          <stop offset="0%" stopColor="#4a1c14" />
+          <stop offset="44%" stopColor="#17110d" />
+          <stop offset="100%" stopColor="#090807" />
+        </radialGradient>
+        <linearGradient id="bib-sash" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stopColor="#ff4f2e" />
+          <stop offset="100%" stopColor="#d9ff5d" />
+        </linearGradient>
+      </defs>
+      <rect width={POSTER_W} height={POSTER_H} fill="url(#bib-flare)" />
+      <AlpinePosterScene tint="#ff4f2e" glow="#d9ff5d" />
+      <DataMist color="#f4d88e" opacity="0.08" />
+      <HeatmapField heatmap={stats.heatmap} x={606} y={382} cell={44} gap={10} colors={heatColors} opacity={0.78} />
+      <rect x="48" y="48" width="984" height="1254" fill="none" stroke="#e9d8a8" strokeWidth="1.2" opacity="0.4" />
+      <rect x="88" y="88" width="904" height="1174" fill="none" stroke="#ff4f2e" strokeWidth="1.1" opacity="0.5" />
+      <path d="M88 318 H992" stroke="url(#bib-sash)" strokeWidth="7" opacity="0.9" />
+      <path d="M88 1014 H992" stroke="#f6f0df" strokeWidth="1.2" opacity="0.22" />
 
-      {brandMark({ logoSrc, x: 840, y: 112, size: 132, opacity: 0.96 })}
-      <text x="118" y="164" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="25" fontWeight="900" letterSpacing="6">
+      {brandMark({ logoSrc, x: 828, y: 106, size: 150, opacity: 0.96 })}
+      <text x="118" y="164" fill="#d9ff5d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24" fontWeight="900" letterSpacing="7">
         TRAINING DOSSIER
       </text>
-      <text x="118" y="214" fill="#9c947f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="27" fontWeight="700" letterSpacing="2">
+      <text x="118" y="214" fill="#c1b69a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="2">
         {stats.periodLabel}
       </text>
 
-      <text x="540" y="428" textAnchor="middle" fill="#74684a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="900" letterSpacing="9">
+      <text x="118" y="424" fill="#ff4f2e" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="32" fontWeight="900" letterSpacing="8">
         {stats.primaryLabel}
       </text>
-      <text x="540" y="710" textAnchor="middle" fill="#f1ead8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="252" fontWeight="900">
+      <text x="112" y="690" fill="#f6f0df" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="244" fontWeight="900">
         {stats.primaryValue}
       </text>
-      <text x="540" y="792" textAnchor="middle" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="50" fontWeight="900" letterSpacing="9">
+      <text x="770" y="650" fill="#d9ff5d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="54" fontWeight="900" letterSpacing="9">
         {stats.primaryUnit}
       </text>
 
       {stats.mode === "single" ? (
         <>
-          <RoutePanel stats={stats} palette={palette} x={118} y={840} w={844} h={210} />
+          <RoutePanel stats={stats} palette={palette} x={118} y={822} w={844} h={222} />
           {metricCards(stats, palette, 118, 1084, 382, 106, 462, 128)}
         </>
       ) : (
         <>
-          {metricCards(stats, palette, 118, 856, 382, 112, 462, 136)}
+          {metricCards(stats, palette, 118, 846, 382, 112, 462, 136)}
         </>
       )}
-      {signature({ y: 1192, ink: "#f1ead8", urlInk: "#bfa66b", opacity: 0.68 })}
+      {signature({ y: 1192, ink: "#f6f0df", urlInk: "#d9ff5d", opacity: 0.74 })}
     </svg>
   );
 }

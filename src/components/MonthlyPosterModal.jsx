@@ -6,14 +6,37 @@ import { workouts as workoutsDb } from "../lib/db";
 import { formatDurationShort, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "../utils/format";
 import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
+import { Dropdown } from "./Dropdown";
+import { POSTER_FONT_CSS } from "../data/posterFonts";
 import iconOnlyUrl from "../../resources/icon-only-poster.png";
 
-const POSTER_W = 1080;
-const POSTER_H = 1350;
-const TEMPLATES = ["classic", "bib", "heatmap", "matrix", "archive"];
+// ── Canvas options ──────────────────────────────────────────────────────────
+// One poster design, three crop ratios. The composition is anchored to fractions
+// of H so it adapts across ratios; type sizes stay roughly constant for legibility.
+const RATIOS = {
+  portrait: { key: "portrait", w: 1080, h: 1350 },
+  square: { key: "square", w: 1080, h: 1080 },
+  story: { key: "story", w: 1080, h: 1920 },
+};
+const RATIO_KEYS = ["portrait", "square", "story"];
+
+// Day / Night finishes. Restraint: paper/ink base + ONE muted moss accent.
+const THEMES = {
+  day: { bg: "#f1ede1", ink: "#16150f", sub: "#74715f", hair: "#d9d3c1", accent: "#54663a" },
+  night: { bg: "#13140d", ink: "#efeadd", sub: "#8c8a7b", hair: "#2b2c22", accent: "#a4b96d" },
+};
+const THEME_KEYS = ["day", "night"];
+
 const POSTER_MODES = ["single", "week", "month", "year", "pr"];
 const RANGE_MODES = new Set(["week", "month", "year"]);
 const PR_RANGES = ["all", "this_year", "last_year", "last_12m"];
+
+// Latin condensed grotesque for numbers/labels; handwriting for the signature.
+// CJK (e.g. a location string) falls back to the system stack — the embedded
+// woff2 is Latin-only on purpose (CJK webfonts are megabytes).
+const FF = "TSCond, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif";
+const FF_SIGN = "TSSign, 'Segoe Script', cursive";
+
 const PosterSaver = registerPlugin("PosterSaver");
 const isNativeApp = () => Capacitor.isNativePlatform?.() === true;
 
@@ -52,8 +75,8 @@ function workoutLabel(log) {
   if (!log) return "";
   const typeLabel = log.type || "Workout";
   const dateLabel = log.date || "";
-  const dist = Number(log.distance) > 0 ? ` - ${fmtNum(log.distance, 1)} km` : "";
-  return `${dateLabel} - ${typeLabel}${dist}`;
+  const dist = Number(log.distance) > 0 ? ` · ${fmtNum(log.distance, 1)} km` : "";
+  return `${dateLabel} · ${typeLabel}${dist}`;
 }
 
 function startedLabel(log) {
@@ -68,6 +91,18 @@ function startedLabel(log) {
   return "";
 }
 
+function timeOfDay(log) {
+  if (!log?.startedAt) return "";
+  const d = new Date(log.startedAt);
+  if (Number.isNaN(d.getTime())) return "";
+  const h = d.getHours();
+  if (h < 5) return "NIGHT";
+  if (h < 11) return "MORNING";
+  if (h < 15) return "MIDDAY";
+  if (h < 19) return "AFTERNOON";
+  return "EVENING";
+}
+
 function paceValue(log) {
   const distance = Number(log?.distance) || 0;
   const duration = Number(log?.duration) || 0;
@@ -75,7 +110,7 @@ function paceValue(log) {
   if (log?.type === "Swimming") return `${formatSwimPace(distance, duration)} /100m`;
   if (Number(log?.pace) > 0) return `${formatPaceFromSec(log.pace)} /km`;
   if (distance > 0 && duration > 0) return `${formatPaceFromSec(Math.round(duration / distance))} /km`;
-  return "-";
+  return "—";
 }
 
 function normalizeGpsTrack(track) {
@@ -89,28 +124,24 @@ function normalizeGpsTrack(track) {
     .filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng));
 }
 
-function gpsPath(track, x, y, w, h) {
-  const pts = normalizeGpsTrack(track);
-  if (pts.length < 2) return "";
+// Fit a GPS track into a box, preserving aspect. Returns the path + endpoints
+// so the hero route can carry start/finish markers.
+function routeGeometry(points, x, y, w, h) {
+  const pts = points || [];
+  if (pts.length < 2) return null;
   const lats = pts.map(p => p[0]);
   const lngs = pts.map(p => p[1]);
-  const minLat = Math.min(...lats);
-  const maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs);
-  const maxLng = Math.max(...lngs);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
   const latSpan = maxLat - minLat || 1;
   const lngSpan = maxLng - minLng || 1;
-  const pad = 44;
+  const pad = 8;
   const scale = Math.min((w - pad * 2) / lngSpan, (h - pad * 2) / latSpan);
-  const routeW = lngSpan * scale;
-  const routeH = latSpan * scale;
-  const ox = x + (w - routeW) / 2;
-  const oy = y + (h - routeH) / 2;
-  return pts.map(([lat, lng], i) => {
-    const px = ox + (lng - minLng) * scale;
-    const py = oy + (maxLat - lat) * scale;
-    return `${i === 0 ? "M" : "L"} ${px.toFixed(1)} ${py.toFixed(1)}`;
-  }).join(" ");
+  const rw = lngSpan * scale, rh = latSpan * scale;
+  const ox = x + (w - rw) / 2, oy = y + (h - rh) / 2;
+  const screen = pts.map(([lat, lng]) => [ox + (lng - minLng) * scale, oy + (maxLat - lat) * scale]);
+  const d = screen.map(([px, py], i) => `${i === 0 ? "M" : "L"} ${px.toFixed(1)} ${py.toFixed(1)}`).join(" ");
+  return { d, start: screen[0], end: screen[screen.length - 1] };
 }
 
 function getRange(mode, offset) {
@@ -126,43 +157,10 @@ function getRange(mode, offset) {
   }
   if (mode === "year") {
     const year = now.getFullYear() + offset;
-    return {
-      start: new Date(year, 0, 1),
-      end: new Date(year + 1, 0, 1),
-    };
+    return { start: new Date(year, 0, 1), end: new Date(year + 1, 0, 1) };
   }
   const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  return {
-    start,
-    end: new Date(start.getFullYear(), start.getMonth() + 1, 1),
-  };
-}
-
-function buildSingleStats(log, gpsTrack, t) {
-  const route = normalizeGpsTrack(gpsTrack);
-  const distance = Number(log?.distance) || 0;
-  const duration = Number(log?.duration) || 0;
-  const typeLabel = log?.type || "Workout";
-  return {
-    mode: "single",
-    title: t("poster.single_title"),
-    periodLabel: startedLabel(log),
-    fileLabel: `single-${log?.date || "workout"}`,
-    primaryValue: fmtNum(distance, distance >= 100 ? 0 : 1),
-    primaryUnit: distance > 0 ? "km" : "",
-    primaryLabel: typeLabel.toUpperCase(),
-    note: route.length >= 2 ? t("poster.single_route_note") : t("poster.single_no_route"),
-    routeLabel: route.length >= 2 ? t("poster.route_map") : t("poster.single_no_route"),
-    activeDaysLabel: t("poster.route_points"),
-    activeDays: route.length >= 2 ? route.length : null,
-    gpsTrack: route,
-    metrics: [
-      { label: t("poster.time"), value: formatDurationShort(duration) },
-      { label: t("poster.pace"), value: paceValue(log) },
-      { label: t("poster.ascent"), value: `+${fmtNum(Number(log?.ascent) || 0)} m` },
-      { label: t("poster.avg_hr"), value: Number(log?.hr) > 0 ? fmtNum(log.hr) : "-" },
-    ],
-  };
+  return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, 1) };
 }
 
 function rangeLabel(mode, range, lang) {
@@ -173,7 +171,7 @@ function rangeLabel(mode, range, lang) {
   }
   const endDisplay = new Date(range.end);
   endDisplay.setDate(endDisplay.getDate() - 1);
-  return `${labelDate(range.start)} - ${labelDate(endDisplay)}`;
+  return `${labelDate(range.start)} – ${labelDate(endDisplay)}`;
 }
 
 function getPRRange(id) {
@@ -189,76 +187,91 @@ function getPRRange(id) {
     return { start, end };
   }
   const year = now.getFullYear() + (id === "last_year" ? -1 : 0);
+  return { start: new Date(year, 0, 1), end: new Date(year + 1, 0, 1) };
+}
+
+// Bucket daily distances into <= maxBars columns so the "volume rhythm" strip
+// stays legible (a year becomes ~weekly bars, a month stays daily).
+function buildBars(days, maxBars) {
+  if (!days?.length) return [];
+  const chunk = Math.max(1, Math.ceil(days.length / maxBars));
+  const bars = [];
+  for (let i = 0; i < days.length; i += chunk) {
+    let sum = 0;
+    for (let j = i; j < Math.min(i + chunk, days.length); j++) sum += days[j].distance || 0;
+    bars.push({ value: sum });
+  }
+  return bars;
+}
+
+function dailyDistances(logs, range) {
+  const byDate = new Map();
+  for (const log of logs) {
+    const key = log.date;
+    if (!key) continue;
+    byDate.set(key, (byDate.get(key) || 0) + (Number(log.distance) || 0));
+  }
+  const days = [];
+  for (let d = new Date(range.start); d < range.end; d.setDate(d.getDate() + 1)) {
+    days.push({ date: dateKey(d), distance: byDate.get(dateKey(d)) || 0 });
+  }
+  return days;
+}
+
+function buildSingleStats(log, gpsTrack) {
+  const route = normalizeGpsTrack(gpsTrack);
+  const distance = Number(log?.distance) || 0;
+  const duration = Number(log?.duration) || 0;
+  const hasDist = distance > 0;
+  const type = (log?.type || "Workout").toUpperCase();
   return {
-    start: new Date(year, 0, 1),
-    end: new Date(year + 1, 0, 1),
+    mode: "single",
+    title: "SINGLE RUN",
+    kicker: type,
+    heroValue: hasDist ? fmtNum(distance, distance >= 100 ? 0 : 1) : formatDurationShort(duration),
+    heroUnit: hasDist ? "KM" : "",
+    meta: [startedLabel(log), timeOfDay(log)].filter(Boolean).join("   "),
+    fileLabel: `single-${log?.date || "workout"}`,
+    route,
+    bigPace: paceValue(log),
+    metrics: [
+      { label: "TIME", value: formatDurationShort(duration) },
+      { label: "PACE", value: paceValue(log) },
+      { label: "ELEV", value: `${fmtNum(Number(log?.ascent) || 0)} m` },
+      { label: "AVG HR", value: Number(log?.hr) > 0 ? fmtNum(log.hr) : "—" },
+    ],
   };
 }
 
-function prRangeLabel(id, t) {
-  return t(`poster.pr_range_${id}`);
-}
-
-function buildPeriodStats(logs, mode, offset, lang, t) {
+function buildPeriodStats(logs, mode, offset, lang) {
   const range = getRange(mode, offset);
   const periodLogs = logs.filter(l => {
     if (l.isPlanned || !RUN_GROUP_TYPES.includes(l.type)) return false;
     const d = new Date(l.date);
     return d >= range.start && d < range.end;
   });
-
   const totalKm = periodLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
   const totalSec = periodLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
   const totalAscent = periodLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
   const longest = periodLogs.reduce((best, l) => (Number(l.distance) || 0) > (Number(best?.distance) || 0) ? l : best, null);
-  const activeDays = new Set(periodLogs.map(l => l.date)).size;
-  const label = rangeLabel(mode, range, lang);
-
+  const days = dailyDistances(periodLogs, range);
+  const title = mode === "week" ? "WEEKLY VOLUME" : mode === "year" ? "YEARLY VOLUME" : "MONTHLY VOLUME";
   return {
     mode,
-    title: t(`poster.${mode}_title`),
-    periodLabel: label,
+    title,
+    kicker: "TOTAL DISTANCE",
+    heroValue: fmtNum(totalKm, 1),
+    heroUnit: "KM",
+    meta: rangeLabel(mode, range, lang),
     fileLabel: `${mode}-${dateKey(range.start)}`,
-    primaryValue: fmtNum(totalKm, 1),
-    primaryUnit: "km",
-    primaryLabel: t(`poster.${mode}_subtitle`),
-    note: t("poster.monthly_note"),
-    activeDaysLabel: t("poster.active_days"),
-    activeDays,
-    heatmap: buildActivityHeatmap(periodLogs, range),
+    bars: buildBars(days, mode === "year" ? 53 : days.length || 1),
     metrics: [
-      { label: t("poster.sessions"), value: fmtNum(periodLogs.length) },
-      { label: t("poster.time"), value: formatDurationShort(totalSec) },
-      { label: t("poster.longest"), value: `${fmtNum(Number(longest?.distance) || 0, 1)} km` },
-      { label: t("poster.ascent"), value: `+${fmtNum(totalAscent)} m` },
+      { label: "SESSIONS", value: fmtNum(periodLogs.length) },
+      { label: "TIME", value: formatDurationShort(totalSec) },
+      { label: "LONGEST", value: `${fmtNum(Number(longest?.distance) || 0, 1)} km` },
+      { label: "ELEV", value: `${fmtNum(totalAscent)} m` },
     ],
   };
-}
-
-function buildActivityHeatmap(logs, range) {
-  const byDate = new Map();
-  for (const log of logs) {
-    const key = log.date;
-    if (!key) continue;
-    const current = byDate.get(key) || { distance: 0, sessions: 0 };
-    current.distance += Number(log.distance) || 0;
-    current.sessions += 1;
-    byDate.set(key, current);
-  }
-
-  const days = [];
-  for (let d = new Date(range.start); d < range.end; d.setDate(d.getDate() + 1)) {
-    const key = dateKey(d);
-    const value = byDate.get(key) || { distance: 0, sessions: 0 };
-    days.push({
-      date: key,
-      distance: value.distance,
-      sessions: value.sessions,
-    });
-  }
-
-  const maxDistance = Math.max(0, ...days.map(day => day.distance));
-  return { days, maxDistance };
 }
 
 function buildPRRecords(races) {
@@ -266,22 +279,14 @@ function buildPRRecords(races) {
   const byCategory = {};
   for (const r of history) {
     const cat = r.category || "Other";
-    if (!byCategory[cat]) byCategory[cat] = [];
-    byCategory[cat].push(r);
+    (byCategory[cat] = byCategory[cat] || []).push(r);
   }
-
-  const spartanRank = SPARTAN_SUBTYPES.reduce((acc, name, i) => {
-    acc[name] = i + 1;
-    return acc;
-  }, {});
-
+  const spartanRank = SPARTAN_SUBTYPES.reduce((acc, name, i) => { acc[name] = i + 1; return acc; }, {});
   const out = [];
   for (const cat of RACE_CATEGORIES) {
     const group = byCategory[cat];
     if (!group || group.length === 0) continue;
-
-    let best;
-    let metric = "time";
+    let best, metric = "time";
     if (cat === "Trail") {
       metric = "distance";
       best = [...group].sort((a, b) => (Number(b.distance) || 0) - (Number(a.distance) || 0))[0] || null;
@@ -294,17 +299,12 @@ function buildPRRecords(races) {
       best = [...group].sort((a, b) => resultSeconds(a) - resultSeconds(b))[0] || null;
       if (!isFinite(resultSeconds(best))) best = null;
     }
-
     if (best) {
       out.push({
         category: cat,
-        metric,
-        race: best,
-        value: metric === "distance"
-          ? `${fmtNum(best.distance, 1)} km`
-          : metric === "difficulty"
-            ? best.subtype
-            : formatHMS(resultSeconds(best)),
+        value: metric === "distance" ? `${fmtNum(best.distance, 1)} km`
+          : metric === "difficulty" ? best.subtype
+          : formatHMS(resultSeconds(best)),
       });
     }
   }
@@ -322,437 +322,156 @@ function buildPRStats(races, rangeId, t) {
   const records = buildPRRecords(filtered);
   return {
     mode: "pr",
-    title: t("poster.pr_title"),
-    periodLabel: prRangeLabel(rangeId, t),
+    title: "PERSONAL RECORDS",
+    kicker: "RECORDS SET",
+    heroValue: fmtNum(records.length),
+    heroUnit: "PR",
+    meta: (t(`poster.pr_range_${rangeId}`) || "").toUpperCase(),
     fileLabel: `pr-${rangeId}`,
-    primaryValue: fmtNum(records.length),
-    primaryUnit: "PR",
-    primaryLabel: t("poster.pr_subtitle"),
-    note: t("poster.pr_note"),
-    activeDaysLabel: t("poster.active_days"),
-    activeDays: null,
-    metrics: (records.length ? records : [{ category: "-", value: "-" }]).slice(0, 4).map(rec => ({
-      label: rec.category,
-      value: rec.value,
-    })),
+    records,
   };
 }
 
-function brandMark({ logoSrc, x = 874, y = 118, size = 96, opacity = 1 }) {
-  return (
-    <image href={logoSrc} x={x} y={y} width={size} height={size} opacity={opacity} preserveAspectRatio="xMidYMid meet" />
-  );
-}
+// ── The poster ──────────────────────────────────────────────────────────────
+function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
+  const W = ratio.w, H = ratio.h;
+  const pal = THEMES[theme];
+  const M = 96;
+  const inner = W - M * 2;
 
-function signature({ y = 1188, ink = "#141413", urlInk = ink, opacity = 0.72 }) {
-  return (
-    <g>
-      <text
-        x="540"
-        y={y}
-        textAnchor="middle"
-        fill={ink}
-        opacity={opacity}
-        fontFamily="Brush Script MT, Segoe Script, Georgia, serif"
-        fontSize="54"
-        fontStyle="italic"
-      >
-        Training Studio
-      </text>
-      <text x="540" y={y + 38} textAnchor="middle" fill={urlInk} opacity="0.62" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="18" fontWeight="700" letterSpacing="2">
-        www.aitrainstudio.com
-      </text>
-    </g>
-  );
-}
+  // Vertical anchors as fractions of H — keeps the composition coherent across crops.
+  const yTitle = H * 0.108;
+  const ySub = H * 0.143;
+  const yHeadRule = H * 0.178;
+  const yKick = H * 0.262;
+  const yHero = H * 0.452;
+  const yRule = H * 0.492;
+  const spineTop = H * 0.527;
+  const spineBot = H * 0.745;
+  const yHair = H * 0.788;
+  const yML = H * 0.816;
+  const yMV = H * 0.853;
+  const ySign = H * 0.940;
+  const yUrl = H * 0.963;
 
-function metricCards(stats, palette, x = 110, y = 790, cardW = 388, cardH = 122, colGap = 430, rowGap = 152) {
-  return (
-    <g transform={`translate(${x} ${y})`}>
-      {stats.metrics.map((item, i) => (
-        <g key={`${item.label}-${i}`} transform={`translate(${(i % 2) * colGap} ${Math.floor(i / 2) * rowGap})`}>
-          <rect x="0" y="0" width={cardW} height={cardH} fill={palette.card} stroke={palette.rule} strokeWidth="1.4" />
-          <text x="26" y="40" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="21" fontWeight="700" letterSpacing="2">
-            {item.label}
-          </text>
-          <text x="26" y="94" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="42" fontWeight="800">
-            {item.value}
-          </text>
+  const heroStr = String(stats.heroValue);
+  const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
+  const unitSize = heroSize * 0.26;
+  const logoSize = Math.round(W * 0.062);
+
+  // Spine graphic per mode — the running itself, not a grid of data cards.
+  let spine;
+  if (stats.mode === "single") {
+    const geo = routeGeometry(stats.route, M, spineTop, inner, spineBot - spineTop);
+    if (geo) {
+      spine = (
+        <g>
+          <path d={geo.d} fill="none" stroke={pal.accent} strokeWidth="22" strokeLinecap="round" strokeLinejoin="round" opacity="0.16" />
+          <path d={geo.d} fill="none" stroke={pal.ink} strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx={geo.start[0]} cy={geo.start[1]} r="11" fill={pal.accent} />
+          <circle cx={geo.end[0]} cy={geo.end[1]} r="10" fill={pal.bg} stroke={pal.ink} strokeWidth="4.5" />
         </g>
-      ))}
-    </g>
-  );
-}
-
-function periodLine(stats, palette, y = 1120) {
-  return (
-    <g>
-      <rect x="110" y={y - 58} width="860" height="1.5" fill={palette.ruleStrong} opacity="0.78" />
-      {stats.activeDays == null ? (
-        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
-          {stats.periodLabel}
-        </text>
-      ) : (
-        <text x="110" y={y} fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
-          {stats.activeDaysLabel} {fmtNum(stats.activeDays)}
-        </text>
-      )}
-    </g>
-  );
-}
-
-function RoutePanel({ stats, palette, x = 110, y = 620, w = 860, h = 310 }) {
-  const path = gpsPath(stats.gpsTrack, x, y, w, h);
-  const hasRoute = Boolean(path);
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} fill={palette.card} stroke={palette.rule} strokeWidth="1.4" />
-      <g fill="none" stroke={palette.ruleStrong} strokeWidth="1" opacity="0.13">
-        {Array.from({ length: 6 }, (_, i) => (
-          <path key={i} d={`M${x + 28} ${y + 58 + i * 38} C ${x + 220} ${y + 12 + i * 28}, ${x + 410} ${y + 98 + i * 20}, ${x + 620} ${y + 56 + i * 34} S ${x + 780} ${y + 16 + i * 30}, ${x + w - 28} ${y + 72 + i * 26}`} />
-        ))}
-      </g>
-      <text x={x + 30} y={y + 46} fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="21" fontWeight="800" letterSpacing="3">
-        {stats.routeLabel}
-      </text>
-      {hasRoute ? (
-        <>
-          <path d={path} fill="none" stroke={palette.ruleStrong} strokeWidth="14" strokeLinecap="round" strokeLinejoin="round" opacity="0.12" />
-          <path d={path} fill="none" stroke={palette.ink} strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      ) : (
-        <text x={x + w / 2} y={y + h / 2 + 16} textAnchor="middle" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700">
-          {stats.note}
-        </text>
-      )}
-    </g>
-  );
-}
-
-function ClassicPoster({ stats, svgRef, logoSrc }) {
-  const palette = {
-    ink: "#11110f",
-    muted: "#7a776e",
-    rule: "#ddd8ca",
-    ruleStrong: "#2f3327",
-    card: "#fbfaf5",
-  };
-
-  return (
-    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#f4f1e8" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#f4f1e8" />
-      <rect x="46" y="46" width="988" height="1258" fill="#f9f7ef" stroke="#c9c2ae" strokeWidth="1.5" />
-      <rect x="86" y="86" width="908" height="1178" fill="none" stroke="#e5decf" strokeWidth="1.2" />
-      <path d="M86 312 H994" stroke="#25291f" strokeWidth="2.5" />
-      <path d="M86 1010 H994" stroke="#c9c2ae" strokeWidth="1.5" />
-      <g fill="none" stroke="#2f3327" strokeWidth="1" opacity="0.045">
-        <path d="M-120 492 C 160 390, 348 560, 560 462 S 892 348, 1190 472" />
-        <path d="M-120 565 C 190 455, 374 640, 615 520 S 910 452, 1190 548" />
-        <path d="M-120 862 C 186 744, 390 920, 640 794 S 948 732, 1190 846" />
-      </g>
-
-      {brandMark({ logoSrc, x: 846, y: 110, size: 128 })}
-      <text x="110" y="154" fill="#5c5a52" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="800" letterSpacing="4">
-        {stats.title}
-      </text>
-      <text x="110" y="204" fill="#8b877c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="27" letterSpacing="2">
-        {stats.periodLabel}
-      </text>
-
-      <text x="110" y="548" fill="#11110f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="230" fontWeight="850">
-        {stats.primaryValue}
-      </text>
-      <text x="805" y="518" fill="#5b624c" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="58" fontWeight="850">
-        {stats.primaryUnit}
-      </text>
-      <text x="114" y="612" fill="#5c5a52" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="30" fontWeight="800">
-        {stats.primaryLabel}
-      </text>
-
-      {stats.mode === "single" ? (
-        <>
-          <RoutePanel stats={stats} palette={palette} y={660} h={260} />
-          {metricCards(stats, palette, 110, 956)}
-          {periodLine(stats, palette, 1210)}
-        </>
-      ) : (
-        <>
-          {metricCards(stats, palette, 110, 710)}
-          {periodLine(stats, palette, 1138)}
-        </>
-      )}
-      {signature({ y: 1192, ink: "#272a21", urlInk: "#666257", opacity: 0.7 })}
-    </svg>
-  );
-}
-
-function BibPoster({ stats, svgRef, logoSrc }) {
-  const palette = {
-    ink: "#f1ead8",
-    muted: "#9c947f",
-    rule: "#373226",
-    ruleStrong: "#bfa66b",
-    card: "#141411",
-  };
-
-  return (
-    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#0f100d" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#0f100d" />
-      <rect x="48" y="48" width="984" height="1254" fill="#11120f" stroke="#5b5037" strokeWidth="1.4" />
-      <rect x="88" y="88" width="904" height="1174" fill="none" stroke="#252116" strokeWidth="1.2" />
-      <path d="M118 318 H962" stroke="#bfa66b" strokeWidth="2.2" opacity="0.82" />
-      <path d="M118 1012 H962" stroke="#363124" strokeWidth="1.4" />
-      <g fill="none" stroke="#bfa66b" strokeWidth="1" opacity="0.1">
-        <path d="M92 612 H988" />
-        <path d="M92 706 H988" />
-        <path d="M92 800 H988" />
-        <path d="M306 88 V1262" />
-        <path d="M774 88 V1262" />
-      </g>
-
-      {brandMark({ logoSrc, x: 840, y: 112, size: 132, opacity: 0.96 })}
-      <text x="118" y="164" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="25" fontWeight="900" letterSpacing="6">
-        TRAINING DOSSIER
-      </text>
-      <text x="118" y="214" fill="#9c947f" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="27" fontWeight="700" letterSpacing="2">
-        {stats.periodLabel}
-      </text>
-
-      <text x="540" y="428" textAnchor="middle" fill="#74684a" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="900" letterSpacing="8">
-        {stats.mode === "single" ? "WORKOUT" : stats.mode === "pr" ? "PERSONAL RECORDS" : "RUNNING VOLUME"}
-      </text>
-      <text x="540" y="710" textAnchor="middle" fill="#f1ead8" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="252" fontWeight="900">
-        {stats.primaryValue}
-      </text>
-      <text x="540" y="792" textAnchor="middle" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="50" fontWeight="900" letterSpacing="9">
-        {stats.primaryUnit}
-      </text>
-
-      {stats.mode === "single" ? (
-        <>
-          <RoutePanel stats={stats} palette={palette} x={118} y={840} w={844} h={210} />
-          {metricCards(stats, palette, 118, 1084, 382, 106, 462, 128)}
-        </>
-      ) : (
-        <>
-          {metricCards(stats, palette, 118, 856, 382, 112, 462, 136)}
-        </>
-      )}
-      {signature({ y: 1192, ink: "#f1ead8", urlInk: "#bfa66b", opacity: 0.68 })}
-    </svg>
-  );
-}
-
-function heatmapLayout(days, w, h) {
-  const count = Math.max(days.length, 1);
-  const cols = count > 180 ? 26 : count > 45 ? 13 : 7;
-  const rows = Math.ceil(count / cols);
-  const gap = count > 180 ? 6 : count > 45 ? 10 : 12;
-  const cell = Math.floor(Math.min((w - gap * (cols - 1)) / cols, (h - gap * (rows - 1)) / rows));
-  return {
-    cols,
-    gap,
-    cell,
-    width: cols * cell + (cols - 1) * gap,
-    height: rows * cell + (rows - 1) * gap,
-  };
-}
-
-function heatColor(day, maxDistance, palette) {
-  if (!day?.distance || !maxDistance) return palette.empty;
-  const level = Math.min(4, Math.max(1, Math.ceil((day.distance / maxDistance) * 4)));
-  return palette.heat[level - 1];
-}
-
-function HeatmapGrid({ stats, palette, x = 110, y = 490, w = 860, h = 430, radius = 8 }) {
-  const days = stats.heatmap?.days || [];
-  const maxDistance = stats.heatmap?.maxDistance || 0;
-  const layout = heatmapLayout(days, w, h);
-  const ox = x + (w - layout.width) / 2;
-  const oy = y + (h - layout.height) / 2;
-
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={h} fill={palette.panel} stroke={palette.rule} strokeWidth="1.4" />
-      {days.map((day, i) => {
-        const col = i % layout.cols;
-        const row = Math.floor(i / layout.cols);
-        return (
-          <rect
-            key={day.date}
-            x={ox + col * (layout.cell + layout.gap)}
-            y={oy + row * (layout.cell + layout.gap)}
-            width={layout.cell}
-            height={layout.cell}
-            rx={radius}
-            fill={heatColor(day, maxDistance, palette)}
-          />
-        );
-      })}
-    </g>
-  );
-}
-
-function MetricStrip({ stats, palette, x = 110, y = 990, w = 860 }) {
-  const gap = 14;
-  const cardW = (w - gap * 3) / 4;
-  return (
-    <g>
-      {stats.metrics.map((item, i) => (
-        <g key={`${item.label}-${i}`} transform={`translate(${x + i * (cardW + gap)} ${y})`}>
-          <rect x="0" y="0" width={cardW} height="112" fill={palette.card} stroke={palette.rule} strokeWidth="1.2" />
-          <text x="22" y="35" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="18" fontWeight="800" letterSpacing="2">
-            {item.label}
-          </text>
-          <text x="22" y="82" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="32" fontWeight="850">
-            {item.value}
-          </text>
+      );
+    } else {
+      // No GPS — promote pace to a second hero element rather than leave a hole.
+      const bandMid = (spineTop + spineBot) / 2;
+      spine = (
+        <g>
+          <text x={M} y={spineTop + H * 0.04} fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="4" fill={pal.sub}>AVG PACE</text>
+          <text x={M} y={bandMid + H * 0.05} fontFamily={FF} fontWeight="800" fontSize={H * 0.13} fill={pal.ink}>{stats.bigPace}</text>
         </g>
-      ))}
-    </g>
-  );
-}
-
-function HeatmapPoster({ stats, svgRef, logoSrc }) {
-  const palette = {
-    ink: "#151512",
-    muted: "#747066",
-    rule: "#d7d1c1",
-    panel: "#f8f5ea",
-    card: "#fffcf3",
-    empty: "#ebe5d7",
-    heat: ["#c9dd9f", "#9bc36e", "#6d984f", "#3d6433"],
-  };
-
-  return (
-    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#f1eee4" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#f1eee4" />
-      <rect x="54" y="54" width="972" height="1242" fill="#fbf8ef" stroke="#c6bfae" strokeWidth="1.5" />
-      {brandMark({ logoSrc, x: 846, y: 100, size: 138 })}
-
-      <text x="110" y="154" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="26" fontWeight="900" letterSpacing="5">
-        TRAINING HEATMAP
-      </text>
-      <text x="110" y="204" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="2">
-        {stats.periodLabel}
-      </text>
-
-      <text x="110" y="350" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="142" fontWeight="900">
-        {stats.primaryValue}
-      </text>
-      <text x="730" y="328" fill="#4d7040" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="48" fontWeight="900">
-        {stats.primaryUnit}
-      </text>
-      <text x="112" y="410" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="24" fontWeight="850" letterSpacing="3">
-        RUNNING VOLUME
-      </text>
-
-      <HeatmapGrid stats={stats} palette={palette} y={472} />
-      <MetricStrip stats={stats} palette={palette} y={948} />
-      {periodLine(stats, { ...palette, ruleStrong: "#2f3327" }, 1140)}
-      {signature({ y: 1210, ink: "#272a21", urlInk: "#666257", opacity: 0.7 })}
-    </svg>
-  );
-}
-
-function MatrixPoster({ stats, svgRef, logoSrc }) {
-  const palette = {
-    ink: "#f5f0df",
-    muted: "#a99f86",
-    rule: "#363225",
-    panel: "#151611",
-    card: "#10110d",
-    empty: "#26271e",
-    heat: ["#48543c", "#6f7d4a", "#b2a35b", "#e2c76f"],
-  };
-
-  return (
-    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#0d0e0b" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#0d0e0b" />
-      <rect x="48" y="48" width="984" height="1254" fill="#10110d" stroke="#5c5134" strokeWidth="1.4" />
-      <g opacity="0.14" stroke="#bfa66b" strokeWidth="1">
-        {Array.from({ length: 10 }, (_, i) => <path key={`h-${i}`} d={`M88 ${270 + i * 76} H992`} />)}
-        {Array.from({ length: 8 }, (_, i) => <path key={`v-${i}`} d={`M${126 + i * 118} 88 V1262`} />)}
+      );
+    }
+  } else if (stats.mode === "pr") {
+    const recs = (stats.records || []).slice(0, 6);
+    const rowH = Math.min(72, (spineBot - spineTop) / Math.max(recs.length, 1));
+    spine = recs.length ? (
+      <g>
+        {recs.map((r, i) => {
+          const ry = spineTop + i * rowH;
+          const cy = ry + rowH * 0.66;
+          const top = i === 0;
+          return (
+            <g key={`${r.category}-${i}`}>
+              {i > 0 && <line x1={M} x2={W - M} y1={ry} y2={ry} stroke={pal.hair} strokeWidth="1.4" />}
+              <text x={M} y={cy} fontFamily={FF} fontWeight="600" fontSize="31" letterSpacing="1" fill={pal.ink}>{r.category}</text>
+              <text x={W - M} y={cy} textAnchor="end" fontFamily={FF} fontWeight="800" fontSize="35" fill={top ? pal.accent : pal.ink}>{r.value}</text>
+            </g>
+          );
+        })}
       </g>
-      {brandMark({ logoSrc, x: 844, y: 100, size: 136, opacity: 0.94 })}
+    ) : (
+      <text x={M} y={(spineTop + spineBot) / 2} fontFamily={FF} fontWeight="600" fontSize="30" fill={pal.sub}>NO RACES LOGGED YET</text>
+    );
+  } else {
+    // Period — running volume as a rhythmic bar strip along a baseline.
+    const bars = stats.bars || [];
+    const n = Math.max(bars.length, 1);
+    const maxV = Math.max(...bars.map(b => b.value), 1);
+    const slot = inner / n;
+    const barW = Math.max(2, Math.min(slot * 0.56, 24));
+    const bandH = spineBot - spineTop;
+    spine = (
+      <g>
+        {bars.map((b, i) => {
+          if (!(b.value > 0)) return null;
+          const hh = Math.max(6, (b.value / maxV) * bandH);
+          const bx = M + i * slot + (slot - barW) / 2;
+          const peak = b.value === maxV;
+          return <rect key={i} x={bx} y={spineBot - hh} width={barW} height={hh} fill={peak ? pal.accent : pal.ink} opacity={peak ? 1 : 0.82} />;
+        })}
+        <line x1={M} x2={W - M} y1={spineBot} y2={spineBot} stroke={pal.hair} strokeWidth="2" />
+      </g>
+    );
+  }
 
-      <text x="110" y="158" fill="#bfa66b" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="25" fontWeight="900" letterSpacing="7">
-        DISTANCE MATRIX
-      </text>
-      <text x="110" y="210" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="28" fontWeight="700" letterSpacing="2">
-        {stats.periodLabel}
-      </text>
-
-      <text x="110" y="372" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="150" fontWeight="900">
-        {stats.primaryValue}
-      </text>
-      <text x="730" y="346" fill="#d9c26d" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="50" fontWeight="900">
-        {stats.primaryUnit}
-      </text>
-
-      <HeatmapGrid stats={stats} palette={palette} y={472} radius={4} />
-      <MetricStrip stats={stats} palette={palette} y={948} />
-      {periodLine(stats, { ...palette, ruleStrong: "#bfa66b" }, 1140)}
-      {signature({ y: 1210, ink: "#f5f0df", urlInk: "#bfa66b", opacity: 0.68 })}
-    </svg>
-  );
-}
-
-function ArchivePoster({ stats, svgRef, logoSrc }) {
-  const palette = {
-    ink: "#161614",
-    muted: "#787064",
-    rule: "#d6cec0",
-    panel: "#f7f3e8",
-    card: "#fbf8ef",
-    empty: "#e8dfd1",
-    heat: ["#d4c49f", "#b89863", "#817a59", "#303b34"],
-  };
+  const showMetrics = stats.mode !== "pr" && stats.metrics;
 
   return (
-    <svg viewBox={`0 0 ${POSTER_W} ${POSTER_H}`} width={POSTER_W} height={POSTER_H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
-      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: "#ede7dc" }}>
-      <rect width={POSTER_W} height={POSTER_H} fill="#ede7dc" />
-      <rect x="70" y="70" width="940" height="1210" fill="#faf7ef" stroke="#bdb3a1" strokeWidth="1.5" />
-      <rect x="110" y="110" width="860" height="1130" fill="none" stroke="#e1d8ca" strokeWidth="1.1" />
-      {brandMark({ logoSrc, x: 826, y: 112, size: 146 })}
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
+      role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: pal.bg }}>
+      <defs><style>{POSTER_FONT_CSS}</style></defs>
+      <rect width={W} height={H} fill={pal.bg} />
 
-      <text x="110" y="168" fill={palette.muted} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="22" fontWeight="900" letterSpacing="6">
-        TRAINING ARCHIVE
-      </text>
-      <text x="110" y="224" fill={palette.ink} fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="52" fontWeight="900">
-        {stats.periodLabel}
-      </text>
+      {/* Header */}
+      <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize="30" letterSpacing="5" fill={pal.ink}>{stats.title}</text>
+      <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
+      {logoSrc && <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 6} width={logoSize} height={logoSize} opacity="0.9" preserveAspectRatio="xMidYMid meet" />}
+      <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="1.4" />
 
-      <rect x="110" y="306" width="860" height="128" fill="#161614" />
-      <text x="142" y="394" fill="#faf7ef" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="78" fontWeight="900">
-        {stats.primaryValue}
+      {/* Hero */}
+      <text x={M} y={yKick} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="4" fill={pal.sub}>{stats.kicker}</text>
+      <text x={M} y={yHero} fontFamily={FF} fontWeight="800" fill={pal.ink} style={{ fontVariantNumeric: "tabular-nums" }}>
+        <tspan fontSize={heroSize}>{stats.heroValue}</tspan>
+        {stats.heroUnit ? <tspan dx={18} fontSize={unitSize} fontWeight="800" fill={pal.accent}>{stats.heroUnit}</tspan> : null}
       </text>
-      <text x="650" y="390" fill="#c9b06e" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="38" fontWeight="900">
-        {stats.primaryUnit}
-      </text>
-      <text x="716" y="382" textAnchor="middle" fill="#cfc8b9" fontFamily="Outfit, Microsoft YaHei, sans-serif" fontSize="22" fontWeight="850" letterSpacing="4">
-        RUNNING VOLUME
-      </text>
+      <rect x={M} y={yRule} width="132" height="8" fill={pal.accent} />
 
-      <HeatmapGrid stats={stats} palette={palette} y={486} h={390} radius={3} />
-      <MetricStrip stats={stats} palette={palette} y={916} />
-      {periodLine(stats, { ...palette, ruleStrong: "#2c2e27" }, 1118)}
-      {signature({ y: 1198, ink: "#272a21", urlInk: "#666257", opacity: 0.7 })}
+      {/* Spine */}
+      {spine}
+
+      {/* Metrics */}
+      {showMetrics && (
+        <g>
+          <line x1={M} x2={W - M} y1={yHair} y2={yHair} stroke={pal.hair} strokeWidth="1.4" />
+          {stats.metrics.map((m, i) => {
+            const colW = inner / 4;
+            const cx = M + i * colW;
+            return (
+              <g key={`${m.label}-${i}`}>
+                <text x={cx} y={yML} fontFamily={FF} fontWeight="600" fontSize="19" letterSpacing="2" fill={pal.sub}>{m.label}</text>
+                <text x={cx} y={yMV} fontFamily={FF} fontWeight="800" fontSize="40" fill={pal.ink}>{m.value}</text>
+              </g>
+            );
+          })}
+        </g>
+      )}
+
+      {/* Signature */}
+      <text x={M} y={ySign} fontFamily={FF_SIGN} fontWeight="600" fontSize={H * 0.05} fill={pal.ink} opacity="0.94">Training Studio</text>
+      <text x={M} y={yUrl} fontFamily={FF} fontWeight="600" fontSize="18" letterSpacing="2" fill={pal.sub}>www.aitrainstudio.com</text>
     </svg>
   );
-}
-
-function PosterSvg({ template, stats, svgRef, logoSrc }) {
-  if (template === "bib") return <BibPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
-  if (template === "heatmap") return <HeatmapPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
-  if (template === "matrix") return <MatrixPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
-  if (template === "archive") return <ArchivePoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
-  return <ClassicPoster stats={stats} svgRef={svgRef} logoSrc={logoSrc} />;
 }
 
 export function MonthlyPosterModal({ logs, races = [], onClose }) {
@@ -762,6 +481,10 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [mode, setMode] = useState("month");
   const [rangeOffset, setRangeOffset] = useState(0);
   const [prRange, setPrRange] = useState("all");
+  const [theme, setTheme] = useState("day");
+  const [ratioKey, setRatioKey] = useState("portrait");
+  const ratio = RATIOS[ratioKey];
+
   const singleOptions = useMemo(() => (logs || [])
     .filter(l => !l.isPlanned && (Number(l.distance) > 0 || Number(l.duration) > 0))
     .slice()
@@ -770,19 +493,26 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
   const [singleGpsTrack, setSingleGpsTrack] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
-  const [template, setTemplate] = useState("classic");
   const [logoSrc, setLogoSrc] = useState(iconOnlyUrl);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+
   const selectedWorkout = useMemo(() => (
     singleOptions.find(l => l.id === selectedWorkoutId) || singleOptions[0] || null
   ), [singleOptions, selectedWorkoutId]);
+
+  const periodOptions = useMemo(() => {
+    if (!RANGE_MODES.has(mode)) return [];
+    const count = mode === "week" ? 16 : mode === "year" ? 6 : 18;
+    const arr = [];
+    for (let o = 0; o > -count; o--) arr.push({ value: o, label: rangeLabel(mode, getRange(mode, o), lang) });
+    return arr;
+  }, [mode, lang]);
+
   const stats = useMemo(() => (
-    mode === "single"
-      ? buildSingleStats(selectedWorkout, singleGpsTrack, t)
-      : mode === "pr"
-      ? buildPRStats(races, prRange, t)
-      : buildPeriodStats(logs || [], mode, rangeOffset, lang, t)
+    mode === "single" ? buildSingleStats(selectedWorkout, singleGpsTrack)
+      : mode === "pr" ? buildPRStats(races, prRange, t)
+      : buildPeriodStats(logs || [], mode, rangeOffset, lang)
   ), [logs, races, selectedWorkout, singleGpsTrack, mode, rangeOffset, prRange, lang, t]);
 
   useEffect(() => {
@@ -795,22 +525,15 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       }))
-      .then(dataUrl => {
-        if (alive && typeof dataUrl === "string") setLogoSrc(dataUrl);
-      })
+      .then(dataUrl => { if (alive && typeof dataUrl === "string") setLogoSrc(dataUrl); })
       .catch(() => {});
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
     let alive = true;
     async function loadTrack() {
-      if (mode !== "single" || !selectedWorkout?.id) {
-        setSingleGpsTrack(null);
-        return;
-      }
+      if (mode !== "single" || !selectedWorkout?.id) { setSingleGpsTrack(null); return; }
       setRouteLoading(true);
       try {
         const track = await workoutsDb.getWorkoutGpsTrack(selectedWorkout.id);
@@ -822,9 +545,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       }
     }
     loadTrack();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [mode, selectedWorkout?.id]);
 
   function switchMode(nextMode) {
@@ -843,24 +564,21 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
       const svgUrl = URL.createObjectURL(svgBlob);
       const img = new Image();
-      const loaded = new Promise((resolve, reject) => {
-        img.onload = resolve;
-        img.onerror = reject;
-      });
+      const loaded = new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
       img.src = svgUrl;
       await loaded;
       const canvas = document.createElement("canvas");
-      canvas.width = POSTER_W;
-      canvas.height = POSTER_H;
+      canvas.width = ratio.w;
+      canvas.height = ratio.h;
       const ctx = canvas.getContext("2d");
       if (!ctx) throw new Error("Canvas unavailable");
-      ctx.drawImage(img, 0, 0, POSTER_W, POSTER_H);
+      ctx.drawImage(img, 0, 0, ratio.w, ratio.h);
       URL.revokeObjectURL(svgUrl);
 
       const pngBlob = await new Promise((resolve, reject) => {
         canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("PNG export failed")), "image/png");
       });
-      const fileName = `training-studio-${stats.fileLabel}-${template}.png`;
+      const fileName = `training-studio-${stats.fileLabel}-${theme}-${ratioKey}.png`;
       if (isNativeApp()) {
         const dataUrl = canvas.toDataURL("image/png");
         await PosterSaver.savePng({ fileName, data: dataUrl });
@@ -889,111 +607,96 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     }
   }
 
+  const previewW = ratioKey === "story" ? 248 : ratioKey === "square" ? 320 : 300;
+
   return (
     <ModalRoot onClose={onClose}>
       <div onClick={onClose} style={s.modalOverlay(true, { float: true })}>
         <div onClick={e => e.stopPropagation()}
-          style={s.modalCard(true, { maxWidth: 520, bg: "var(--bg)", float: true })}>
+          style={s.modalCard(true, { maxWidth: 480, bg: "var(--bg)", float: true })}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
-            <div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("poster.preview_title")}</h2>
-              <div style={{ ...s.muted, marginTop: 3 }}>{stats.periodLabel}</div>
-            </div>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">x</button>
+            <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("poster.preview_title")}</h2>
+            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6, marginBottom: 8 }}>
-            {POSTER_MODES.map(id => (
-              <button key={id} onClick={() => switchMode(id)}
-                style={{ ...s.chip(mode === id), minHeight: 34, minWidth: 0, padding: "0 6px", fontSize: 12 }}>
-                {t(`poster.mode_${id}`)}
-              </button>
-            ))}
+          {/* Row 1: poster type */}
+          <label style={{ ...s.muted, fontSize: 12, display: "block", marginBottom: 4 }}>{t("poster.field_type")}</label>
+          <div style={{ marginBottom: 10 }}>
+            <Dropdown
+              ariaLabel={t("poster.field_type")}
+              options={POSTER_MODES.map(id => ({ value: id, label: t(`poster.mode_${id}`) }))}
+              value={mode}
+              onChange={switchMode}
+            />
           </div>
 
+          {/* Row 2: subject (workout / period / pr range) */}
           {mode === "single" && (
-            <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
-              <select
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ ...s.muted, fontSize: 12, display: "block", marginBottom: 4 }}>{t("poster.field_workout")}</label>
+              <Dropdown
+                ariaLabel={t("poster.field_workout")}
+                placeholder={t("poster.no_single_workout")}
+                options={singleOptions.map(l => ({ value: l.id, label: workoutLabel(l) }))}
                 value={selectedWorkout?.id || ""}
-                onChange={e => {
-                  setSelectedWorkoutId(e.target.value);
-                  setMsg("");
-                }}
-                style={{
-                  ...s.input,
-                  minHeight: 38,
-                  fontSize: 12,
-                  padding: "0 10px",
-                }}
-              >
-                {singleOptions.length ? singleOptions.map(l => (
-                  <option key={l.id} value={l.id}>{workoutLabel(l)}</option>
-                )) : (
-                  <option value="">{t("poster.no_single_workout")}</option>
-                )}
-              </select>
-              <div style={{ ...s.muted, fontSize: 12 }}>
-                {routeLoading ? t("poster.route_loading") : stats.note}
+                onChange={v => { setSelectedWorkoutId(v); setMsg(""); }}
+              />
+              <div style={{ ...s.muted, fontSize: 12, marginTop: 4 }}>
+                {routeLoading ? t("poster.route_loading") : (stats.route?.length >= 2 ? t("poster.route_map") : t("poster.single_no_route"))}
               </div>
             </div>
           )}
-
           {RANGE_MODES.has(mode) && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-              <button onClick={() => setRangeOffset(v => v - 1)} style={{ ...s.btnGhost, minHeight: 34, padding: "0 10px" }}>
-                {t("poster.prev_range")}
-              </button>
-              <div style={{ ...s.muted, flex: 1, textAlign: "center", fontSize: 12 }}>{stats.periodLabel}</div>
-              <button onClick={() => setRangeOffset(v => Math.min(v + 1, 0))} disabled={rangeOffset >= 0}
-                style={{ ...s.btnGhost, minHeight: 34, padding: "0 10px", opacity: rangeOffset >= 0 ? 0.45 : 1 }}>
-                {t("poster.next_range")}
-              </button>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ ...s.muted, fontSize: 12, display: "block", marginBottom: 4 }}>{t("poster.field_period")}</label>
+              <Dropdown
+                ariaLabel={t("poster.field_period")}
+                options={periodOptions}
+                value={rangeOffset}
+                onChange={v => { setRangeOffset(v); setMsg(""); }}
+              />
             </div>
           )}
-
           {mode === "pr" && (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
-              {PR_RANGES.map(id => (
-                <button key={id} onClick={() => {
-                  setPrRange(id);
-                  setMsg("");
-                }}
-                  style={{ ...s.chip(prRange === id), minHeight: 34, minWidth: 0, padding: "0 6px", fontSize: 12 }}>
-                  {t(`poster.pr_range_${id}`)}
-                </button>
-              ))}
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ ...s.muted, fontSize: 12, display: "block", marginBottom: 4 }}>{t("poster.field_period")}</label>
+              <Dropdown
+                ariaLabel={t("poster.field_period")}
+                options={PR_RANGES.map(id => ({ value: id, label: t(`poster.pr_range_${id}`) }))}
+                value={prRange}
+                onChange={v => { setPrRange(v); setMsg(""); }}
+              />
             </div>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 6, marginBottom: 12 }}>
-            {TEMPLATES.map(id => {
-              const active = template === id;
-              return (
-                <button key={id} onClick={() => setTemplate(id)}
-                  style={{
-                    ...s.chip(active),
-                    minHeight: 36,
-                    minWidth: 0,
-                    padding: "0 8px",
-                    fontSize: 12,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}>
-                  {t(`poster.template_${id}`)}
-                </button>
-              );
-            })}
+          {/* Row 3: theme + ratio */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+            <div>
+              <label style={{ ...s.muted, fontSize: 12, display: "block", marginBottom: 4 }}>{t("poster.field_theme")}</label>
+              <Dropdown
+                ariaLabel={t("poster.field_theme")}
+                options={THEME_KEYS.map(k => ({ value: k, label: t(`poster.theme_${k}`) }))}
+                value={theme}
+                onChange={setTheme}
+              />
+            </div>
+            <div>
+              <label style={{ ...s.muted, fontSize: 12, display: "block", marginBottom: 4 }}>{t("poster.field_ratio")}</label>
+              <Dropdown
+                ariaLabel={t("poster.field_ratio")}
+                options={RATIO_KEYS.map(k => ({ value: k, label: t(`poster.ratio_${k}`) }))}
+                value={ratioKey}
+                onChange={setRatioKey}
+              />
+            </div>
           </div>
 
+          {/* Preview */}
           <div style={{
-            width: "100%",
-            maxWidth: 360,
-            margin: "0 auto 14px",
-            border: "1px solid var(--rule)",
-            background: "var(--bg-elevated)",
+            width: "100%", maxWidth: previewW, margin: "0 auto 14px",
+            border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <PosterSvg template={template} svgRef={svgRef} stats={stats} logoSrc={logoSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

@@ -1025,7 +1025,7 @@ export function AICoachTab({
                 );
               });
             })()}
-            {chatLoading && (
+            {chatLoading && !chatMessages.some(m => m.isStreaming) && (
               <div style={{
                 alignSelf: "flex-start", color: "var(--ink-3)", fontSize: 13,
                 display: "inline-flex", alignItems: "center", gap: 8,

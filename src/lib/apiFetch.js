@@ -112,3 +112,64 @@ export async function postJson({ url, headers = {}, body }) {
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
 }
+
+// Streaming POST for the AI coach (Anthropic-style SSE). Uses window.fetch on
+// BOTH web and the WebView (CapacitorHttp can't stream — it buffers the whole
+// body), but still wraps the read in withBackgroundGrace so a mid-stream
+// backgrounding on Android gets OS grace time. `onToken(fullText)` is called
+// with the running accumulated text as deltas arrive. Robust fallback: if the
+// provider ignores `stream:true` and returns a single JSON body, we read it and
+// emit the whole text once. Returns { ok, status, text, errorText }.
+export async function postJsonStream({ url, headers = {}, body, onToken }) {
+  return withBackgroundGrace(async () => {
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "POST",
+        headers,
+        body: typeof body === "string" ? body : JSON.stringify(body),
+      });
+    } catch (err) {
+      return { ok: false, status: 0, text: "", errorText: err.message || "network error" };
+    }
+    const ct = resp.headers.get("content-type") || "";
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => "");
+      return { ok: false, status: resp.status, text: "", errorText: errText.slice(0, 200) };
+    }
+    // Non-streaming fallback: provider returned a single JSON body.
+    if (!ct.includes("event-stream") || !resp.body || !resp.body.getReader) {
+      const data = await resp.json().catch(() => null);
+      if (data && data.error) return { ok: false, status: resp.status, text: "", errorText: data.error?.message || "error" };
+      const text = data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      if (text && onToken) onToken(text);
+      return { ok: true, status: resp.status, text };
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "", full = "", errMsg = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buffer.indexOf("\n")) >= 0) {
+        const line = buffer.slice(0, nl).trim();
+        buffer = buffer.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === "[DONE]") continue;
+        let evt;
+        try { evt = JSON.parse(payload); } catch { continue; }
+        if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+          full += evt.delta.text;
+          if (onToken) onToken(full);
+        } else if (evt.type === "error") {
+          errMsg = evt.error?.message || "stream error";
+        }
+      }
+    }
+    if (errMsg) return { ok: false, status: resp.status, text: full, errorText: errMsg };
+    return { ok: true, status: resp.status, text: full };
+  });
+}

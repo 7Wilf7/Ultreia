@@ -108,7 +108,20 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
       return { label, rangeText: rangeLabel, value: val };
     };
 
-    if (chartPeriod.type === "week") {
+    if (chartPeriod.type === "day") {
+      for (let i = chartPeriod.count - 1; i >= 0; i--) {
+        const start = new Date(nowD);
+        start.setDate(nowD.getDate() - i);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start); end.setDate(start.getDate() + 1);
+        const sum = filteredAllLogs.filter(l => {
+          const d = new Date(l.date);
+          return d >= start && d < end;
+        }).reduce((acc, l) => acc + pickValue(l), 0);
+        const lbl = `${start.getMonth() + 1}-${start.getDate()}`;
+        buckets.push(finishBucket(lbl, lbl, sum));
+      }
+    } else if (chartPeriod.type === "week") {
       for (let i = chartPeriod.count - 1; i >= 0; i--) {
         const dayOfWeek = (nowD.getDay() + 6) % 7;
         const start = new Date(nowD);
@@ -154,7 +167,11 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   const chartRangeLogs = useMemo(() => {
     const nowD = new Date();
     let from;
-    if (chartPeriod.type === "week") {
+    if (chartPeriod.type === "day") {
+      from = new Date(nowD);
+      from.setDate(nowD.getDate() - (chartPeriod.count - 1));
+      from.setHours(0, 0, 0, 0);
+    } else if (chartPeriod.type === "week") {
       const dayOfWeek = (nowD.getDay() + 6) % 7;
       from = new Date(nowD);
       from.setDate(nowD.getDate() - dayOfWeek - (chartPeriod.count - 1) * 7);
@@ -206,7 +223,16 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
         return d >= from && d < to;
       }).reduce((acc, l) => acc + (l.ascent || 0), 0);
 
-    if (chartPeriod.type === "week") {
+    if (chartPeriod.type === "day") {
+      for (let i = chartPeriod.count - 1; i >= 0; i--) {
+        const start = new Date(nowD);
+        start.setDate(nowD.getDate() - i);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start); end.setDate(start.getDate() + 1);
+        const lbl = `${start.getMonth() + 1}-${start.getDate()}`;
+        buckets.push({ label: lbl, rangeText: lbl, value: Math.round(sumIn(start, end)) });
+      }
+    } else if (chartPeriod.type === "week") {
       for (let i = chartPeriod.count - 1; i >= 0; i--) {
         const dayOfWeek = (nowD.getDay() + 6) % 7;
         const start = new Date(nowD);
@@ -238,6 +264,7 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   }, [filteredAllLogs, chartPeriod, config.showAscent, t]);
 
   function chartPeriodLabel() {
+    if (chartPeriod.type === "day")   return t("charts.last_days",   { n: chartPeriod.count });
     if (chartPeriod.type === "week")  return t("charts.last_weeks",  { n: chartPeriod.count });
     if (chartPeriod.type === "month") return t("charts.last_months", { n: chartPeriod.count });
     if (chartPeriod.type === "year")  return t("charts.last_years",  { n: chartPeriod.count });
@@ -258,6 +285,7 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
 
   const presets = [
+    { type: "day",   count: 7,  label: t("charts.this_week") },
     { type: "week",  count: 4,  label: t("charts.weeks",  { n: 4 }) },
     { type: "week",  count: 8,  label: t("charts.weeks",  { n: 8 }) },
     { type: "month", count: 6,  label: t("charts.months", { n: 6 }) },

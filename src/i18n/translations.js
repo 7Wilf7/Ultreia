@@ -415,7 +415,7 @@ const dict = {
   "training.load_label":      { en: "LOAD",                 zh: "训练负荷" },
   "training.load_building":   { en: "baseline building…",   zh: "基线建立中…" },
   "training.load_hint":       { en: "Training load: 7-day vs 4-week session-RPE (duration×RPE). ACWR sweet spot 0.8–1.3; >1.5 = injury-spike risk.", zh: "训练负荷：近 7 天 vs 近 4 周的 sRPE（时长×RPE）。ACWR 安全区 0.8–1.3；>1.5 为骤增伤病风险。" },
-  "training.load_ac":         { en: "7d {a} / wk {c}",       zh: "近7天 {a} / 周均 {c}" },
+  "training.load_ac":         { en: "7d {a} · 4wk-avg {c}",  zh: "近7天 {a} · 周均 {c}" },
   "training.ramp_low":        { en: "low",                  zh: "偏低" },
   "training.ramp_optimal":    { en: "optimal",              zh: "理想" },
   "training.ramp_high":       { en: "high",                 zh: "偏高" },
@@ -519,9 +519,11 @@ const dict = {
 
   // ===== Charts tab =====
   "charts.show":              { en: "Show:",                zh: "范围：" },
+  "charts.this_week":          { en: "7 Days",              zh: "近 7 天" },
   "charts.weeks":              { en: "{n} Weeks",           zh: "{n} 周" },
   "charts.months":            { en: "{n} Months",           zh: "{n} 个月" },
   "charts.years":             { en: "{n} Years",            zh: "{n} 年" },
+  "charts.last_days":         { en: "Last {n} Days",        zh: "近 {n} 天" },
   "charts.last_weeks":        { en: "Last {n} Weeks",       zh: "近 {n} 周" },
   "charts.last_months":       { en: "Last {n} Months",      zh: "近 {n} 个月" },
   "charts.last_years":        { en: "Last {n} Years",       zh: "近 {n} 年" },

@@ -173,8 +173,30 @@ export function TrainingTab({
   const actualLogs = useMemo(() => logs.filter(l => !l.isPlanned), [logs]);
 
   // Whole-body training load (sRPE acute:chronic) — computed from ALL completed
-  // activities, not the type-filtered set, since load is total stress.
+  // activities, not the type-filtered set, since load is total stress. Recomputes
+  // whenever the activity list changes (e.g. right after an import with RPE).
   const load = useMemo(() => computeTrainingLoad(actualLogs, new Date()), [actualLogs]);
+
+  // The load strip — rendered inside the Activities sticky block (between the
+  // toolbar and the list) so it pins with the stats and doesn't scroll away.
+  const loadChipEl = load ? (
+    <div title={t("training.load_hint")}
+      style={{ display: "flex", alignItems: "center", gap: 8, padding: isMobile ? "7px 2px 3px" : "8px 2px 4px", fontSize: 12.5, flexWrap: "wrap", borderTop: "1px solid var(--rule)" }}>
+      <span style={{ ...s.muted, letterSpacing: "0.06em", fontSize: 11 }}>{t("training.load_label")}</span>
+      {load.building || load.acwr == null ? (
+        <span style={{ ...s.muted }}>{t("training.load_building")}</span>
+      ) : (
+        <>
+          <span style={{ width: 9, height: 9, borderRadius: "50%", background: RAMP_COLOR[load.ramp], flexShrink: 0 }} />
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)" }}>ACWR {load.acwr.toFixed(2)}</span>
+          <span style={{ ...s.muted }}>· {t(`training.ramp_${load.ramp}`)}</span>
+          <span style={{ ...s.muted, marginLeft: "auto", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+            {t("training.load_ac", { a: load.acute, c: load.chronicWeekly })}
+          </span>
+        </>
+      )}
+    </div>
+  ) : null;
 
   const filteredAllLogs = useMemo(
     () => actualLogs.filter(l => logMatchesFilter(l, filter)),
@@ -353,32 +375,13 @@ export function TrainingTab({
             profile={profile}
             toolbarStickyTop={toolbarTop}
             stickyHeader={activitiesStickyHeader}
+            loadChip={loadChipEl}
           />
         </>
       )}
 
       {view === "charts" && (
-        <>
-          {load && (
-            <div title={t("training.load_hint")}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 2px 12px", fontSize: 13, flexWrap: "wrap" }}>
-              <span style={{ ...s.muted, letterSpacing: "0.04em" }}>{t("training.load_label")}</span>
-              {load.building || load.acwr == null ? (
-                <span style={{ ...s.muted }}>{t("training.load_building")}</span>
-              ) : (
-                <>
-                  <span style={{ width: 9, height: 9, borderRadius: "50%", background: RAMP_COLOR[load.ramp], flexShrink: 0 }} />
-                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)" }}>ACWR {load.acwr.toFixed(2)}</span>
-                  <span style={{ ...s.muted }}>· {t(`training.ramp_${load.ramp}`)}</span>
-                  <span style={{ ...s.muted, marginLeft: "auto", fontSize: 11, fontFamily: "var(--font-mono)" }}>
-                    {t("training.load_ac", { a: load.acute, c: load.chronicWeekly })}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-          <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
-        </>
+        <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
       )}
     </div>
   );

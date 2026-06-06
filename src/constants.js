@@ -132,15 +132,16 @@ export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "Cycli
 // coach plans around a disrupted week. Stored as text[], so adding values
 // here needs no schema change.
 // Order matters for the Calendar day-tag grid (3 cols → row 1: massage /
-// stretching / sick, row 2: poor_sleep [spans 2 cols] / travel).
-export const DAILY_TAGS = ["massage", "stretching", "sick", "poor_sleep", "travel"];
+// stretching / sick, row 2: travel). "poor_sleep" was retired once the morning
+// readiness check-in (sleep/legs/energy) covered sleep; old rows keep the tag
+// in the DB harmlessly, it just no longer renders as a toggle.
+export const DAILY_TAGS = ["massage", "stretching", "sick", "travel"];
 
 // Emoji glyph per day tag. Mobile calendar cells show just these icons (no
 // room for text); desktop chips + the day modal show icon + label.
 export const DAILY_TAG_ICONS = {
   massage:    "💆",
   stretching: "🤸",
-  poor_sleep: "😴",
   sick:       "🤒",
   travel:     "✈️",
 };

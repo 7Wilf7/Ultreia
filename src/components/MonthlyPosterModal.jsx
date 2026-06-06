@@ -559,11 +559,15 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     setBusy(true);
     setMsg("");
     try {
-      if (document.fonts?.ready) await document.fonts.ready;
+      // No document.fonts.ready wait — the fonts are embedded as base64
+      // @font-face INSIDE the serialized SVG, so the export img is self-contained
+      // and waiting on document-level font loading just stalls (notably on the
+      // Android WebView).
       const svgText = new XMLSerializer().serializeToString(svgRef.current);
       const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
       const svgUrl = URL.createObjectURL(svgBlob);
       const img = new Image();
+      img.decoding = "sync";
       const loaded = new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
       img.src = svgUrl;
       await loaded;
@@ -575,16 +579,18 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       ctx.drawImage(img, 0, 0, ratio.w, ratio.h);
       URL.revokeObjectURL(svgUrl);
 
-      const pngBlob = await new Promise((resolve, reject) => {
-        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("PNG export failed")), "image/png");
-      });
       const fileName = `training-studio-${stats.fileLabel}-${theme}-${ratioKey}.png`;
+      // Native: encode the PNG ONCE (toDataURL) and hand it to the saver — the
+      // old path encoded twice (toBlob then toDataURL), doubling the cost.
       if (isNativeApp()) {
         const dataUrl = canvas.toDataURL("image/png");
         await PosterSaver.savePng({ fileName, data: dataUrl });
         setMsg(t("poster.downloaded"));
         return;
       }
+      const pngBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error("PNG export failed")), "image/png");
+      });
       const file = new File([pngBlob], fileName, { type: "image/png" });
       if (navigator.canShare?.({ files: [file] }) && navigator.share) {
         await navigator.share({ files: [file], title: "Training Studio" });

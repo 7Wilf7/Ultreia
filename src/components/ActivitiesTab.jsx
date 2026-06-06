@@ -39,7 +39,7 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
-export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
   // ActivityForm for the chip "recommended" badge, and used inline below for
@@ -520,6 +520,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           />
         </div>
         </div>
+        {/* Training-load strip — lives inside the sticky block so it pins with
+            the stats + toolbar and doesn't scroll away. */}
+        {loadChip}
       </div>
 
       {selectMode && (
@@ -642,24 +645,41 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               to be scrolled to). The page scrolls instead. */}
           <div>
             {parsedRows.map(r => (
-              <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16 }} />
-                <div style={{ minWidth: 60, fontSize: 11, color: "#888" }}>{formatDateShort(r.date)}</div>
-                <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
-                <div style={{ fontSize: 12, flex: 1 }}>
-                  {r.distance > 0 && <span>{r.distance}km · </span>}
-                  {formatDuration(r.duration)} {r.hr > 0 && `· HR ${r.hr}`} {r.ascent > 0 && `· +${r.ascent}m`}
+              <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+                {/* Line 1 — select · date · type · (Road Run) subtype picker */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
+                  <div style={{ fontSize: 11, color: "#888", flexShrink: 0 }}>{formatDateShort(r.date)}</div>
+                  <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
+                  {r.type === "Road Run" && (
+                    <div style={{ width: 118, marginLeft: "auto" }}>
+                      <Dropdown
+                        ariaLabel={t("form.run_type")}
+                        fontSize={12}
+                        options={RUN_SUBTYPES.map(st => ({ value: st, label: t(`enum.subtype.${st}`) }))}
+                        value={r.subTypes[0] || ""}
+                        onChange={(v) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [v] } : x))}
+                      />
+                    </div>
+                  )}
                 </div>
-                {r.type === "Road Run" && (
-                  <div style={{ width: 130 }}>
-                    <Dropdown
-                      ariaLabel={t("form.run_type")}
-                      options={RUN_SUBTYPES.map(st => ({ value: st, label: t(`enum.subtype.${st}`) }))}
-                      value={r.subTypes[0] || ""}
-                      onChange={(v) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [v] } : x))}
-                    />
+                {/* Line 2 — metrics + a small RPE box at the end */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 12, flex: 1, color: "#555", fontFamily: "var(--font-mono)", minWidth: 0 }}>
+                    {r.distance > 0 && <span>{r.distance}km · </span>}
+                    {formatDuration(r.duration)}{r.hr > 0 && ` · HR ${r.hr}`}{r.ascent > 0 && ` · +${r.ascent}m`}
                   </div>
-                )}
+                  <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11, color: "#888" }}>RPE</span>
+                    <input type="number" inputMode="numeric" min="1" max="10" value={r.rpe || ""} placeholder="–"
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const v = raw === "" ? 0 : Math.max(1, Math.min(10, parseInt(raw, 10) || 0));
+                        setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, rpe: v } : x));
+                      }}
+                      style={{ width: 44, fontSize: 12, padding: "4px 6px", textAlign: "center", minHeight: 0, border: "1px solid var(--rule)", borderRadius: 4, background: "#fff", color: "var(--ink-1)" }} />
+                  </label>
+                </div>
               </div>
             ))}
           </div>

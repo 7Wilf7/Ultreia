@@ -25,12 +25,12 @@ import changelogMd from "../../docs/changelog.md?raw";
 const CHAPTERS = [
   { file: "README.md",       title: "总览",              md: readmeMd },
   { file: "training-log.md", title: "训练记录",          md: trainingLogMd },
-  { file: "running.md",      title: "配速分类",          md: runningMd },
-  { file: "data-import.md",  title: "数据导入",          md: dataImportMd },
+  { file: "ai-coach.md",     title: "AI 教练",           md: aiCoachMd },
   { file: "races.md",        title: "赛事管理",          md: racesMd },
   { file: "weather.md",      title: "天气",              md: weatherMd },
-  { file: "ai-coach.md",     title: "AI 教练",           md: aiCoachMd },
   { file: "charts.md",       title: "图表",              md: chartsMd },
+  { file: "running.md",      title: "配速分类",          md: runningMd },
+  { file: "data-import.md",  title: "数据导入",          md: dataImportMd },
   { file: "changelog.md",    title: "更新日志",          md: changelogMd },
 ];
 

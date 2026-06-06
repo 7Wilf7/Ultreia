@@ -42,7 +42,7 @@ import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
-import { postJson } from "./lib/apiFetch";
+import { postJson, postJsonStream } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
@@ -1158,11 +1158,15 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       return true;
     }
 
+    // Streaming reply. A transient assistant bubble fills in token-by-token,
+    // then we persist the final text and swap the placeholder for the saved row.
+    // postJsonStream uses window.fetch (streams on web + WebView) wrapped in
+    // background grace; if the provider ignores stream:true it falls back to a
+    // single full-text emit, so this path is safe for all providers.
+    const streamId = `stream-${Date.now()}`;
+    let started = false, lastFlush = 0;
     try {
-      // postJson goes through CapacitorHttp on the APK so the WebView can
-      // be backgrounded mid-request without the OS killing the connection.
-      // On web it falls back to plain fetch.
-      const resp = await postJson({
+      const result = await postJsonStream({
         url: endpointUrl,
         headers: {
           "Content-Type": "application/json",
@@ -1175,33 +1179,43 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
           max_tokens: 8000,
           system: systemPrompt,
           messages: messagesToSend,
+          stream: true,
+        },
+        onToken: (full) => {
+          if (!started) {
+            started = true;
+            setChatMessages(prev => [...prev, { id: streamId, role: "assistant", content: full, isLocal: true, isStreaming: true }]);
+            return;
+          }
+          // Throttle re-renders (re-parsing markdown every token janks on phones).
+          const tNow = Date.now();
+          if (tNow - lastFlush < 40) return;
+          lastFlush = tNow;
+          setChatMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: full } : m));
         },
       });
-      // Detect "server returned HTML instead of JSON" up-front — that's the
-      // classic symptom of a wrong endpoint URL (path 404'd, response is a
-      // generic error page). Mapping it to a clearer error beats the JSON
-      // parser blowing up with "Unexpected token '<'".
-      const contentType = resp.headers.get("content-type") || "";
-      if (!contentType.includes("json")) {
-        const body = await resp.text().catch(() => "");
-        const snippet = body.slice(0, 120).replace(/\s+/g, " ");
-        appendLocalChatMessage("assistant", t("coach.endpoint_error", { status: resp.status, url: endpointUrl, snippet }));
-        setChatLoading(false);
-        return true;
-      }
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        const msg = data.error?.message || `HTTP ${resp.status}`;
-        console.error("[AI Coach] API error:", data);
+      if (!result.ok) {
+        setChatMessages(prev => prev.filter(m => m.id !== streamId));
+        const msg = result.errorText || `HTTP ${result.status}`;
+        console.error("[AI Coach] API error:", msg);
         appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
+      } else if (!started) {
+        // Provider returned nothing to stream — append a normal bubble.
+        try { await appendChatMessage("assistant", result.text || t("coach.no_response")); } catch { /* alerted */ }
       } else {
-        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+        // Finalize the streamed bubble IN PLACE (no flash), then persist in the
+        // background and swap the placeholder for the saved row (real id → the
+        // calendar-import button then appears).
+        const reply = result.text || t("coach.no_response");
+        setChatMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: reply, isStreaming: false } : m));
         try {
-          await appendChatMessage("assistant", reply);
-        } catch { /* alerted by wrapper */ }
+          const saved = await db.coachMessages.appendMessage("assistant", reply);
+          setChatMessages(prev => prev.map(m => m.id === streamId ? saved : m));
+        } catch (e) { console.error("[AI Coach] persist failed:", e); }
       }
     } catch (err) {
       console.error("[AI Coach] Network error:", err);
+      setChatMessages(prev => prev.filter(m => m.id !== streamId));
       appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: endpointUrl }));
     }
     setChatLoading(false);

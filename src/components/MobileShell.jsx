@@ -96,6 +96,16 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
     if (!st || st.skip) return;
     if (!st.startAtTop) return;
     const y = e.touches[0].clientY;
+    const x = e.touches[0].clientX;
+    // Horizontal-dominant gesture → it's a tab swipe, not a pull. Disqualify so
+    // the indicator never flickers in during a Calendar↔Training swipe (the
+    // faint "Pull to refresh" ghost the user saw on every tab change).
+    if (!st.leftTop && Math.abs(x - st.x) > Math.abs(y - st.y) && Math.abs(x - st.x) > 8) {
+      st.leftTop = true;
+      if (pullState.current) pullState.current = null;
+      if (pullRef.current) setPullPx(0);
+      return;
+    }
     const atTop = (mainRef.current?.scrollTop || 0) <= 0;
     // Left the top (scrolled into history) → this touch is a list scroll, not a
     // pull. Mark it disqualified so that coming BACK to the top within the same

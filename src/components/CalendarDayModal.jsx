@@ -6,10 +6,54 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useState, useRef } from "react";
 import { s } from "../styles";
-import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
+import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { formatDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
+import { formatDuration, formatPlanDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
+import { evaluatePlanOutcome } from "../utils/planMatch";
+
+// Per-type plan field visibility — which inputs the add/edit-plan form shows for
+// a given activity type (time-of-day is always shown). Mirrored in
+// CoachPlanImportModal so a plan reads the same wherever it's edited.
+//   Road Run        → run type + distance
+//   Trail / Hiking  → distance + ascent
+//   Floor Climbing  → ascent
+//   Cycling         → distance + speed
+//   Swimming        → duration
+//   Strength        → body area(s) + per-area minutes
+//   HIIT            → time-of-day only
+export function planFields(type) {
+  return {
+    runType:  type === "Road Run",
+    distance: type === "Road Run" || type === "Trail Run" || type === "Hiking" || type === "Cycling",
+    ascent:   type === "Trail Run" || type === "Hiking" || type === "Floor Climbing",
+    speed:    type === "Cycling",
+    duration: type === "Swimming",
+    strength: type === "Strength",
+  };
+}
+
+// Compact target readout for a PLANNED row, by type. Mirrors planFields so the
+// row shows exactly what the user planned (never a spurious "00s").
+export function planHeadline(l, t) {
+  const f = planFields(l.type);
+  const parts = [];
+  if (f.distance && l.distance > 0) parts.push(`${l.distance} km`);
+  if (f.ascent && l.ascent > 0) parts.push(`+${l.ascent} m`);
+  if (f.speed && l.planDetail?.speed > 0) parts.push(`${l.planDetail.speed} km/h`);
+  if (f.duration && l.duration > 0) parts.push(formatPlanDuration(l.duration));
+  if (f.strength) {
+    const d = l.planDetail?.subTypeDurations;
+    if (d && typeof d === "object") {
+      const segs = (l.subTypes || [])
+        .filter(a => d[a] > 0)
+        .map(a => `${t(`enum.subtype.${a}`)} ${d[a]}m`);
+      if (segs.length) parts.push(segs.join(" · "));
+      else if (l.duration > 0) parts.push(formatPlanDuration(l.duration));
+    } else if (l.duration > 0) parts.push(formatPlanDuration(l.duration));
+  }
+  return parts.join(" · ") || "—";
+}
 import { skyconMeta } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 import { ItemActionModal } from "./ItemActionModal";
@@ -82,14 +126,12 @@ export function CalendarDayModal({
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   const isPast = !isFuture && !isToday;
-  // A planned session counts as DONE when explicitly marked done, or when any
-  // completed workout exists on the same day (auto-reconciliation).
-  const dayHasCompleted = logs.some(l => !l.isPlanned);
+  // A planned session is reconciled against the SAME-TYPE completed workouts on
+  // this day, comparing the planned target (distance / ascent / duration) to
+  // what was actually done — see evaluatePlanOutcome. An explicit planStatus
+  // (the "did it" / "skip" buttons below) always wins.
   function planOutcome(l) {
-    if (!l.isPlanned) return null;
-    if (l.planStatus === "skipped") return "skipped";
-    if (l.planStatus === "done" || dayHasCompleted) return "done";
-    return isPast ? "missed" : "pending";
+    return evaluatePlanOutcome(l, logs, { isPast }).outcome;
   }
   function setPlanStatus(id, status) {
     updateLog(id, { planStatus: status }).catch(() => {});
@@ -109,9 +151,13 @@ export function CalendarDayModal({
   // edit mode (Save then calls updateLog instead of addLog). ──
   const [planType, setPlanType] = useState("Road Run");
   const [planDistance, setPlanDistance] = useState("");
-  const [planDurationMin, setPlanDurationMin] = useState("");
+  const [planAscent, setPlanAscent] = useState("");        // trail/hiking/floor-climbing target ascent (m)
+  const [planSpeed, setPlanSpeed] = useState("");          // cycling target speed (km/h) → plan_detail.speed
+  const [planDurationMin, setPlanDurationMin] = useState(""); // swimming target (min)
+  const [planRunType, setPlanRunType] = useState("");      // Road Run: Easy/Aerobic/Tempo/Interval
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
+  const [planPartDurations, setPlanPartDurations] = useState({}); // strength: { area: minutes-string }
   const [editingId, setEditingId] = useState(null);
   // Long-press a workout row → a centered Edit/Delete action card (same
   // pattern as the Training list's ItemActionModal). actionTarget = the log.
@@ -122,7 +168,7 @@ export function CalendarDayModal({
     pressTimer.current = setTimeout(() => setActionTarget(l), 450);
   }
   function cancelRowPress() { clearTimeout(pressTimer.current); }
-  const planIsStrength = planType === "Strength";
+  const planF = planFields(planType);
 
   // Day-level tags live in dailyNotes — we toggle in-place. The Save is implicit:
   // each click calls setDailyTags() which upserts immediately. UI reflects the
@@ -137,14 +183,23 @@ export function CalendarDayModal({
 
   function togglePlanSub(sub) {
     setPlanSubTypes(prev => prev.includes(sub) ? prev.filter(x => x !== sub) : [...prev, sub]);
+    // Drop a per-area duration when its area is unchecked.
+    setPlanPartDurations(prev => {
+      if (!prev[sub]) return prev;
+      const next = { ...prev }; delete next[sub]; return next;
+    });
   }
 
   function resetPlanForm() {
     setPlanType("Road Run");
     setPlanDistance("");
+    setPlanAscent("");
+    setPlanSpeed("");
     setPlanDurationMin("");
+    setPlanRunType("");
     setPlanTimeOfDay("");
     setPlanSubTypes([]);
+    setPlanPartDurations({});
     setEditingId(null);
   }
 
@@ -153,43 +208,69 @@ export function CalendarDayModal({
     setEditingId(l.id);
     setPlanType(l.type);
     setPlanDistance(l.distance > 0 ? String(l.distance) : "");
+    setPlanAscent(l.ascent > 0 ? String(l.ascent) : "");
+    setPlanSpeed(l.planDetail?.speed > 0 ? String(l.planDetail.speed) : "");
     setPlanDurationMin(l.duration > 0 ? String(Math.round(l.duration / 60)) : "");
+    const subs = Array.isArray(l.subTypes) ? l.subTypes : [];
+    setPlanRunType(l.type === "Road Run" ? (subs.find(s => RUN_PACE_TYPES.includes(s)) || "") : "");
     setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
-    setPlanSubTypes(Array.isArray(l.subTypes) ? l.subTypes : []);
+    setPlanSubTypes(subs);
+    const pd = l.planDetail?.subTypeDurations || {};
+    setPlanPartDurations(Object.fromEntries(Object.entries(pd).map(([k, v]) => [k, String(v)])));
     setActionTarget(null);
     setPanel("plan");
   }
 
   async function savePlan() {
-    const distNum = parseFloat(planDistance) || 0;
-    const durSec = (parseFloat(planDurationMin) || 0) * 60;
-    const subTypes = planIsStrength ? planSubTypes : [];
-    // A strength plan is meaningful with just a picked area (e.g. "Core") even
-    // without a duration; everything else still needs a distance or duration.
-    if (distNum === 0 && durSec === 0 && subTypes.length === 0) {
+    const f = planFields(planType);
+    // Assemble the type-specific fields. Everything not shown for this type
+    // stays zero/empty so switching type then saving doesn't carry stale values.
+    const distNum = f.distance ? (parseFloat(planDistance) || 0) : 0;
+    const ascNum = f.ascent ? Math.round(parseFloat(planAscent) || 0) : 0;
+    const speedNum = f.speed ? (parseFloat(planSpeed) || 0) : 0;
+    let durSec = f.duration ? (parseFloat(planDurationMin) || 0) * 60 : 0;
+    let subTypes = [];
+    let planDetail = null;
+    if (f.runType) {
+      subTypes = planRunType ? [planRunType] : [];
+    } else if (f.strength) {
+      subTypes = planSubTypes;
+      const parts = {};
+      let total = 0;
+      for (const area of planSubTypes) {
+        const m = Math.round(parseFloat(planPartDurations[area]) || 0);
+        if (m > 0) { parts[area] = m; total += m; }
+      }
+      if (Object.keys(parts).length) planDetail = { subTypeDurations: parts };
+      durSec = total * 60; // total drives duration-based completion
+    }
+    if (f.speed && speedNum > 0) planDetail = { ...(planDetail || {}), speed: speedNum };
+
+    // HIIT is valid with nothing but a time-of-day; every other type needs at
+    // least one target so the plan means something.
+    const hasTarget = distNum > 0 || ascNum > 0 || speedNum > 0 || durSec > 0 || subTypes.length > 0;
+    if (planType !== "HIIT" && !hasTarget) {
       alert(t("calendar.plan_empty_warning"));
       return;
     }
+    const payload = {
+      type: planType,
+      subTypes,
+      distance: distNum,
+      ascent: ascNum,
+      duration: Math.round(durSec),
+      planDetail,
+      startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
+    };
     try {
       if (editingId) {
         // Edit mode: patch the existing planned row (stays is_planned=true).
-        await updateLog(editingId, {
-          type: planType,
-          subTypes,
-          distance: distNum,
-          duration: Math.round(durSec),
-          startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
-        });
+        await updateLog(editingId, payload);
       } else {
         await addLog({
           date: dateKey,
-          type: planType,
-          subTypes,
-          distance: distNum,
-          duration: Math.round(durSec),
-          pace: 0, hr: 0, maxHR: 0,
-          ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
-          startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
+          ...payload,
+          pace: 0, hr: 0, maxHR: 0, cadence: 0, aerobicTE: 0, gap: 0,
           isPlanned: true,
           tags: [],
         }, { source: "calendar_plan" });
@@ -329,7 +410,7 @@ export function CalendarDayModal({
                         fontFamily: "var(--font-mono)", fontSize: 13,
                         color: "var(--ink-2)", fontVariantNumeric: "tabular-nums",
                       }}>
-                        {logHeadline(l)}
+                        {l.isPlanned ? planHeadline(l, t) : logHeadline(l)}
                       </div>
                     </div>
                     {/* Plan reconciliation — past plans show their outcome and a
@@ -344,13 +425,18 @@ export function CalendarDayModal({
                       const miniBtn = (txt, onClick) => (
                         <button onClick={onClick} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11 }}>{txt}</button>
                       );
+                      // missed + partial both get the resolve buttons (the
+                      // runner can confirm a partial counts as done, or mark it
+                      // skipped). done/skipped show an undo.
+                      const resolvable = outcome === "missed" || outcome === "partial";
                       return (
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
                           {outcome === "done" && badge("var(--moss)", `✓ ${t("calendar.plan_done")}`)}
+                          {outcome === "partial" && badge("#b07a3e", t("calendar.plan_partial"))}
                           {outcome === "skipped" && badge("var(--ink-3)", t("calendar.plan_skipped"))}
                           {outcome === "missed" && badge("#b07a3e", t("calendar.plan_missed"))}
-                          {outcome === "missed" && miniBtn(`✓ ${t("calendar.plan_mark_done")}`, () => setPlanStatus(l.id, "done"))}
-                          {outcome === "missed" && miniBtn(t("calendar.plan_mark_skip"), () => setPlanStatus(l.id, "skipped"))}
+                          {resolvable && miniBtn(`✓ ${t("calendar.plan_mark_done")}`, () => setPlanStatus(l.id, "done"))}
+                          {resolvable && miniBtn(t("calendar.plan_mark_skip"), () => setPlanStatus(l.id, "skipped"))}
                           {(l.planStatus === "done" || l.planStatus === "skipped") && miniBtn(t("calendar.plan_reset"), () => setPlanStatus(l.id, "pending"))}
                         </div>
                       );
@@ -465,6 +551,8 @@ export function CalendarDayModal({
                   </h2>
                   <button onClick={() => { setPanel(null); resetPlanForm(); }} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>
+                {/* Type + time-of-day are shown for every activity; the metric
+                    inputs below switch per type (see planFields). */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                   <div>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.type")}</div>
@@ -474,22 +562,6 @@ export function CalendarDayModal({
                       value={planType}
                       onChange={setPlanType}
                     />
-                  </div>
-                  {RUN_GROUP_TYPES.includes(planType) && (
-                    <div>
-                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.distance")} (km)</div>
-                      <input type="number" step="0.1" min="0" value={planDistance}
-                        onChange={e => setPlanDistance(e.target.value)}
-                        placeholder="e.g. 8"
-                        style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
-                    </div>
-                  )}
-                  <div>
-                    <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.duration")} ({t("form.minutes")})</div>
-                    <input type="number" step="1" min="0" value={planDurationMin}
-                      onChange={e => setPlanDurationMin(e.target.value)}
-                      placeholder="e.g. 45"
-                      style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
                   </div>
                   <div>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_time_of_day")}</div>
@@ -504,13 +576,62 @@ export function CalendarDayModal({
                       onChange={setPlanTimeOfDay}
                     />
                   </div>
+                  {planF.distance && (
+                    <div>
+                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.distance")} (km)</div>
+                      <input type="number" step="0.1" min="0" value={planDistance}
+                        onChange={e => setPlanDistance(e.target.value)}
+                        placeholder="e.g. 8"
+                        style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
+                    </div>
+                  )}
+                  {planF.ascent && (
+                    <div>
+                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_ascent")} (m)</div>
+                      <input type="number" step="10" min="0" value={planAscent}
+                        onChange={e => setPlanAscent(e.target.value)}
+                        placeholder="e.g. 600"
+                        style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
+                    </div>
+                  )}
+                  {planF.speed && (
+                    <div>
+                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_speed")} (km/h)</div>
+                      <input type="number" step="0.5" min="0" value={planSpeed}
+                        onChange={e => setPlanSpeed(e.target.value)}
+                        placeholder="e.g. 25"
+                        style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
+                    </div>
+                  )}
+                  {planF.duration && (
+                    <div>
+                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.duration")} ({t("form.minutes")})</div>
+                      <input type="number" step="1" min="0" value={planDurationMin}
+                        onChange={e => setPlanDurationMin(e.target.value)}
+                        placeholder="e.g. 45"
+                        style={{ ...s.input, padding: "8px 10px", fontSize: 14 }} />
+                    </div>
+                  )}
+                  {planF.runType && (
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 6 }}>{t("calendar.plan_run_type")}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {RUN_PACE_TYPES.map(rt => (
+                          <button key={rt} type="button"
+                            onClick={() => setPlanRunType(planRunType === rt ? "" : rt)}
+                            style={{ ...s.chip(planRunType === rt), minHeight: 0, padding: "6px 12px", fontSize: 13 }}>
+                            {t(`enum.subtype.${rt}`)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {/* Strength: which area(s) — so an imported "Strength" plan shows
-                    Upper / Lower / Core instead of a bare label. */}
-                {planIsStrength && (
+                {/* Strength: area(s) + per-area minutes (e.g. Upper 20 / Core 10). */}
+                {planF.strength && (
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 6 }}>{t("calendar.plan_strength_area")}</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: planSubTypes.length ? 10 : 0 }}>
                       {STRENGTH_SUBS.map(sub => (
                         <button key={sub} type="button" onClick={() => togglePlanSub(sub)}
                           style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "6px 12px", fontSize: 13 }}>
@@ -518,6 +639,16 @@ export function CalendarDayModal({
                         </button>
                       ))}
                     </div>
+                    {planSubTypes.map(area => (
+                      <div key={area} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <span style={{ ...s.muted, fontSize: 12, width: 90, flexShrink: 0 }}>{t(`enum.subtype.${area}`)}</span>
+                        <input type="number" step="5" min="0" value={planPartDurations[area] || ""}
+                          onChange={e => setPlanPartDurations(prev => ({ ...prev, [area]: e.target.value }))}
+                          placeholder="—"
+                          style={{ ...s.input, padding: "6px 10px", fontSize: 13, width: 90 }} />
+                        <span style={{ ...s.muted, fontSize: 12 }}>{t("calendar.plan_part_minutes")}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

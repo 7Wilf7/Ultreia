@@ -52,6 +52,17 @@ export function formatDuration(sec) {
   return `${s}s`;
 }
 
+// Duration for PLANNED sessions — minutes/hours only, never seconds. A plan is
+// a target ("30m", "1h 30m"), so the spurious "00s" on a round planned figure
+// just reads as noise. Used wherever a planned row's duration is shown.
+export function formatPlanDuration(sec) {
+  if (!sec) return "—";
+  const h = Math.floor(sec / 3600);
+  const m = Math.round((sec % 3600) / 60);
+  if (h > 0) return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  return `${m}m`;
+}
+
 // Compact duration for tight cells (mobile stat tiles). Drops seconds + minutes
 // once it spans an hour so a weekly total stays one line: "12h", "45m". Below
 // 1 minute we still surface seconds so the readout isn't an unhelpful "0m".

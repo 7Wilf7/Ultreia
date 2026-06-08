@@ -3,8 +3,9 @@
 // these touch React; they're pure data → string transforms.
 
 import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
-import { formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
+import { formatDuration, formatPlanDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
 import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
+import { evaluatePlanOutcome } from "./planMatch";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -295,10 +296,13 @@ export function buildWeeklyTrend(logs, now, weeks = 8) {
 
 // Plan adherence — reconcile PAST planned sessions (last 14 days) against what
 // was actually completed. Durable: reads structured plan rows + their status,
-// NOT the conversation, so it survives a chat clear. A plan counts as:
+// NOT the conversation, so it survives a chat clear. Each plan is matched to the
+// SAME-TYPE completed workouts on its date and the planned target compared to
+// what was done (see evaluatePlanOutcome). A plan counts as:
 //   • skipped  — user explicitly marked it skipped (intentional rest; not a miss)
-//   • done     — marked done, OR a completed workout exists on that date
-//   • missed   — past, pending, no completed workout that day
+//   • done     — marked done, OR a same-type session met ≥80% of the target
+//   • partial  — a same-type session happened but fell short of the target
+//   • missed   — past, no same-type completed workout that day
 // Returns null when the runner doesn't plan (nothing to reconcile).
 function buildPlanAdherence(logs, now) {
   const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
@@ -312,18 +316,26 @@ function buildPlanAdherence(logs, now) {
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   if (!planned.length) return null;
 
-  const completedDates = new Set(logs.filter(l => !l.isPlanned && l.date).map(l => l.date));
-  let done = 0, missed = 0, skipped = 0;
+  let done = 0, partial = 0, missed = 0, skipped = 0;
   const lines = planned.map(p => {
-    let outcome;
-    if (p.planStatus === "skipped") { outcome = "skipped"; skipped++; }
-    else if (p.planStatus === "done" || completedDates.has(p.date)) { outcome = "done"; done++; }
-    else { outcome = "missed"; missed++; }
-    const desc = `${p.type}${p.subTypes?.length ? "(" + p.subTypes.join(",") + ")" : ""}${p.distance > 0 ? " " + p.distance + "km" : ""}`;
+    const dayLogs = logs.filter(l => l.date === p.date);
+    const { outcome } = evaluatePlanOutcome(p, dayLogs, { isPast: true });
+    if (outcome === "skipped") skipped++;
+    else if (outcome === "done") done++;
+    else if (outcome === "partial") partial++;
+    else missed++;
+    const metric = p.distance > 0 ? ` ${p.distance}km`
+      : p.ascent > 0 ? ` +${p.ascent}m`
+      : p.duration > 0 ? ` ${formatPlanDuration(p.duration)}`
+      : "";
+    const desc = `${p.type}${p.subTypes?.length ? "(" + p.subTypes.join(",") + ")" : ""}${metric}`;
     return `${p.date} planned ${desc} → ${outcome}`;
   });
-  const denom = done + missed;
-  const ratio = denom > 0 ? `completed ${done}/${denom}${skipped ? ` (+${skipped} skipped)` : ""}` : `${skipped} planned, all intentionally skipped`;
+  const denom = done + partial + missed;
+  const extras = [partial ? `${partial} partial` : "", skipped ? `${skipped} skipped` : ""].filter(Boolean).join(", ");
+  const ratio = denom > 0
+    ? `completed ${done}/${denom}${extras ? ` (+${extras})` : ""}`
+    : `${skipped} planned, all intentionally skipped`;
   return { body: `${ratio}\n${lines.join("\n")}`, missed };
 }
 
@@ -466,7 +478,15 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
     .map(l => {
       const planParts = [`${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`];
       if (l.distance > 0) planParts.push(`${l.distance}km`);
-      if (l.duration > 0) planParts.push(formatDuration(l.duration));
+      if (l.ascent > 0) planParts.push(`+${l.ascent}m`);
+      if (l.planDetail?.speed > 0) planParts.push(`${l.planDetail.speed}km/h`);
+      const partDur = l.planDetail?.subTypeDurations;
+      if (partDur && typeof partDur === "object") {
+        const segs = Object.entries(partDur).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}min`);
+        if (segs.length) planParts.push(segs.join("/"));
+      } else if (l.duration > 0) {
+        planParts.push(formatPlanDuration(l.duration));
+      }
       const fcStr = forecastByDate ? formatDailyForecast(forecastByDate.get(l.date)) : "";
       if (fcStr) planParts.push(`forecast: ${fcStr}`);
       return planParts.join(" ");

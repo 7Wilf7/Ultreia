@@ -625,7 +625,14 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
   const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
-  const visibleLogs = cellPast ? logs.filter(l => !l.isPlanned) : logs;
+  // Fold plans into a "+N plan" hint once they're history: any past day, OR
+  // today once a real workout is logged (a reconciled plan shouldn't clutter
+  // the cell). Future days keep their plan bars so upcoming sessions stay
+  // visible. This is also why today (with 2 done + 2 plans) reads "+2 plan"
+  // instead of capping the bars at 3 and showing a bare "+1".
+  const hasCompleted = logs.some(l => !l.isPlanned);
+  const foldPlans = cellPast || (isToday && hasCompleted);
+  const visibleLogs = foldPlans ? logs.filter(l => !l.isPlanned) : logs;
   const hiddenPlanCount = logs.length - visibleLogs.length;
   const hasContent = visibleLogs.length > 0;
 

@@ -97,15 +97,21 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
     if (!st.startAtTop) return;
     const y = e.touches[0].clientY;
     const atTop = (mainRef.current?.scrollTop || 0) <= 0;
-    // Left the top (scrolled into history) → not a pull; drop any engaged pull.
+    // Left the top (scrolled into history) → this touch is a list scroll, not a
+    // pull. Mark it disqualified so that coming BACK to the top within the same
+    // continuous gesture doesn't re-arm the refresh — the user has to lift and
+    // start a fresh pull from the top. (Previously we re-armed here, which made
+    // an "scroll up to read, then scroll back down past the top" gesture trip
+    // the sync indicator and feel janky.)
     if (!atTop) {
+      st.leftTop = true;
       if (pullState.current) pullState.current = null;
       if (pullRef.current) setPullPx(0);
       return;
     }
-    // At the top: arm on the first frame here (so a continuous up-then-down
-    // gesture engages the moment the list reaches the latest record), then
-    // track the downward drag from that baseline.
+    if (st.leftTop) return;
+    // Touch began at the top and has stayed there — arm the pull and track the
+    // downward drag from this baseline.
     if (!pullState.current) pullState.current = { startY: y };
     const dy = y - pullState.current.startY;
     if (dy > 0) setPullPx(Math.min(dy * PULL_RESIST, PULL_MAX));

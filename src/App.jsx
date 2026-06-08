@@ -1630,6 +1630,7 @@ Rules:
           setMemoryProposal={setMemoryProposal}
           proposeMemoryUpdate={proposeMemoryUpdate}
           externalDraft={coachDraft}
+          clearExternalDraft={() => setCoachDraft(null)}
         />
       )}
     </>

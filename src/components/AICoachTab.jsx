@@ -228,7 +228,7 @@ export function AICoachTab({
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
   memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
-  externalDraft,
+  externalDraft, clearExternalDraft,
 }) {
   // Provider label for the status pill. The memory-update call (which used to
   // need a resolved endpoint + key here) now lives in AppShell.
@@ -512,6 +512,10 @@ export function AICoachTab({
       markHintsSeen();
     }
     setChatInput("");
+    // Consume the injected draft for good — without this, leaving the tab
+    // unmounts AICoachTab (resetting the consumedDraftId ref) and coming back
+    // re-injects the same prefilled review text into the input box.
+    clearExternalDraft?.();
     await sendChat(userMsg);
   }
 

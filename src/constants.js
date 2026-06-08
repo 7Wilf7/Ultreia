@@ -135,7 +135,7 @@ export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "Cycli
 // stretching / sick, row 2: travel). "poor_sleep" was retired once the morning
 // readiness check-in (sleep/legs/energy) covered sleep; old rows keep the tag
 // in the DB harmlessly, it just no longer renders as a toggle.
-export const DAILY_TAGS = ["massage", "stretching", "sick", "travel"];
+export const DAILY_TAGS = ["massage", "stretching", "sick"];
 
 // Emoji glyph per day tag. Mobile calendar cells show just these icons (no
 // room for text); desktop chips + the day modal show icon + label.
@@ -143,7 +143,6 @@ export const DAILY_TAG_ICONS = {
   massage:    "💆",
   stretching: "🤸",
   sick:       "🤒",
-  travel:     "✈️",
 };
 
 // Running sub-types — split into two groups:

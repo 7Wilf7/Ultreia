@@ -430,6 +430,7 @@ const dict = {
   "calendar.legend_hint":      { en: "solid = done · dashed = planned · click any day to edit", zh: "实线 = 已完成 · 虚线 = 计划 · 点击日期编辑" },
   "calendar.rest":             { en: "rest",                 zh: "休息" },
   "calendar.add_plan_hint":    { en: "+ plan",               zh: "+ 计划" },
+  "calendar.plan_hidden_past": { en: "{n} past plan in details", zh: "{n} 条计划在详情里" },
   "calendar.day_past":         { en: "Day",                  zh: "当日" },
   "calendar.day_future":       { en: "Plan",                 zh: "计划" },
   "calendar.day_logs_title":   { en: "Activities & plans",   zh: "活动与计划" },

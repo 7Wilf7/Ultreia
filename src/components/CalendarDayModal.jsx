@@ -128,17 +128,11 @@ export function CalendarDayModal({
   // each click calls setDailyTags() which upserts immediately. UI reflects the
   // latest state via the `note` prop the parent reloads after every mutation.
   const currentTags = note ? (note.tags || []) : [];
-  // Travel destination draft (only relevant when the "travel" tag is on).
-  const [travelDraft, setTravelDraft] = useState(note?.travelDest || "");
   function toggleDayTag(tag) {
     const next = currentTags.includes(tag)
       ? currentTags.filter(x => x !== tag)
       : [...currentTags, tag];
-    setDailyTags(dateKey, next, travelDraft).catch(() => { /* alerted by wrapper */ });
-  }
-  function saveTravelDest() {
-    if ((note?.travelDest || "") === travelDraft.trim()) return; // no change
-    setDailyTags(dateKey, currentTags, travelDraft).catch(() => {});
+    setDailyTags(dateKey, next).catch(() => { /* alerted by wrapper */ });
   }
 
   function togglePlanSub(sub) {
@@ -422,17 +416,6 @@ export function CalendarDayModal({
             </div>
             {/* Travel destination — where are you going? Fed to the coach + push
                 so it can suggest local running and reference the trip. */}
-            {currentTags.includes("travel") && (
-              <div style={{ marginTop: 8 }}>
-                <input
-                  value={travelDraft}
-                  placeholder={t("calendar.travel_dest_placeholder")}
-                  onChange={e => setTravelDraft(e.target.value)}
-                  onBlur={saveTravelDest}
-                  style={{ ...s.input, width: "100%" }}
-                />
-              </div>
-            )}
           </div>
         )}
 

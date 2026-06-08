@@ -435,12 +435,13 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
       })
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
       .map(n => {
-        const tagStr = n.tags.map(tg => String(tg).replace(/_/g, " ")).join(", ");
+        const tagStr = n.tags.filter(tg => tg !== "travel").map(tg => String(tg).replace(/_/g, " ")).join(", ");
         // Travel destination → so the coach can suggest local running and
         // factor the trip in (different climate, jet lag, terrain).
-        const dest = (n.tags.includes("travel") && n.travelDest) ? ` (travel to ${n.travelDest})` : "";
-        return `${n.date}: ${tagStr}${dest}`;
+        const dest = "";
+        return tagStr ? `${n.date}: ${tagStr}${dest}` : "";
       })
+      .filter(Boolean)
       .join("\n");
   })();
 

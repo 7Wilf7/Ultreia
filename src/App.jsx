@@ -1263,7 +1263,11 @@ Output a JSON array. Each item:
 
 Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
-- For Strength sessions, set subTypes to the area(s) the coach names — "Upper Body" / "Lower Body" / "Core" (one or more). If the coach just says "strength" with no area, leave subTypes empty.
+- Every extracted workout may include a heart-rate zone in notes as "Z1", "Z2", "Z3", "Z4", or "Z5" when the coach names one.
+- Road Run: extract EITHER distance OR duration. If both are present, prefer distance unless the reply clearly frames it as a time-based run.
+- Trail Run: extract distance; put elevation gain in notes as "+Xm" if present. Do NOT extract duration for Trail Run.
+- For Strength sessions, set subTypes to the area(s) the coach names: "Upper Body" / "Lower Body" / "Core" (one or more). If durations are split by area, put the split in notes, for example "Upper Body 20min; Core 10min".
+- HIIT: keep type "HIIT" and omit distance/duration unless the coach explicitly gives a fixed duration.
 - Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
 - REST DAYS ARE NORMAL: do NOT invent a workout for every day. Only output entries for days the coach actually assigns training. A day the coach leaves blank — or explicitly calls a rest day with no activity — gets NO entry at all (just omit it). Only emit a "Recovery" entry if the coach explicitly prescribes an active-recovery session (e.g. an easy shakeout, mobility).
 - If you cannot find any concrete plan, output [].

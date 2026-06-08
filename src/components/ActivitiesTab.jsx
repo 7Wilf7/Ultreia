@@ -439,6 +439,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     }
   }
 
+  function cancelParsedImport() {
+    setParsedRows(null);
+    setUploadMsg("");
+    setParseProgress(null);
+    setDuplicateWarning(null);
+  }
+
   // Icon-only toolbar buttons (labels dropped — the watch-file Upload flow is
   // now the primary path, so the bar is glyphs + a black-filled Upload first).
   const iconBtnStyle = {
@@ -626,7 +633,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t("activities.review", { sel: parsedRows.filter(r => r._selected).length, total: parsedRows.length })}</span>
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={() => setParsedRows(null)} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("common.cancel")}</button>
+              <button onClick={cancelParsedImport} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("common.cancel")}</button>
               <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>{t("activities.import")}</button>
             </div>
           </div>
@@ -652,10 +659,10 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   <div style={{ fontSize: 11, color: "#888", flexShrink: 0 }}>{formatDateShort(r.date)}</div>
                   <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
                   {r.type === "Road Run" && (
-                    <div style={{ width: 118, marginLeft: "auto" }}>
+                    <div style={{ width: 132, marginLeft: "auto" }}>
                       <Dropdown
                         ariaLabel={t("form.run_type")}
-                        fontSize={12}
+                        triggerStyle={{ fontSize: 11.5, padding: "6px 8px", minHeight: 0 }}
                         options={RUN_SUBTYPES.map(st => ({ value: st, label: t(`enum.subtype.${st}`) }))}
                         value={r.subTypes[0] || ""}
                         onChange={(v) => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, subTypes: [v] } : x))}

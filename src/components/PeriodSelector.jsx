@@ -92,8 +92,11 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
         label={period.type === "week" ? getPeriodLabel(period, t) : t("period.this_week")}
         onClick={(e) => {
           e.stopPropagation();
-          if (period.type === "week" && period.offset !== 0) setPeriod({ type: "week", offset: 0 });
-          else if (period.type !== "week") setPeriod({ type: "week", offset: 0 });
+          if (period.type !== "week" || period.offset !== 0) {
+            setPeriod({ type: "week", offset: 0 });
+            setPeriodDropdown(null);
+            return;
+          }
           setPeriodDropdown(periodDropdown === "week" ? null : "week");
         }}
         hasDropdown
@@ -113,7 +116,11 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
         label={period.type === "month" ? getPeriodLabel(period, t) : t("period.this_month")}
         onClick={(e) => {
           e.stopPropagation();
-          if (period.type !== "month" || period.year != null) setPeriod({ type: "month" });
+          if (period.type !== "month" || period.year != null) {
+            setPeriod({ type: "month" });
+            setPeriodDropdown(null);
+            return;
+          }
           setPeriodDropdown(periodDropdown === "month" ? null : "month");
         }}
         hasDropdown
@@ -138,7 +145,11 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
         label={period.type === "year" ? getPeriodLabel(period, t) : t("period.this_year")}
         onClick={(e) => {
           e.stopPropagation();
-          if (period.type !== "year" || period.year != null) setPeriod({ type: "year" });
+          if (period.type !== "year" || period.year != null) {
+            setPeriod({ type: "year" });
+            setPeriodDropdown(null);
+            return;
+          }
           setPeriodDropdown(periodDropdown === "year" ? null : "year");
         }}
         hasDropdown

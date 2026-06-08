@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { s } from "../styles";
 
 // Reusable in-app dropdown — replaces native <select> for a consistent look
@@ -27,23 +28,55 @@ export function Dropdown({
                   // inline dropdown near the screen edge doesn't overflow off-screen
 }) {
   const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState(null);
   const wrapRef = useRef(null);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
+    function placeMenu() {
+      const el = wrapRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const minWidth = Math.max(120, rect.width);
+      const menuWidth = variant === "field" ? minWidth : Math.max(minWidth, 160);
+      const left = align === "right"
+        ? Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth))
+        : Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.left));
+      const availableBelow = window.innerHeight - rect.bottom - 10;
+      const availableAbove = rect.top - 10;
+      const opensUp = availableBelow < 160 && availableAbove > availableBelow;
+      const maxHeight = Math.max(120, Math.min(320, opensUp ? availableAbove : availableBelow));
+      setMenuStyle({
+        position: "fixed",
+        left,
+        top: opensUp ? "auto" : rect.bottom + 2,
+        bottom: opensUp ? window.innerHeight - rect.top + 2 : "auto",
+        minWidth,
+        width: variant === "field" ? minWidth : "max-content",
+        maxWidth: `calc(100vw - 16px)`,
+        maxHeight,
+      });
+    }
+    placeMenu();
     function onDocClick(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+      if (wrapRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
+      setOpen(false);
     }
     function onKey(e) { if (e.key === "Escape") setOpen(false); }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("touchstart", onDocClick);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", placeMenu);
+    window.addEventListener("scroll", placeMenu, true);
     return () => {
       document.removeEventListener("mousedown", onDocClick);
       document.removeEventListener("touchstart", onDocClick);
       document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", placeMenu);
+      window.removeEventListener("scroll", placeMenu, true);
     };
-  }, [open]);
+  }, [open, align, variant]);
 
   const selected = multi ? (Array.isArray(value) ? value : []) : value;
   const labelOf = (v) => options.find(o => o.value === v)?.label ?? v;
@@ -92,22 +125,15 @@ export function Dropdown({
         }}>{triggerText || placeholder}</span>
         <span style={{ fontSize: 10, color: "var(--ink-3)", flexShrink: 0 }}>▼</span>
       </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "100%",
-          left: align === "right" ? "auto" : 0,
-          right: align === "right" ? 0 : "auto",
-          marginTop: 2,
-          // Match the trigger width (so the menu lines up under the control box),
-          // growing only if an option is wider than the trigger.
-          minWidth: "100%",
-          width: variant === "field" ? "100%" : "max-content",
-          maxHeight: 280, overflowY: "auto",
+      {open && menuStyle && createPortal((
+        <div ref={menuRef} style={{
+          ...menuStyle,
+          overflowY: "auto",
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)", borderRadius: 4,
           padding: "4px 0",
           boxShadow: "0 8px 24px rgba(20,20,19,0.12)",
-          zIndex: 60, boxSizing: "border-box",
+          zIndex: 10040, boxSizing: "border-box",
         }}>
           {options.map(o => {
             const isSel = multi ? selected.includes(o.value) : value === o.value;
@@ -130,7 +156,7 @@ export function Dropdown({
             );
           })}
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 }

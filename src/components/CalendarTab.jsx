@@ -618,7 +618,10 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 // ─────────────────────────────────────────────────────────────────────────
 function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, t, isMobile }) {
   const dayTags = note ? (note.tags || []) : [];
-  const hasContent = logs.length > 0;
+  const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
+  const visibleLogs = cellPast ? logs.filter(l => !l.isPlanned) : logs;
+  const hiddenPlanCount = logs.length - visibleLogs.length;
+  const hasContent = visibleLogs.length > 0;
 
   const cellBg = isToday
     ? "var(--moss-bg)"
@@ -681,28 +684,26 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
               // Past PLANNED bars recede (auto-archive) so an old, unfulfilled
               // plan stops cluttering the grid — the user no longer needs to
               // delete it. Completed bars and future plans render at full strength.
-              const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
-              return logs.slice(0, 3).map(l => {
+              return visibleLogs.slice(0, 3).map(l => {
                 const c = TYPE_COLOR[l.type] || "#57564f";
-                const fade = l.isPlanned && cellPast;
                 return (
                   <span key={l.id} style={{
                     width: "76%", maxWidth: 26, height: 4,
                     borderRadius: 1,
                     background: l.isPlanned ? "transparent" : c,
                     border: l.isPlanned ? `1px dashed ${c}` : "none",
-                    opacity: fade ? 0.3 : 1,
+                    opacity: 1,
                     display: "inline-block",
                     flexShrink: 0,
                   }} title={t(`enum.activity.${l.type}`)} />
                 );
               });
             })()}
-            {logs.length > 3 && (
+            {visibleLogs.length > 3 && (
               <span style={{
                 fontSize: 8, color: "var(--ink-3)",
                 fontFamily: "var(--font-mono)", lineHeight: 1,
-              }}>+{logs.length - 3}</span>
+              }}>+{visibleLogs.length - 3}</span>
             )}
           </div>
         )}
@@ -766,7 +767,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
 
       {/* Workouts */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {logs.map(l => <LogPill key={l.id} log={l} t={t} />)}
+        {visibleLogs.map(l => <LogPill key={l.id} log={l} t={t} />)}
       </div>
 
       {/* Rest placeholder — past/today + no activity at all */}
@@ -783,6 +784,13 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
           color: "var(--ink-3)", marginTop: 4, letterSpacing: "0.04em",
           opacity: 0.55,
         }}>{t("calendar.add_plan_hint")}</div>
+      )}
+
+      {hiddenPlanCount > 0 && inMonth && (
+        <div style={{
+          fontFamily: "var(--font-mono)", fontSize: 11,
+          color: "var(--ink-3)", marginTop: 4,
+        }}>{t("calendar.plan_hidden_past", { n: hiddenPlanCount })}</div>
       )}
 
       {/* Day-level tags (massage). Pinned to the bottom-right corner so

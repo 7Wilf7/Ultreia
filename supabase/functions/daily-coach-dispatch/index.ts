@@ -106,7 +106,6 @@ function fmtDuration(sec: number): string {
 function buildPrompt(opts: {
   lang: string; name: string; today: string;
   workouts: any[]; targetRace: any | null; memory: string;
-  travel?: { date: string; dest: string } | null;
   recentChat?: { role: string; content: string }[];
 }): { system: string; user: string } {
   const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
@@ -131,11 +130,7 @@ function buildPrompt(opts: {
     `Other hard rules: at most 2 sentences; no greeting, no sign-off, no markdown, no emoji; ` +
     `be specific and actionable using the data (e.g. if yesterday was hard, suggest easy today; mind the race countdown). ` +
     `If [Recent coach chat] is present, treat it as the FRESHEST context: reference what the runner just told you (a session they're doing today, how they feel, a change of plan) and stay consistent with it — do NOT just repeat the same race reminder every day; vary the focus. ` +
-    `If the runner is travelling, you may wish them a good trip and suggest a local running spot or local food to try. ` +
     `If there's no recent training, give a brief encouraging nudge. Output ONLY the message text.`;
-  const travelLine = opts.travel
-    ? `[Travel] ${opts.travel.date === opts.today ? "today" : "soon"} going to ${opts.travel.dest}\n`
-    : "";
   // Recent in-app coach chat — most recent last. Lets the push pick up what the
   // runner just told the coach (e.g. "bootcamp tonight") instead of only the
   // structured data. Each turn truncated so a long reply can't blow up the prompt.
@@ -151,7 +146,6 @@ function buildPrompt(opts: {
     `[Today] ${opts.today}\n` +
     `[Recent training (newest first)]\n${lines.length ? lines.join("\n") : "none"}\n` +
     `[Target race] ${race}\n` +
-    travelLine +
     chatBlock +
     (opts.memory ? `[Notes about this runner] ${opts.memory.slice(0, 600)}\n` : "");
   return { system, user };
@@ -252,21 +246,6 @@ Deno.serve(async (req) => {
       const targetRace = (races || []).find((r) => r.date) || (races || [])[0] || null;
 
       // Travel today/tomorrow → let the push reference the trip (local running,
-      // local food). tomorrow = the user's local date + 1.
-      const tomorrow = new Date(`${date}T00:00:00Z`);
-      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-      const { data: travelNotes } = await supabase
-        .from("daily_notes")
-        .select("date, travel_dest")
-        .eq("user_id", u.user_id)
-        .in("date", [date, tomorrowStr])
-        .contains("tags", ["travel"])
-        .not("travel_dest", "is", null)
-        .order("date", { ascending: true });
-      const travelHit = (travelNotes || []).find((n) => n.travel_dest);
-      const travel = travelHit ? { date: travelHit.date, dest: travelHit.travel_dest } : null;
-
       // Recent in-app coach chat (last ~8 turns, chronological) so the push can
       // reference what the runner just told the coach.
       const { data: chatRows } = await supabase
@@ -279,7 +258,7 @@ Deno.serve(async (req) => {
 
       const { system, user } = buildPrompt({
         lang: u.lang || "en", name: "", today: date,
-        workouts: workouts || [], targetRace, memory: u.coach_memory || "", travel,
+        workouts: workouts || [], targetRace, memory: u.coach_memory || "",
         recentChat,
       });
 

@@ -63,6 +63,10 @@ function daysUntilRace(dateStr, now) {
   return Math.round((race - today) / 86400000);
 }
 
+function shouldSkipRaceSwipe(target) {
+  return !!target?.closest?.("button,input,textarea,select,a,[role='button'],[data-dropdown-menu]");
+}
+
 export function RacesTab({
   races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
   // Lifted to AppShell so the chosen top/sub tab survives switching away to
@@ -73,6 +77,34 @@ export function RacesTab({
   const { lang } = useLanguage();
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
+  const topSwipe = useRef(null);
+
+  function onTopSwipeStart(e) {
+    if (!isMobile || e.touches.length !== 1 || shouldSkipRaceSwipe(e.target)) {
+      topSwipe.current = null;
+      return;
+    }
+    const p = e.touches[0];
+    topSwipe.current = { x: p.clientX, y: p.clientY };
+  }
+
+  function onTopSwipeEnd(e) {
+    if (!isMobile || !topSwipe.current) return;
+    const st = topSwipe.current;
+    topSwipe.current = null;
+    const p = e.changedTouches?.[0];
+    if (!p) return;
+    const dx = p.clientX - st.x;
+    const dy = p.clientY - st.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    if (dx < 0 && mobileTopTab === "races") {
+      e.stopPropagation();
+      setMobileTopTab("pr");
+    } else if (dx > 0 && mobileTopTab === "pr") {
+      e.stopPropagation();
+      setMobileTopTab("races");
+    }
+  }
 
   // Race-day weather for upcoming TARGET races that have a location (outdoor
   // only — Hyrox is indoor, skipped). Within ~2 weeks → real forecast; further
@@ -568,7 +600,7 @@ export function RacesTab({
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
     return (
-      <div>
+      <div onTouchStart={onTopSwipeStart} onTouchEnd={onTopSwipeEnd}>
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
             Side margins bleed past main's 14px gutters. Negative `top`
             (matching main's padding) lifts the sticky's pinned position up

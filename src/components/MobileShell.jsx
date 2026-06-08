@@ -81,7 +81,12 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
   function onTouchStart(e) {
     if (e.touches.length !== 1) { touch.current = null; pullState.current = null; setPullPx(0); return; }
     const p = e.touches[0];
-    touch.current = { x: p.clientX, y: p.clientY, skip: inHorizontalScroller(e.target) };
+    touch.current = {
+      x: p.clientX,
+      y: p.clientY,
+      skip: inHorizontalScroller(e.target),
+      startAtTop: (mainRef.current?.scrollTop || 0) <= 0,
+    };
     pullState.current = null;
     if (pullRef.current) setPullPx(0);
   }
@@ -89,6 +94,7 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
     if (!onRefresh || refreshing || e.touches.length !== 1) return;
     const st = touch.current;
     if (!st || st.skip) return;
+    if (!st.startAtTop) return;
     const y = e.touches[0].clientY;
     const atTop = (mainRef.current?.scrollTop || 0) <= 0;
     // Left the top (scrolled into history) → not a pull; drop any engaged pull.

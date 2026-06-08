@@ -71,7 +71,7 @@ export function SettingsMobileTab({
         border: "1px solid var(--rule)",
         background: "var(--bg-elevated)",
         borderRadius: 10,
-        marginBottom: headerOpen ? 0 : 10,
+        marginBottom: 0,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
         cursor: "pointer",
         color: "var(--ink-1)",
@@ -119,14 +119,19 @@ export function SettingsMobileTab({
         </div>
       </button>
       {/* ── 账号 ────────────────────────────────────────────────────────── */}
-      {headerOpen && (
-        <div style={{
+      <div aria-hidden={!headerOpen} style={{
+          maxHeight: headerOpen ? 560 : 0,
+          opacity: headerOpen ? 1 : 0,
+          transform: headerOpen ? "translateY(0)" : "translateY(-6px)",
+          overflow: "hidden",
+          pointerEvents: headerOpen ? "auto" : "none",
+          transition: "max-height 220ms cubic-bezier(0.2,0.7,0.3,1), opacity 160ms ease, transform 180ms ease",
           paddingLeft: 14,
           background: "var(--bg)",
           borderLeft: "1px solid var(--rule-soft)",
           borderRight: "1px solid var(--rule-soft)",
           borderBottom: "1px solid var(--rule-soft)",
-          marginBottom: 10,
+          marginBottom: headerOpen ? 10 : 0,
         }}>
           <SubCell
             primary={t("settings.profile")}
@@ -178,8 +183,7 @@ export function SettingsMobileTab({
             danger
             onClick={onDeleteAccount}
           />
-        </div>
-      )}
+      </div>
 
       {/* ── 其他 ──────────────────────────────────────────────────────────── */}
       <Cell

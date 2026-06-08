@@ -11,17 +11,25 @@ import { Dropdown } from "./Dropdown";
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
 // checkbox. Both strip off when we hand off to bulkAddLogs.
 function buildDraft(p, idx) {
+  const type = ACTIVITY_TYPES.includes(p.type) ? p.type : "Road Run";
+  const usesDuration = type !== "Trail Run" && type !== "HIIT";
   return {
     _id: `proposal-${idx}`,
     _selected: true,
     date: p.date || "",
-    type: ACTIVITY_TYPES.includes(p.type) ? p.type : "Road Run",
+    type,
     subTypes: Array.isArray(p.subTypes) ? p.subTypes : [],
     distance: p.distance != null ? String(p.distance) : "",
-    durationMin: p.duration != null ? String(p.duration) : "",
+    durationMin: usesDuration && p.duration != null ? String(p.duration) : "",
     timeOfDay: (p.timeOfDay === "am" || p.timeOfDay === "pm") ? p.timeOfDay : "",
     notes: p.notes || "",
   };
+}
+
+function parseAscentMeters(notes) {
+  const m = String(notes || "").match(/\+?\s*(\d+(?:\.\d+)?)\s*m\b/i);
+  const n = m ? Number(m[1]) : 0;
+  return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
 export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
@@ -55,7 +63,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
       subTypes: it.subTypes || [],
       distance: parseFloat(it.distance) || 0,
       duration: Math.round((parseFloat(it.durationMin) || 0) * 60),
-      pace: 0, hr: 0, maxHR: 0, ascent: 0, cadence: 0, aerobicTE: 0, gap: 0,
+      pace: 0, hr: 0, maxHR: 0, ascent: parseAscentMeters(it.notes), cadence: 0, aerobicTE: 0, gap: 0,
       startedAt: timeOfDayToStartedAt(it.date, it.timeOfDay),
       isPlanned: true,
       tags: [],
@@ -120,6 +128,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
             {items.map(it => {
               const color = TYPE_COLOR[it.type] || "var(--ink-2)";
               const showDistance = RUN_GROUP_TYPES.includes(it.type);
+              const showDuration = it.type !== "Trail Run" && it.type !== "HIIT";
               return (
                 <div key={it._id} style={{
                   border: "1px solid var(--rule)",
@@ -137,12 +146,13 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                       {t(`enum.activity.${it.type}`)}
                     </div>
                     <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)",
-                      textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      textTransform: "uppercase", letterSpacing: "0.06em", display: isMobile ? "none" : "block" }}>
                       {t("calendar.planned_badge")}
                     </div>
                     {it.notes && (
                       <div style={{ fontSize: 12, color: "var(--ink-2)", fontStyle: "italic",
-                        flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        display: isMobile ? "none" : "block" }}>
                         {it.notes}
                       </div>
                     )}
@@ -152,11 +162,27 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                       {t("common.delete")}
                     </button>
                   </div>
+                  {it.notes && isMobile && (
+                    <div style={{
+                      marginBottom: 8,
+                      fontSize: 12,
+                      lineHeight: 1.35,
+                      color: "var(--ink-2)",
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                    }}>
+                      {it.notes}
+                    </div>
+                  )}
 
                   {/* Editable fields */}
                   <div style={{
                     display: "grid",
-                    gridTemplateColumns: showDistance ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr",
+                    gridTemplateColumns: isMobile
+                      ? "repeat(2, minmax(0, 1fr))"
+                      : (showDistance ? "1fr 1fr 1fr 1fr" : "1fr 1fr 1fr"),
                     gap: 8,
                   }}>
                     <div>
@@ -183,7 +209,8 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                           style={{ ...s.input, padding: "5px 8px", fontSize: 12 }} />
                       </div>
                     )}
-                    <div>
+                    {showDuration && (
+                      <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>
                         {t("form.duration")} ({t("form.minutes")})
                       </div>
@@ -191,7 +218,8 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                         onChange={e => patch(it._id, { durationMin: e.target.value })}
                         placeholder="—"
                         style={{ ...s.input, padding: "5px 8px", fontSize: 12 }} />
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Second row: time of day + (strength) area chips, so an

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -150,6 +150,10 @@ function StatTile({ label, val, unit, isMobile }) {
   );
 }
 
+function shouldSkipSectionSwipe(target) {
+  return !!target?.closest?.("button,input,textarea,select,a,[role='button'],[data-dropdown-menu]");
+}
+
 export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter,
@@ -160,6 +164,34 @@ export function TrainingTab({
 }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const sectionTouch = useRef(null);
+
+  function onSectionTouchStart(e) {
+    if (!isMobile || e.touches.length !== 1 || shouldSkipSectionSwipe(e.target)) {
+      sectionTouch.current = null;
+      return;
+    }
+    const p = e.touches[0];
+    sectionTouch.current = { x: p.clientX, y: p.clientY };
+  }
+
+  function onSectionTouchEnd(e) {
+    if (!isMobile || !sectionTouch.current) return;
+    const st = sectionTouch.current;
+    sectionTouch.current = null;
+    const p = e.changedTouches?.[0];
+    if (!p) return;
+    const dx = p.clientX - st.x;
+    const dy = p.clientY - st.y;
+    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    if (dx < 0 && view === "activities") {
+      e.stopPropagation();
+      setView("charts");
+    } else if (dx > 0 && view === "charts") {
+      e.stopPropagation();
+      setView("activities");
+    }
+  }
 
   // Sticky stacking for the Activities view: nav rows (existing sticky) → stats
   // row → toolbar row all stay pinned at the top while only the list scrolls.
@@ -318,7 +350,7 @@ export function TrainingTab({
   );
 
   return (
-    <div>
+    <div onTouchStart={onSectionTouchStart} onTouchEnd={onSectionTouchEnd}>
       {view !== "activities" && (
       <div style={stickyHeaderStyle}>
         {isMobile ? (

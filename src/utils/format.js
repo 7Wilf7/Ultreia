@@ -142,8 +142,8 @@ export function inferRaceCategory(race) {
 // date. Display derives the AM/PM badge back from that hour.
 export function timeOfDayToStartedAt(dateKey, tod) {
   if (!dateKey) return null;
-  if (tod === "am") return `${dateKey}T08:00:00`;
-  if (tod === "pm") return `${dateKey}T18:00:00`;
+  if (tod === "am") return `${dateKey}T08:00:00+08:00`;
+  if (tod === "pm") return `${dateKey}T18:00:00+08:00`;
   return null;
 }
 // Returns "am" | "pm" | "" from a workout's startedAt (local hour). "" when no

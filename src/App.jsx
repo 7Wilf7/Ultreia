@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
+import { formatDuration, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
@@ -29,6 +30,7 @@ import { DeleteAccountModal } from "./components/DeleteAccountModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
 import { OnboardingTour, TOUR_FLAG } from "./components/OnboardingTour";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
+import { ReadinessPromptModal } from "./components/ReadinessPromptModal";
 import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
 import { UserBadge } from "./components/Auth/UserBadge";
@@ -47,6 +49,50 @@ import { initPushNotifications } from "./lib/push";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
+
+function localDateKey(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function readinessComplete(readiness) {
+  return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
+}
+
+function describeWorkoutForCoach(w, idx) {
+  const subTypes = (w.subTypes || []).filter(Boolean).join(", ");
+  const metrics = [
+    w.distance ? `${w.distance} km` : null,
+    w.duration ? formatDuration(w.duration) : null,
+    w.pace ? `${formatPaceFromSec(w.pace)} /km` : null,
+    w.ascent ? `+${w.ascent} m` : null,
+    w.hr ? `avg HR ${w.hr}` : null,
+    w.maxHR ? `max HR ${w.maxHR}` : null,
+    w.rpe ? `RPE ${w.rpe}` : null,
+    w.note ? `note: ${w.note}` : null,
+  ].filter(Boolean).join(" · ");
+  return `${idx + 1}. ${w.date || "No date"} · ${w.type || "Activity"}${subTypes ? ` (${subTypes})` : ""}${metrics ? ` · ${metrics}` : ""}`;
+}
+
+function buildWorkoutReviewDraft(workouts, meta = {}) {
+  const rows = workouts.map(describeWorkoutForCoach).join("\n");
+  const countLine = meta.count && meta.count > workouts.length
+    ? `这是批量导入 ${meta.count} 条活动中的最近 ${workouts.length} 条。`
+    : "这是刚新增的活动。";
+  return `请点评下面的训练。${countLine}
+
+请按这个结构回答：
+1. 训练目的和强度判断
+2. 恢复风险或需要注意的地方
+3. 下一次训练建议
+
+不要重写完整训练计划，重点点评这次活动。
+
+[New Activities]
+${rows}`;
+}
 
 // Boot screen — deliberately mirrors the native Android splash (logo +
 // "Training Studio" on the cream background) so on the APK the native splash →
@@ -714,9 +760,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Optimistic: patch local state from `tags` (we don't have a server row
   // yet, but the shape is straightforward) and replace with the canonical
   // row on success / roll back on failure.
-  function setDailyTags(date, tags, travelDest = "") {
+  function setDailyTags(date, tags) {
     let snapshot = null;
-    const dest = (Array.isArray(tags) && tags.includes("travel")) ? travelDest : "";
     setDailyNotes(prev => {
       snapshot = prev.find(n => n.date === date) || null;
       const without = prev.filter(n => n.date !== date);
@@ -725,7 +770,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         ...(snapshot || {}),
         date,
         tags,
-        travelDest: dest,
+        travelDest: "",
         // Mark so renderers can render a subtle "saving…" hint if they want.
         isOptimistic: true,
       };
@@ -734,7 +779,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
     (async () => {
       try {
-        const updated = await db.dailyNotes.setDailyTags(date, tags, dest);
+        const updated = await db.dailyNotes.setDailyTags(date, tags, "");
         setDailyNotes(prev => {
           const without = prev.filter(n => n.date !== date);
           return updated ? [updated, ...without] : without;
@@ -887,6 +932,8 @@ function AppShell({
   const [showTour, setShowTour] = useState(false);
   const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const [showGuide, setShowGuide] = useState(false);
+  const [readinessPromptDate, setReadinessPromptDate] = useState(null);
+  const [coachDraft, setCoachDraft] = useState(null);
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
   // "set up daily push" button — draws the eye to where the setting lives.
   const [pushFlash, setPushFlash] = useState(false);
@@ -902,6 +949,37 @@ function AppShell({
     db.pushInbox.listMine().then(setInboxItems).catch(() => {});
   }, []);
   const inboxUnread = inboxItems.filter(i => !i.read).length;
+
+  useEffect(() => {
+    const today = localDateKey(now);
+    const note = dailyNotes.find(n => n.date === today);
+    if (now.getHours() < 5 || readinessComplete(note?.readiness)) return;
+    if (profileEditorMode || showTour || readinessPromptDate) return;
+    try {
+      if (localStorage.getItem(`ts.readinessPrompt.${today}`)) return;
+    } catch { /* private mode */ }
+    const id = setTimeout(() => setReadinessPromptDate(today), 0);
+    return () => clearTimeout(id);
+  }, [dailyNotes, now, profileEditorMode, readinessPromptDate, showTour]);
+
+  function markReadinessPromptHandled(dateKey) {
+    try { localStorage.setItem(`ts.readinessPrompt.${dateKey}`, "1"); } catch { /* private mode */ }
+    setReadinessPromptDate(null);
+  }
+
+  function saveReadinessPrompt(vals) {
+    const dateKey = readinessPromptDate;
+    if (!dateKey) return;
+    setReadiness(dateKey, vals);
+    markReadinessPromptHandled(dateKey);
+  }
+
+  function requestCoachReview(workouts, meta = {}) {
+    const rows = (Array.isArray(workouts) ? workouts : [workouts]).filter(Boolean).slice(0, 3);
+    if (!rows.length) return;
+    setCoachDraft({ id: Date.now(), text: buildWorkoutReviewDraft(rows, { ...meta, count: meta.count || rows.length }) });
+    setTab(3);
+  }
 
   // Jump from the inbox to the daily-push setting. On mobile that's the
   // Settings tab (flash the cell); on desktop just open the modal directly.
@@ -1470,6 +1548,7 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           profile={profile}
           races={races}
+          onCoachReviewRequest={requestCoachReview}
         />
       )}
       {tab === 1 && (
@@ -1550,6 +1629,7 @@ Rules:
           memoryProposal={memoryProposal}
           setMemoryProposal={setMemoryProposal}
           proposeMemoryUpdate={proposeMemoryUpdate}
+          externalDraft={coachDraft}
         />
       )}
     </>
@@ -1672,6 +1752,14 @@ Rules:
           setItems={setInboxItems}
           onClose={() => setShowInbox(false)}
           onGoToPushSettings={goToPushSettings}
+        />
+      )}
+
+      {readinessPromptDate && (
+        <ReadinessPromptModal
+          initial={dailyNotes.find(n => n.date === readinessPromptDate)?.readiness || null}
+          onSave={saveReadinessPrompt}
+          onSkip={() => markReadinessPromptHandled(readinessPromptDate)}
         />
       )}
 

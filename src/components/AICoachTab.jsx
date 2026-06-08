@@ -228,6 +228,7 @@ export function AICoachTab({
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
   memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
+  externalDraft,
 }) {
   // Provider label for the status pill. The memory-update call (which used to
   // need a resolved endpoint + key here) now lives in AppShell.
@@ -291,6 +292,7 @@ export function AICoachTab({
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const hideJumpTimer = useRef(null);
+  const consumedDraftId = useRef(null);
   // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
   // events too — mute the button logic briefly so they don't flash the arrows.
   const suppressJumpUntil = useRef(0);
@@ -364,9 +366,16 @@ export function AICoachTab({
     el.scrollTop = el.scrollHeight;
     const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
-  }, [chatMessages.length, chatLoading, muteAndHideJumps]);
+  }, [chatMessages.length, muteAndHideJumps]);
   // Drop the pending hide timer if the tab unmounts mid-countdown.
   useEffect(() => () => clearTimeout(hideJumpTimer.current), []);
+
+  useEffect(() => {
+    if (!externalDraft || consumedDraftId.current === externalDraft.id) return;
+    consumedDraftId.current = externalDraft.id;
+    setChatInput(externalDraft.text || "");
+    requestAnimationFrame(() => chatInputRef.current?.focus?.());
+  }, [externalDraft]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -919,6 +928,9 @@ export function AICoachTab({
         flex: 1,
         minHeight: 0,
         overflowY: "auto",
+        overscrollBehavior: "contain",
+        WebkitOverflowScrolling: "touch",
+        contain: "layout paint",
       }}>
         {chatMessages.length === 0 ? (
           <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, whiteSpace: "pre-line" }}>

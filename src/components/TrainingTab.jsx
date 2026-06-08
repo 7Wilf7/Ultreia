@@ -160,7 +160,7 @@ export function TrainingTab({
   period, setPeriod, periodDropdown, setPeriodDropdown,
   view, setView,            // "activities" | "charts" — lifted to AppShell so
                             // it survives top-tab switches within a session
-  setConfirmDelete, profile, races,
+  setConfirmDelete, profile, races, onCoachReviewRequest,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -408,6 +408,7 @@ export function TrainingTab({
             toolbarStickyTop={toolbarTop}
             stickyHeader={activitiesStickyHeader}
             loadChip={loadChipEl}
+            onCoachReviewRequest={onCoachReviewRequest}
           />
         </>
       )}

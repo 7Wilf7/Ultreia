@@ -39,7 +39,7 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
-export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null, onCoachReviewRequest }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
   // ActivityForm for the chip "recommended" badge, and used inline below for
@@ -71,6 +71,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
   const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
   const [importWeather, setImportWeather] = useState(true); // fetch weather for import rows inside Caiyun's 24h window
+  const [coachReviewOffer, setCoachReviewOffer] = useState(null);
   // Cap how many rows render at once. With hundreds of activities, rendering
   // them all builds a huge DOM (each card has several SVG icons) → slow tab
   // switch + janky pull-to-refresh. Show a page at a time via "load more".
@@ -175,8 +176,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
 
   async function handleAddSubmit(logData) {
     try {
-      await addLog(logData);
+      const created = await addLog(logData);
       setShowAdd(false);
+      if (onCoachReviewRequest && created && !created.isPlanned) {
+        setCoachReviewOffer({ workouts: [created], count: 1, source: "manual" });
+      }
     } catch {
       // alert already shown by the wrapper; keep the form open so the user can retry
     }
@@ -430,10 +434,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       return out;
     });
     try {
-      await bulkAddLogs(toAdd, { fetchWeather: importWeather });
+      const created = await bulkAddLogs(toAdd, { fetchWeather: importWeather });
       setParsedRows(null);
       setUploadMsg(t("activities.import_done", { n: toAdd.length }));
       setTimeout(() => setUploadMsg(""), 4000);
+      if (onCoachReviewRequest && created?.length) {
+        setCoachReviewOffer({ workouts: created.slice(0, 3), count: created.length, source: "import" });
+      }
     } catch {
       // alert shown by wrapper; leave the review panel open so user can retry / cancel
     }
@@ -444,6 +451,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
     setUploadMsg("");
     setParseProgress(null);
     setDuplicateWarning(null);
+    setCoachReviewOffer(null);
   }
 
   // Icon-only toolbar buttons (labels dropped — the watch-file Upload flow is
@@ -555,6 +563,42 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
 
       {uploadMsg && (
         <div style={{ fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 6, padding: "8px 12px", marginBottom: 14, lineHeight: 1.6 }}>{uploadMsg}</div>
+      )}
+
+      {coachReviewOffer && onCoachReviewRequest && (
+        <div style={{
+          border: "1px solid var(--rule)",
+          background: "var(--bg-elevated)",
+          borderRadius: 6,
+          padding: "10px 12px",
+          marginBottom: 14,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 650, marginBottom: 2 }}>{t("activities.coach_review_title")}</div>
+            <div style={{ ...s.muted, fontSize: 11.5, lineHeight: 1.45 }}>
+              {t("activities.coach_review_body", { n: coachReviewOffer.count, shown: coachReviewOffer.workouts.length })}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              onCoachReviewRequest(coachReviewOffer.workouts, { count: coachReviewOffer.count, source: coachReviewOffer.source });
+              setCoachReviewOffer(null);
+            }}
+            style={{ ...s.btn, minHeight: 34, padding: "7px 10px", fontSize: 12, whiteSpace: "nowrap" }}
+          >
+            {t("activities.coach_review_ask")}
+          </button>
+          <button
+            onClick={() => setCoachReviewOffer(null)}
+            style={{ ...s.btnGhost, width: 34, height: 34, minHeight: 0, padding: 0, fontSize: 18, lineHeight: 1 }}
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {parseProgress && (

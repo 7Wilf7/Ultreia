@@ -39,6 +39,7 @@ export function SettingsMobileTab({
   onDeleteAccount,
   isAdmin,
   onGenerateInvite,
+  onOpenPromptCatalog,
   signOut,
 }) {
   const t = useT();
@@ -166,6 +167,12 @@ export function SettingsMobileTab({
             <SubCell
               primary={t("settings.generate_invite")}
               onClick={onGenerateInvite}
+            />
+          )}
+          {isAdmin && (
+            <SubCell
+              primary={t("settings.prompt_catalog")}
+              onClick={onOpenPromptCatalog}
             />
           )}
           <SubCell

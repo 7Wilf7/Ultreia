@@ -37,6 +37,7 @@ const dict = {
   "settings.location_missing": { en: "Not set — weather uses device GPS only", zh: "未设置 · 仅使用设备 GPS" },
   "settings.change_password": { en: "Change password",      zh: "修改密码" },
   "settings.generate_invite": { en: "Generate invite code", zh: "生成邀请码" },
+  "settings.prompt_catalog":  { en: "Prompt catalog",       zh: "提示词总览" },
   "settings.delete_account": { en: "Delete account",        zh: "删除账号" },
   "del.title":               { en: "Delete account",        zh: "删除账号" },
   "del.warning":             { en: "This permanently deletes your account and all training data — workouts, races, coach chats, settings. It cannot be undone.", zh: "此操作将永久删除你的账号和全部训练数据（训练记录、比赛、教练对话、设置），无法恢复。" },

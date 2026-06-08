@@ -28,6 +28,7 @@ import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { DeleteAccountModal } from "./components/DeleteAccountModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
+import { PromptCatalogModal } from "./components/PromptCatalogModal";
 import { OnboardingTour, TOUR_FLAG } from "./components/OnboardingTour";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { ReadinessPromptModal } from "./components/ReadinessPromptModal";
@@ -929,6 +930,7 @@ function AppShell({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showInviteCodes, setShowInviteCodes] = useState(false);
+  const [showPromptCatalog, setShowPromptCatalog] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const [showGuide, setShowGuide] = useState(false);
@@ -1668,6 +1670,7 @@ Rules:
           onDeleteAccount={() => setShowDeleteAccount(true)}
           isAdmin={isAdmin}
           onGenerateInvite={() => setShowInviteCodes(true)}
+          onOpenPromptCatalog={() => setShowPromptCatalog(true)}
           signOut={signOut}
         />
     );
@@ -1756,6 +1759,12 @@ Rules:
 
       {showInviteCodes && (
         <InviteCodeModal onClose={() => setShowInviteCodes(false)} />
+      )}
+
+      {/* Admin-only prompt catalog viewer (gated on isAdmin so the entry never
+          shows for normal users; render is also guarded here). */}
+      {isAdmin && showPromptCatalog && (
+        <PromptCatalogModal onClose={() => setShowPromptCatalog(false)} />
       )}
 
       {showTour && !profileEditorMode && (

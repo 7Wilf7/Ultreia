@@ -1534,9 +1534,12 @@ Rules:
   // Tab content rendered identically across desktop & mobile shells — only
   // the chrome around it differs. Modals stay outside both shells so they
   // overlay everything (and aren't constrained by the mobile content scroll).
-  const tabContent = (
-    <>
-      {tab === 0 && (
+  // Render the content for a given tab index. A function (not a static
+  // `tab === N` fragment) so the mobile pager can render the CURRENT tab AND a
+  // neighbor simultaneously during a finger-follow swipe. Index 4 is the
+  // mobile-only Settings page (desktop has no Settings tab; it never asks for 4).
+  const renderTab = (which) => {
+    if (which === 0) return (
         <TrainingTab
           logs={logs}
           addLog={addLog}
@@ -1557,8 +1560,8 @@ Rules:
           races={races}
           onCoachReviewRequest={requestCoachReview}
         />
-      )}
-      {tab === 1 && (
+    );
+    if (which === 1) return (
         <CalendarTab
           logs={logs}
           addLog={addLog}
@@ -1573,8 +1576,8 @@ Rules:
              hook is enough. */
           weatherCtx={weatherCtx}
         />
-      )}
-      {tab === 2 && (
+    );
+    if (which === 2) return (
         <RacesTab
           races={races}
           addRace={addRace}
@@ -1588,8 +1591,8 @@ Rules:
           mobileSubTab={racesSubTab}
           setMobileSubTab={setRacesSubTab}
         />
-      )}
-      {tab === 3 && (
+    );
+    if (which === 3) return (
         <AICoachTab
           logs={logs}
           races={races}
@@ -1639,9 +1642,38 @@ Rules:
           externalDraft={coachDraft}
           clearExternalDraft={() => setCoachDraft(null)}
         />
-      )}
-    </>
-  );
+    );
+    // Index 4 — mobile-only Settings page (desktop puts these in the top-right).
+    if (which === 4) return (
+        <SettingsMobileTab
+          user={user}
+          profile={profile}
+          apiKey={apiKey}
+          caiyunApiKey={caiyunApiKey}
+          freeDeepseekLeft={freeDeepseekLeft}
+          freeWeatherLeft={freeWeatherLeft}
+          lang={lang}
+          onOpenProfile={() => setProfileEditorMode("preview")}
+          onOpenApiSettings={() => setShowApiSettings(true)}
+          onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
+          onOpenPushSettings={() => setShowPushSettings(true)}
+          pushEnabled={pushEnabled}
+          pushHours={pushHours}
+          pushTimes={pushTimes}
+          pushFlash={pushFlash}
+          profileFlash={profileFlash}
+          onOpenGuide={() => setShowGuide(true)}
+          onToggleLang={toggleLang}
+          onChangePassword={() => setShowChangePassword(true)}
+          onDeleteAccount={() => setShowDeleteAccount(true)}
+          isAdmin={isAdmin}
+          onGenerateInvite={() => setShowInviteCodes(true)}
+          signOut={signOut}
+        />
+    );
+    return null;
+  };
+  const tabContent = renderTab(tab);
 
   const modals = (
     <>
@@ -1792,41 +1824,21 @@ Rules:
   );
 
   if (isMobile) {
-    // 5th tab (idx=4) is the mobile-only Settings page — it owns the actions
-    // that desktop puts in the top-right (profile / api / lang / guide / signout).
-    const mobileContent = tab === 4 ? (
-      <SettingsMobileTab
-        user={user}
-        profile={profile}
-        apiKey={apiKey}
-        caiyunApiKey={caiyunApiKey}
-        freeDeepseekLeft={freeDeepseekLeft}
-        freeWeatherLeft={freeWeatherLeft}
-        lang={lang}
-        onOpenProfile={() => setProfileEditorMode("preview")}
-        onOpenApiSettings={() => setShowApiSettings(true)}
-        onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
-        onOpenPushSettings={() => setShowPushSettings(true)}
-        pushEnabled={pushEnabled}
-        pushHours={pushHours}
-        pushTimes={pushTimes}
-        pushFlash={pushFlash}
-        profileFlash={profileFlash}
-        onOpenGuide={() => setShowGuide(true)}
-        onToggleLang={toggleLang}
-        onChangePassword={() => setShowChangePassword(true)}
-        onDeleteAccount={() => setShowDeleteAccount(true)}
-        isAdmin={isAdmin}
-        onGenerateInvite={() => setShowInviteCodes(true)}
-        signOut={signOut}
-      />
-    ) : tabContent;
+    // MobileShell drives the finger-follow pager; renderTab(idx) lets it paint
+    // the current tab AND a neighbor during a swipe. Index 4 is the Settings
+    // page (handled inside renderTab).
     return (
       <>
         <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}
-          onRefresh={tab === 0 ? refresh : null} refreshing={refreshing}>
-          {mobileContent}
-        </MobileShell>
+          renderTab={renderTab} tabCount={5}
+          /* Inner toggles (Training: Activities/Charts; Races: Races/PR) own a
+             horizontal swipe until their edge — then the top pager takes over.
+             This tells the shell where each inner toggle currently sits. */
+          getInnerPager={(which) =>
+            which === 0 ? { index: trainingView === "charts" ? 1 : 0, count: 2 }
+            : which === 2 ? { index: racesTopTab === "pr" ? 1 : 0, count: 2 }
+            : null}
+          onRefresh={tab === 0 ? refresh : null} refreshing={refreshing} />
         {modals}
       </>
     );

@@ -19,39 +19,57 @@ function inHorizontalScroller(node) {
 }
 
 /**
- * Mobile chrome — no top header, content slot, fixed bottom 5-tab nav.
+ * Mobile chrome — no top header, a finger-follow tab pager, fixed bottom 5-tab
+ * nav. `renderTab(idx)` paints any tab by index so the pager can show the
+ * current tab AND a neighbor at once while you drag; the 5th tab (idx=4) is the
+ * mobile-only Settings page.
  *
- * The 5th tab (idx=4) is "Settings" — a mobile-only page that holds what
- * used to live in the desktop top-right (profile, API, language, guide,
- * sign out). AppShell decides what to render in `children` based on `tab`.
+ * Each tab is its OWN scroll container (so scroll position is preserved per tab
+ * and pull-to-refresh only engages on the active pane). Only the active pane and
+ * its immediate neighbors render real content — far panes stay empty so we never
+ * mount five heavy tabs at once.
  *
- * Layout uses 100dvh so the bottom bar sits above mobile browser chrome
- * (Safari URL bar collapse, Android nav bar). safe-area-inset-bottom
- * keeps labels above iPhone's home indicator in PWA standalone mode.
- *
- * `coachBusy` — when AI Coach has any in-flight request (chat send or plan
- * import), the AI Coach tab cell shows a small spinner badge. The state
- * lives in AppShell so it stays alive across tab switches.
+ * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
+ * shows a small spinner badge.
  */
 // Pull distance (px of finger travel) needed to trigger a refresh, and how far
 // the indicator can stretch. Resistance makes the pull feel rubbery.
 const PULL_TRIGGER = 70;
 const PULL_MAX = 110;
 const PULL_RESIST = 0.5;
+// Edge resistance when dragging past the first/last tab, snap-animation timing,
+// and how far you must drag (fraction of width, capped) to commit a tab change.
+const EDGE_RESIST = 0.35;
+const SNAP_MS = 280;
 
-export function MobileShell({ children, tab, setTab, coachBusy = false, onRefresh = null, refreshing = false }) {
+export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
   const t = useT();
   const mainRef = useRef(null);
+  const paneRefs = useRef({});
+  const setPaneRef = (idx) => (el) => { if (el) paneRefs.current[idx] = el; };
+  const activePane = () => paneRefs.current[tab];
+
+  // Horizontal pager drag offset (px) + whether a finger is actively dragging
+  // (drives transition: none while following, snap transition on release).
+  const [dragX, setDragX] = useState(0);
+  const dragXRef = useRef(0);
+  const setDragXpx = (px) => { dragXRef.current = px; setDragX(px); };
+  const [dragging, setDragging] = useState(false);
+  // `instant` suppresses the slide transition for a single render so a bottom-nav
+  // tap teleports (no sweep through the empty panes between far tabs) and the
+  // post-commit reposition doesn't double-animate.
+  const [instant, setInstant] = useState(false);
+  const snapTimer = useRef(null);
+
   // Pull-to-refresh gesture state. pull = current indicator offset in px.
   const [pull, setPull] = useState(0);
-  const pullState = useRef(null); // { startY } once a top-pull has engaged
-  const pullRef = useRef(0);      // mirror of `pull` for the release-threshold check (avoids stale closure)
+  const pullState = useRef(null);
+  const pullRef = useRef(0);
   function setPullPx(px) { pullRef.current = px; setPull(px); }
-  // Double-tap the active Training tab to scroll its list back to the top.
-  const lastTabTap = useRef({ idx: -1, at: 0 });
 
-  function scrollMainToTop() {
-    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  const lastTabTap = useRef({ idx: -1, at: 0 });
+  function scrollActiveToTop() {
+    activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
 
   const TABS = [
@@ -62,164 +80,157 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
     { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
-  // ── Swipe between tabs ─────────────────────────────────────────────────
-  // A clearly-horizontal drag on the content area switches to the adjacent
-  // tab (left → next, right → prev). Thresholds are deliberately strict
-  // (≥70px and horizontal at least 2× the vertical) so it never fights
-  // vertical scrolling or a card tap. Drags that begin inside a horizontal
-  // scroller are left alone (see inHorizontalScroller).
+  // touch.current = { x, y, skip, startAtTop, w, mode }. mode is decided on the
+  // first significant move: 'page' (horizontal → tab pager), 'pull' (downward at
+  // the top of the active pane), 'scroll' (vertical → let the pane scroll), or
+  // 'ignore' (started inside a horizontal scroller).
   const touch = useRef(null);
-  // Direction of the last tab change — kept in STATE (not a ref) because the
-  // wrapper reads it during render to pick the slide-in class, and refs can't
-  // be read in render. Set in go() alongside setTab so both land in one render.
-  const [slideDir, setSlideDir] = useState("right");
-  function go(nextTab) {
-    if (nextTab === tab) return;
-    setSlideDir(nextTab > tab ? "right" : "left");
-    setTab(nextTab);
+
+  // Jump to `next` tab. Used by drag-commit AND by bottom-nav taps. Taps pass
+  // instant=true so a far jump teleports instead of sweeping blank panes.
+  function go(next, { teleport = false } = {}) {
+    if (next === tab || next < 0 || next >= tabCount) return;
+    if (teleport) {
+      setInstant(true);
+      requestAnimationFrame(() => setInstant(false));
+    }
+    setTab(next);
   }
+
   function onTouchStart(e) {
-    if (e.touches.length !== 1) { touch.current = null; pullState.current = null; setPullPx(0); return; }
+    clearTimeout(snapTimer.current);
+    if (e.touches.length !== 1) {
+      touch.current = null; pullState.current = null;
+      if (pullRef.current) setPullPx(0);
+      return;
+    }
     const p = e.touches[0];
+    const pane = activePane();
     touch.current = {
-      x: p.clientX,
-      y: p.clientY,
+      x: p.clientX, y: p.clientY,
       skip: inHorizontalScroller(e.target),
-      startAtTop: (mainRef.current?.scrollTop || 0) <= 0,
+      startAtTop: (pane?.scrollTop || 0) <= 0,
+      w: mainRef.current?.clientWidth || 1,
+      mode: null,
     };
     pullState.current = null;
     if (pullRef.current) setPullPx(0);
-  }
-  function onTouchMove(e) {
-    if (!onRefresh || refreshing || e.touches.length !== 1) return;
-    const st = touch.current;
-    if (!st || st.skip) return;
-    if (!st.startAtTop) return;
-    const y = e.touches[0].clientY;
-    const x = e.touches[0].clientX;
-    // Horizontal-dominant gesture → it's a tab swipe, not a pull. Disqualify so
-    // the indicator never flickers in during a Calendar↔Training swipe (the
-    // faint "Pull to refresh" ghost the user saw on every tab change).
-    if (!st.leftTop && Math.abs(x - st.x) > Math.abs(y - st.y) && Math.abs(x - st.x) > 8) {
-      st.leftTop = true;
-      if (pullState.current) pullState.current = null;
-      if (pullRef.current) setPullPx(0);
-      return;
-    }
-    const atTop = (mainRef.current?.scrollTop || 0) <= 0;
-    // Left the top (scrolled into history) → this touch is a list scroll, not a
-    // pull. Mark it disqualified so that coming BACK to the top within the same
-    // continuous gesture doesn't re-arm the refresh — the user has to lift and
-    // start a fresh pull from the top. (Previously we re-armed here, which made
-    // an "scroll up to read, then scroll back down past the top" gesture trip
-    // the sync indicator and feel janky.)
-    if (!atTop) {
-      st.leftTop = true;
-      if (pullState.current) pullState.current = null;
-      if (pullRef.current) setPullPx(0);
-      return;
-    }
-    if (st.leftTop) return;
-    // Touch began at the top and has stayed there — arm the pull and track the
-    // downward drag from this baseline.
-    if (!pullState.current) pullState.current = { startY: y };
-    const dy = y - pullState.current.startY;
-    if (dy > 0) setPullPx(Math.min(dy * PULL_RESIST, PULL_MAX));
-    else { pullState.current.startY = y; if (pullRef.current) setPullPx(0); }
-  }
-  function onTouchEnd(e) {
-    // Pull-to-refresh release.
-    if (pullState.current) {
-      const triggered = pullRef.current >= PULL_TRIGGER;
-      pullState.current = null;
-      setPullPx(0);
-      if (triggered && onRefresh) { onRefresh(); return; }
-    }
-    const st = touch.current;
-    touch.current = null;
-    if (!st || st.skip) return;
-    const p = e.changedTouches?.[0];
-    if (!p) return;
-    const dx = p.clientX - st.x;
-    const dy = p.clientY - st.y;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
-    if (dx < 0 && tab < TABS.length - 1) go(tab + 1);
-    else if (dx > 0 && tab > 0) go(tab - 1);
+    if (dragXRef.current) setDragXpx(0);
   }
 
-  // Tab tap: double-tapping the already-active Training tab scrolls its list to
-  // the top (smooth). Other taps just switch tabs. Time comes from the event
-  // (pure) rather than Date.now() so it's safe in component scope.
+  function onTouchMove(e) {
+    if (e.touches.length !== 1) return;
+    const st = touch.current;
+    if (!st || st.skip) return;
+    const p = e.touches[0];
+    const dx = p.clientX - st.x;
+    const dy = p.clientY - st.y;
+
+    if (st.mode === null) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+        // Horizontal. If the current tab has an inner toggle (Training's
+        // Activities/Charts, Races' Races/PR) that can still move in this
+        // direction, leave it to that tab's own swipe handler — the top pager
+        // only takes over once the inner toggle is at its edge. ('inner' = stay
+        // out of the way; we don't move the outer track at all.)
+        const inner = getInnerPager?.(tab);
+        const dir = dx < 0 ? 1 : -1;
+        const innerCanMove = inner && ((dir > 0 && inner.index < inner.count - 1) || (dir < 0 && inner.index > 0));
+        st.mode = innerCanMove ? "inner" : "page";
+      }
+      else if (dy > 0 && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6 && onRefresh && st.startAtTop) st.mode = "pull";
+      else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) st.mode = "scroll";
+      else return; // too small to classify yet
+      if (st.mode === "page" || st.mode === "pull") setDragging(true);
+    }
+
+    if (st.mode === "page") {
+      const atFirst = tab <= 0, atLast = tab >= tabCount - 1;
+      const d = ((atFirst && dx > 0) || (atLast && dx < 0)) ? dx * EDGE_RESIST : dx;
+      setDragXpx(d);
+    } else if (st.mode === "pull") {
+      const atTop = (activePane()?.scrollTop || 0) <= 0;
+      if (!atTop) { if (pullRef.current) setPullPx(0); return; }
+      if (!pullState.current) pullState.current = { startY: p.clientY };
+      const pdy = p.clientY - pullState.current.startY;
+      if (pdy > 0) setPullPx(Math.min(pdy * PULL_RESIST, PULL_MAX));
+      else { pullState.current.startY = p.clientY; if (pullRef.current) setPullPx(0); }
+    }
+  }
+
+  function onTouchEnd() {
+    const st = touch.current;
+    touch.current = null;
+    if (!st) return;
+
+    if (st.mode === "pull") {
+      const triggered = pullRef.current >= PULL_TRIGGER;
+      pullState.current = null;
+      setDragging(false);
+      setPullPx(0);
+      if (triggered && onRefresh) onRefresh();
+      return;
+    }
+
+    if (st.mode === "page") {
+      const W = st.w || 1;
+      const dx = dragXRef.current;
+      const threshold = Math.min(W * 0.25, 90);
+      let dir = 0;
+      if (dx <= -threshold && tab < tabCount - 1) dir = 1;
+      else if (dx >= threshold && tab > 0) dir = -1;
+      setDragging(false); // re-enable the snap transition
+      if (dir !== 0) {
+        // Animate the rest of the way, then teleport-commit (the rest position
+        // shifts by exactly one pane, so resetting dragX to 0 leaves no jump).
+        setDragXpx(dir === 1 ? -W : W);
+        snapTimer.current = setTimeout(() => { setDragXpx(0); go(tab + dir, { teleport: true }); }, SNAP_MS);
+      } else {
+        setDragXpx(0); // snap back
+      }
+      return;
+    }
+    // 'scroll' / 'ignore' / unclassified — nothing to settle.
+    setDragging(false);
+  }
+
   function onTabTap(idx, e) {
     const now = e?.timeStamp ?? 0;
     const prev = lastTabTap.current;
     lastTabTap.current = { idx, at: now };
-    if (idx === 0 && tab === 0 && prev.idx === 0 && now - prev.at < 320) {
-      scrollMainToTop();
+    if (idx === tab && prev.idx === idx && now - prev.at < 320) {
+      scrollActiveToTop();
       return;
     }
-    go(idx);
+    go(idx, { teleport: true });
   }
+
+  const pullY = refreshing ? 44 : pull;
+  const trackTransition = (dragging || instant) ? "none" : `transform ${Math.round(SNAP_MS * 0.93)}ms cubic-bezier(0.2,0.7,0.3,1)`;
 
   return (
     <div style={{
-      // Lock the shell to exactly the viewport — no body-level scroll, no
-      // rubber-band overscroll on tabs whose content already fits.
       height: "100dvh",
       overflow: "hidden",
       display: "flex",
       flexDirection: "column",
       background: "var(--bg)",
     }}>
-      {/* ── Content slot ───────────────────────────────────────────────────
-          flex: 1 takes the space between safe-area-top and the bottom nav.
-          Tabs that overflow scroll INTERNALLY here (Training, Races);
-          tabs that fit (Calendar, AI Coach, Settings) use height: 100%
-          flex layouts and never overflow. overscroll-behavior: contain
-          keeps drag gestures from bouncing the page. */}
       <main
         ref={mainRef}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         style={{
-        flex: 1,
-        minHeight: 0,
-        overflowY: "auto",
-        overflowX: "hidden",
-        overscrollBehavior: "contain",
-        touchAction: "pan-y",
-        WebkitOverflowScrolling: "touch",
-        position: "relative",
-        // Explicit background — without it the padding-top area is transparent
-        // and on some mobile Chromium builds scrolled content can be seen
-        // through it (the "thin gap above sticky" complaint).
-        background: "var(--bg)",
-        padding: "14px 14px 0",
-        paddingTop: "max(env(safe-area-inset-top), 14px)",
-        // Reserve room for the position: fixed bottom nav. The nav is ~66px
-        // tall (icon + label), so 76px clears it with a ~10px gap — just
-        // enough, no dead space. (The earlier "last line hidden" wasn't a
-        // padding problem — it was the height:100% wrapper regression, fixed
-        // separately; bumping this to 100px was a misdiagnosis that left a
-        // ~34px gap at the bottom of every scrolled tab.)
-        paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
-      }}>
-        {/* Keyed by tab so each switch remounts + replays the slide-in.
-            height:100% is applied ONLY to the AI Coach tab (idx 3): it must
-            fill the slot so its provider pills + input row pin and only the
-            message window scrolls internally. Every OTHER tab keeps its natural
-            height — forcing height:100% on all tabs capped the wrapper at one
-            viewport, so `main`'s scrollHeight never exceeded its clientHeight
-            and the taller tabs (Settings, Calendar…) couldn't scroll at all.
-            That was a regression; this restores their normal page scroll. */}
-        {/* Pull-to-refresh indicator — sits above the content; the content
-            wrapper shifts down by `pull` (or a fixed amount while refreshing)
-            so the spinner peeks in from the top. */}
+          flex: 1, minHeight: 0,
+          overflow: "hidden",
+          position: "relative",
+          background: "var(--bg)",
+        }}>
+        {/* Pull-to-refresh indicator — above the panes; the track shifts down by
+            `pull` (or a fixed amount while refreshing) so it peeks in. */}
         {(pull > 0 || refreshing) && (
           <div style={{
-            // Offset below the safe-area / front-camera cutout so the indicator
-            // isn't hidden under it — sits down near the content's top controls.
             position: "absolute",
             top: "calc(max(env(safe-area-inset-top), 14px) + 8px)",
             left: 0, right: 0,
@@ -227,39 +238,56 @@ export function MobileShell({ children, tab, setTab, coachBusy = false, onRefres
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             color: "var(--ink-2)", pointerEvents: "none", zIndex: 11,
             fontFamily: "var(--font-sans)", fontSize: 13,
-            transition: pull === 0 ? "height 0.2s ease" : "none",
           }}>
             {refreshing ? (
-              <>
-                <Spinner size={16} thickness={2} color="var(--moss)" />
-                <span>{t("sync.syncing")}</span>
-              </>
+              <><Spinner size={16} thickness={2} color="var(--moss)" /><span>{t("sync.syncing")}</span></>
             ) : pull >= PULL_TRIGGER ? (
-              <>
-                <Spinner size={16} thickness={2} color="var(--moss)" />
-                <span>{t("sync.release")}</span>
-              </>
+              <><Spinner size={16} thickness={2} color="var(--moss)" /><span>{t("sync.release")}</span></>
             ) : (
               <span style={{ opacity: Math.min(pull / PULL_TRIGGER, 1) }}>↓ {t("sync.pull")}</span>
             )}
           </div>
         )}
-        <div key={tab} className={slideDir === "right" ? "ts-tab-in-right" : "ts-tab-in-left"}
-          style={{
-            height: tab === 3 ? "100%" : undefined,
-            transform: refreshing ? "translateY(44px)" : (pull > 0 ? `translateY(${pull}px)` : undefined),
-            transition: pull === 0 ? "transform 0.2s ease" : "none",
-            // Promote to its own compositing layer during the gesture so the
-            // translate is GPU-cheap (no per-frame repaint of the list).
-            willChange: (pull > 0 || refreshing) ? "transform" : undefined,
-          }}>
-          {children}
+
+        {/* Pager track — width = tabCount viewports; translateX moves between
+            tabs (px during a drag → finger-following), translateY handles the
+            pull. Each pane is its own scroller. */}
+        <div style={{
+          display: "flex",
+          height: "100%",
+          width: `${tabCount * 100}%`,
+          transform: `translateX(calc(${(-tab * 100) / tabCount}% + ${dragX}px)) translateY(${pullY}px)`,
+          transition: trackTransition,
+          willChange: (dragging || pull || refreshing || instant) ? "transform" : undefined,
+        }}>
+          {TABS.map(({ idx }) => {
+            const isAdjacent = Math.abs(idx - tab) <= 1;
+            return (
+              <div
+                key={idx}
+                ref={setPaneRef(idx)}
+                style={{
+                  width: `${100 / tabCount}%`,
+                  height: "100%",
+                  flexShrink: 0,
+                  overflowY: "auto",
+                  overflowX: "hidden",
+                  overscrollBehavior: "contain",
+                  WebkitOverflowScrolling: "touch",
+                  touchAction: "pan-y",
+                  background: "var(--bg)",
+                  padding: "14px 14px 0",
+                  paddingTop: "max(env(safe-area-inset-top), 14px)",
+                  paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
+                }}>
+                {isAdjacent ? renderTab(idx) : null}
+              </div>
+            );
+          })}
         </div>
       </main>
 
-      {/* ── Bottom tab bar ─────────────────────────────────────────────────
-          Fixed at viewport bottom. 5 equal cells. Active cell gets a top
-          accent rule + ink-1 weight. */}
+      {/* ── Bottom tab bar ───────────────────────────────────────────────── */}
       <nav style={{
         position: "fixed", left: 0, right: 0, bottom: 0,
         zIndex: 20,

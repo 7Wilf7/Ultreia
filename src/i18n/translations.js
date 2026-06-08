@@ -428,9 +428,11 @@ const dict = {
   // ===== Calendar tab =====
   "calendar.today":            { en: "Today",                zh: "今天" },
   "calendar.legend_hint":      { en: "solid = done · dashed = planned · click any day to edit", zh: "实线 = 已完成 · 虚线 = 计划 · 点击日期编辑" },
+  "calendar.legend_hint_mobile": { en: "past plans move to day details", zh: "历史计划收进当日详情" },
   "calendar.rest":             { en: "rest",                 zh: "休息" },
   "calendar.add_plan_hint":    { en: "+ plan",               zh: "+ 计划" },
   "calendar.plan_hidden_past": { en: "{n} past plan in details", zh: "{n} 条计划在详情里" },
+  "calendar.plan_hidden_past_mobile": { en: "+{n} plan",      zh: "{n}计划" },
   "calendar.day_past":         { en: "Day",                  zh: "当日" },
   "calendar.day_future":       { en: "Plan",                 zh: "计划" },
   "calendar.day_logs_title":   { en: "Activities & plans",   zh: "活动与计划" },

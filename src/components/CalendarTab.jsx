@@ -240,11 +240,17 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         {/* Legend hint is verbose — hidden on mobile to save the nav bar from
             wrapping. Users still see the visual distinction (solid vs dashed)
             in the cells themselves. */}
-        {!isMobile && (
-          <div style={{ marginLeft: "auto", ...s.muted, fontSize: 12 }}>
-            {t("calendar.legend_hint")}
-          </div>
-        )}
+        <div style={{
+          marginLeft: isMobile ? 0 : "auto",
+          width: isMobile ? "100%" : "auto",
+          ...s.muted,
+          fontSize: isMobile ? 10.5 : 12,
+          lineHeight: 1.25,
+          fontFamily: "var(--font-mono)",
+          letterSpacing: isMobile ? "0.02em" : 0,
+        }}>
+          {t(isMobile ? "calendar.legend_hint_mobile" : "calendar.legend_hint")}
+        </div>
       </div>
 
       {/* Weekday header */}
@@ -711,6 +717,19 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
         {/* Day-level tags — mobile shows just the emoji icon(s), centered along
             the bottom of the cell (no room for text); multiple tags sit in a
             centered row. */}
+        {hiddenPlanCount > 0 && inMonth && (
+          <span style={{
+            marginTop: hasContent ? 1 : 4,
+            fontFamily: "var(--font-mono)",
+            fontSize: 8,
+            color: "var(--ink-3)",
+            lineHeight: 1,
+            whiteSpace: "nowrap",
+          }}>
+            {t("calendar.plan_hidden_past_mobile", { n: hiddenPlanCount })}
+          </span>
+        )}
+
         {dayTags.length > 0 && (
           <span style={{
             position: "absolute", bottom: 2, left: 0, right: 0,

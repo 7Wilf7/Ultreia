@@ -67,6 +67,9 @@ function shouldSkipRaceSwipe(target) {
   return !!target?.closest?.("button,input,textarea,select,a,[role='button'],[data-dropdown-menu]");
 }
 
+const MOBILE_TOP_TAB_ORDER = { races: 0, pr: 1 };
+const MOBILE_SUB_TAB_ORDER = { target: 0, history: 1 };
+
 export function RacesTab({
   races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
   // Lifted to AppShell so the chosen top/sub tab survives switching away to
@@ -78,6 +81,27 @@ export function RacesTab({
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const topSwipe = useRef(null);
+  const [topMotion, setTopMotion] = useState({ dir: 0, seq: 0 });
+  const [subMotion, setSubMotion] = useState({ dir: 0, seq: 0 });
+
+  function changeMobileTopTab(nextTab) {
+    if (nextTab === mobileTopTab) return;
+    setTopMotion(prev => ({
+      dir: MOBILE_TOP_TAB_ORDER[nextTab] > MOBILE_TOP_TAB_ORDER[mobileTopTab] ? 1 : -1,
+      seq: prev.seq + 1,
+    }));
+    setMobileTopTab(nextTab);
+  }
+
+  function changeMobileSubTab(nextTab) {
+    if (nextTab === mobileSubTab) return;
+    if (addingMode) cancelAdd();
+    setSubMotion(prev => ({
+      dir: MOBILE_SUB_TAB_ORDER[nextTab] > MOBILE_SUB_TAB_ORDER[mobileSubTab] ? 1 : -1,
+      seq: prev.seq + 1,
+    }));
+    setMobileSubTab(nextTab);
+  }
 
   function onTopSwipeStart(e) {
     if (!isMobile || e.touches.length !== 1 || shouldSkipRaceSwipe(e.target)) {
@@ -99,10 +123,10 @@ export function RacesTab({
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
     if (dx < 0 && mobileTopTab === "races") {
       e.stopPropagation();
-      setMobileTopTab("pr");
+      changeMobileTopTab("pr");
     } else if (dx > 0 && mobileTopTab === "pr") {
       e.stopPropagation();
-      setMobileTopTab("races");
+      changeMobileTopTab("races");
     }
   }
 
@@ -599,8 +623,15 @@ export function RacesTab({
   // sub-tabs Target / History; the count lives in the sub-tab label so the
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
+    const topMotionClass = topMotion.dir > 0 ? "ts-tab-in-right" : topMotion.dir < 0 ? "ts-tab-in-left" : undefined;
+    const subMotionClass = subMotion.dir > 0 ? "ts-tab-in-right" : subMotion.dir < 0 ? "ts-tab-in-left" : undefined;
     return (
-      <div onTouchStart={onTopSwipeStart} onTouchEnd={onTopSwipeEnd}>
+      <div
+        key={`${mobileTopTab}-${topMotion.seq}`}
+        className={topMotionClass}
+        onTouchStart={onTopSwipeStart}
+        onTouchEnd={onTopSwipeEnd}
+      >
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
             Side margins bleed past main's 14px gutters. Negative `top`
             (matching main's padding) lifts the sticky's pinned position up
@@ -624,7 +655,7 @@ export function RacesTab({
           ].map(tab => {
             const active = mobileTopTab === tab.id;
             return (
-              <button key={tab.id} onClick={() => setMobileTopTab(tab.id)}
+              <button key={tab.id} onClick={() => changeMobileTopTab(tab.id)}
                 style={{
                   flex: 1, background: "transparent", border: "none",
                   padding: "12px 8px",
@@ -656,14 +687,7 @@ export function RacesTab({
             ].map((tab, i) => {
               const active = mobileSubTab === tab.id;
               return (
-                <button key={tab.id} onClick={() => {
-                  // Close any open Add form when switching sub-tab. Otherwise
-                  // a target-add form would linger over the history list and
-                  // its title text would lie ("New target race" while on
-                  // History). cancelAdd resets newRace draft too.
-                  if (addingMode) cancelAdd();
-                  setMobileSubTab(tab.id);
-                }}
+                <button key={tab.id} onClick={() => changeMobileSubTab(tab.id)}
                   style={{
                     flex: 1, minHeight: 36, padding: "8px 10px",
                     background: active ? "var(--ink-1)" : "transparent",
@@ -700,22 +724,24 @@ export function RacesTab({
               </div>
             )}
 
-            {mobileSubTab === "target" && renderMobileSection({
-              kind: "target",
-              list: targetRacesList,
-              all: targetRacesAll,
-              filter: targetFilter,
-              setFilter: setTargetFilter,
-              emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
-            })}
-            {mobileSubTab === "history" && renderMobileSection({
-              kind: "history",
-              list: historyRacesList,
-              all: historyRacesAll,
-              filter: historyFilter,
-              setFilter: setHistoryFilter,
-              emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
-            })}
+            <div key={`${mobileSubTab}-${subMotion.seq}`} className={subMotionClass}>
+              {mobileSubTab === "target" && renderMobileSection({
+                kind: "target",
+                list: targetRacesList,
+                all: targetRacesAll,
+                filter: targetFilter,
+                setFilter: setTargetFilter,
+                emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
+              })}
+              {mobileSubTab === "history" && renderMobileSection({
+                kind: "history",
+                list: historyRacesList,
+                all: historyRacesAll,
+                filter: historyFilter,
+                setFilter: setHistoryFilter,
+                emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
+              })}
+            </div>
           </>
         )}
         {modals}

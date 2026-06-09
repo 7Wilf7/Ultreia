@@ -27,11 +27,10 @@ const THEMES = {
     ink: "#151610",
     sub: "#5f6250",
     hair: "#d2cbb7",
-    accent: "#536631",
+    accent: "#586340",
     veil: "#f1ede1",
     veilOpacity: 0.18,
-    imageOpacity: 0.34,
-    imageFilter: "url(#poster-invert)",
+    imageOpacity: 0.18,
     vignetteA: 0.06,
     vignetteB: 0.18,
   },
@@ -40,11 +39,10 @@ const THEMES = {
     ink: "#f3f0e2",
     sub: "#aaa98c",
     hair: "#303426",
-    accent: "#a4d45f",
+    accent: "#77825b",
     veil: "#080a07",
     veilOpacity: 0.68,
     imageOpacity: 0.62,
-    imageFilter: undefined,
     vignetteA: 0.18,
     vignetteB: 0.58,
   },
@@ -357,6 +355,48 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
+function PosterBackground({ W, H, theme, pal, backgroundSrc }) {
+  if (theme === "day") {
+    const scale = W / 720;
+    const x = W * 0.02;
+    const y = H * 0.19;
+
+    return (
+      <g opacity={pal.imageOpacity} transform={`translate(${x} ${y}) scale(${scale})`}>
+        <path
+          d="M76 360 L292 112 L476 360 M330 360 L502 190 L642 360"
+          fill="none"
+          stroke={pal.ink}
+          strokeWidth="38"
+          strokeLinecap="butt"
+          strokeLinejoin="miter"
+        />
+        <path
+          d="M642 360 H704"
+          fill="none"
+          stroke={pal.accent}
+          strokeWidth="18"
+          strokeLinecap="butt"
+        />
+      </g>
+    );
+  }
+
+  if (!backgroundSrc) return null;
+
+  return (
+    <image
+      href={backgroundSrc}
+      x="0"
+      y="0"
+      width={W}
+      height={H}
+      opacity={pal.imageOpacity}
+      preserveAspectRatio="xMidYMid meet"
+    />
+  );
+}
+
 function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
@@ -381,7 +421,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
   const heroStr = String(stats.heroValue);
   const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
   const unitSize = heroSize * 0.26;
-  const logoSize = Math.round(W * 0.145);
+  const logoSize = Math.round(W * 0.18);
   const titleSize = Math.min(60, H * 0.046);
   const metaSize = Math.min(34, H * 0.026);
   const kickerSize = Math.min(34, H * 0.026);
@@ -459,9 +499,6 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: pal.bg }}>
       <defs>
         <style>{POSTER_FONT_CSS}</style>
-        <filter id="poster-invert">
-          <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0" />
-        </filter>
         <radialGradient id={`poster-vignette-${theme}`} cx="50%" cy="42%" r="75%">
           <stop offset="0%" stopColor="#000000" stopOpacity="0" />
           <stop offset="70%" stopColor="#000000" stopOpacity={pal.vignetteA} />
@@ -469,18 +506,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      {backgroundSrc && (
-        <image
-          href={backgroundSrc}
-          x="0"
-          y="0"
-          width={W}
-          height={H}
-          opacity={pal.imageOpacity}
-          filter={pal.imageFilter}
-          preserveAspectRatio="xMidYMid meet"
-        />
-      )}
+      <PosterBackground W={W} H={H} theme={theme} pal={pal} backgroundSrc={backgroundSrc} />
       <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
@@ -488,7 +514,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="3" fill={pal.ink}>{stats.title}</text>
       <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize={metaSize} letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
       {logoSrc && (
-        <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 12} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />
+        <image href={logoSrc} x={W - M - logoSize} y={M} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />
       )}
       <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
 

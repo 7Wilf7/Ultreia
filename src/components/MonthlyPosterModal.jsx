@@ -22,8 +22,8 @@ const RATIO_KEYS = ["portrait", "square", "story"];
 
 // Day / Night finishes. Restraint: paper/ink base + ONE muted moss accent.
 const THEMES = {
-  day: { bg: "#f1ede1", ink: "#16150f", sub: "#74715f", hair: "#d9d3c1", accent: "#54663a" },
-  night: { bg: "#13140d", ink: "#efeadd", sub: "#8c8a7b", hair: "#2b2c22", accent: "#a4b96d" },
+  day: { bg: "#11120e", ink: "#fff8e8", sub: "#d3c9a8", hair: "#474b39", accent: "#d6ec75", veil: "#11120e", veilOpacity: 0.58, imageOpacity: 0.54 },
+  night: { bg: "#090b08", ink: "#f3f0e2", sub: "#aaa98c", hair: "#303426", accent: "#a4d45f", veil: "#080a07", veilOpacity: 0.68, imageOpacity: 0.62 },
 };
 const THEME_KEYS = ["day", "night"];
 
@@ -333,10 +333,10 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
-  const M = 96;
+  const M = 82;
   const inner = W - M * 2;
 
   // Vertical anchors as fractions of H — keeps the composition coherent across crops.
@@ -357,7 +357,10 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
   const heroStr = String(stats.heroValue);
   const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
   const unitSize = heroSize * 0.26;
-  const logoSize = Math.round(W * 0.062);
+  const logoSize = Math.round(W * 0.096);
+  const titleSize = Math.min(60, H * 0.046);
+  const metaSize = Math.min(34, H * 0.026);
+  const kickerSize = Math.min(34, H * 0.026);
 
   // Spine graphic per mode — the running itself, not a grid of data cards.
   let spine;
@@ -377,7 +380,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
       const bandMid = (spineTop + spineBot) / 2;
       spine = (
         <g>
-          <text x={M} y={spineTop + H * 0.04} fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="4" fill={pal.sub}>AVG PACE</text>
+          <text x={M} y={spineTop + H * 0.04} fontFamily={FF} fontWeight="600" fontSize="30" letterSpacing="4" fill={pal.sub}>AVG PACE</text>
           <text x={M} y={bandMid + H * 0.05} fontFamily={FF} fontWeight="800" fontSize={H * 0.13} fill={pal.ink}>{stats.bigPace}</text>
         </g>
       );
@@ -394,14 +397,14 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
           return (
             <g key={`${r.category}-${i}`}>
               {i > 0 && <line x1={M} x2={W - M} y1={ry} y2={ry} stroke={pal.hair} strokeWidth="1.4" />}
-              <text x={M} y={cy} fontFamily={FF} fontWeight="600" fontSize="31" letterSpacing="1" fill={pal.ink}>{r.category}</text>
-              <text x={W - M} y={cy} textAnchor="end" fontFamily={FF} fontWeight="800" fontSize="35" fill={top ? pal.accent : pal.ink}>{r.value}</text>
+              <text x={M} y={cy} fontFamily={FF} fontWeight="600" fontSize="36" letterSpacing="1" fill={pal.ink}>{r.category}</text>
+              <text x={W - M} y={cy} textAnchor="end" fontFamily={FF} fontWeight="800" fontSize="44" fill={top ? pal.accent : pal.ink}>{r.value}</text>
             </g>
           );
         })}
       </g>
     ) : (
-      <text x={M} y={(spineTop + spineBot) / 2} fontFamily={FF} fontWeight="600" fontSize="30" fill={pal.sub}>NO RACES LOGGED YET</text>
+      <text x={M} y={(spineTop + spineBot) / 2} fontFamily={FF} fontWeight="600" fontSize="36" fill={pal.sub}>NO RACES LOGGED YET</text>
     );
   } else {
     // Period — running volume as a rhythmic bar strip along a baseline.
@@ -430,22 +433,42 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} xmlns="http://www.w3.org/2000/svg" ref={svgRef}
       role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: pal.bg }}>
-      <defs><style>{POSTER_FONT_CSS}</style></defs>
+      <defs>
+        <style>{POSTER_FONT_CSS}</style>
+        <radialGradient id={`poster-vignette-${theme}`} cx="50%" cy="42%" r="75%">
+          <stop offset="0%" stopColor="#000000" stopOpacity="0" />
+          <stop offset="70%" stopColor="#000000" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0.58" />
+        </radialGradient>
+      </defs>
       <rect width={W} height={H} fill={pal.bg} />
+      {backgroundSrc && (
+        <image
+          href={backgroundSrc}
+          x="0"
+          y="0"
+          width={W}
+          height={H}
+          opacity={pal.imageOpacity}
+          preserveAspectRatio="xMidYMid slice"
+        />
+      )}
+      <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
+      <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
       {/* Header */}
-      <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize="30" letterSpacing="5" fill={pal.ink}>{stats.title}</text>
-      <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
-      {logoSrc && <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 6} width={logoSize} height={logoSize} opacity="0.9" preserveAspectRatio="xMidYMid meet" />}
-      <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="1.4" />
+      <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="3" fill={pal.ink}>{stats.title}</text>
+      <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize={metaSize} letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
+      {logoSrc && <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 12} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />}
+      <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
 
       {/* Hero */}
-      <text x={M} y={yKick} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="4" fill={pal.sub}>{stats.kicker}</text>
+      <text x={M} y={yKick} fontFamily={FF} fontWeight="600" fontSize={kickerSize} letterSpacing="4" fill={pal.sub}>{stats.kicker}</text>
       <text x={M} y={yHero} fontFamily={FF} fontWeight="800" fill={pal.ink} style={{ fontVariantNumeric: "tabular-nums" }}>
         <tspan fontSize={heroSize}>{stats.heroValue}</tspan>
-        {stats.heroUnit ? <tspan dx={18} fontSize={unitSize} fontWeight="800" fill={pal.accent}>{stats.heroUnit}</tspan> : null}
+        {stats.heroUnit ? <tspan dx={20} fontSize={unitSize} fontWeight="800" fill={pal.accent}>{stats.heroUnit}</tspan> : null}
       </text>
-      <rect x={M} y={yRule} width="132" height="8" fill={pal.accent} />
+      <rect x={M} y={yRule} width="172" height="10" fill={pal.accent} />
 
       {/* Spine */}
       {spine}
@@ -453,14 +476,14 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
       {/* Metrics */}
       {showMetrics && (
         <g>
-          <line x1={M} x2={W - M} y1={yHair} y2={yHair} stroke={pal.hair} strokeWidth="1.4" />
+          <line x1={M} x2={W - M} y1={yHair} y2={yHair} stroke={pal.hair} strokeWidth="2" />
           {stats.metrics.map((m, i) => {
             const colW = inner / 4;
             const cx = M + i * colW;
             return (
               <g key={`${m.label}-${i}`}>
-                <text x={cx} y={yML} fontFamily={FF} fontWeight="600" fontSize="19" letterSpacing="2" fill={pal.sub}>{m.label}</text>
-                <text x={cx} y={yMV} fontFamily={FF} fontWeight="800" fontSize="40" fill={pal.ink}>{m.value}</text>
+                <text x={cx} y={yML} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1.5" fill={pal.sub}>{m.label}</text>
+                <text x={cx} y={yMV} fontFamily={FF} fontWeight="800" fontSize="52" fill={pal.ink}>{m.value}</text>
               </g>
             );
           })}
@@ -469,7 +492,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
 
       {/* Signature */}
       <text x={M} y={ySign} fontFamily={FF_SIGN} fontWeight="600" fontSize={H * 0.05} fill={pal.ink} opacity="0.94">Training Studio</text>
-      <text x={M} y={yUrl} fontFamily={FF} fontWeight="600" fontSize="18" letterSpacing="2" fill={pal.sub}>www.aitrainstudio.com</text>
+      <text x={M} y={yUrl} fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="1.5" fill={pal.sub}>www.aitrainstudio.com</text>
     </svg>
   );
 }
@@ -494,6 +517,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [singleGpsTrack, setSingleGpsTrack] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [logoSrc, setLogoSrc] = useState(iconOnlyUrl);
+  const [backgroundSrc, setBackgroundSrc] = useState(iconOnlyUrl);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -525,7 +549,12 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       }))
-      .then(dataUrl => { if (alive && typeof dataUrl === "string") setLogoSrc(dataUrl); })
+      .then(dataUrl => {
+        if (alive && typeof dataUrl === "string") {
+          setLogoSrc(dataUrl);
+          setBackgroundSrc(dataUrl);
+        }
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, []);
@@ -702,7 +731,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} backgroundSrc={backgroundSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

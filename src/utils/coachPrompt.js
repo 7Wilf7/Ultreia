@@ -2,7 +2,7 @@
 // be called from the lifted sendChat/importToCalendar in AppShell. None of
 // these touch React; they're pure data → string transforms.
 
-import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES } from "../constants";
+import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES, DAILY_TAGS } from "../constants";
 import { formatDuration, formatPlanDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
 import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
 import { evaluatePlanOutcome } from "./planMatch";
@@ -431,27 +431,26 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
     const swim = (l.type === "Swimming" && l.distance > 0 && l.duration > 0) ? " " + formatSwimPace(l.distance, l.duration) + "/100m" : "";
     return `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${speed}${swim}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`;
   }).join("\n");
-  // Day-level recovery/context flags (sick / travel / poor sleep / massage /
-  // stretching) from the Calendar, last 21 days only, oldest→newest. Tag slugs
-  // are de-underscored ("poor_sleep" → "poor sleep") for the LLM. Skipped when
-  // the runner hasn't tagged any recent day.
+  // Day-level recovery/context flags from the Calendar, last 21 days only,
+  // oldest→newest. Retired legacy tags are ignored so old rows do not leak into
+  // the coach prompt after the UI stops showing them.
   const dayNotesBlock = (() => {
     if (!Array.isArray(dailyNotes) || !dailyNotes.length) return "";
     const todayMs = now.getTime();
     const windowMs = 21 * 24 * 60 * 60 * 1000;
     return dailyNotes
-      .filter(n => n && n.date && Array.isArray(n.tags) && n.tags.length)
+      .filter(n => n && n.date && Array.isArray(n.tags) && n.tags.some(tg => DAILY_TAGS.includes(tg)))
       .filter(n => {
         const ms = new Date(`${n.date}T00:00:00`).getTime();
         return ms >= todayMs - windowMs && ms <= todayMs + 12 * 60 * 60 * 1000;
       })
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
       .map(n => {
-        const tagStr = n.tags.filter(tg => tg !== "travel").map(tg => String(tg).replace(/_/g, " ")).join(", ");
-        // Travel destination → so the coach can suggest local running and
-        // factor the trip in (different climate, jet lag, terrain).
-        const dest = "";
-        return tagStr ? `${n.date}: ${tagStr}${dest}` : "";
+        const tagStr = n.tags
+          .filter(tg => DAILY_TAGS.includes(tg))
+          .map(tg => String(tg).replace(/_/g, " "))
+          .join(", ");
+        return tagStr ? `${n.date}: ${tagStr}` : "";
       })
       .filter(Boolean)
       .join("\n");
@@ -605,7 +604,7 @@ export function buildPromptSkeleton(lang = "en") {
     "[Training Load — sRPE acute:chronic + ACWR spike risk]",
     "[Morning Readiness — recent self-ratings]",
     "[Recent Activities (last 10)] with RPE / notes / weather",
-    "[Recent Day Notes] recovery / sick / travel",
+    "[Recent Day Notes] recovery / sick / mobility",
     "[Plan Adherence — last 14d planned vs done/missed/skipped]",
     "[Upcoming Planned Sessions — next ~21 days]",
     "[Coaching Focus — periodization / heat / load / missed-session cues that fired]",

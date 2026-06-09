@@ -101,15 +101,16 @@ ${rows}`;
 // web-view handoff is visually seamless: the user sees ONE logo screen, then
 // the app. Now also a warm time-of-day greeting + a random sport line.
 // Logo + text use vmin units so they track the stretched native splash size.
-function LoadingScreen() {
+function LoadingScreen({ userId = null }) {
   // Read directly from localStorage — this renders before LanguageProvider /
   // profile are available (during auth + first data load). Name is cached when
-  // the profile loads; absent on a first-ever launch (greeting just omits it).
+  // the profile loads. Cache is per auth user so switching accounts cannot leak
+  // the previous account's name into the boot greeting.
   let lang = "en", name = "";
   try {
     const l = localStorage.getItem("ts-lang");
     if (l === "zh" || l === "en") lang = l;
-    name = localStorage.getItem("ts-display-name") || "";
+    name = userId ? (localStorage.getItem(`ts-display-name:${userId}`) || "") : "";
   } catch { /* private mode */ }
   const hello = timeGreeting(lang) + (name ? `，${name}` : "");
   const line = BOOT_GREETING[lang === "zh" ? "zh" : "en"];
@@ -179,7 +180,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [loading]);
 
-  if (loading) return <LoadingScreen />;
+  if (loading) return <LoadingScreen userId={user?.id} />;
   if (recoveryMode) {
     return (
       <PasswordRecoveryModal
@@ -282,7 +283,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         setItraPIState(mergedProfile.itraPI ?? "");
         // Cache the name so the next launch's splash greeting can show it before
         // the profile finishes loading.
-        try { localStorage.setItem("ts-display-name", mergedProfile.displayName || ""); } catch { /* private mode */ }
+        try {
+          localStorage.setItem(`ts-display-name:${user.id}`, mergedProfile.displayName || "");
+          localStorage.removeItem("ts-display-name");
+        } catch { /* private mode */ }
 
         // Settings — same defensive merge.
         if (settingsData) {
@@ -347,7 +351,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Free-tier usage counters.
         setDeepseekUsed(usageData?.deepseekUsed ?? 0);
         setWeatherUsed(usageData?.weatherUsed ?? 0);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
   // Initial load on mount / user change. Owns the full-screen LoadingScreen +
@@ -876,7 +879,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     }]);
   }
 
-  if (dataLoading) return <LoadingScreen />;
+  if (dataLoading) return <LoadingScreen userId={user?.id} />;
 
   return (
     <LanguageProvider lang={lang} setLang={setLang}>

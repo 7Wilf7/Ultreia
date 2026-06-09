@@ -469,24 +469,17 @@ export function CalendarDayModal({
           </div>
         )}
 
-        {/* Day-level tags — available for past, today AND future days (e.g.
-            pre-tag a known travel day). "Poor sleep" is hidden on future days
-            since it hasn't happened yet. Each click upserts immediately. */}
+        {/* Day-level tags — available for past, today AND future days. Each
+            click upserts immediately. */}
         {(
           <div style={{ borderTop: "1px solid var(--rule)", paddingTop: 14, marginBottom: 14 }}>
             <div style={{ ...s.label, marginBottom: 8 }}>
               {t("calendar.day_tags_title")}
             </div>
-            {/* 3-column grid → 2 rows. Row 1: massage / stretching / sick.
-                Row 2: travel (left) + poor_sleep (right, spans 2 cols so
-                "(last night)" fits one line). On future days poor_sleep is
-                dropped, leaving travel alone on row 2. */}
+            {/* 3-column grid: massage / stretching / sick. Retired tags such
+                as poor_sleep/travel are no longer rendered as toggles. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
-              {DAILY_TAGS
-                .filter(tag => !(isFuture && tag === "poor_sleep"))
-                // poor_sleep renders after travel so it lands to travel's right.
-                .sort((a, b) => Number(a === "poor_sleep") - Number(b === "poor_sleep"))
-                .map(tag => (
+              {DAILY_TAGS.map(tag => (
                 <button key={tag}
                   onClick={() => toggleDayTag(tag)}
                   style={{
@@ -494,14 +487,11 @@ export function CalendarDayModal({
                     width: "100%", minHeight: 0, padding: "8px 6px",
                     fontSize: 12, lineHeight: 1.25, textAlign: "center",
                     whiteSpace: "nowrap",
-                    gridColumn: (tag === "poor_sleep" && !isFuture) ? "span 2" : undefined,
                   }}>
                   {DAILY_TAG_ICONS[tag] ? `${DAILY_TAG_ICONS[tag]} ` : ""}{t(`calendar.tag.${tag}`)}
                 </button>
               ))}
             </div>
-            {/* Travel destination — where are you going? Fed to the coach + push
-                so it can suggest local running and reference the trip. */}
           </div>
         )}
 

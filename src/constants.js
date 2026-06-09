@@ -126,15 +126,10 @@ export const ENDURANCE_GROUP_TYPES = [...RUN_GROUP_TYPES, CYCLING_TYPE, SWIMMING
 // don't surface it in the UI for those types.
 export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "Cycling", "HIIT"];
 
-// Day-level tags stored in daily_notes.tags[]. Surfaced on Calendar day
-// cells and toggled via the day modal. Recovery/context markers that don't
-// belong on a single workout — sick / travel especially matter for how the
-// coach plans around a disrupted week. Stored as text[], so adding values
-// here needs no schema change.
-// Order matters for the Calendar day-tag grid (3 cols → row 1: massage /
-// stretching / sick, row 2: travel). "poor_sleep" was retired once the morning
-// readiness check-in (sleep/legs/energy) covered sleep; old rows keep the tag
-// in the DB harmlessly, it just no longer renders as a toggle.
+// Day-level tags stored in daily_notes.tags[]. Surfaced on Calendar day cells
+// and toggled via the day modal. Stored as text[], so adding values here needs
+// no schema change. `poor_sleep` and `travel` are retired legacy values; new
+// writes filter them out, and Calendar/Coach only use the supported set below.
 export const DAILY_TAGS = ["massage", "stretching", "sick"];
 
 // Emoji glyph per day tag. Mobile calendar cells show just these icons (no

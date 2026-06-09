@@ -35,7 +35,7 @@ function inHorizontalScroller(node) {
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
-const SNAP_MS = 280;
+const SNAP_MS = 220;
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
   const t = useT();
@@ -54,7 +54,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   // tap teleports (no sweep through the empty panes between far tabs) and the
   // post-commit reposition doesn't double-animate.
   const [instant, setInstant] = useState(false);
-  const snapTimer = useRef(null);
 
   const lastTabTap = useRef({ idx: -1, at: 0 });
   function scrollActiveToTop() {
@@ -86,7 +85,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   function onTouchStart(e) {
-    clearTimeout(snapTimer.current);
     if (e.touches.length !== 1) {
       touch.current = null;
       return;
@@ -94,6 +92,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const p = e.touches[0];
     touch.current = {
       x: p.clientX, y: p.clientY,
+      t: Date.now(),
       skip: inHorizontalScroller(e.target),
       w: mainRef.current?.clientWidth || 1,
       mode: null,
@@ -141,16 +140,19 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (st.mode === "page") {
       const W = st.w || 1;
       const dx = dragXRef.current;
-      const threshold = Math.min(W * 0.25, 90);
+      const dt = Math.max(1, Date.now() - (st.t || 0));
+      const velocity = dx / dt;
+      const threshold = Math.min(W * 0.18, 68);
       let dir = 0;
-      if (dx <= -threshold && tab < tabCount - 1) dir = 1;
-      else if (dx >= threshold && tab > 0) dir = -1;
+      if ((dx <= -threshold || velocity < -0.45) && tab < tabCount - 1) dir = 1;
+      else if ((dx >= threshold || velocity > 0.45) && tab > 0) dir = -1;
       setDragging(false); // re-enable the snap transition
       if (dir !== 0) {
-        // Animate the rest of the way, then teleport-commit (the rest position
-        // shifts by exactly one pane, so resetting dragX to 0 leaves no jump).
-        setDragXpx(dir === 1 ? -W : W);
-        snapTimer.current = setTimeout(() => { setDragXpx(0); go(tab + dir, { teleport: true }); }, SNAP_MS);
+        // Commit immediately so rapid repeated swipes can start from the new
+        // tab without waiting for the old 280ms delayed setTab.
+        setDragXpx(dx + (dir === 1 ? W : -W));
+        setTab(tab + dir);
+        requestAnimationFrame(() => setDragXpx(0));
       } else {
         setDragXpx(0); // snap back
       }

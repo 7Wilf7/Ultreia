@@ -1,10 +1,11 @@
 import { supabase } from '../supabase';
 import { getCurrentUserId } from './_auth';
 
+const SUPPORTED_DAILY_TAGS = new Set(['massage', 'stretching', 'sick']);
+
 // daily_notes: one row per (user_id, date). Holds day-level metadata that
-// doesn't fit on a single workout — currently just tags[] (e.g. ['massage']
-// to mark active recovery). Calendar reads this alongside workouts; the
-// Activities list does NOT touch it.
+// doesn't fit on a single workout — tags[] plus morning readiness. Calendar
+// reads this alongside workouts; the Activities list does NOT touch it.
 //
 // Schema (see project CLAUDE.md / SQL migration):
 //   id          uuid PK
@@ -20,8 +21,8 @@ function fromRow(row) {
     id: row.id,
     date: row.date,
     tags: Array.isArray(row.tags) ? row.tags : [],
-    // Free-text destination for a day tagged "travel" (where the user is
-    // going) — feeds local running tips to the coach + push.
+    // Legacy travel destination. Kept in the row mapper so old rows can still
+    // load, but new tag writes clear it because travel is no longer a day tag.
     travelDest: row.travel_dest ?? '',
     // Morning readiness self-check (1=poor 2=ok 3=good), null when not logged.
     // Feeds the coach so it can judge "push or back off today".
@@ -50,8 +51,8 @@ export async function listMyDailyNotes() {
 // resulting row (or null if deleted).
 export async function setDailyTags(date, tags, travelDest = '') {
   if (!date) throw new Error('setDailyTags: date is required');
-  const cleanTags = Array.isArray(tags) ? tags.filter(Boolean) : [];
-  // Destination only makes sense alongside the "travel" tag; drop it otherwise.
+  const cleanTags = Array.isArray(tags) ? tags.filter(tag => SUPPORTED_DAILY_TAGS.has(tag)) : [];
+  // Destination only made sense alongside the retired "travel" tag.
   const dest = cleanTags.includes('travel') ? (travelDest || '').trim() : '';
 
   if (cleanTags.length === 0) {
@@ -88,7 +89,7 @@ export async function setDailyTags(date, tags, travelDest = '') {
 }
 
 // Upsert the morning readiness check-in for a date (1–3 each, or null to clear
-// a field). Only touches the readiness columns — tags / travel on the same row
+// a field). Only touches the readiness columns — tags on the same row
 // are preserved. Returns the resulting row.
 export async function setReadiness(date, { sleep = null, legs = null, energy = null } = {}) {
   if (!date) throw new Error('setReadiness: date is required');

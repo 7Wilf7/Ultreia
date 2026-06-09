@@ -220,6 +220,24 @@ summary::-webkit-details-marker { display: none; }
   .ts-tab-in-right, .ts-tab-in-left { animation: none; }
 }
 
+@keyframes ts-settings-panel-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.99); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes ts-settings-slide-left {
+  from { opacity: 0.35; transform: translateX(18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes ts-settings-slide-right {
+  from { opacity: 0.35; transform: translateX(-18px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.ts-settings-slide-left  { animation: ts-settings-slide-left 0.18s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ts-settings-slide-right { animation: ts-settings-slide-right 0.18s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@media (prefers-reduced-motion: reduce) {
+  .ts-settings-slide-left, .ts-settings-slide-right { animation: none; }
+}
+
 /* Chat message entrance — a single subtle fade + 6px rise as a bubble lands.
    Runs once on element mount: React keys bubbles by index and doesn't recreate
    existing ones on append, so only a genuinely NEW message animates (the coach

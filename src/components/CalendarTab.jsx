@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef } from "react";
 import { s } from "../styles";
-import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAG_ICONS } from "../constants";
+import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAGS, DAILY_TAG_ICONS } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal } from "./CalendarDayModal";
@@ -19,6 +19,11 @@ function dateKey(d) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function visibleDailyTags(note) {
+  if (!note || !Array.isArray(note.tags)) return [];
+  return note.tags.filter(tag => DAILY_TAGS.includes(tag));
 }
 
 // Mon-Sun ordering. JavaScript's getDay() returns 0=Sun..6=Sat — we shift so
@@ -623,7 +628,7 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
 function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, t, isMobile }) {
-  const dayTags = note ? (note.tags || []) : [];
+  const dayTags = visibleDailyTags(note);
   const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
   // Fold plans into a "+N plan" hint once they're history: any past day, OR
   // today once a real workout is logged (a reconciled plan shouldn't clutter

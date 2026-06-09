@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
 import { CoachIcon, CloudIcon } from "./Icons";
+
+const GROUP_ORDER = { api: 0, admin: 1, other: 2 };
 
 /**
  * Mobile-only settings page. The old single "tap the email → one long list"
@@ -42,19 +44,32 @@ export function SettingsMobileTab({
   signOut,
 }) {
   const t = useT();
-  // Accordion — only one group open at a time. null | 'account' | 'api' | 'admin' | 'other'.
-  // Defaults to 'other' so the page doesn't land looking empty (everything else
-  // is one tap away via the header / chips).
-  const [open, setOpen] = useState("other");
-  const toggle = (sec) => setOpen(cur => (cur === sec ? null : sec));
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [group, setGroup] = useState("other");
+  const [groupMotion, setGroupMotion] = useState({ dir: 0, seq: 0 });
   const [signingOut, setSigningOut] = useState(false);
+
+  function toggleAccount() {
+    setAccountOpen(open => !open);
+  }
+
+  const selectGroup = useCallback((next) => {
+    if (next === group) return;
+    setGroupMotion(prev => ({
+      dir: (GROUP_ORDER[next] ?? 0) > (GROUP_ORDER[group] ?? 0) ? 1 : -1,
+      seq: prev.seq + 1,
+    }));
+    setGroup(next);
+  }, [group]);
 
   // The "jump to this setting" flashes (from the inbox push-setup button / the
   // AI Coach edit-profile jump) only read if their group is open — auto-open it.
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (pushFlash) setOpen("other"); }, [pushFlash]);
+  useEffect(() => { if (pushFlash) selectGroup("other"); }, [pushFlash, selectGroup]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (profileFlash) setOpen("account"); }, [profileFlash]);
+  useEffect(() => { if (profileFlash) setAccountOpen(true); }, [profileFlash]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (!isAdmin && group === "admin") setGroup("other"); }, [isAdmin, group]);
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
@@ -78,7 +93,7 @@ export function SettingsMobileTab({
   return (
     <div style={{ paddingTop: 8, paddingBottom: 8 }}>
       {/* Identity header — tap toggles the Account group. */}
-      <button type="button" onClick={() => toggle("account")} style={{
+      <button type="button" onClick={toggleAccount} style={{
         display: "flex", alignItems: "center", gap: 14,
         width: "100%",
         textAlign: "left",
@@ -113,11 +128,11 @@ export function SettingsMobileTab({
           )}
         </div>
         <div style={{ color: "var(--ink-3)", fontSize: 15, marginLeft: 4, flexShrink: 0 }}>
-          {open === "account" ? "⌃" : "⌄"}
+          {accountOpen ? "⌃" : "⌄"}
         </div>
       </button>
 
-      <Panel open={open === "account"}>
+      <AccountPanel open={accountOpen}>
         <SubCell primary={t("settings.profile")} secondary={t("settings.profile_desc")} flash={profileFlash} onClick={onOpenProfile} />
         <SubCell primary={t("settings.change_password")} onClick={onChangePassword} />
         <SubCell
@@ -129,88 +144,107 @@ export function SettingsMobileTab({
             : t("settings.sign_out")}
           danger onClick={handleSignOut} />
         <SubCell primary={t("settings.delete_account")} danger onClick={onDeleteAccount} />
-      </Panel>
+      </AccountPanel>
 
       {/* Section chips. API keeps the two "configured" indicators from before. */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <SectionChip active={open === "api"} onClick={() => toggle("api")}>
-          <ApiDot icon={<CoachIcon size={12} />} ok={!!apiKey} active={open === "api"} />
-          <ApiDot icon={<CloudIcon size={12} />} ok={!!caiyunApiKey} active={open === "api"} />
+        <SectionChip active={group === "api"} onClick={() => selectGroup("api")}>
+          <ApiDot icon={<CoachIcon size={12} />} ok={!!apiKey} active={group === "api"} />
+          <ApiDot icon={<CloudIcon size={12} />} ok={!!caiyunApiKey} active={group === "api"} />
           <span>{t("settings.section_api")}</span>
         </SectionChip>
         {isAdmin && (
-          <SectionChip active={open === "admin"} onClick={() => toggle("admin")}>
+          <SectionChip active={group === "admin"} onClick={() => selectGroup("admin")}>
             {t("settings.section_admin")}
           </SectionChip>
         )}
-        <SectionChip active={open === "other"} onClick={() => toggle("other")}>
+        <SectionChip active={group === "other"} onClick={() => selectGroup("other")}>
           {t("settings.section_other")}
         </SectionChip>
       </div>
 
-      <Panel open={open === "api"}>
-        <SubCell
-          primary={t("settings.ai_api")}
-          secondary={apiKey
-            ? t("settings.api_set")
-            : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
-                ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
-                : t("settings.api_missing"))}
-          warn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
-          onClick={onOpenApiSettings} />
-        <SubCell
-          primary={t("settings.weather_api")}
-          secondary={caiyunApiKey
-            ? t("settings.api_set")
-            : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
-                ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
-                : t("settings.weather_api_default"))}
-          warn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
-          onClick={onOpenWeatherApiSettings} />
-      </Panel>
+      <GroupPanel motion={groupMotion}>
+        {group === "api" && (
+          <>
+            <SubCell
+              primary={t("settings.ai_api")}
+              secondary={apiKey
+                ? t("settings.api_set")
+                : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
+                    ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
+                    : t("settings.api_missing"))}
+              warn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
+              onClick={onOpenApiSettings} />
+            <SubCell
+              primary={t("settings.weather_api")}
+              secondary={caiyunApiKey
+                ? t("settings.api_set")
+                : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
+                    ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
+                    : t("settings.weather_api_default"))}
+              warn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
+              onClick={onOpenWeatherApiSettings} />
+          </>
+        )}
 
-      {isAdmin && (
-        <Panel open={open === "admin"}>
-          <SubCell primary={t("settings.generate_invite")} onClick={onGenerateInvite} />
-          <SubCell primary={t("settings.prompt_catalog")} onClick={onOpenPromptCatalog} />
-        </Panel>
-      )}
+        {group === "admin" && isAdmin && (
+          <>
+            <SubCell primary={t("settings.generate_invite")} onClick={onGenerateInvite} />
+            <SubCell primary={t("settings.prompt_catalog")} onClick={onOpenPromptCatalog} />
+          </>
+        )}
 
-      <Panel open={open === "other"}>
-        <SubCell
-          primary={t("settings.daily_push")}
-          flash={pushFlash}
-          secondary={(pushEnabled && pushSlots.length > 0)
-            ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
-            : t("settings.daily_push_off")}
-          onClick={onOpenPushSettings} />
-        <SubCell
-          primary={t("settings.language")}
-          rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
-          onClick={onToggleLang} />
-        <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
-        <UpdateChecker />
-      </Panel>
+        {group === "other" && (
+          <>
+            <SubCell
+              primary={t("settings.daily_push")}
+              flash={pushFlash}
+              secondary={(pushEnabled && pushSlots.length > 0)
+                ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
+                : t("settings.daily_push_off")}
+              onClick={onOpenPushSettings} />
+            <SubCell
+              primary={t("settings.language")}
+              rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
+              onClick={onToggleLang} />
+            <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
+            <UpdateChecker />
+          </>
+        )}
+      </GroupPanel>
     </div>
   );
 }
 
-// Collapsible group container with the same animation the account list used.
-function Panel({ open, children }) {
+function AccountPanel({ open, children }) {
   return (
     <div aria-hidden={!open} style={{
-      maxHeight: open ? 600 : 0,
-      opacity: open ? 1 : 0,
-      transform: open ? "translateY(0)" : "translateY(-6px)",
-      overflow: "hidden",
-      pointerEvents: open ? "auto" : "none",
-      transition: "max-height 240ms cubic-bezier(0.2,0.7,0.3,1), opacity 160ms ease, transform 180ms ease",
-      marginBottom: open ? 10 : 0,
-      border: open ? "1px solid var(--rule-soft)" : "1px solid transparent",
+      display: open ? "block" : "none",
+      animation: open ? "ts-settings-panel-in 160ms cubic-bezier(0.2,0.7,0.3,1)" : undefined,
+      marginBottom: 10,
+      border: "1px solid var(--rule-soft)",
       borderRadius: 8,
       background: "var(--bg)",
+      overflow: "hidden",
     }}>
       {children}
+    </div>
+  );
+}
+
+function GroupPanel({ motion, children }) {
+  const cls = motion.dir > 0 ? "ts-settings-slide-left" : motion.dir < 0 ? "ts-settings-slide-right" : undefined;
+  return (
+    <div style={{
+      border: "1px solid var(--rule-soft)",
+      borderRadius: 8,
+      background: "var(--bg)",
+      overflow: "hidden",
+      minHeight: 48,
+    }}>
+      <div key={motion.seq} className={cls}>
+        {children}
+      </div>
     </div>
   );
 }

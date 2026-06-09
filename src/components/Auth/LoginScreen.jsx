@@ -79,7 +79,7 @@ export function LoginScreen({ onClose, signIn, register }) {
     } catch (err) {
       setError(isRegister
         ? registerErrorText(err?.code)
-        : (err?.message || tt("login.err_signin")));
+        : tt("login.err_signin"));
       setSubmitting(false);
     }
   }
@@ -97,6 +97,8 @@ export function LoginScreen({ onClose, signIn, register }) {
       fontSize: active ? 13 : 11,
       fontFamily: active ? "var(--font-sans)" : "var(--font-mono)",
       fontWeight: 600, cursor: "pointer",
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      lineHeight: 1,
       transition: "background 160ms, color 160ms",
     };
   }
@@ -116,13 +118,24 @@ export function LoginScreen({ onClose, signIn, register }) {
           padding: isMobile ? "calc(env(safe-area-inset-top) + 28px) 22px calc(env(safe-area-inset-bottom) + 24px)" : 28,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--moss)", fontWeight: 600 }}>
-            ▲ Training Studio
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "start", marginBottom: 14 }}>
+          <div />
+          <img
+            src="/splash-logo.png"
+            alt="Training Studio"
+            style={{
+              width: 72,
+              height: 72,
+              borderRadius: 16,
+              objectFit: "cover",
+              border: "1px solid var(--rule)",
+              boxShadow: "0 8px 20px rgba(20,20,19,0.08)",
+            }}
+          />
           {/* Language pill — lets a brand-new user read the screen + tour in
               their language before any account exists. */}
           <div style={{
+            justifySelf: "end",
             display: "flex", overflow: "hidden",
             border: "1px solid var(--rule)", borderRadius: 13, height: 26,
           }}>
@@ -131,7 +144,7 @@ export function LoginScreen({ onClose, signIn, register }) {
           </div>
         </div>
 
-        <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 22, fontWeight: 500, margin: "10px 0 4px", color: "var(--ink-1)", letterSpacing: "-0.01em" }}>
+        <h2 style={{ fontFamily: "var(--font-sans)", fontSize: 22, fontWeight: 500, margin: "8px 0 4px", color: "var(--ink-1)", letterSpacing: "-0.01em" }}>
           {isRegister ? tt("login.create") : tt("login.signin")}
         </h2>
         <p style={{ ...s.muted, marginBottom: 22, lineHeight: 1.5 }}>
@@ -255,6 +268,23 @@ export function LoginScreen({ onClose, signIn, register }) {
             </>
           )}
         </div>
+
+        <a
+          href="https://www.aitrainstudio.com/"
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            display: "block",
+            marginTop: 14,
+            textAlign: "center",
+            fontFamily: "var(--font-sans)",
+            fontSize: 12.5,
+            color: "var(--moss-deep)",
+            textDecoration: "underline",
+          }}
+        >
+          {tt("login.web_link")}
+        </a>
       </form>
     </div>
     </ModalRoot>

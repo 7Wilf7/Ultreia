@@ -467,10 +467,11 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
               aria-label={tt("login.saved_accounts")}
               style={{
                 ...s.input,
-                height: 34,
+                minHeight: 42,
                 marginBottom: 8,
                 fontFamily: "var(--font-mono)",
-                fontSize: 12,
+                fontSize: 13,
+                "--mobile-input-fs": "13px",
                 color: "var(--ink-2)",
                 background: "var(--paper)",
               }}

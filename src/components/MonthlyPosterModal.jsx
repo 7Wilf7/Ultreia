@@ -22,8 +22,34 @@ const RATIO_KEYS = ["portrait", "square", "story"];
 
 // Day / Night finishes. Restraint: paper/ink base + ONE muted moss accent.
 const THEMES = {
-  day: { bg: "#11120e", ink: "#fff8e8", sub: "#d3c9a8", hair: "#474b39", accent: "#d6ec75", veil: "#11120e", veilOpacity: 0.58, imageOpacity: 0.54 },
-  night: { bg: "#090b08", ink: "#f3f0e2", sub: "#aaa98c", hair: "#303426", accent: "#a4d45f", veil: "#080a07", veilOpacity: 0.68, imageOpacity: 0.62 },
+  day: {
+    bg: "#f1ede1",
+    ink: "#151610",
+    sub: "#5f6250",
+    hair: "#d2cbb7",
+    accent: "#536631",
+    veil: "#f1ede1",
+    veilOpacity: 0.18,
+    imageOpacity: 0.34,
+    imageFilter: "url(#poster-invert)",
+    logoFilter: "url(#poster-invert)",
+    vignetteA: 0.06,
+    vignetteB: 0.18,
+  },
+  night: {
+    bg: "#090b08",
+    ink: "#f3f0e2",
+    sub: "#aaa98c",
+    hair: "#303426",
+    accent: "#a4d45f",
+    veil: "#080a07",
+    veilOpacity: 0.68,
+    imageOpacity: 0.62,
+    imageFilter: undefined,
+    logoFilter: undefined,
+    vignetteA: 0.18,
+    vignetteB: 0.58,
+  },
 };
 const THEME_KEYS = ["day", "night"];
 
@@ -357,7 +383,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
   const heroStr = String(stats.heroValue);
   const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
   const unitSize = heroSize * 0.26;
-  const logoSize = Math.round(W * 0.096);
+  const logoSize = Math.round(W * 0.118);
   const titleSize = Math.min(60, H * 0.046);
   const metaSize = Math.min(34, H * 0.026);
   const kickerSize = Math.min(34, H * 0.026);
@@ -435,10 +461,13 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       role="img" aria-label={stats.title} style={{ width: "100%", height: "auto", display: "block", background: pal.bg }}>
       <defs>
         <style>{POSTER_FONT_CSS}</style>
+        <filter id="poster-invert">
+          <feColorMatrix type="matrix" values="-1 0 0 0 1  0 -1 0 0 1  0 0 -1 0 1  0 0 0 1 0" />
+        </filter>
         <radialGradient id={`poster-vignette-${theme}`} cx="50%" cy="42%" r="75%">
           <stop offset="0%" stopColor="#000000" stopOpacity="0" />
-          <stop offset="70%" stopColor="#000000" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#000000" stopOpacity="0.58" />
+          <stop offset="70%" stopColor="#000000" stopOpacity={pal.vignetteA} />
+          <stop offset="100%" stopColor="#000000" stopOpacity={pal.vignetteB} />
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
@@ -450,7 +479,8 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
           width={W}
           height={H}
           opacity={pal.imageOpacity}
-          preserveAspectRatio="xMidYMid slice"
+          filter={pal.imageFilter}
+          preserveAspectRatio="xMidYMid meet"
         />
       )}
       <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
@@ -459,7 +489,13 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       {/* Header */}
       <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="3" fill={pal.ink}>{stats.title}</text>
       <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize={metaSize} letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
-      {logoSrc && <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 12} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />}
+      {logoSrc && (
+        <>
+          {theme === "night" && <rect x={W - M - logoSize - 10} y={yTitle - logoSize + 2} width={logoSize + 20} height={logoSize + 20} rx="26" fill="#000000" opacity="0.22" />}
+          <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 12} width={logoSize} height={logoSize} opacity="0.98" filter={pal.logoFilter} preserveAspectRatio="xMidYMid meet" />
+          {theme === "night" && <rect x={W - M - logoSize * 0.26} y={yTitle + logoSize * 0.37} width={logoSize * 0.19} height={logoSize * 0.035} rx={logoSize * 0.017} fill="#f3f0e2" opacity="0.88" />}
+        </>
+      )}
       <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
 
       {/* Hero */}

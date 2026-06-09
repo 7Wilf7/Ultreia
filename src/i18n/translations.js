@@ -168,6 +168,8 @@ const dict = {
   "login.register_desc":  { en: "Register with an invite code from the admin.", zh: "用管理员发给你的邀请码注册。" },
   "login.email":          { en: "Email",                    zh: "邮箱" },
   "login.password":       { en: "Password",                 zh: "密码" },
+  "login.saved_accounts": { en: "Saved accounts",           zh: "已保存账号" },
+  "login.remember_password": { en: "Remember this account and password on this device", zh: "在当前设备记住这个账号和密码" },
   "login.confirm":        { en: "Confirm password",         zh: "确认密码" },
   "login.invite":         { en: "Invite code",              zh: "邀请码" },
   "login.signing":        { en: "Signing in…",              zh: "登录中…" },

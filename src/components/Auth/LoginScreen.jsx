@@ -5,6 +5,8 @@ import { ModalRoot } from "../ModalRoot";
 import { translate } from "../../i18n/translations";
 
 const LANG_KEY = "ts-lang";
+const SAVED_LOGINS_KEY = "ts-saved-logins";
+const MAX_SAVED_LOGINS = 8;
 
 function initialLang() {
   try {
@@ -14,6 +16,47 @@ function initialLang() {
   try {
     return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
   } catch { return "en"; }
+}
+
+function normalizeEmail(value) {
+  return value.trim().toLowerCase();
+}
+
+function loadSavedLogins() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVED_LOGINS_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(item => item && typeof item.email === "string" && typeof item.password === "string")
+      .map(item => ({
+        email: normalizeEmail(item.email),
+        password: item.password,
+        updatedAt: Number(item.updatedAt) || 0,
+      }))
+      .filter(item => item.email && item.password)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_SAVED_LOGINS);
+  } catch {
+    return [];
+  }
+}
+
+function saveLoginCredential(email, password) {
+  const normalized = normalizeEmail(email);
+  if (!normalized || !password) return loadSavedLogins();
+  const next = [
+    { email: normalized, password, updatedAt: Date.now() },
+    ...loadSavedLogins().filter(item => item.email !== normalized),
+  ].slice(0, MAX_SAVED_LOGINS);
+  try { localStorage.setItem(SAVED_LOGINS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  return next;
+}
+
+function removeLoginCredential(email) {
+  const normalized = normalizeEmail(email);
+  const next = loadSavedLogins().filter(item => item.email !== normalized);
+  try { localStorage.setItem(SAVED_LOGINS_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+  return next;
 }
 
 // Pre-auth screen: no LanguageProvider in scope (it lives inside the authed
@@ -32,6 +75,8 @@ export function LoginScreen({ onClose, signIn, register }) {
   const [invite, setInvite] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [savedLogins, setSavedLogins] = useState(loadSavedLogins);
+  const [rememberLogin, setRememberLogin] = useState(false);
 
   const isRegister = mode === "register";
 
@@ -57,6 +102,15 @@ export function LoginScreen({ onClose, signIn, register }) {
     setInvite("");
   }
 
+  function chooseSavedLogin(nextEmail) {
+    const picked = savedLogins.find(item => item.email === nextEmail);
+    if (!picked) return;
+    setEmail(picked.email);
+    setPassword(picked.password);
+    setRememberLogin(true);
+    setError("");
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     if (submitting) return;
@@ -70,10 +124,14 @@ export function LoginScreen({ onClose, signIn, register }) {
 
     setSubmitting(true);
     try {
+      const normalizedEmail = normalizeEmail(email);
       if (isRegister) {
-        await register(email.trim(), password, invite.trim());
+        await register(normalizedEmail, password, invite.trim());
       } else {
-        await signIn(email, password);
+        await signIn(normalizedEmail, password);
+        setSavedLogins(rememberLogin
+          ? saveLoginCredential(normalizedEmail, password)
+          : removeLoginCredential(normalizedEmail));
       }
       onClose();
     } catch (err) {
@@ -153,13 +211,43 @@ export function LoginScreen({ onClose, signIn, register }) {
 
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>{tt("login.email")}</div>
+          {!isRegister && savedLogins.length > 0 && (
+            <select
+              value=""
+              onChange={e => chooseSavedLogin(e.target.value)}
+              disabled={submitting}
+              aria-label={tt("login.saved_accounts")}
+              style={{
+                ...s.input,
+                height: 34,
+                marginBottom: 8,
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                color: "var(--ink-2)",
+                background: "var(--paper)",
+              }}
+            >
+              <option value="">{tt("login.saved_accounts")}</option>
+              {savedLogins.map(item => (
+                <option key={item.email} value={item.email}>{item.email}</option>
+              ))}
+            </select>
+          )}
           <input
             type="email"
             required
             autoFocus
             autoComplete="email"
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={e => {
+              setEmail(e.target.value);
+              const normalized = normalizeEmail(e.target.value);
+              const matched = savedLogins.find(item => item.email === normalized);
+              if (matched) {
+                setPassword(matched.password);
+                setRememberLogin(true);
+              }
+            }}
             disabled={submitting}
             style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 13 }}
           />
@@ -177,6 +265,29 @@ export function LoginScreen({ onClose, signIn, register }) {
             style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 13 }}
           />
         </div>
+
+        {!isRegister && (
+          <label style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            margin: "-6px 0 18px",
+            fontFamily: "var(--font-sans)",
+            fontSize: 12.5,
+            lineHeight: 1.45,
+            color: "var(--ink-3)",
+            cursor: submitting ? "default" : "pointer",
+          }}>
+            <input
+              type="checkbox"
+              checked={rememberLogin}
+              onChange={e => setRememberLogin(e.target.checked)}
+              disabled={submitting}
+              style={{ marginTop: 2, accentColor: "var(--moss)" }}
+            />
+            <span>{tt("login.remember_password")}</span>
+          </label>
+        )}
 
         {isRegister && (
           <>

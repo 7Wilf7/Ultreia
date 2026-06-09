@@ -1,21 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
 import { CoachIcon, CloudIcon } from "./Icons";
 
 /**
- * Mobile-only settings page — three sections, top-down:
- *   1. 账号 (Account)    — display name + email cell that EXPANDS into a
- *                          secondary menu (Change password / Sign out).
- *                          "Change password" pops a centered modal so the
- *                          user never leaves Settings.
- *   2. API               — AI Coach API cell + Weather API cell.
- *   3. 其他 (Other)      — Language · Default location · User guide · App version.
- *
- * The expanding-account-cell pattern keeps Sign out off the top-level list
- * (used to live as a dangerous-looking standalone cell at the bottom) and
- * groups password / sign-out under one identity owner.
+ * Mobile-only settings page. The old single "tap the email → one long list"
+ * was too tall, so it's now an accordion of independent groups (one open at a
+ * time):
+ *   • Account  — tap the identity header → profile / change password / sign
+ *                out / delete account.
+ *   • API      — chip carries the two configured indicators; expands to the
+ *                AI Coach API + Weather API cells.
+ *   • Admin    — (admin only) invite codes + prompt catalog.
+ *   • Other    — daily push / language / guide / app version.
  */
 export function SettingsMobileTab({
   user,
@@ -33,6 +31,7 @@ export function SettingsMobileTab({
   pushHours,
   pushTimes,
   pushFlash,
+  profileFlash,
   onOpenGuide,
   onToggleLang,
   onChangePassword,
@@ -43,11 +42,23 @@ export function SettingsMobileTab({
   signOut,
 }) {
   const t = useT();
-  const [headerOpen, setHeaderOpen] = useState(false);
+  // Accordion — only one group open at a time. null | 'account' | 'api' | 'admin' | 'other'.
+  const [open, setOpen] = useState(null);
+  const toggle = (sec) => setOpen(cur => (cur === sec ? null : sec));
   const [signingOut, setSigningOut] = useState(false);
+
+  // The "jump to this setting" flashes (from the inbox push-setup button / the
+  // AI Coach edit-profile jump) only read if their group is open — auto-open it.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (pushFlash) setOpen("other"); }, [pushFlash]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (profileFlash) setOpen("account"); }, [profileFlash]);
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
+  const pushSlots = (Array.isArray(pushTimes) && pushTimes.length)
+    ? [...pushTimes].sort()
+    : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -64,198 +75,171 @@ export function SettingsMobileTab({
 
   return (
     <div style={{ paddingTop: 8, paddingBottom: 8 }}>
-      <button type="button" onClick={() => setHeaderOpen(v => !v)} style={{
+      {/* Identity header — tap toggles the Account group. */}
+      <button type="button" onClick={() => toggle("account")} style={{
         display: "flex", alignItems: "center", gap: 14,
         width: "100%",
         textAlign: "left",
-        padding: "14px 14px 16px",
+        padding: "14px 14px",
         border: "1px solid var(--rule)",
         background: "var(--bg-elevated)",
         borderRadius: 10,
-        marginBottom: 0,
+        marginBottom: 10,
         boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
         cursor: "pointer",
         color: "var(--ink-1)",
         WebkitTapHighlightColor: "transparent",
       }}>
-        <img
-          src="/splash-logo.png"
-          alt=""
-          aria-hidden="true"
-          style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }}
-        />
+        <img src="/splash-logo.png" alt="" aria-hidden="true"
+          style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: 17,
-            fontWeight: 600,
-            color: "var(--ink-1)",
-            lineHeight: 1.15,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 600,
+            color: "var(--ink-1)", lineHeight: 1.15,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}>
             {displayName}
           </div>
           {email && (
             <div style={{
-              marginTop: 4,
-              fontFamily: "var(--font-sans)",
-              fontSize: 12,
+              marginTop: 4, fontFamily: "var(--font-sans)", fontSize: 12,
               color: "var(--ink-3)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {email}
             </div>
           )}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-            <StatusChip icon={<CoachIcon size={12} />} label={apiKey ? t("settings.api_set") : t("settings.api_missing")} warn={!apiKey} />
-            <StatusChip icon={<CloudIcon size={12} />} label={caiyunApiKey ? t("settings.api_set") : t("settings.weather_api_default")} warn={!caiyunApiKey} />
-          </div>
         </div>
         <div style={{ color: "var(--ink-3)", fontSize: 15, marginLeft: 4, flexShrink: 0 }}>
-          {headerOpen ? "⌃" : "⌄"}
+          {open === "account" ? "⌃" : "⌄"}
         </div>
       </button>
-      {/* ── 账号 ────────────────────────────────────────────────────────── */}
-      <div aria-hidden={!headerOpen} style={{
-          maxHeight: headerOpen ? 560 : 0,
-          opacity: headerOpen ? 1 : 0,
-          transform: headerOpen ? "translateY(0)" : "translateY(-6px)",
-          overflow: "hidden",
-          pointerEvents: headerOpen ? "auto" : "none",
-          transition: "max-height 220ms cubic-bezier(0.2,0.7,0.3,1), opacity 160ms ease, transform 180ms ease",
-          paddingLeft: 14,
-          background: "var(--bg)",
-          borderLeft: "1px solid var(--rule-soft)",
-          borderRight: "1px solid var(--rule-soft)",
-          borderBottom: "1px solid var(--rule-soft)",
-          marginBottom: headerOpen ? 10 : 0,
-        }}>
-          <SubCell
-            primary={t("settings.profile")}
-            secondary={t("settings.profile_desc")}
-            onClick={onOpenProfile}
-          />
-          <SubCell
-            primary={t("settings.ai_api")}
-            secondary={apiKey
-              ? t("settings.api_set")
-              : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
-                  ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
-                  : t("settings.api_missing"))}
-            warn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
-            onClick={onOpenApiSettings}
-          />
-          <SubCell
-            primary={t("settings.weather_api")}
-            secondary={caiyunApiKey
-              ? t("settings.api_set")
-              : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
-                  ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
-                  : t("settings.weather_api_default"))}
-            warn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
-            onClick={onOpenWeatherApiSettings}
-          />
-          <SubCell
-            primary={t("settings.change_password")}
-            onClick={onChangePassword}
-          />
-          {isAdmin && (
-            <SubCell
-              primary={t("settings.generate_invite")}
-              onClick={onGenerateInvite}
-            />
-          )}
-          {isAdmin && (
-            <SubCell
-              primary={t("settings.prompt_catalog")}
-              onClick={onOpenPromptCatalog}
-            />
-          )}
-          <SubCell
-            primary={signingOut
-              ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <span className="ts-spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
-                  {t("settings.signing_out")}
-                </span>
-              : t("settings.sign_out")}
-            danger
-            onClick={handleSignOut}
-          />
-          <SubCell
-            primary={t("settings.delete_account")}
-            danger
-            onClick={onDeleteAccount}
-          />
+
+      <Panel open={open === "account"}>
+        <SubCell primary={t("settings.profile")} secondary={t("settings.profile_desc")} flash={profileFlash} onClick={onOpenProfile} />
+        <SubCell primary={t("settings.change_password")} onClick={onChangePassword} />
+        <SubCell
+          primary={signingOut
+            ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span className="ts-spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
+                {t("settings.signing_out")}
+              </span>
+            : t("settings.sign_out")}
+          danger onClick={handleSignOut} />
+        <SubCell primary={t("settings.delete_account")} danger onClick={onDeleteAccount} />
+      </Panel>
+
+      {/* Section chips. API keeps the two "configured" indicators from before. */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+        <SectionChip active={open === "api"} onClick={() => toggle("api")}>
+          <ApiDot icon={<CoachIcon size={12} />} ok={!!apiKey} active={open === "api"} />
+          <ApiDot icon={<CloudIcon size={12} />} ok={!!caiyunApiKey} active={open === "api"} />
+          <span>{t("settings.section_api")}</span>
+        </SectionChip>
+        {isAdmin && (
+          <SectionChip active={open === "admin"} onClick={() => toggle("admin")}>
+            {t("settings.section_admin")}
+          </SectionChip>
+        )}
+        <SectionChip active={open === "other"} onClick={() => toggle("other")}>
+          {t("settings.section_other")}
+        </SectionChip>
       </div>
 
-      {/* ── 其他 ──────────────────────────────────────────────────────────── */}
-      <Cell
-        flash={pushFlash}
-        primary={t("settings.daily_push")}
-        secondary={(() => {
-          // Prefer the new "HH:MM" times; fall back to legacy whole-hours.
-          const slots = (Array.isArray(pushTimes) && pushTimes.length)
-            ? [...pushTimes].sort()
-            : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
-          return (pushEnabled && slots.length > 0)
-            ? t("settings.daily_push_on", { time: slots.join(" · ") })
-            : t("settings.daily_push_off");
-        })()}
-        onClick={onOpenPushSettings}
-      />
-      <Cell
-        primary={t("settings.language")}
-        rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
-        onClick={onToggleLang}
-      />
-      <Cell
-        primary={t("settings.guide")}
-        secondary={t("settings.guide_desc")}
-        onClick={onOpenGuide}
-      />
-      <UpdateChecker />
+      <Panel open={open === "api"}>
+        <SubCell
+          primary={t("settings.ai_api")}
+          secondary={apiKey
+            ? t("settings.api_set")
+            : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
+                ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
+                : t("settings.api_missing"))}
+          warn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
+          onClick={onOpenApiSettings} />
+        <SubCell
+          primary={t("settings.weather_api")}
+          secondary={caiyunApiKey
+            ? t("settings.api_set")
+            : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
+                ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
+                : t("settings.weather_api_default"))}
+          warn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
+          onClick={onOpenWeatherApiSettings} />
+      </Panel>
+
+      {isAdmin && (
+        <Panel open={open === "admin"}>
+          <SubCell primary={t("settings.generate_invite")} onClick={onGenerateInvite} />
+          <SubCell primary={t("settings.prompt_catalog")} onClick={onOpenPromptCatalog} />
+        </Panel>
+      )}
+
+      <Panel open={open === "other"}>
+        <SubCell
+          primary={t("settings.daily_push")}
+          flash={pushFlash}
+          secondary={(pushEnabled && pushSlots.length > 0)
+            ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
+            : t("settings.daily_push_off")}
+          onClick={onOpenPushSettings} />
+        <SubCell
+          primary={t("settings.language")}
+          rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
+          onClick={onToggleLang} />
+        <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
+        <UpdateChecker />
+      </Panel>
     </div>
   );
 }
 
-// Oval 中/EN segmented switch — a knob slides to the active side on tap.
-// Rendered inside the language Cell as its right-hand control. Uses a div
-// (not a button) to stay valid nested inside the Cell's <button>, and stops
-// propagation so it toggles exactly once.
-function StatusChip({ icon, label, warn }) {
+// Collapsible group container with the same animation the account list used.
+function Panel({ open, children }) {
   return (
-    <span style={{
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 5,
-      minHeight: 22,
-      padding: "3px 8px",
-      border: `1px solid ${warn ? "rgba(181,78,26,0.32)" : "rgba(74,92,55,0.28)"}`,
-      background: warn ? "rgba(181,78,26,0.07)" : "var(--moss-bg)",
-      color: warn ? "var(--warn)" : "var(--moss-deep)",
-      borderRadius: 999,
-      fontFamily: "var(--font-sans)",
-      fontSize: 11,
-      fontWeight: 600,
-      whiteSpace: "nowrap",
-      maxWidth: "100%",
+    <div aria-hidden={!open} style={{
+      maxHeight: open ? 600 : 0,
+      opacity: open ? 1 : 0,
+      transform: open ? "translateY(0)" : "translateY(-6px)",
       overflow: "hidden",
-      textOverflow: "ellipsis",
+      pointerEvents: open ? "auto" : "none",
+      transition: "max-height 240ms cubic-bezier(0.2,0.7,0.3,1), opacity 160ms ease, transform 180ms ease",
+      marginBottom: open ? 10 : 0,
+      border: open ? "1px solid var(--rule-soft)" : "1px solid transparent",
+      borderRadius: 8,
+      background: "var(--bg)",
     }}>
-      {icon && (
-        <span style={{ display: "inline-flex", color: warn ? "var(--warn)" : "var(--moss-deep)" }}>
-          {icon}
-        </span>
-      )}
-      {label}
-    </span>
+      {children}
+    </div>
   );
 }
 
+// Pill that toggles a settings group.
+function SectionChip({ active, onClick, children }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      padding: "8px 14px", minHeight: 0,
+      border: `1px solid ${active ? "var(--ink-1)" : "var(--rule)"}`,
+      background: active ? "var(--ink-1)" : "var(--bg-elevated)",
+      color: active ? "var(--ink-inv)" : "var(--ink-1)",
+      borderRadius: 999,
+      fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600,
+      cursor: "pointer", WebkitTapHighlightColor: "transparent",
+    }}>
+      {children}
+    </button>
+  );
+}
+
+// Compact configured/missing indicator shown on the API chip (replaces the two
+// "Configured" pills). Green icon = set, warn = needs attention.
+function ApiDot({ icon, ok, active }) {
+  const color = active ? "var(--ink-inv)" : ok ? "var(--moss-deep)" : "var(--warn)";
+  return <span style={{ display: "inline-flex", color }} title={ok ? "configured" : "not set"}>{icon}</span>;
+}
+
+// Oval 中/EN segmented switch — a knob slides to the active side on tap. Stops
+// propagation so tapping the switch toggles language exactly once.
 function LangSwitch({ lang, onToggle }) {
   const isEn = lang === "en";
   return (
@@ -293,108 +277,27 @@ function LangSwitch({ lang, onToggle }) {
   );
 }
 
-// Top-level cells — full-width with the rule above + below, iOS-Settings look.
-function Cell({ primary, secondary, secondaryWarn, rightValue, onClick, href, external, danger, ariaLabel, flash }) {
-  const inner = (
-    <>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontFamily: "var(--font-sans)",
-          fontSize: 15,
-          color: danger ? "var(--danger)" : "var(--ink-1)",
-          fontWeight: 500,
-          lineHeight: 1.25,
-        }}>
-          {primary}
-        </div>
-        {secondary && (
-          <div style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: 12,
-            color: secondaryWarn ? "var(--warn)" : "var(--ink-3)",
-            marginTop: 3,
-            lineHeight: 1.35,
-          }}>
-            {secondary}
-          </div>
-        )}
-      </div>
-      {rightValue && (
-        <div style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 13,
-          color: "var(--ink-3)",
-          marginLeft: 12,
-        }}>
-          {rightValue}
-        </div>
-      )}
-      {(onClick || href) && !rightValue && (
-        <div style={{
-          marginLeft: 10,
-          color: "var(--ink-3)",
-          fontSize: 16,
-          lineHeight: 1,
-        }}>
-          {external ? "↗" : "›"}
-        </div>
-      )}
-    </>
-  );
-
-  const baseStyle = {
-    display: "flex",
-    alignItems: "center",
-    width: "100%",
-    textAlign: "left",
-    background: "var(--bg-elevated)",
-    border: "none",
-    borderBottom: "1px solid var(--rule-soft)",
-    borderTop: "1px solid var(--rule-soft)",
-    marginTop: -1,
-    padding: "14px 14px",
-    minHeight: 56,
-    cursor: onClick || href ? "pointer" : "default",
-    fontFamily: "var(--font-sans)",
-    borderRadius: 0,
-    color: "var(--ink-1)",
-    textDecoration: "none",
-    WebkitTapHighlightColor: "transparent",
-  };
-
-  if (href) {
-    return (
-      <a href={href} target="_blank" rel="noreferrer" style={baseStyle} aria-label={ariaLabel}>
-        {inner}
-      </a>
-    );
-  }
+// Rows inside an accordion group. Supports a secondary line, a right-hand
+// control (rightValue, e.g. the language switch — replaces the chevron), a
+// flash highlight (jump-to-setting), and a danger tone.
+function SubCell({ primary, secondary, warn, danger, rightValue, flash, onClick }) {
   return (
-    <button onClick={onClick} style={baseStyle} aria-label={ariaLabel}
-      className={flash ? "ts-flash" : undefined}>
-      {inner}
-    </button>
-  );
-}
-
-// Secondary cells — slightly indented + lower density, used inside the
-// expanded account menu so the user reads them as "options under email".
-function SubCell({ primary, secondary, warn, danger, onClick }) {
-  return (
-    <button onClick={onClick} style={{
-      display: "flex", alignItems: "center", width: "100%",
-      textAlign: "left",
-      background: "transparent",
-      border: "none",
-      borderBottom: "1px solid var(--rule-soft)",
-      padding: "12px 14px",
-      minHeight: 48,
-      fontFamily: "var(--font-sans)", fontSize: 14,
-      color: danger ? "var(--danger)" : "var(--ink-1)",
-      fontWeight: 500,
-      cursor: "pointer", borderRadius: 0,
-      WebkitTapHighlightColor: "transparent",
-    }}>
+    <button onClick={onClick}
+      className={flash ? "ts-flash" : undefined}
+      style={{
+        display: "flex", alignItems: "center", width: "100%",
+        textAlign: "left",
+        background: "transparent",
+        border: "none",
+        borderBottom: "1px solid var(--rule-soft)",
+        padding: "12px 14px",
+        minHeight: 48,
+        fontFamily: "var(--font-sans)", fontSize: 14,
+        color: danger ? "var(--danger)" : "var(--ink-1)",
+        fontWeight: 500,
+        cursor: "pointer", borderRadius: 0,
+        WebkitTapHighlightColor: "transparent",
+      }}>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span>{primary}</span>
         {secondary && (
@@ -413,7 +316,9 @@ function SubCell({ primary, secondary, warn, danger, onClick }) {
           </span>
         )}
       </span>
-      <span style={{ color: "var(--ink-3)", fontSize: 14 }}>›</span>
+      {rightValue
+        ? <span style={{ marginLeft: 12, flexShrink: 0 }}>{rightValue}</span>
+        : <span style={{ color: "var(--ink-3)", fontSize: 14 }}>›</span>}
     </button>
   );
 }

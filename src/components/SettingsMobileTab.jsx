@@ -43,7 +43,9 @@ export function SettingsMobileTab({
 }) {
   const t = useT();
   // Accordion — only one group open at a time. null | 'account' | 'api' | 'admin' | 'other'.
-  const [open, setOpen] = useState(null);
+  // Defaults to 'other' so the page doesn't land looking empty (everything else
+  // is one tap away via the header / chips).
+  const [open, setOpen] = useState("other");
   const toggle = (sec) => setOpen(cur => (cur === sec ? null : sec));
   const [signingOut, setSigningOut] = useState(false);
 

@@ -63,7 +63,7 @@ function removeLoginCredential(email) {
 // app), so we translate directly via translate(key, lang) and keep the chosen
 // language in localStorage. The authed app reads that same key on first load so
 // a brand-new user's UI + onboarding tour open in the language they picked here.
-export function LoginScreen({ onClose, signIn, register }) {
+export function LoginScreen({ onClose, signIn, register, sendPasswordReset, resendSignupConfirmation }) {
   const isMobile = useIsMobile();
   const [lang, setLang] = useState(initialLang);
   const tt = (k) => translate(k, lang);
@@ -74,7 +74,9 @@ export function LoginScreen({ onClose, signIn, register }) {
   const [password2, setPassword2] = useState("");
   const [invite, setInvite] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [auxBusy, setAuxBusy] = useState("");
   const [savedLogins, setSavedLogins] = useState(loadSavedLogins);
   const [rememberLogin, setRememberLogin] = useState(false);
 
@@ -91,6 +93,7 @@ export function LoginScreen({ onClose, signIn, register }) {
       case "code_used":     return tt("login.err_code_used");
       case "email_taken":   return tt("login.err_email_taken");
       case "weak_password": return tt("login.err_pw_short");
+      case "confirmation_send_failed": return tt("login.err_confirmation_send");
       default:              return tt("login.err_register");
     }
   }
@@ -98,6 +101,7 @@ export function LoginScreen({ onClose, signIn, register }) {
   function switchMode(next) {
     setMode(next);
     setError("");
+    setNotice("");
     setPassword2("");
     setInvite("");
   }
@@ -115,6 +119,7 @@ export function LoginScreen({ onClose, signIn, register }) {
     e.preventDefault();
     if (submitting) return;
     setError("");
+    setNotice("");
 
     if (isRegister) {
       if (password.length < 6) { setError(tt("login.err_pw_short")); return; }
@@ -127,6 +132,15 @@ export function LoginScreen({ onClose, signIn, register }) {
       const normalizedEmail = normalizeEmail(email);
       if (isRegister) {
         await register(normalizedEmail, password, invite.trim());
+        setNotice(tt("login.verify_sent"));
+        setMode("signin");
+        setEmail(normalizedEmail);
+        setPassword("");
+        setPassword2("");
+        setInvite("");
+        setRememberLogin(false);
+        setSubmitting(false);
+        return;
       } else {
         await signIn(normalizedEmail, password);
         setSavedLogins(rememberLogin
@@ -137,8 +151,40 @@ export function LoginScreen({ onClose, signIn, register }) {
     } catch (err) {
       setError(isRegister
         ? registerErrorText(err?.code)
-        : tt("login.err_signin"));
+        : (err?.code === "email_not_confirmed" ? tt("login.err_email_unverified") : tt("login.err_signin")));
       setSubmitting(false);
+    }
+  }
+
+  async function requestPasswordReset() {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) { setError(tt("login.err_email_required")); return; }
+    setError("");
+    setNotice("");
+    setAuxBusy("reset");
+    try {
+      await sendPasswordReset(normalizedEmail);
+      setNotice(tt("login.reset_sent"));
+    } catch {
+      setError(tt("login.err_reset"));
+    } finally {
+      setAuxBusy("");
+    }
+  }
+
+  async function resendConfirmation() {
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) { setError(tt("login.err_email_required")); return; }
+    setError("");
+    setNotice("");
+    setAuxBusy("confirm");
+    try {
+      await resendSignupConfirmation(normalizedEmail);
+      setNotice(tt("login.verify_resent"));
+    } catch {
+      setError(tt("login.err_resend_confirmation"));
+    } finally {
+      setAuxBusy("");
     }
   }
 
@@ -333,6 +379,43 @@ export function LoginScreen({ onClose, signIn, register }) {
             wordBreak: "break-word",
           }}>
             {error}
+          </div>
+        )}
+        {notice && (
+          <div style={{
+            border: "1px solid rgba(72,93,57,0.35)",
+            background: "rgba(72,93,57,0.08)",
+            color: "var(--moss-deep)",
+            padding: "8px 12px",
+            fontSize: 12,
+            fontFamily: "var(--font-sans)",
+            borderRadius: 2,
+            marginBottom: 16,
+            lineHeight: 1.5,
+          }}>
+            {notice}
+          </div>
+        )}
+
+        {!isRegister && (
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            margin: error ? "-8px 0 16px" : "-8px 0 16px",
+            fontFamily: "var(--font-sans)",
+            fontSize: 12,
+          }}>
+            <button type="button" onClick={requestPasswordReset}
+              disabled={submitting || auxBusy === "reset"}
+              style={{ background: "none", border: "none", padding: 0, color: "var(--moss-deep)", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", textDecoration: "underline" }}>
+              {auxBusy === "reset" ? tt("login.sending") : tt("login.forgot_password")}
+            </button>
+            <button type="button" onClick={resendConfirmation}
+              disabled={submitting || auxBusy === "confirm"}
+              style={{ background: "none", border: "none", padding: 0, color: "var(--ink-3)", cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", textDecoration: "underline" }}>
+              {auxBusy === "confirm" ? tt("login.sending") : tt("login.resend_verify")}
+            </button>
           </div>
         )}
 

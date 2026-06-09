@@ -36,6 +36,7 @@ import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
+import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
@@ -156,7 +157,20 @@ function LoadingScreen() {
 }
 
 export default function App() {
-  const { user, loading, signIn, signOut, changePassword, register, deleteAccount } = useAuth();
+  const {
+    user,
+    loading,
+    recoveryMode,
+    signIn,
+    signOut,
+    changePassword,
+    register,
+    deleteAccount,
+    sendPasswordReset,
+    resendSignupConfirmation,
+    completePasswordRecovery,
+    clearRecoveryMode,
+  } = useAuth();
 
   // Watchdog: if auth init never resolves the loading state, surface it on the
   // error overlay so a stuck-on-splash boot is diagnosable on the device.
@@ -167,7 +181,25 @@ export default function App() {
   }, [loading]);
 
   if (loading) return <LoadingScreen />;
-  if (!user) return <LoginScreen onClose={() => {}} signIn={signIn} register={register} />;
+  if (recoveryMode) {
+    return (
+      <PasswordRecoveryModal
+        completePasswordRecovery={completePasswordRecovery}
+        onClose={clearRecoveryMode}
+      />
+    );
+  }
+  if (!user) {
+    return (
+      <LoginScreen
+        onClose={() => {}}
+        signIn={signIn}
+        register={register}
+        sendPasswordReset={sendPasswordReset}
+        resendSignupConfirmation={resendSignupConfirmation}
+      />
+    );
+  }
   return <AuthedApp user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount} />;
 }
 

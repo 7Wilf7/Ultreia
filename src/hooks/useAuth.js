@@ -2,9 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { registerWithInvite } from "../lib/db/invites";
 
+const AUTH_REDIRECT_TO = "https://www.aitrainstudio.com/";
+
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [recoveryMode, setRecoveryMode] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -15,7 +18,8 @@ export function useAuth() {
       setLoading(false);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       setUser(session?.user ?? null);
       setLoading(false);
     });
@@ -28,8 +32,34 @@ export function useAuth() {
 
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    if (error) {
+      const msg = (error.message || "").toLowerCase();
+      if (msg.includes("confirm") || msg.includes("verified")) error.code = "email_not_confirmed";
+      throw error;
+    }
     return data;
+  }
+
+  async function sendPasswordReset(email) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: AUTH_REDIRECT_TO,
+    });
+    if (error) throw error;
+  }
+
+  async function resendSignupConfirmation(email) {
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: AUTH_REDIRECT_TO },
+    });
+    if (error) throw error;
+  }
+
+  async function completePasswordRecovery(newPassword) {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    setRecoveryMode(false);
   }
 
   async function signOut() {
@@ -38,11 +68,11 @@ export function useAuth() {
   }
 
   // Invite-gated registration: the Edge Function validates the code + creates
-  // the (pre-confirmed) account, then we sign in so a session is established.
+  // the unconfirmed account, then sends the signup confirmation email. The
+  // user can sign in only after clicking the email link.
   // registerWithInvite throws an Error with `.code` set to the server error id.
   async function register(email, password, code) {
-    await registerWithInvite(email, password, code);
-    return signIn(email, password);
+    return await registerWithInvite(email, password, code);
   }
 
   // Verify-then-update flow: Supabase's updateUser does NOT require the old
@@ -89,5 +119,18 @@ export function useAuth() {
     await supabase.auth.signOut();
   }
 
-  return { user, loading, signIn, signOut, changePassword, register, deleteAccount };
+  return {
+    user,
+    loading,
+    recoveryMode,
+    signIn,
+    signOut,
+    changePassword,
+    register,
+    deleteAccount,
+    sendPasswordReset,
+    resendSignupConfirmation,
+    completePasswordRecovery,
+    clearRecoveryMode: () => setRecoveryMode(false),
+  };
 }

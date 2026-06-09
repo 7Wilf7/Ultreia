@@ -3,7 +3,8 @@
 // The app is invite-only. Public Supabase signup stays DISABLED — instead a
 // would-be user submits { email, password, code } here, and this function (with
 // service_role, so it bypasses RLS) validates a one-time invite code, creates
-// the auth user, and burns the code. Atomicity: the code is only marked used
+// an unconfirmed auth user, burns the code, and sends the signup confirmation
+// email. Atomicity: the code is only marked used
 // AFTER the user is created, via a conditional UPDATE that loses the race if
 // someone else used it first (in which case we delete the just-created user).
 //
@@ -62,11 +63,13 @@ Deno.serve(async (req) => {
   if (!codeRow) return json({ error: "invalid_code" }, 400);
   if (codeRow.used_by) return json({ error: "code_used" }, 400);
 
-  // 2. Create the auth user (email pre-confirmed so they can log in right away).
+  // 2. Create the auth user without confirming email. createUser() does not
+  //    send the confirmation email, so we resend the signup confirmation after
+  //    the invite code is safely burned below.
   const { data: created, error: createErr } = await db.auth.admin.createUser({
     email,
     password,
-    email_confirm: true,
+    email_confirm: false,
   });
   if (createErr) {
     const msg = (createErr.message || "").toLowerCase();
@@ -91,5 +94,14 @@ Deno.serve(async (req) => {
     return json({ error: "code_used" }, 400);
   }
 
-  return json({ ok: true });
+  // 4. Send the verification email. If this fails, keep the account + burned
+  //    code: the login screen can resend the confirmation email for this user.
+  const { error: resendErr } = await db.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: "https://www.aitrainstudio.com/" },
+  });
+  if (resendErr) return json({ error: "confirmation_send_failed", detail: resendErr.message }, 500);
+
+  return json({ ok: true, needsEmailVerification: true });
 });

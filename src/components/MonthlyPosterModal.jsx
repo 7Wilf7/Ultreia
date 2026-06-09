@@ -32,7 +32,6 @@ const THEMES = {
     veilOpacity: 0.18,
     imageOpacity: 0.34,
     imageFilter: "url(#poster-invert)",
-    logoFilter: "url(#poster-invert)",
     vignetteA: 0.06,
     vignetteB: 0.18,
   },
@@ -46,7 +45,6 @@ const THEMES = {
     veilOpacity: 0.68,
     imageOpacity: 0.62,
     imageFilter: undefined,
-    logoFilter: undefined,
     vignetteA: 0.18,
     vignetteB: 0.58,
   },
@@ -383,7 +381,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
   const heroStr = String(stats.heroValue);
   const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
   const unitSize = heroSize * 0.26;
-  const logoSize = Math.round(W * 0.118);
+  const logoSize = Math.round(W * 0.145);
   const titleSize = Math.min(60, H * 0.046);
   const metaSize = Math.min(34, H * 0.026);
   const kickerSize = Math.min(34, H * 0.026);
@@ -490,11 +488,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="3" fill={pal.ink}>{stats.title}</text>
       <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize={metaSize} letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
       {logoSrc && (
-        <>
-          {theme === "night" && <rect x={W - M - logoSize - 10} y={yTitle - logoSize + 2} width={logoSize + 20} height={logoSize + 20} rx="26" fill="#000000" opacity="0.22" />}
-          <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 12} width={logoSize} height={logoSize} opacity="0.98" filter={pal.logoFilter} preserveAspectRatio="xMidYMid meet" />
-          {theme === "night" && <rect x={W - M - logoSize * 0.26} y={yTitle + logoSize * 0.37} width={logoSize * 0.19} height={logoSize * 0.035} rx={logoSize * 0.017} fill="#f3f0e2" opacity="0.88" />}
-        </>
+        <image href={logoSrc} x={W - M - logoSize} y={yTitle - logoSize + 12} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />
       )}
       <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
 

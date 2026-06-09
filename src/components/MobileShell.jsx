@@ -24,19 +24,14 @@ function inHorizontalScroller(node) {
  * current tab AND a neighbor at once while you drag; the 5th tab (idx=4) is the
  * mobile-only Settings page.
  *
- * Each tab is its OWN scroll container (so scroll position is preserved per tab
- * and pull-to-refresh only engages on the active pane). Only the active pane and
+ * Each tab is its OWN scroll container (so scroll position is preserved per tab).
+ * Only the active pane and
  * its immediate neighbors render real content — far panes stay empty so we never
  * mount five heavy tabs at once.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
  */
-// Pull distance (px of finger travel) needed to trigger a refresh, and how far
-// the indicator can stretch. Resistance makes the pull feel rubbery.
-const PULL_TRIGGER = 70;
-const PULL_MAX = 110;
-const PULL_RESIST = 0.5;
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
@@ -61,12 +56,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const [instant, setInstant] = useState(false);
   const snapTimer = useRef(null);
 
-  // Pull-to-refresh gesture state. pull = current indicator offset in px.
-  const [pull, setPull] = useState(0);
-  const pullState = useRef(null);
-  const pullRef = useRef(0);
-  function setPullPx(px) { pullRef.current = px; setPull(px); }
-
   const lastTabTap = useRef({ idx: -1, at: 0 });
   function scrollActiveToTop() {
     activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
@@ -80,9 +69,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
-  // touch.current = { x, y, skip, startAtTop, w, mode }. mode is decided on the
-  // first significant move: 'page' (horizontal → tab pager), 'pull' (downward at
-  // the top of the active pane), 'scroll' (vertical → let the pane scroll), or
+  // touch.current = { x, y, skip, w, mode }. mode is decided on the first
+  // significant move: 'page' (horizontal → tab pager), 'scroll' (vertical → let the pane scroll), or
   // 'ignore' (started inside a horizontal scroller).
   const touch = useRef(null);
 
@@ -100,21 +88,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   function onTouchStart(e) {
     clearTimeout(snapTimer.current);
     if (e.touches.length !== 1) {
-      touch.current = null; pullState.current = null;
-      if (pullRef.current) setPullPx(0);
+      touch.current = null;
       return;
     }
     const p = e.touches[0];
-    const pane = activePane();
     touch.current = {
       x: p.clientX, y: p.clientY,
       skip: inHorizontalScroller(e.target),
-      startAtTop: (pane?.scrollTop || 0) <= 0,
       w: mainRef.current?.clientWidth || 1,
       mode: null,
     };
-    pullState.current = null;
-    if (pullRef.current) setPullPx(0);
     if (dragXRef.current) setDragXpx(0);
   }
 
@@ -138,23 +121,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         const innerCanMove = inner && ((dir > 0 && inner.index < inner.count - 1) || (dir < 0 && inner.index > 0));
         st.mode = innerCanMove ? "inner" : "page";
       }
-      else if (dy > 0 && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6 && onRefresh && st.startAtTop) st.mode = "pull";
       else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) st.mode = "scroll";
       else return; // too small to classify yet
-      if (st.mode === "page" || st.mode === "pull") setDragging(true);
+      if (st.mode === "page") setDragging(true);
     }
 
     if (st.mode === "page") {
       const atFirst = tab <= 0, atLast = tab >= tabCount - 1;
       const d = ((atFirst && dx > 0) || (atLast && dx < 0)) ? dx * EDGE_RESIST : dx;
       setDragXpx(d);
-    } else if (st.mode === "pull") {
-      const atTop = (activePane()?.scrollTop || 0) <= 0;
-      if (!atTop) { if (pullRef.current) setPullPx(0); return; }
-      if (!pullState.current) pullState.current = { startY: p.clientY };
-      const pdy = p.clientY - pullState.current.startY;
-      if (pdy > 0) setPullPx(Math.min(pdy * PULL_RESIST, PULL_MAX));
-      else { pullState.current.startY = p.clientY; if (pullRef.current) setPullPx(0); }
     }
   }
 
@@ -162,15 +137,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const st = touch.current;
     touch.current = null;
     if (!st) return;
-
-    if (st.mode === "pull") {
-      const triggered = pullRef.current >= PULL_TRIGGER;
-      pullState.current = null;
-      setDragging(false);
-      setPullPx(0);
-      if (triggered && onRefresh) onRefresh();
-      return;
-    }
 
     if (st.mode === "page") {
       const W = st.w || 1;
@@ -199,13 +165,22 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const prev = lastTabTap.current;
     lastTabTap.current = { idx, at: now };
     if (idx === tab && prev.idx === idx && now - prev.at < 320) {
+      if (idx === 0 && onRefresh) {
+        const pane = activePane();
+        if ((pane?.scrollTop || 0) > 4) {
+          scrollActiveToTop();
+          return;
+        }
+        onRefresh();
+        return;
+      }
       scrollActiveToTop();
       return;
     }
     go(idx, { teleport: true });
   }
 
-  const pullY = refreshing ? 44 : pull;
+  const pullY = refreshing ? 44 : 0;
   const trackTransition = (dragging || instant) ? "none" : `transform ${Math.round(SNAP_MS * 0.93)}ms cubic-bezier(0.2,0.7,0.3,1)`;
 
   return (
@@ -227,38 +202,31 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           position: "relative",
           background: "var(--bg)",
         }}>
-        {/* Pull-to-refresh indicator — above the panes; the track shifts down by
-            `pull` (or a fixed amount while refreshing) so it peeks in. */}
-        {(pull > 0 || refreshing) && (
+        {/* Refresh indicator shown while a manual sync is running. */}
+        {refreshing && (
           <div style={{
             position: "absolute",
             top: "calc(max(env(safe-area-inset-top), 14px) + 8px)",
             left: 0, right: 0,
-            height: refreshing ? 44 : pull,
+            height: 44,
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             color: "var(--ink-2)", pointerEvents: "none", zIndex: 11,
             fontFamily: "var(--font-sans)", fontSize: 13,
           }}>
-            {refreshing ? (
-              <><Spinner size={16} thickness={2} color="var(--moss)" /><span>{t("sync.syncing")}</span></>
-            ) : pull >= PULL_TRIGGER ? (
-              <><Spinner size={16} thickness={2} color="var(--moss)" /><span>{t("sync.release")}</span></>
-            ) : (
-              <span style={{ opacity: Math.min(pull / PULL_TRIGGER, 1) }}>↓ {t("sync.pull")}</span>
-            )}
+            <><Spinner size={16} thickness={2} color="var(--moss)" /><span>{t("sync.syncing")}</span></>
           </div>
         )}
 
         {/* Pager track — width = tabCount viewports; translateX moves between
             tabs (px during a drag → finger-following), translateY handles the
-            pull. Each pane is its own scroller. */}
+            manual refresh offset. Each pane is its own scroller. */}
         <div style={{
           display: "flex",
           height: "100%",
           width: `${tabCount * 100}%`,
           transform: `translateX(calc(${(-tab * 100) / tabCount}% + ${dragX}px)) translateY(${pullY}px)`,
           transition: trackTransition,
-          willChange: (dragging || pull || refreshing || instant) ? "transform" : undefined,
+          willChange: (dragging || refreshing || instant) ? "transform" : undefined,
         }}>
           {TABS.map(({ idx }) => {
             const isAdjacent = Math.abs(idx - tab) <= 1;

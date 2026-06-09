@@ -167,7 +167,6 @@ export default function App() {
     register,
     deleteAccount,
     sendPasswordReset,
-    resendSignupConfirmation,
     completePasswordRecovery,
     clearRecoveryMode,
   } = useAuth();
@@ -196,7 +195,6 @@ export default function App() {
         signIn={signIn}
         register={register}
         sendPasswordReset={sendPasswordReset}
-        resendSignupConfirmation={resendSignupConfirmation}
       />
     );
   }

@@ -167,10 +167,18 @@ export function TrainingTab({
   const t = useT();
   const isMobile = useIsMobile();
   const sectionTouch = useRef(null);
+  const viewDragX = useRef(0);
   const [viewMotion, setViewMotion] = useState({ dir: 0, seq: 0 });
+  const [viewDrag, setViewDrag] = useState({ x: 0, active: false });
+
+  function setViewDragX(x, active = true) {
+    viewDragX.current = x;
+    setViewDrag({ x, active });
+  }
 
   function changeView(nextView) {
     if (nextView === view) return;
+    setViewDragX(0, false);
     setViewMotion(prev => ({
       dir: TRAINING_VIEW_ORDER[nextView] > TRAINING_VIEW_ORDER[view] ? 1 : -1,
       seq: prev.seq + 1,
@@ -184,24 +192,68 @@ export function TrainingTab({
       return;
     }
     const p = e.touches[0];
-    sectionTouch.current = { x: p.clientX, y: p.clientY };
+    sectionTouch.current = {
+      x: p.clientX,
+      y: p.clientY,
+      t: e.timeStamp || 0,
+      w: e.currentTarget?.clientWidth || window.innerWidth || 1,
+      mode: null,
+    };
+  }
+
+  function onSectionTouchMove(e) {
+    if (!isMobile || e.touches.length !== 1 || !sectionTouch.current) return;
+    const st = sectionTouch.current;
+    const p = e.touches[0];
+    const dx = p.clientX - st.x;
+    const dy = p.clientY - st.y;
+    if (st.mode == null) {
+      if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
+        const dir = dx < 0 ? 1 : -1;
+        const canMove = (dir > 0 && view === "activities") || (dir < 0 && view === "charts");
+        st.mode = canMove ? "inner" : "pass";
+        if (st.mode === "inner") setViewDragX(0, true);
+      } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
+        st.mode = "scroll";
+      } else {
+        return;
+      }
+    }
+    if (st.mode === "inner") {
+      e.stopPropagation();
+      e.preventDefault?.();
+      setViewDragX(dx, true);
+    }
   }
 
   function onSectionTouchEnd(e) {
     if (!isMobile || !sectionTouch.current) return;
     const st = sectionTouch.current;
     sectionTouch.current = null;
+    if (st.mode !== "inner") {
+      setViewDragX(0, false);
+      return;
+    }
     const p = e.changedTouches?.[0];
     if (!p) return;
     const dx = p.clientX - st.x;
     const dy = p.clientY - st.y;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    const dt = Math.max(1, (e.timeStamp || 0) - (st.t || 0));
+    const velocity = dx / dt;
+    const threshold = Math.min((st.w || 1) * 0.16, 58);
+    const shouldCommit = Math.abs(dx) >= threshold || Math.abs(velocity) > 0.38;
+    if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
+      setViewDragX(0, false);
+      return;
+    }
     if (dx < 0 && view === "activities") {
       e.stopPropagation();
       changeView("charts");
     } else if (dx > 0 && view === "charts") {
       e.stopPropagation();
       changeView("activities");
+    } else {
+      setViewDragX(0, false);
     }
   }
 
@@ -370,7 +422,13 @@ export function TrainingTab({
       key={`${view}-${viewMotion.seq}`}
       className={viewMotionClass}
       onTouchStart={onSectionTouchStart}
+      onTouchMove={onSectionTouchMove}
       onTouchEnd={onSectionTouchEnd}
+      style={isMobile ? {
+        transform: `translateX(${viewDrag.x}px)`,
+        transition: viewDrag.active ? "none" : "transform 240ms cubic-bezier(0.18,0.86,0.24,1)",
+        willChange: viewDrag.active ? "transform" : undefined,
+      } : undefined}
     >
       {view !== "activities" && (
       <div style={stickyHeaderStyle}>

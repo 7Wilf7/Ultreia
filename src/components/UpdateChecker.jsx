@@ -61,18 +61,49 @@ function pickApkAsset(assets) {
   return assets.find((a) => /\.apk$/i.test(a?.name)) || null;
 }
 
+const NOTE_TRANSLATIONS = {
+  "add horizontal tab motion and cleaner update notes": "优化移动端横滑动画，并清理更新日志",
+  "optimize mobile tab gestures and update notes": "优化移动端 tab 手势和更新日志",
+  "remove unused legacy logo resources": "清理不再使用的旧 logo 资源",
+  "optimize logo assets and poster line background": "优化 logo 资源与海报背景线条",
+  "use original product logo assets": "统一使用正确的产品 logo",
+  "refine poster logo treatment": "调整分享海报 logo 细节",
+  "fix poster logo rendering": "修正分享海报 logo 显示",
+  "separate day and night poster themes": "区分分享海报 Day / Night 样式",
+  "improve poster background and readability": "优化分享海报背景和可读性",
+  "improve mobile settings and tab gestures": "优化移动端设置页和 tab 手势",
+  "fix calendar legacy dots and greeting profile": "清理日历旧标记，并修复问候语账号读取",
+  "fix login layout and account actions": "修复登录页布局和账号操作入口",
+  "add remembered login accounts": "新增登录账号记忆",
+  "add email verification flow": "新增邮箱验证流程",
+};
+
+function localizeNoteLine(line) {
+  const prefix = line.match(/^(\s*[-*]\s*)/)?.[1] || "";
+  let text = line.replace(/^\s*[-*]\s*/, "").trim();
+  if (!text) return "";
+  if (/^(bump|reset)\s+version\s+to\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
+  if (/^version\s+bump\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
+  text = text
+    .replace(/[;,]?\s*(bump|reset)\s+version\s+to\s+v?\d+\.\d+\.\d+/gi, "")
+    .replace(/\bv?\d+\.\d+\.\d+\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (!text) return "";
+  const translated = NOTE_TRANSLATIONS[text.toLowerCase()] || text;
+  return `${prefix}${translated}`;
+}
+
 // The release notes come from raw git commit subjects, which sometimes mention
-// version numbers ("reset version to 0.6.2"). The version already shows as the
-// panel title, so strip stray version tokens from the body to avoid the dupe.
+// version numbers ("Bump version to 0.9.4"). The version already shows as the
+// panel title, so remove release-only version lines and localize common commit
+// subjects for the in-app changelog.
 function cleanNotes(notes) {
   if (!notes) return "";
   return notes
     .split("\n")
-    .map((l) => l
-      .replace(/[;,]?\s*reset version to\s*v?\d+\.\d+\.\d+/gi, "")
-      .replace(/\bv?\d+\.\d+\.\d+\b/g, "")
-      .replace(/\s{2,}/g, " ")
-      .trimEnd())
+    .map(localizeNoteLine)
+    .filter(Boolean)
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

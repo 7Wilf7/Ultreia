@@ -220,13 +220,17 @@ export function SettingsMobileTab({
 function AccountPanel({ open, children }) {
   return (
     <div aria-hidden={!open} style={{
-      display: open ? "block" : "none",
-      animation: open ? "ts-settings-panel-in 160ms cubic-bezier(0.2,0.7,0.3,1)" : undefined,
-      marginBottom: 10,
+      maxHeight: open ? 260 : 0,
+      opacity: open ? 1 : 0,
+      transform: open ? "translateY(0)" : "translateY(-6px)",
+      transition: "max-height 320ms cubic-bezier(0.18,0.86,0.24,1), opacity 240ms cubic-bezier(0.2,0.7,0.3,1), transform 280ms cubic-bezier(0.18,0.86,0.24,1), margin-bottom 280ms cubic-bezier(0.18,0.86,0.24,1), border-color 240ms ease",
+      marginBottom: open ? 10 : 0,
       border: "1px solid var(--rule-soft)",
       borderRadius: 8,
       background: "var(--bg)",
       overflow: "hidden",
+      pointerEvents: open ? "auto" : "none",
+      willChange: "max-height, opacity, transform",
     }}>
       {children}
     </div>

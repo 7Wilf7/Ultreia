@@ -81,11 +81,19 @@ export function RacesTab({
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const topSwipe = useRef(null);
+  const topDragX = useRef(0);
   const [topMotion, setTopMotion] = useState({ dir: 0, seq: 0 });
   const [subMotion, setSubMotion] = useState({ dir: 0, seq: 0 });
+  const [topDrag, setTopDrag] = useState({ x: 0, active: false });
+
+  function setTopDragX(x, active = true) {
+    topDragX.current = x;
+    setTopDrag({ x, active });
+  }
 
   function changeMobileTopTab(nextTab) {
     if (nextTab === mobileTopTab) return;
+    setTopDragX(0, false);
     setTopMotion(prev => ({
       dir: MOBILE_TOP_TAB_ORDER[nextTab] > MOBILE_TOP_TAB_ORDER[mobileTopTab] ? 1 : -1,
       seq: prev.seq + 1,
@@ -109,24 +117,68 @@ export function RacesTab({
       return;
     }
     const p = e.touches[0];
-    topSwipe.current = { x: p.clientX, y: p.clientY };
+    topSwipe.current = {
+      x: p.clientX,
+      y: p.clientY,
+      t: e.timeStamp || 0,
+      w: e.currentTarget?.clientWidth || window.innerWidth || 1,
+      mode: null,
+    };
+  }
+
+  function onTopSwipeMove(e) {
+    if (!isMobile || e.touches.length !== 1 || !topSwipe.current) return;
+    const st = topSwipe.current;
+    const p = e.touches[0];
+    const dx = p.clientX - st.x;
+    const dy = p.clientY - st.y;
+    if (st.mode == null) {
+      if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
+        const dir = dx < 0 ? 1 : -1;
+        const canMove = (dir > 0 && mobileTopTab === "races") || (dir < 0 && mobileTopTab === "pr");
+        st.mode = canMove ? "inner" : "pass";
+        if (st.mode === "inner") setTopDragX(0, true);
+      } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
+        st.mode = "scroll";
+      } else {
+        return;
+      }
+    }
+    if (st.mode === "inner") {
+      e.stopPropagation();
+      e.preventDefault?.();
+      setTopDragX(dx, true);
+    }
   }
 
   function onTopSwipeEnd(e) {
     if (!isMobile || !topSwipe.current) return;
     const st = topSwipe.current;
     topSwipe.current = null;
+    if (st.mode !== "inner") {
+      setTopDragX(0, false);
+      return;
+    }
     const p = e.changedTouches?.[0];
     if (!p) return;
     const dx = p.clientX - st.x;
     const dy = p.clientY - st.y;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    const dt = Math.max(1, (e.timeStamp || 0) - (st.t || 0));
+    const velocity = dx / dt;
+    const threshold = Math.min((st.w || 1) * 0.16, 58);
+    const shouldCommit = Math.abs(dx) >= threshold || Math.abs(velocity) > 0.38;
+    if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
+      setTopDragX(0, false);
+      return;
+    }
     if (dx < 0 && mobileTopTab === "races") {
       e.stopPropagation();
       changeMobileTopTab("pr");
     } else if (dx > 0 && mobileTopTab === "pr") {
       e.stopPropagation();
       changeMobileTopTab("races");
+    } else {
+      setTopDragX(0, false);
     }
   }
 
@@ -630,7 +682,13 @@ export function RacesTab({
         key={`${mobileTopTab}-${topMotion.seq}`}
         className={topMotionClass}
         onTouchStart={onTopSwipeStart}
+        onTouchMove={onTopSwipeMove}
         onTouchEnd={onTopSwipeEnd}
+        style={{
+          transform: `translateX(${topDrag.x}px)`,
+          transition: topDrag.active ? "none" : "transform 240ms cubic-bezier(0.18,0.86,0.24,1)",
+          willChange: topDrag.active ? "transform" : undefined,
+        }}
       >
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
             Side margins bleed past main's 14px gutters. Negative `top`

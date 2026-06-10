@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
@@ -35,7 +35,7 @@ function inHorizontalScroller(node) {
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
-const SNAP_MS = 220;
+const SNAP_MS = 260;
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
   const t = useT();
@@ -54,6 +54,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   // tap teleports (no sweep through the empty panes between far tabs) and the
   // post-commit reposition doesn't double-animate.
   const [instant, setInstant] = useState(false);
+  const [tapWindow, setTapWindow] = useState(null);
+  const tapWindowTimer = useRef(null);
+
+  useEffect(() => () => {
+    if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
+  }, []);
 
   const lastTabTap = useRef({ idx: -1, at: 0 });
   function scrollActiveToTop() {
@@ -73,13 +79,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   // 'ignore' (started inside a horizontal scroller).
   const touch = useRef(null);
 
-  // Jump to `next` tab. Used by drag-commit AND by bottom-nav taps. Taps pass
-  // instant=true so a far jump teleports instead of sweeping blank panes.
-  function go(next, { teleport = false } = {}) {
+  // Jump to `next` tab. Used by drag-commit AND by bottom-nav taps.
+  function go(next, { animate = true } = {}) {
     if (next === tab || next < 0 || next >= tabCount) return;
-    if (teleport) {
+    if (!animate) {
       setInstant(true);
       requestAnimationFrame(() => setInstant(false));
+    } else {
+      if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
+      setDragging(false);
+      setDragXpx(0);
+      setTapWindow({ from: Math.min(tab, next), to: Math.max(tab, next) });
+      tapWindowTimer.current = setTimeout(() => setTapWindow(null), SNAP_MS + 90);
     }
     setTab(next);
   }
@@ -92,7 +103,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const p = e.touches[0];
     touch.current = {
       x: p.clientX, y: p.clientY,
-      t: Date.now(),
+      t: e.timeStamp || 0,
       skip: inHorizontalScroller(e.target),
       w: mainRef.current?.clientWidth || 1,
       mode: null,
@@ -109,7 +120,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const dy = p.clientY - st.y;
 
     if (st.mode === null) {
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
         // Horizontal. If the current tab has an inner toggle (Training's
         // Activities/Charts, Races' Races/PR) that can still move in this
         // direction, leave it to that tab's own swipe handler — the top pager
@@ -126,13 +137,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }
 
     if (st.mode === "page") {
+      e.preventDefault?.();
       const atFirst = tab <= 0, atLast = tab >= tabCount - 1;
       const d = ((atFirst && dx > 0) || (atLast && dx < 0)) ? dx * EDGE_RESIST : dx;
       setDragXpx(d);
     }
   }
 
-  function onTouchEnd() {
+  function onTouchEnd(e) {
     const st = touch.current;
     touch.current = null;
     if (!st) return;
@@ -140,12 +152,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (st.mode === "page") {
       const W = st.w || 1;
       const dx = dragXRef.current;
-      const dt = Math.max(1, Date.now() - (st.t || 0));
+      const dt = Math.max(1, (e.timeStamp || 0) - (st.t || 0));
       const velocity = dx / dt;
-      const threshold = Math.min(W * 0.18, 68);
+      const threshold = Math.min(W * 0.16, 58);
       let dir = 0;
-      if ((dx <= -threshold || velocity < -0.45) && tab < tabCount - 1) dir = 1;
-      else if ((dx >= threshold || velocity > 0.45) && tab > 0) dir = -1;
+      if ((dx <= -threshold || velocity < -0.38) && tab < tabCount - 1) dir = 1;
+      else if ((dx >= threshold || velocity > 0.38) && tab > 0) dir = -1;
       setDragging(false); // re-enable the snap transition
       if (dir !== 0) {
         // Commit immediately so rapid repeated swipes can start from the new
@@ -179,11 +191,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       scrollActiveToTop();
       return;
     }
-    go(idx, { teleport: true });
+    go(idx, { animate: true });
   }
 
   const pullY = refreshing ? 44 : 0;
-  const trackTransition = (dragging || instant) ? "none" : `transform ${Math.round(SNAP_MS * 0.93)}ms cubic-bezier(0.2,0.7,0.3,1)`;
+  const trackTransition = (dragging || instant) ? "none" : `transform ${SNAP_MS}ms cubic-bezier(0.18,0.86,0.24,1)`;
 
   return (
     <div style={{
@@ -231,7 +243,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           willChange: (dragging || refreshing || instant) ? "transform" : undefined,
         }}>
           {TABS.map(({ idx }) => {
-            const isAdjacent = Math.abs(idx - tab) <= 1;
+            const isAdjacent = tapWindow
+              ? idx >= tapWindow.from && idx <= tapWindow.to
+              : Math.abs(idx - tab) <= 1;
             return (
               <div
                 key={idx}

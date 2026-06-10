@@ -3,7 +3,7 @@ import { s } from "../../styles";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { ModalRoot } from "../ModalRoot";
 import { translate } from "../../i18n/translations";
-import productLogoUrl from "../../../resources/Original.png";
+import productLogoUrl from "../../../resources/original-ui.png";
 
 const LANG_KEY = "ts-lang";
 const SAVED_LOGINS_KEY = "ts-saved-logins";

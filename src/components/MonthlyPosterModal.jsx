@@ -8,7 +8,9 @@ import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
-import productLogoUrl from "../../resources/Original.png";
+import productLogoUrl from "../../resources/original-ui.png";
+import posterLineNightUrl from "../../resources/Line Only.png";
+import posterLineDayUrl from "../../resources/line-only-day.png";
 
 // ── Canvas options ──────────────────────────────────────────────────────────
 // One poster design, three crop ratios. The composition is anchored to fractions
@@ -30,7 +32,7 @@ const THEMES = {
     accent: "#586340",
     veil: "#f1ede1",
     veilOpacity: 0.18,
-    imageOpacity: 0.18,
+    imageOpacity: 0.16,
     vignetteA: 0.06,
     vignetteB: 0.18,
   },
@@ -42,7 +44,7 @@ const THEMES = {
     accent: "#77825b",
     veil: "#080a07",
     veilOpacity: 0.68,
-    imageOpacity: 0.62,
+    imageOpacity: 0.42,
     vignetteA: 0.18,
     vignetteB: 0.58,
   },
@@ -355,33 +357,27 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function PosterBackground({ W, H, pal }) {
-  const scale = W / 720;
-  const x = W * 0.02;
-  const y = H * 0.19;
+function PosterBackground({ W, H, theme, pal, lineSrc }) {
+  if (!lineSrc) return null;
+  const size = Math.round(W * 1.22);
+  const x = Math.round((W - size) / 2);
+  const y = Math.round(H * 0.135);
 
   return (
-    <g opacity={pal.imageOpacity} transform={`translate(${x} ${y}) scale(${scale})`}>
-      <path
-        d="M76 360 L292 112 L476 360 M330 360 L502 190 L642 360"
-        fill="none"
-        stroke={pal.ink}
-        strokeWidth="38"
-        strokeLinecap="butt"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M642 360 H704"
-        fill="none"
-        stroke={pal.accent}
-        strokeWidth="18"
-        strokeLinecap="butt"
-      />
-    </g>
+    <image
+      href={lineSrc}
+      x={x}
+      y={y}
+      width={size}
+      height={size}
+      opacity={pal.imageOpacity}
+      preserveAspectRatio="xMidYMid meet"
+      style={{ mixBlendMode: theme === "day" ? "multiply" : "screen" }}
+    />
   );
 }
 
-function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc, lineDaySrc, lineNightSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
   const M = 82;
@@ -494,7 +490,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      <PosterBackground W={W} H={H} pal={pal} />
+      <PosterBackground W={W} H={H} theme={theme} pal={pal} lineSrc={theme === "day" ? lineDaySrc : lineNightSrc} />
       <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
@@ -561,6 +557,8 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [singleGpsTrack, setSingleGpsTrack] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [logoSrc, setLogoSrc] = useState(productLogoUrl);
+  const [lineDaySrc, setLineDaySrc] = useState(posterLineDayUrl);
+  const [lineNightSrc, setLineNightSrc] = useState(posterLineNightUrl);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -584,20 +582,24 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
 
   useEffect(() => {
     let alive = true;
-    fetch(productLogoUrl)
-      .then(res => res.blob())
-      .then(blob => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      }))
-      .then(dataUrl => {
-        if (alive && typeof dataUrl === "string") {
-          setLogoSrc(dataUrl);
-        }
-      })
-      .catch(() => {});
+    function loadAsset(url, setter) {
+      return fetch(url)
+        .then(res => res.blob())
+        .then(blob => new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        }))
+        .then(dataUrl => {
+          if (alive && typeof dataUrl === "string") setter(dataUrl);
+        });
+    }
+    Promise.all([
+      loadAsset(productLogoUrl, setLogoSrc),
+      loadAsset(posterLineDayUrl, setLineDaySrc),
+      loadAsset(posterLineNightUrl, setLineNightSrc),
+    ]).catch(() => {});
     return () => { alive = false; };
   }, []);
 
@@ -773,7 +775,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} lineDaySrc={lineDaySrc} lineNightSrc={lineNightSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

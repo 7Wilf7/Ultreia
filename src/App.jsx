@@ -48,7 +48,7 @@ import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
 import { postJson, postJsonStream } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
-import productLogoUrl from "../resources/Original.png";
+import productLogoUrl from "../resources/original-ui.png";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();

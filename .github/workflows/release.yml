@@ -135,6 +135,7 @@ jobs:
         # auto "Full Changelog" link. Uses the commit subjects since the
         # previous tag.
         run: |
+          release_day=$(TZ=Asia/Shanghai date +%F)
           prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
           if [ -n "$prev" ]; then
             notes=$(git log --no-merges --pretty='- %s' "$prev..${GITHUB_REF_NAME}")
@@ -143,6 +144,8 @@ jobs:
           fi
           {
             echo 'RELEASE_NOTES<<__TSEOF__'
+            echo "## $release_day"
+            echo
             echo "$notes"
             echo '__TSEOF__'
           } >> "$GITHUB_ENV"

@@ -40,15 +40,31 @@ const SNAP_MS = 260;
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
   const t = useT();
   const mainRef = useRef(null);
+  const trackRef = useRef(null);
   const paneRefs = useRef({});
   const setPaneRef = (idx) => (el) => { if (el) paneRefs.current[idx] = el; };
   const activePane = () => paneRefs.current[tab];
 
-  // Horizontal pager drag offset (px) + whether a finger is actively dragging
-  // (drives transition: none while following, snap transition on release).
-  const [dragX, setDragX] = useState(0);
+  // Horizontal pager drag offset. During finger-following this updates a CSS
+  // variable directly instead of setState on every touchmove; rendering the
+  // active tab + neighbor per frame is what made PWA swipes feel dropped.
   const dragXRef = useRef(0);
-  const setDragXpx = (px) => { dragXRef.current = px; setDragX(px); };
+  const dragFrameRef = useRef(0);
+  const pendingDragXRef = useRef(0);
+  const setDragXpx = (px, immediate = false) => {
+    dragXRef.current = px;
+    pendingDragXRef.current = px;
+    const apply = () => {
+      dragFrameRef.current = 0;
+      trackRef.current?.style.setProperty("--drag-x", `${pendingDragXRef.current}px`);
+    };
+    if (immediate) {
+      if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
+      apply();
+      return;
+    }
+    if (!dragFrameRef.current) dragFrameRef.current = requestAnimationFrame(apply);
+  };
   const [dragging, setDragging] = useState(false);
   // `instant` suppresses the slide transition for a single render so a bottom-nav
   // tap teleports (no sweep through the empty panes between far tabs) and the
@@ -59,6 +75,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => () => {
     if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
+    if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
   }, []);
 
   const lastTabTap = useRef({ idx: -1, at: 0 });
@@ -88,7 +105,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     } else {
       if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
       setDragging(false);
-      setDragXpx(0);
+      setDragXpx(0, true);
       setTapWindow({ from: Math.min(tab, next), to: Math.max(tab, next) });
       tapWindowTimer.current = setTimeout(() => setTapWindow(null), SNAP_MS + 90);
     }
@@ -108,7 +125,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       w: mainRef.current?.clientWidth || 1,
       mode: null,
     };
-    if (dragXRef.current) setDragXpx(0);
+    if (dragXRef.current) setDragXpx(0, true);
   }
 
   function onTouchMove(e) {
@@ -162,11 +179,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (dir !== 0) {
         // Commit immediately so rapid repeated swipes can start from the new
         // tab without waiting for the old 280ms delayed setTab.
-        setDragXpx(dx + (dir === 1 ? W : -W));
+        setDragXpx(dx + (dir === 1 ? W : -W), true);
         setTab(tab + dir);
-        requestAnimationFrame(() => setDragXpx(0));
+        requestAnimationFrame(() => setDragXpx(0, true));
       } else {
-        setDragXpx(0); // snap back
+        requestAnimationFrame(() => setDragXpx(0, true)); // snap back
       }
       return;
     }
@@ -238,10 +255,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           display: "flex",
           height: "100%",
           width: `${tabCount * 100}%`,
-          transform: `translateX(calc(${(-tab * 100) / tabCount}% + ${dragX}px)) translateY(${pullY}px)`,
+          transform: `translate3d(calc(${(-tab * 100) / tabCount}% + var(--drag-x, 0px)), ${pullY}px, 0)`,
           transition: trackTransition,
           willChange: (dragging || refreshing || instant) ? "transform" : undefined,
-        }}>
+        }} ref={trackRef}>
           {TABS.map(({ idx }) => {
             const isAdjacent = tapWindow
               ? idx >= tapWindow.from && idx <= tapWindow.to

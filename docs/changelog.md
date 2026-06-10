@@ -4,6 +4,8 @@
 
 ## 2026-06-09
 
+- **logo 资源清理**：删除不再被界面或海报引用的旧 resources logo 文件，保留当前使用的轻量 logo 与海报线条资源；PWA favicon 和 Android splash 生成链路仍依赖的 public 资源继续保留。
+
 - **logo 资源轻量化与海报背景修正**：开屏、登录页、设置页和海报右上角 logo 改用 384px 的轻量显示版，减少首次解码卡顿；分享海报背景改用 `resources/Line Only.png` 的真实三角线条，Day 版本将白色三角转为深色并保留深苔绿横线。
 
 - **产品 logo 统一**：应用内可见的 Training Studio logo 和分享海报改用 `resources/Original.png`，保留右下角深苔绿横线；分享海报右上角 logo 移到更靠右上，顶部横线不再穿过 logo；底部签名和网址改为居中；Day / Night 背景三角形与深苔绿横线使用同一套位置和大小。

@@ -394,7 +394,7 @@ function PosterBackground({ W, H, ratioKey, pal, lineSrc }) {
   if (!lineSrc) return null;
   const size = Math.round(W * 1.22);
   const x = Math.round((W - size) / 2);
-  const yFactor = ratioKey === "story" ? 0.135 : ratioKey === "square" ? 0.06 : 0.075;
+  const yFactor = ratioKey === "story" ? 0.135 : ratioKey === "square" ? -0.08 : 0.03;
   const y = Math.round(H * yFactor);
 
   return (
@@ -423,7 +423,6 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, lineSrc }) {
   const yHeadRule = H * 0.178;
   const yKick = H * 0.262;
   const yHero = H * 0.452;
-  const yRule = ratio.key === "story" ? H * 0.492 : H * 0.445;
   const spineTop = H * 0.527;
   const spineBot = H * 0.745;
   const yHair = H * 0.788;
@@ -542,8 +541,6 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, lineSrc }) {
         <tspan fontSize={heroSize}>{stats.heroValue}</tspan>
         {stats.heroUnit ? <tspan dx={20} fontSize={unitSize} fontWeight="800" fill={pal.accent}>{stats.heroUnit}</tspan> : null}
       </text>
-      <rect x={M} y={yRule} width="172" height="10" fill={pal.accent} />
-
       {/* Spine */}
       {spine}
 

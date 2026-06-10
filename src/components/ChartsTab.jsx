@@ -475,11 +475,12 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
           return (
             <div style={{
               marginTop: 8,
-              display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10,
+              display: "flex", alignItems: "baseline", justifyContent: "center", gap: 8,
               borderTop: "1px solid var(--rule-soft)", paddingTop: 9,
               fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--ink-2)",
+              textAlign: "center",
             }}>
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.rangeText}</span>
+              <span style={{ whiteSpace: "nowrap" }}>{item.rangeText}</span>
               <span style={{ ...s.dataNum, color: "var(--ink-1)", fontSize: 15 }}>{item.value} {trendMeta.axis}</span>
             </div>
           );

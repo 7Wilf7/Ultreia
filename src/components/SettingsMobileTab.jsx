@@ -37,7 +37,6 @@ export function SettingsMobileTab({
   profileFlash,
   onOpenGuide,
   onToggleLang,
-  onExportBackup,
   onChangePassword,
   onDeleteAccount,
   isAdmin,
@@ -136,7 +135,6 @@ export function SettingsMobileTab({
 
       <AccountPanel open={accountOpen}>
         <SubCell primary={t("settings.profile")} secondary={t("settings.profile_desc")} flash={profileFlash} onClick={onOpenProfile} />
-        <SubCell primary={t("settings.export_backup")} secondary={t("settings.export_backup_desc")} onClick={onExportBackup} />
         <SubCell primary={t("settings.change_password")} onClick={onChangePassword} />
         <SubCell
           primary={signingOut

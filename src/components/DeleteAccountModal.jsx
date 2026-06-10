@@ -7,12 +7,13 @@ import { ModalRoot } from "./ModalRoot";
 // act as the confirmation gate. deleteAccount(password) re-authenticates, wipes
 // the account server-side, then signs out — so on success this modal's parent
 // unmounts as the app returns to the login screen.
-export function DeleteAccountModal({ deleteAccount, onClose }) {
+export function DeleteAccountModal({ deleteAccount, onExportBackup, onClose }) {
   const t = useT();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
   const [errMsg, setErrMsg] = useState("");
+  const [confirmBackup, setConfirmBackup] = useState(false);
 
   async function submit() {
     setErrMsg("");
@@ -31,6 +32,11 @@ export function DeleteAccountModal({ deleteAccount, onClose }) {
       }
       setBusy(false);
     }
+  }
+
+  function exportBackup() {
+    setConfirmBackup(false);
+    onExportBackup?.();
   }
 
   return (
@@ -74,6 +80,56 @@ export function DeleteAccountModal({ deleteAccount, onClose }) {
           }}>
             {t("del.warning")}
           </div>
+
+          <div style={{
+            border: "1px solid var(--rule-soft)",
+            background: "var(--bg-sunken)",
+            padding: "10px 12px",
+            fontSize: 12,
+            borderRadius: 3,
+            margin: "-6px 0 16px",
+            lineHeight: 1.5,
+            color: "var(--ink-2)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span>{t("settings.export_backup_delete_hint")}</span>
+              <button
+                type="button"
+                onClick={() => setConfirmBackup(true)}
+                style={{ ...s.btnGhost, minHeight: 0, padding: "5px 8px", fontSize: 11, flexShrink: 0 }}
+              >
+                {t("settings.export_backup_short")}
+              </button>
+            </div>
+          </div>
+
+          {confirmBackup && (
+            <div style={{
+              border: "1px solid var(--moss)",
+              background: "rgba(91,105,65,0.08)",
+              padding: "12px",
+              fontSize: 12.5,
+              borderRadius: 3,
+              margin: "-4px 0 16px",
+              lineHeight: 1.55,
+              color: "var(--ink-2)",
+            }}>
+              <div style={{ fontWeight: 600, color: "var(--ink-1)", marginBottom: 5 }}>
+                {t("settings.export_backup_confirm_title")}
+              </div>
+              <div>{t("settings.export_backup_confirm_body")}</div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
+                <button type="button" onClick={() => setConfirmBackup(false)}
+                  style={{ ...s.btnGhost, minHeight: 0, padding: "6px 10px", fontSize: 12 }}>
+                  {t("common.cancel")}
+                </button>
+                <button type="button" onClick={exportBackup}
+                  style={{ ...s.btn, minHeight: 0, padding: "6px 10px", fontSize: 12 }}>
+                  {t("settings.export_backup")}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div style={{ ...s.label, marginBottom: 6 }}>{t("del.password")}</div>
           <input type="password" value={pw}

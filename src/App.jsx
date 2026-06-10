@@ -48,7 +48,7 @@ import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
 import { postJson, postJsonStream } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
-import productLogoUrl from "../resources/original-ui.png";
+import { productLogoUrl } from "./assets/logo";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
@@ -122,9 +122,11 @@ function LoadingScreen({ userId = null }) {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       gap: "5vmin", background: "var(--bg)", padding: "0 24px",
     }}>
-      {/* Pre-rounded, transparent-corner logo (favicon center-cropped to drop
-          the dark frame) — identical asset to the native splash so the
-          native-splash → web-view handoff shows the same logo. */}
+      {/* Lightweight (384px) display version of the product logo. The native
+          Android splash renders the SAME artwork from a separate hi-res source
+          (resources/splash-logo.png via scripts/make-splash.mjs) so the
+          native-splash → web-view handoff still reads as one logo screen —
+          when swapping the logo, update both assets (see src/assets/logo.js). */}
       <img
         src={productLogoUrl}
         alt="Training Studio"

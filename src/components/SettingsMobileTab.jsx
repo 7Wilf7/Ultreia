@@ -3,7 +3,7 @@ import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
 import { CoachIcon, CloudIcon } from "./Icons";
-import productLogoUrl from "../../resources/original-ui.png";
+import { productLogoUrl } from "../assets/logo";
 
 const GROUP_ORDER = { api: 0, admin: 1, other: 2 };
 

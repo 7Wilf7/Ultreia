@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { RACE_CATEGORIES, RUN_GROUP_TYPES, SPARTAN_SUBTYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -8,9 +9,39 @@ import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
-import productLogoUrl from "../../resources/original-ui.png";
+import { productLogoUrl } from "../assets/logo";
 import posterLineNightUrl from "../../resources/Line Only.png";
 import posterLineDayUrl from "../../resources/line-only-day.png";
+
+// One background line-art image per theme (same artwork, day = dark recolor).
+const POSTER_LINE_URLS = { day: posterLineDayUrl, night: posterLineNightUrl };
+
+// url → Promise<dataUrl>, module-scoped so the fetch + base64 encode happens
+// once per session even across modal remounts. SVG <image> hrefs MUST be data
+// URLs before export: an SVG rasterized through an <img> element cannot fetch
+// external resources, so a plain asset URL would silently drop the logo /
+// background from the saved PNG. Failed conversions are evicted so a transient
+// network error can retry on the next call.
+const assetDataUrlCache = new Map();
+function fetchAsDataUrl(url) {
+  if (!assetDataUrlCache.has(url)) {
+    const p = fetch(url)
+      .then(res => res.blob())
+      .then(blob => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }))
+      .then(dataUrl => {
+        if (typeof dataUrl !== "string") throw new Error("asset encode failed");
+        return dataUrl;
+      });
+    p.catch(() => assetDataUrlCache.delete(url));
+    assetDataUrlCache.set(url, p);
+  }
+  return assetDataUrlCache.get(url);
+}
 
 // ── Canvas options ──────────────────────────────────────────────────────────
 // One poster design, three crop ratios. The composition is anchored to fractions
@@ -33,6 +64,7 @@ const THEMES = {
     veil: "#f1ede1",
     veilOpacity: 0.18,
     imageOpacity: 0.16,
+    lineBlend: "multiply",
     vignetteA: 0.06,
     vignetteB: 0.18,
   },
@@ -45,6 +77,7 @@ const THEMES = {
     veil: "#080a07",
     veilOpacity: 0.68,
     imageOpacity: 0.42,
+    lineBlend: "screen",
     vignetteA: 0.18,
     vignetteB: 0.58,
   },
@@ -357,7 +390,7 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function PosterBackground({ W, H, theme, pal, lineSrc }) {
+function PosterBackground({ W, H, pal, lineSrc }) {
   if (!lineSrc) return null;
   const size = Math.round(W * 1.22);
   const x = Math.round((W - size) / 2);
@@ -372,12 +405,12 @@ function PosterBackground({ W, H, theme, pal, lineSrc }) {
       height={size}
       opacity={pal.imageOpacity}
       preserveAspectRatio="xMidYMid meet"
-      style={{ mixBlendMode: theme === "day" ? "multiply" : "screen" }}
+      style={{ mixBlendMode: pal.lineBlend }}
     />
   );
 }
 
-function Poster({ stats, theme, ratio, svgRef, logoSrc, lineDaySrc, lineNightSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc, lineSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
   const M = 82;
@@ -405,7 +438,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, lineDaySrc, lineNightSrc
   const logoMargin = 28;
   const logoX = W - logoMargin - logoSize;
   const logoY = logoMargin;
-  const headerRuleEnd = Math.max(M + inner * 0.45, logoX - 28);
+  const headerRuleEnd = Math.max(M + inner * 0.45, logoX - logoMargin);
   const titleSize = Math.min(60, H * 0.046);
   const metaSize = Math.min(34, H * 0.026);
   const kickerSize = Math.min(34, H * 0.026);
@@ -490,7 +523,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, lineDaySrc, lineNightSrc
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      <PosterBackground W={W} H={H} theme={theme} pal={pal} lineSrc={theme === "day" ? lineDaySrc : lineNightSrc} />
+      <PosterBackground W={W} H={H} pal={pal} lineSrc={lineSrc} />
       <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
@@ -556,9 +589,12 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
   const [singleGpsTrack, setSingleGpsTrack] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
+  // Initialized with the plain asset URLs so the preview renders instantly
+  // (the in-DOM SVG can fetch them); the effects below swap in data URLs,
+  // which the export path requires (see fetchAsDataUrl).
   const [logoSrc, setLogoSrc] = useState(productLogoUrl);
-  const [lineDaySrc, setLineDaySrc] = useState(posterLineDayUrl);
-  const [lineNightSrc, setLineNightSrc] = useState(posterLineNightUrl);
+  const [lineSrcs, setLineSrcs] = useState({ ...POSTER_LINE_URLS });
+  const lineSrc = lineSrcs[theme];
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -582,26 +618,21 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
 
   useEffect(() => {
     let alive = true;
-    function loadAsset(url, setter) {
-      return fetch(url)
-        .then(res => res.blob())
-        .then(blob => new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        }))
-        .then(dataUrl => {
-          if (alive && typeof dataUrl === "string") setter(dataUrl);
-        });
-    }
-    Promise.all([
-      loadAsset(productLogoUrl, setLogoSrc),
-      loadAsset(posterLineDayUrl, setLineDaySrc),
-      loadAsset(posterLineNightUrl, setLineNightSrc),
-    ]).catch(() => {});
+    fetchAsDataUrl(productLogoUrl)
+      .then(d => { if (alive) setLogoSrc(d); })
+      .catch(() => {}); // preview keeps the asset URL; export retries and surfaces the error
     return () => { alive = false; };
   }, []);
+
+  // Convert only the CURRENT theme's line art (the other theme's image is
+  // never shown unless the user switches, so don't fetch + base64 it upfront).
+  useEffect(() => {
+    let alive = true;
+    fetchAsDataUrl(POSTER_LINE_URLS[theme])
+      .then(d => { if (alive) setLineSrcs(prev => (prev[theme] === d ? prev : { ...prev, [theme]: d })); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [theme]);
 
   useEffect(() => {
     let alive = true;
@@ -632,6 +663,20 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     setBusy(true);
     setMsg("");
     try {
+      // The <image> hrefs must be data URLs before serialization (an <img>-
+      // loaded SVG can't fetch external resources). Await the cached
+      // conversions — instant when the mount effects already finished — and
+      // flush them into the DOM so the serializer sees them. A failed fetch
+      // rejects here and lands in the catch below instead of silently
+      // exporting a poster with no logo / background.
+      const [logoData, lineData] = await Promise.all([
+        fetchAsDataUrl(productLogoUrl),
+        fetchAsDataUrl(POSTER_LINE_URLS[theme]),
+      ]);
+      flushSync(() => {
+        setLogoSrc(logoData);
+        setLineSrcs(prev => (prev[theme] === lineData ? prev : { ...prev, [theme]: lineData }));
+      });
       // No document.fonts.ready wait — the fonts are embedded as base64
       // @font-face INSIDE the serialized SVG, so the export img is self-contained
       // and waiting on document-level font loading just stalls (notably on the
@@ -775,7 +820,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} lineDaySrc={lineDaySrc} lineNightSrc={lineNightSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} lineSrc={lineSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

@@ -21,8 +21,11 @@ import { readdir, stat } from 'node:fs/promises';
 // drop its outer dark frame (the iOS-style bevel border) so the topo tile
 // reaches the rounded edge — matching how the launcher icon looks on the home
 // screen. Using favicon.jpg directly here showed that dark frame as an ugly
-// ring around the splash logo. Regenerate via scripts (see public/splash-logo.png).
-const LOGO_SRC = 'public/splash-logo.png';
+// ring around the splash logo. Lives in resources/ (NOT public/) so it isn't
+// shipped + PWA-precached at runtime — it's only a build-time source here.
+// The web LoadingScreen shows the same artwork via src/assets/logo.js; keep
+// the two in sync when the logo changes.
+const LOGO_SRC = 'resources/splash-logo.png';
 const BG = '#f2f1ec';                     // app cream (PWA theme/background color)
 const TEXT = 'Training Studio';
 const TEXT_COLOR = '#141413';             // ink-1

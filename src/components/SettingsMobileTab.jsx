@@ -136,6 +136,7 @@ export function SettingsMobileTab({
 
       <AccountPanel open={accountOpen}>
         <SubCell primary={t("settings.profile")} secondary={t("settings.profile_desc")} flash={profileFlash} onClick={onOpenProfile} />
+        <SubCell primary={t("settings.export_backup")} secondary={t("settings.export_backup_desc")} onClick={onExportBackup} />
         <SubCell primary={t("settings.change_password")} onClick={onChangePassword} />
         <SubCell
           primary={signingOut
@@ -209,7 +210,6 @@ export function SettingsMobileTab({
               primary={t("settings.language")}
               rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
               onClick={onToggleLang} />
-            <SubCell primary={t("settings.export_backup")} secondary={t("settings.export_backup_desc")} onClick={onExportBackup} />
             <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
             <UpdateChecker />
           </>
@@ -222,7 +222,7 @@ export function SettingsMobileTab({
 function AccountPanel({ open, children }) {
   return (
     <div aria-hidden={!open} style={{
-      maxHeight: open ? 260 : 0,
+      maxHeight: open ? 360 : 0,
       opacity: open ? 1 : 0,
       transform: open ? "translateY(0)" : "translateY(-6px)",
       transition: "max-height 320ms cubic-bezier(0.18,0.86,0.24,1), opacity 240ms cubic-bezier(0.2,0.7,0.3,1), transform 280ms cubic-bezier(0.18,0.86,0.24,1), margin-bottom 280ms cubic-bezier(0.18,0.86,0.24,1), border-color 240ms ease",
@@ -351,9 +351,7 @@ function SubCell({ primary, secondary, warn, danger, rightValue, flash, onClick 
             color: warn ? "var(--warn)" : "var(--ink-3)",
             fontWeight: 400,
             lineHeight: 1.35,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
+            overflowWrap: "anywhere",
           }}>
             {secondary}
           </span>

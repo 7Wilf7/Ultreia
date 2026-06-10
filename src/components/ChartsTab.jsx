@@ -284,7 +284,8 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   const chartMax = Math.max(...chartData.map(w => w.value), 1);
   const ascentMax = ascentData ? Math.max(...ascentData.map(w => w.value), 1) : 1;
   const loadTrendData = useMemo(() => computeLoadTrend(filteredAllLogs, new Date(), 56), [filteredAllLogs]);
-  const loadTrendMax = Math.max(...loadTrendData.flatMap(d => [d.ctl, d.atl, d.load]), 1);
+  const loadTrendMaxRaw = Math.max(...loadTrendData.flatMap(d => [d.ctl, d.atl]), 1);
+  const loadTrendMax = Math.max(1, Math.ceil(loadTrendMaxRaw * 1.18));
   const loadTrendSelected = loadTrendData[selectedLoadIndex ?? loadTrendData.length - 1] || null;
   // totalRunsForPie now holds total DURATION in seconds (not session count).
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
@@ -499,11 +500,12 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
             <div style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr 1fr 1fr" : "repeat(3, max-content)",
-              justifyContent: isMobile ? "stretch" : "end",
+              justifyContent: "center",
               gap: isMobile ? 8 : 18,
               borderTop: "1px solid var(--rule-soft)",
               paddingTop: 10,
               fontSize: 12,
+              textAlign: "center",
             }}>
               {[
                 [t("charts.fitness_ctl"), loadTrendSelected?.ctl, "var(--moss-deep)"],

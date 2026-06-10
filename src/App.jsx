@@ -2080,13 +2080,6 @@ Rules:
               <BookIcon size={13} />
               {t("header.guide")}
             </button>
-            {!isMobile && (
-              <button onClick={exportJsonBackup}
-                title={t("settings.export_backup_desc")}
-                style={headerCell}>
-                JSON
-              </button>
-            )}
             <button onClick={toggleLang} title={t("header.lang_tooltip")}
               style={headerCell}>
               <GlobeIcon size={13} />
@@ -2115,7 +2108,7 @@ Rules:
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <SettingsIcon size={14} />
             </button>
-            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} onDeleteAccount={() => setShowDeleteAccount(true)} isAdmin={isAdmin} onGenerateInvite={() => setShowInviteCodes(true)} />
+            <UserBadge user={user} signOut={signOut} onExportBackup={exportJsonBackup} onChangePassword={() => setShowChangePassword(true)} onDeleteAccount={() => setShowDeleteAccount(true)} isAdmin={isAdmin} onGenerateInvite={() => setShowInviteCodes(true)} />
           </div>
         </div>
       </div>

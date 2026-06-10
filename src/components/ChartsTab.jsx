@@ -6,6 +6,7 @@ import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration } from "../utils/format";
 import { getPeriodLabel } from "../utils/period";
+import { computeLoadTrend } from "../utils/trainingLoad";
 import { MonthlyPosterModal } from "./MonthlyPosterModal";
 
 // Compact week-bucket label like "5-18~24" (same month) or "5-30~6-5" (cross-month).
@@ -52,6 +53,7 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   const isMobile = useIsMobile();
   const [showMonthlyPoster, setShowMonthlyPoster] = useState(false);
   const [selectedTrendIndex, setSelectedTrendIndex] = useState(null);
+  const [selectedLoadIndex, setSelectedLoadIndex] = useState(null);
   // Persisted to localStorage so the chosen period survives tab switches (and
   // reloads) instead of snapping back to the 4-week default every time.
   const [chartPeriod, setChartPeriod] = useState(() => {
@@ -281,6 +283,9 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
 
   const chartMax = Math.max(...chartData.map(w => w.value), 1);
   const ascentMax = ascentData ? Math.max(...ascentData.map(w => w.value), 1) : 1;
+  const loadTrendData = useMemo(() => computeLoadTrend(filteredAllLogs, new Date(), 56), [filteredAllLogs]);
+  const loadTrendMax = Math.max(...loadTrendData.flatMap(d => [d.ctl, d.atl, d.load]), 1);
+  const loadTrendSelected = loadTrendData[selectedLoadIndex ?? loadTrendData.length - 1] || null;
   // totalRunsForPie now holds total DURATION in seconds (not session count).
   const totalRunsForPie = runTypeDist.reduce((sum, [, c]) => sum + c, 0);
 
@@ -347,6 +352,65 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
             </>
           );
         })()}
+      </svg>
+    );
+  }
+
+  function renderLoadTrendSvg(data, max, selectedIndex, setSelectedIndex) {
+    const width = isMobile ? 360 : 700;
+    const height = isMobile ? 220 : 250;
+    const plotLeft = isMobile ? 34 : 52;
+    const plotRight = isMobile ? 332 : 654;
+    const plotBottom = isMobile ? 174 : 206;
+    const plotHeight = isMobile ? 118 : 152;
+    const ticks = isMobile ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
+    const xStep = data.length > 1 ? (plotRight - plotLeft) / (data.length - 1) : 0;
+    const makePoints = (key) => data.map((w, i) => ({
+      x: plotLeft + i * xStep,
+      y: plotBottom - (w[key] / max) * plotHeight,
+      w,
+    }));
+    const linePath = (points) => points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+    const ctlPoints = makePoints("ctl");
+    const atlPoints = makePoints("atl");
+    return (
+      <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "auto", display: "block", fontFamily: "var(--font-mono)", touchAction: "manipulation" }}>
+        {ticks.map((p, i) => {
+          const y = plotBottom - p * plotHeight;
+          const val = (max * p).toFixed(0);
+          return (
+            <g key={i}>
+              <line x1={plotLeft - 6} y1={y} x2={plotRight + 4} y2={y} stroke="var(--rule-soft)" strokeWidth="0.5" strokeDasharray={p === 0 ? "none" : "2 4"} />
+              <text x={plotLeft - 10} y={y + 4} fontSize={isMobile ? 9 : 14} fill="var(--ink-3)" textAnchor="end">{val}</text>
+            </g>
+          );
+        })}
+        <text x={isMobile ? 12 : 22} y={isMobile ? 15 : 18} fontSize={isMobile ? 9 : 13} fill="var(--ink-3)" textTransform="uppercase" letterSpacing="0.08em">sRPE</text>
+        {ctlPoints.length > 0 && (
+          <>
+            <path d={linePath(ctlPoints)} fill="none" stroke="var(--moss-deep)" strokeWidth={isMobile ? 2.2 : 1.8} />
+            <path d={linePath(atlPoints)} fill="none" stroke="var(--warn)" strokeWidth={isMobile ? 2 : 1.6} strokeDasharray="5 4" />
+            {ctlPoints.map((p, i) => {
+              const active = selectedIndex === i || (selectedIndex == null && i === ctlPoints.length - 1);
+              return (
+                <g key={i} onClick={() => setSelectedIndex(i)} style={{ cursor: "pointer" }}>
+                  <rect x={p.x - (isMobile ? 5 : 3)} y={Math.min(p.y, atlPoints[i].y) - (isMobile ? 8 : 5)}
+                    width={isMobile ? 10 : 6}
+                    height={Math.max(10, Math.abs(p.y - atlPoints[i].y) + (isMobile ? 16 : 10))}
+                    fill="transparent">
+                    <title>{p.w.date}: CTL {p.w.ctl}, ATL {p.w.atl}, TSB {p.w.tsb}</title>
+                  </rect>
+                  {active && (
+                    <line x1={p.x} y1={plotBottom - plotHeight - 8} x2={p.x} y2={plotBottom} stroke="var(--ink-3)" strokeWidth="0.7" strokeDasharray="2 3" />
+                  )}
+                  <text x={p.x} y={isMobile ? 194 : 218} fontSize={isMobile ? 9 : 13} fill="var(--ink-3)" textAnchor="middle">
+                    {i % 7 === 0 || i === data.length - 1 ? p.w.label : ""}
+                  </text>
+                </g>
+              );
+            })}
+          </>
+        )}
       </svg>
     );
   }
@@ -422,6 +486,40 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
       </div>
 
       {/* Secondary ascent trend — only on Trail Run / Hiking filters */}
+      <div style={s.section}>
+        {t("charts.load_trend")}
+        <span style={{ ...s.muted, fontWeight: 400, marginLeft: 8 }}>{t("charts.load_trend_note")}</span>
+      </div>
+      <div style={{ ...s.card, marginBottom: 22, padding: isMobile ? "10px 6px 12px" : undefined }}>
+        {loadTrendData.length === 0 ? (
+          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 20, fontSize: 13 }}>{t("charts.load_empty")}</div>
+        ) : (
+          <>
+            {renderLoadTrendSvg(loadTrendData, loadTrendMax, selectedLoadIndex, setSelectedLoadIndex)}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr 1fr 1fr" : "repeat(3, max-content)",
+              justifyContent: isMobile ? "stretch" : "end",
+              gap: isMobile ? 8 : 18,
+              borderTop: "1px solid var(--rule-soft)",
+              paddingTop: 10,
+              fontSize: 12,
+            }}>
+              {[
+                [t("charts.fitness_ctl"), loadTrendSelected?.ctl, "var(--moss-deep)"],
+                [t("charts.fatigue_atl"), loadTrendSelected?.atl, "var(--warn)"],
+                [t("charts.form_tsb"), loadTrendSelected?.tsb, "var(--ink-2)"],
+              ].map(([label, value, color]) => (
+                <div key={label} style={{ minWidth: 0 }}>
+                  <div style={{ color: "var(--ink-3)", marginBottom: 2 }}>{label}</div>
+                  <div style={{ ...s.dataNum, fontSize: 16, color }}>{value ?? 0}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
       {config.showAscent && ascentData && (
         <>
           <div style={s.section}>{t("charts.ascent_trend")}</div>

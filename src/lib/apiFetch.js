@@ -119,7 +119,7 @@ export async function postJson({ url, headers = {}, body }) {
 // backgrounding on Android gets OS grace time. `onToken(fullText)` is called
 // with the running accumulated text as deltas arrive. Robust fallback: if the
 // provider ignores `stream:true` and returns a single JSON body, we read it and
-// emit the whole text once. Returns { ok, status, text, errorText }.
+// emit the whole text once. Returns { ok, status, text, usage, errorText }.
 export async function postJsonStream({ url, headers = {}, body, onToken }) {
   return withBackgroundGrace(async () => {
     let resp;
@@ -143,11 +143,15 @@ export async function postJsonStream({ url, headers = {}, body, onToken }) {
       if (data && data.error) return { ok: false, status: resp.status, text: "", errorText: data.error?.message || "error" };
       const text = data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       if (text && onToken) onToken(text);
-      return { ok: true, status: resp.status, text };
+      return { ok: true, status: resp.status, text, usage: data?.usage || null };
     }
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = "", full = "", errMsg = "";
+    let buffer = "", full = "", errMsg = "", usage = null;
+    const mergeUsage = (next) => {
+      if (!next || typeof next !== "object") return;
+      usage = { ...(usage || {}), ...next };
+    };
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -164,12 +168,16 @@ export async function postJsonStream({ url, headers = {}, body, onToken }) {
         if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
           full += evt.delta.text;
           if (onToken) onToken(full);
+        } else if (evt.type === "message_start") {
+          mergeUsage(evt.message?.usage);
+        } else if (evt.type === "message_delta") {
+          mergeUsage(evt.usage);
         } else if (evt.type === "error") {
           errMsg = evt.error?.message || "stream error";
         }
       }
     }
     if (errMsg) return { ok: false, status: resp.status, text: full, errorText: errMsg };
-    return { ok: true, status: resp.status, text: full };
+    return { ok: true, status: resp.status, text: full, usage };
   });
 }

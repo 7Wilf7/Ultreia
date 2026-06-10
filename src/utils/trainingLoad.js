@@ -21,6 +21,13 @@ function sessionLoad(l) {
   return min * rpe;
 }
 
+function startOfLocalDay(dateLike) {
+  const d = dateLike instanceof Date ? new Date(dateLike) : new Date(`${dateLike}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 // `logs` is the full activity list; `now` a Date. Returns null when there's
 // not enough completed training to say anything (no sessions in 28 days).
 export function computeTrainingLoad(logs, now = new Date()) {
@@ -71,6 +78,55 @@ export function computeTrainingLoad(logs, now = new Date()) {
     sessions7: in7,
     rpeCoverage: in28 > 0 ? rpe28 / in28 : 0,
   };
+}
+
+// Simplified CTL/ATL trend for charts. It uses the same sRPE load, then smooths
+// daily load with exponential averages: ATL reacts over ~7 days, CTL over ~42.
+export function computeLoadTrend(logs, now = new Date(), days = 56) {
+  const completed = (logs || []).filter(l => l && !l.isPlanned && (Number(l.duration) || 0) > 0);
+  if (!completed.length) return [];
+
+  const today = startOfLocalDay(now);
+  if (!today) return [];
+  const displayDays = Math.max(7, Math.round(days || 56));
+  const displayStart = new Date(today);
+  displayStart.setDate(today.getDate() - (displayDays - 1));
+
+  const loadByDate = new Map();
+  let earliest = null;
+  for (const l of completed) {
+    const d = startOfLocalDay(l.date);
+    if (!d || d > today) continue;
+    const key = d.toISOString().slice(0, 10);
+    loadByDate.set(key, (loadByDate.get(key) || 0) + sessionLoad(l));
+    if (!earliest || d < earliest) earliest = d;
+  }
+  if (!earliest) return [];
+
+  const warmupStart = new Date(displayStart);
+  warmupStart.setDate(displayStart.getDate() - 42);
+  const start = earliest < warmupStart ? earliest : warmupStart;
+  const rows = [];
+  let ctl = 0;
+  let atl = 0;
+
+  for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
+    const key = d.toISOString().slice(0, 10);
+    const load = loadByDate.get(key) || 0;
+    atl += (load - atl) / 7;
+    ctl += (load - ctl) / 42;
+    if (d >= displayStart) {
+      rows.push({
+        date: key,
+        label: `${d.getMonth() + 1}-${d.getDate()}`,
+        load: Math.round(load),
+        atl: Math.round(atl),
+        ctl: Math.round(ctl),
+        tsb: Math.round(ctl - atl),
+      });
+    }
+  }
+  return rows;
 }
 
 // Compact English line for the coach prompt. "" when no load data.

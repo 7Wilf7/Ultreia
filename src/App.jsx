@@ -49,6 +49,12 @@ import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, u
 import { postJson, postJsonStream } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
 import { productLogoUrl } from "./assets/logo";
+import {
+  appendCoachMessageMeta,
+  messageContentForCoach,
+  normalizeTokenUsage,
+  parseCoachMessageMeta,
+} from "./utils/coachPrompt";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
@@ -62,6 +68,24 @@ function localDateKey(d = new Date()) {
 
 function readinessComplete(readiness) {
   return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
+}
+
+function buildCoachReplyMeta({ providerId, model, usage, freeTier }) {
+  const normalized = normalizeTokenUsage(usage);
+  if (!normalized) return null;
+  const pricing = API_PROVIDERS[providerId]?.pricing;
+  const costUsd = (!freeTier && pricing)
+    ? (normalized.inputTokens / 1_000_000) * pricing.inputPerM
+      + (normalized.outputTokens / 1_000_000) * pricing.outputPerM
+    : 0;
+  return {
+    provider: providerId,
+    model,
+    freeTier: !!freeTier,
+    usage: normalized,
+    costUsd: Math.round(costUsd * 1_000_000) / 1_000_000,
+    createdAt: new Date().toISOString(),
+  };
 }
 
 function describeWorkoutForCoach(w, idx) {
@@ -1083,7 +1107,7 @@ function AppShell({
     const apiEndpoint = apiProvider === "claude"
       ? getEndpointUrl("claude", claudeEndpointId)
       : providerCfg.endpoints[0].url;
-    const chatTranscript = chatMessages.map(m => `[${m.role}]\n${m.content}`).join("\n\n");
+    const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
     const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
 Current memory (English):
@@ -1165,6 +1189,65 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
   //    appendChatMessage wrapper (which writes to Supabase + updates the
   //    chatMessages prop coming from AuthedApp). On API or network errors,
   //    emits a transient local-only bubble that won't pollute the DB.
+  function exportJsonBackup() {
+    try {
+      const coachMessagesForBackup = chatMessages.map(m => {
+        const parsed = parseCoachMessageMeta(m.content);
+        return { ...m, content: parsed.text, meta: parsed.meta || null };
+      });
+      const payload = {
+        app: "Training Studio",
+        schemaVersion: 1,
+        exportedAt: new Date().toISOString(),
+        user: {
+          id: user?.id || null,
+          email: user?.email || null,
+        },
+        counts: {
+          workouts: logs.length,
+          races: races.length,
+          dailyNotes: dailyNotes.length,
+          coachMessages: coachMessagesForBackup.length,
+        },
+        profile,
+        settings: {
+          lang,
+          apiProvider,
+          apiModel,
+          coachConfig,
+          coachMemory,
+          coachMemoryZh,
+          defaultLocation,
+          pushEnabled,
+          pushHours,
+          pushTimes,
+          pushTimezone,
+          hasDeepseekApiKey: !!apiKey,
+          hasClaudeApiKey: !!claudeApiKey,
+          hasCaiyunApiKey: !!caiyunApiKey,
+        },
+        data: {
+          workouts: logs,
+          races,
+          dailyNotes,
+          coachMessages: coachMessagesForBackup,
+        },
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `training-studio-backup-${localDateKey(new Date())}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      window.alert(t("settings.export_backup_done"));
+    } catch (err) {
+      window.alert(t("settings.export_backup_failed", { msg: err?.message || String(err) }));
+    }
+  }
+
   async function sendChat(userMsg) {
     if (!userMsg || chatLoading) return false;
     const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
@@ -1186,7 +1269,10 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
     // send. The persisted row replaces this placeholder once the DB write
     // returns; on failure we surface an error bubble and bail.
     const optimisticId = `pending-${Date.now()}`;
-    const messagesToSend = [...chatMessages, { role: "user", content: userMsg }];
+    const messagesToSend = [
+      ...chatMessages.map(m => ({ role: m.role, content: messageContentForCoach(m.content) })),
+      { role: "user", content: userMsg },
+    ];
     setChatMessages(prev => [...prev, { id: optimisticId, role: "user", content: userMsg, isLocal: true }]);
     setChatLoading(true);
 
@@ -1260,7 +1346,13 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         });
         if (typeof data.remaining === "number") setDeepseekUsed(FREE_DEEPSEEK_LIMIT - data.remaining);
         const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
-        try { await appendChatMessage("assistant", reply); } catch { /* alerted by wrapper */ }
+        const meta = buildCoachReplyMeta({
+          providerId: "deepseek",
+          model: API_PROVIDERS.deepseek.defaultModel,
+          usage: data.usage,
+          freeTier: true,
+        });
+        try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted by wrapper */ }
       } catch (err) {
         if (err?.code === "quota_exceeded") {
           setDeepseekUsed(FREE_DEEPSEEK_LIMIT);
@@ -1317,15 +1409,29 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
       } else if (!started) {
         // Provider returned nothing to stream — append a normal bubble.
-        try { await appendChatMessage("assistant", result.text || t("coach.no_response")); } catch { /* alerted */ }
+        const reply = result.text || t("coach.no_response");
+        const meta = buildCoachReplyMeta({
+          providerId: apiProvider,
+          model: apiModel,
+          usage: result.usage,
+          freeTier: false,
+        });
+        try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted */ }
       } else {
         // Finalize the streamed bubble IN PLACE (no flash), then persist in the
         // background and swap the placeholder for the saved row (real id → the
         // calendar-import button then appears).
         const reply = result.text || t("coach.no_response");
+        const meta = buildCoachReplyMeta({
+          providerId: apiProvider,
+          model: apiModel,
+          usage: result.usage,
+          freeTier: false,
+        });
+        const storedReply = appendCoachMessageMeta(reply, meta);
         setChatMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: reply, isStreaming: false } : m));
         try {
-          const saved = await db.coachMessages.appendMessage("assistant", reply);
+          const saved = await db.coachMessages.appendMessage("assistant", storedReply);
           setChatMessages(prev => prev.map(m => m.id === streamId ? saved : m));
         } catch (e) { console.error("[AI Coach] persist failed:", e); }
       }
@@ -1702,6 +1808,7 @@ Rules:
           profileFlash={profileFlash}
           onOpenGuide={() => setShowGuide(true)}
           onToggleLang={toggleLang}
+          onExportBackup={exportJsonBackup}
           onChangePassword={() => setShowChangePassword(true)}
           onDeleteAccount={() => setShowDeleteAccount(true)}
           isAdmin={isAdmin}
@@ -1973,6 +2080,13 @@ Rules:
               <BookIcon size={13} />
               {t("header.guide")}
             </button>
+            {!isMobile && (
+              <button onClick={exportJsonBackup}
+                title={t("settings.export_backup_desc")}
+                style={headerCell}>
+                JSON
+              </button>
+            )}
             <button onClick={toggleLang} title={t("header.lang_tooltip")}
               style={headerCell}>
               <GlobeIcon size={13} />

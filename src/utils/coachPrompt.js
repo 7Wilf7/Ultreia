@@ -8,6 +8,45 @@ import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
 import { evaluatePlanOutcome } from "./planMatch";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const COACH_META_RE = /<!--\s*ts-meta:(.*?)\s*-->/s;
+
+export function parseCoachMessageMeta(content = "") {
+  const raw = String(content || "");
+  const match = raw.match(COACH_META_RE);
+  if (!match) return { text: raw, meta: null };
+  try {
+    return { text: raw.replace(COACH_META_RE, "").trim(), meta: JSON.parse(match[1]) };
+  } catch {
+    return { text: raw.replace(COACH_META_RE, "").trim(), meta: null };
+  }
+}
+
+export function messageContentForCoach(content = "") {
+  return parseCoachMessageMeta(content).text;
+}
+
+export function appendCoachMessageMeta(content, meta) {
+  if (!meta) return content;
+  try {
+    return `${String(content || "").trim()}\n\n<!-- ts-meta:${JSON.stringify(meta)} -->`;
+  } catch {
+    return content;
+  }
+}
+
+export function normalizeTokenUsage(usage) {
+  if (!usage || typeof usage !== "object") return null;
+  const input = Number(usage.input_tokens ?? usage.prompt_tokens ?? usage.inputTokens ?? usage.promptTokens ?? 0);
+  const output = Number(usage.output_tokens ?? usage.completion_tokens ?? usage.outputTokens ?? usage.completionTokens ?? 0);
+  const total = Number(usage.total_tokens ?? usage.totalTokens ?? input + output);
+  if (![input, output, total].every(Number.isFinite)) return null;
+  if (input <= 0 && output <= 0 && total <= 0) return null;
+  return {
+    inputTokens: Math.max(0, Math.round(input)),
+    outputTokens: Math.max(0, Math.round(output)),
+    totalTokens: Math.max(0, Math.round(total || input + output)),
+  };
+}
 
 // Locale-aware headers for the dynamic data block (current date / target races /
 // race history / recent activities). Numbers + race names stay as-is — only the

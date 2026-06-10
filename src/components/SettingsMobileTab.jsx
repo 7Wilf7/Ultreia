@@ -37,6 +37,7 @@ export function SettingsMobileTab({
   profileFlash,
   onOpenGuide,
   onToggleLang,
+  onExportBackup,
   onChangePassword,
   onDeleteAccount,
   isAdmin,
@@ -208,6 +209,7 @@ export function SettingsMobileTab({
               primary={t("settings.language")}
               rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
               onClick={onToggleLang} />
+            <SubCell primary={t("settings.export_backup")} secondary={t("settings.export_backup_desc")} onClick={onExportBackup} />
             <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
             <UpdateChecker />
           </>

@@ -9,7 +9,7 @@ import {
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { buildPromptSkeleton } from "../utils/coachPrompt";
+import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
@@ -952,6 +952,10 @@ export function AICoachTab({
               }
               return chatMessages.map((m, i) => {
                 const isUser = m.role === "user";
+                const parsedMessage = parseCoachMessageMeta(m.content);
+                const displayContent = parsedMessage.text;
+                const costMeta = parsedMessage.meta;
+                const usage = costMeta?.usage;
                 const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton;
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
@@ -989,16 +993,34 @@ export function AICoachTab({
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={mdComponents}>
-                        {m.content}
+                        {displayContent}
                       </ReactMarkdown>
                     </div>
+
+                    {!isUser && usage && (
+                      <div style={{
+                        color: "var(--ink-3)",
+                        fontSize: 11,
+                        lineHeight: 1.3,
+                        fontFamily: "var(--font-mono)",
+                        paddingLeft: 2,
+                      }}>
+                        {costMeta.freeTier
+                          ? t("coach.cost_free", { tokens: String(usage.totalTokens || 0) })
+                          : t("coach.cost_paid", {
+                              provider: costMeta.provider || "AI",
+                              tokens: String(usage.totalTokens || 0),
+                              cost: Number(costMeta.costUsd || 0).toFixed(6),
+                            })}
+                      </div>
+                    )}
 
                     {/* Calendar import affordance — text button below the bubble.
                         Gated by the showCalendarButton coach setting (default ON).
                         Shows on persistent assistant replies only. */}
                     {canImport && (
                       <button
-                        onClick={() => importToCalendar(m.content, m.id)}
+                        onClick={() => importToCalendar(displayContent, m.id)}
                         disabled={extracting}
                         style={{
                           background: "var(--bg-elevated)",
@@ -1022,7 +1044,7 @@ export function AICoachTab({
                         without having to copy/paste their text. */}
                     {canResend && (
                       <button
-                        onClick={() => sendChat(m.content)}
+                        onClick={() => sendChat(messageContentForCoach(m.content))}
                         style={{
                           background: "var(--bg-elevated)",
                           border: "1px solid var(--rule)",

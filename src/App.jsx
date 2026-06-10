@@ -48,6 +48,7 @@ import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
 import { postJson, postJsonStream } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
+import productLogoUrl from "../resources/Original.png";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
@@ -125,7 +126,7 @@ function LoadingScreen({ userId = null }) {
           the dark frame) — identical asset to the native splash so the
           native-splash → web-view handoff shows the same logo. */}
       <img
-        src="/splash-logo.png"
+        src={productLogoUrl}
         alt="Training Studio"
         style={{
           width: "min(30vmin, 150px)",
@@ -1917,7 +1918,7 @@ Rules:
           fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
           lineHeight: 1.2,
         }}>
-          <img src="/favicon.jpg" alt="Training Studio"
+          <img src={productLogoUrl} alt="Training Studio"
             style={{
               width: 28, height: 28,
               borderRadius: 4,

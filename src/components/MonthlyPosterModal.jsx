@@ -8,7 +8,7 @@ import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
-import iconOnlyUrl from "../../resources/icon-only-poster.png";
+import productLogoUrl from "../../resources/Original.png";
 
 // ── Canvas options ──────────────────────────────────────────────────────────
 // One poster design, three crop ratios. The composition is anchored to fractions
@@ -355,49 +355,33 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function PosterBackground({ W, H, theme, pal, backgroundSrc }) {
-  if (theme === "day") {
-    const scale = W / 720;
-    const x = W * 0.02;
-    const y = H * 0.19;
-
-    return (
-      <g opacity={pal.imageOpacity} transform={`translate(${x} ${y}) scale(${scale})`}>
-        <path
-          d="M76 360 L292 112 L476 360 M330 360 L502 190 L642 360"
-          fill="none"
-          stroke={pal.ink}
-          strokeWidth="38"
-          strokeLinecap="butt"
-          strokeLinejoin="miter"
-        />
-        <path
-          d="M642 360 H704"
-          fill="none"
-          stroke={pal.accent}
-          strokeWidth="18"
-          strokeLinecap="butt"
-        />
-      </g>
-    );
-  }
-
-  if (!backgroundSrc) return null;
+function PosterBackground({ W, H, pal }) {
+  const scale = W / 720;
+  const x = W * 0.02;
+  const y = H * 0.19;
 
   return (
-    <image
-      href={backgroundSrc}
-      x="0"
-      y="0"
-      width={W}
-      height={H}
-      opacity={pal.imageOpacity}
-      preserveAspectRatio="xMidYMid meet"
-    />
+    <g opacity={pal.imageOpacity} transform={`translate(${x} ${y}) scale(${scale})`}>
+      <path
+        d="M76 360 L292 112 L476 360 M330 360 L502 190 L642 360"
+        fill="none"
+        stroke={pal.ink}
+        strokeWidth="38"
+        strokeLinecap="butt"
+        strokeLinejoin="miter"
+      />
+      <path
+        d="M642 360 H704"
+        fill="none"
+        stroke={pal.accent}
+        strokeWidth="18"
+        strokeLinecap="butt"
+      />
+    </g>
   );
 }
 
-function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
   const M = 82;
@@ -422,6 +406,10 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
   const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
   const unitSize = heroSize * 0.26;
   const logoSize = Math.round(W * 0.18);
+  const logoMargin = 28;
+  const logoX = W - logoMargin - logoSize;
+  const logoY = logoMargin;
+  const headerRuleEnd = Math.max(M + inner * 0.45, logoX - 28);
   const titleSize = Math.min(60, H * 0.046);
   const metaSize = Math.min(34, H * 0.026);
   const kickerSize = Math.min(34, H * 0.026);
@@ -506,7 +494,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      <PosterBackground W={W} H={H} theme={theme} pal={pal} backgroundSrc={backgroundSrc} />
+      <PosterBackground W={W} H={H} pal={pal} />
       <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
@@ -514,9 +502,9 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="3" fill={pal.ink}>{stats.title}</text>
       <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize={metaSize} letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
       {logoSrc && (
-        <image href={logoSrc} x={W - M - logoSize} y={M} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />
+        <image href={logoSrc} x={logoX} y={logoY} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />
       )}
-      <line x1={M} x2={W - M} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
+      <line x1={M} x2={headerRuleEnd} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
 
       {/* Hero */}
       <text x={M} y={yKick} fontFamily={FF} fontWeight="600" fontSize={kickerSize} letterSpacing="4" fill={pal.sub}>{stats.kicker}</text>
@@ -547,8 +535,8 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, backgroundSrc }) {
       )}
 
       {/* Signature */}
-      <text x={M} y={ySign} fontFamily={FF_SIGN} fontWeight="600" fontSize={H * 0.05} fill={pal.ink} opacity="0.94">Training Studio</text>
-      <text x={M} y={yUrl} fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="1.5" fill={pal.sub}>www.aitrainstudio.com</text>
+      <text x={W / 2} y={ySign} textAnchor="middle" fontFamily={FF_SIGN} fontWeight="600" fontSize={H * 0.05} fill={pal.ink} opacity="0.94">Training Studio</text>
+      <text x={W / 2} y={yUrl} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="1.5" fill={pal.sub}>www.aitrainstudio.com</text>
     </svg>
   );
 }
@@ -572,8 +560,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
   const [singleGpsTrack, setSingleGpsTrack] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
-  const [logoSrc, setLogoSrc] = useState(iconOnlyUrl);
-  const [backgroundSrc, setBackgroundSrc] = useState(iconOnlyUrl);
+  const [logoSrc, setLogoSrc] = useState(productLogoUrl);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -597,7 +584,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
 
   useEffect(() => {
     let alive = true;
-    fetch(iconOnlyUrl)
+    fetch(productLogoUrl)
       .then(res => res.blob())
       .then(blob => new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -608,7 +595,6 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       .then(dataUrl => {
         if (alive && typeof dataUrl === "string") {
           setLogoSrc(dataUrl);
-          setBackgroundSrc(dataUrl);
         }
       })
       .catch(() => {});
@@ -787,7 +773,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} backgroundSrc={backgroundSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

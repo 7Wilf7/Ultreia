@@ -3,6 +3,7 @@ import { s } from "../../styles";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { ModalRoot } from "../ModalRoot";
 import { translate } from "../../i18n/translations";
+import productLogoUrl from "../../../resources/Original.png";
 
 const LANG_KEY = "ts-lang";
 const SAVED_LOGINS_KEY = "ts-saved-logins";
@@ -427,7 +428,7 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "start", marginBottom: 14 }}>
           <div />
           <img
-            src="/splash-logo.png"
+            src={productLogoUrl}
             alt="Training Studio"
             style={{
               width: 72,

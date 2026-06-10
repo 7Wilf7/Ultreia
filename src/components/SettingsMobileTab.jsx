@@ -3,6 +3,7 @@ import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
 import { CoachIcon, CloudIcon } from "./Icons";
+import productLogoUrl from "../../resources/Original.png";
 
 const GROUP_ORDER = { api: 0, admin: 1, other: 2 };
 
@@ -107,7 +108,7 @@ export function SettingsMobileTab({
         color: "var(--ink-1)",
         WebkitTapHighlightColor: "transparent",
       }}>
-        <img src="/splash-logo.png" alt="" aria-hidden="true"
+        <img src={productLogoUrl} alt="" aria-hidden="true"
           style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{

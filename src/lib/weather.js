@@ -12,7 +12,7 @@ import { Geolocation } from '@capacitor/geolocation';
 import { supabase } from './supabase';
 
 const isNative = () => Capacitor.isNativePlatform?.() === true;
-const WEATHER_PROXY_ORIGIN = 'https://www.aitrainstudio.com';
+const WEATHER_PROXY_ORIGIN = 'https://www.ultreia.run';
 
 // Round to 4 decimals so coords are stable across calls — the Vercel edge
 // cache (and any future client-side cache) can then dedupe.

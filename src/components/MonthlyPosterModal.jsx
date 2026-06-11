@@ -563,7 +563,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, lineSrc }) {
 
       {/* Signature */}
       <text x={W / 2} y={ySign} textAnchor="middle" fontFamily={FF_SIGN} fontWeight="600" fontSize={H * 0.05} fill={pal.ink} opacity="0.94">Ultreia</text>
-      <text x={W / 2} y={yUrl} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="1.5" fill={pal.sub}>www.aitrainstudio.com</text>
+      <text x={W / 2} y={yUrl} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="1.5" fill={pal.sub}>www.ultreia.run</text>
     </svg>
   );
 }

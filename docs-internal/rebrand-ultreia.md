@@ -57,31 +57,32 @@
 
 ## 待办 checklist
 
-### 1. 域名切换（需要在两个控制台手动操作）
+### 1. 域名切换（2026-06-12 完成 ✅）
 
-- [ ] **Vercel** → 项目 Settings → Domains → Add `ultreia.run` 和 `www.ultreia.run`；
-      Vercel 会显示需要的 DNS 记录值
-- [ ] **阿里云** → 域名控制台 → ultreia.run → 解析设置：
-      按 Vercel 给的值加记录（典型：`@` A 记录 → `76.76.21.21`；
-      `www` CNAME → `cname.vercel-dns.com`；以 Vercel 页面显示为准）
-- [ ] 等解析生效，浏览器验证 https://ultreia.run 能打开 app
-- [ ] 旧域名在 Vercel 里保留并设置 redirect → ultreia.run（Vercel Domains 页可直接配）
+- [x] **Vercel** → Domains 已加 `ultreia.run`（308 → www）和 `www.ultreia.run`（Production）
+- [x] **阿里云解析**：`@` A → `216.198.79.1`；`www` CNAME → `bfdeced61aabd1b0.vercel-dns-017.com`
+- [x] 双双 Valid Configuration，浏览器已验证 https://ultreia.run 打开 app
+- **旧域名策略（重要）**：`aitrainstudio.com` 继续绑定同一项目正常服务，**不做 redirect、
+  不下线**——已发布的老版本 APK 里天气代理（`WEATHER_PROXY_ORIGIN`）和登录跳转还
+  硬编码指向它，redirect 可能干扰 POST 代理请求。等绝大多数用户升级到新版后再考虑跳转。
 
-### 2. 代码里的功能性 URL 切换（⚠ 必须等第 1 步生效后再做）
+### 2. 代码里的功能性 URL 切换（2026-06-12 完成 ✅）
 
-- [ ] `src/hooks/useAuth.js:5` — `AUTH_REDIRECT_TO`
-- [ ] `src/lib/weather.js:15` — `WEATHER_PROXY_ORIGIN`
-- [ ] `src/components/Auth/LoginScreen.jsx:613` — 登录页「访问网页版」链接
-- [ ] `src/components/MonthlyPosterModal.jsx:566` — 海报底部网址（用户可见，跟品牌强相关）
-- [ ] `supabase/functions/register-with-invite/index.ts:102` — emailRedirectTo（改完要重新部署该函数，**加 --no-verify-jwt**）
-- [ ] `scripts/seed-demo.mjs` — demo 邮箱域名 + 提示链接（低优先级）
-- [ ] **Supabase Dashboard** → Authentication → URL Configuration：把 ultreia.run 加进
-      Site URL / Redirect URLs 白名单（不加的话邮件验证/重置密码会跳回旧域名或被拒）
+- [x] `src/hooks/useAuth.js` — `AUTH_REDIRECT_TO` → https://www.ultreia.run/
+- [x] `src/lib/weather.js` — `WEATHER_PROXY_ORIGIN` → https://www.ultreia.run
+- [x] `src/components/Auth/LoginScreen.jsx` — 登录页「访问网页版」链接
+- [x] `src/components/MonthlyPosterModal.jsx` — 海报底部网址 → www.ultreia.run
+- [x] `supabase/functions/register-with-invite/index.ts` — emailRedirectTo
+- [x] `scripts/seed-demo.mjs` — 打印的登录链接；**demo 邮箱 `demo@aitrainstudio.com`
+      故意不改**（它是 Supabase 里已存在账号的标识，改了脚本会另建孤儿账号）
+- [ ] **Supabase Dashboard** → Authentication → URL Configuration：
+      Site URL → `https://www.ultreia.run`；Redirect URLs 追加
+      `https://www.ultreia.run/**` 和 `https://ultreia.run/**`（旧域名条目保留）——用户操作
 
-### 3. Edge Function 部署（推送标题已改码未部署）
+### 3. Edge Function 部署（2026-06-12 完成 ✅）
 
-- [ ] `npx supabase functions deploy daily-coach-dispatch --no-verify-jwt`
-      （部署后每日打卡推送的标题变成「Ultreia」）
+- [x] `daily-coach-dispatch` 已部署（推送标题 → Ultreia）
+- [x] `register-with-invite` 已部署（注册邮件跳新域名）
 
 ### 4. Logo 重设计（用户正在打磨）
 

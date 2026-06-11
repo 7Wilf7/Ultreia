@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { registerWithInvite } from "../lib/db/invites";
 
-const AUTH_REDIRECT_TO = "https://www.aitrainstudio.com/";
+const AUTH_REDIRECT_TO = "https://www.ultreia.run/";
 
 export function useAuth() {
   const [user, setUser] = useState(null);

@@ -610,7 +610,7 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
           color: "var(--ink-3)",
         }}>
           <a
-            href="https://www.aitrainstudio.com/"
+            href="https://www.ultreia.run/"
             target="_blank"
             rel="noreferrer"
             style={{

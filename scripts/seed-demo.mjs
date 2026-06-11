@@ -295,7 +295,7 @@ async function insertAll(userId) {
   console.log('→ Old demo data wiped.');
   await insertAll(id);
   console.log(`✓ Seeded: ${workouts.length} workouts, ${races.length} races, ${chatRows.length} coach messages, ${dailyNotes.length} daily notes.`);
-  console.log(`\nLogin at https://www.aitrainstudio.com/  →  ${EMAIL} / ${PASSWORD}`);
+  console.log(`\nLogin at https://www.ultreia.run/  →  ${EMAIL} / ${PASSWORD}`);
 })().catch(err => {
   console.error('\n✗ Seed failed:', err.message || err);
   process.exit(1);

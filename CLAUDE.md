@@ -8,7 +8,7 @@
 
 ## 部署 & 分发
 
-- **Web 版**：部署在 Vercel，自有域名 `https://www.aitrainstudio.com/`（现役）；新域名 `ultreia.run` 已在阿里云注册，**尚未**绑定 Vercel / 配置 DNS——切换步骤见 `docs-internal/rebrand-ultreia.md`，切换完成前代码里的功能性 URL 继续用旧域名
+- **Web 版**：部署在 Vercel，主域名 `https://www.ultreia.run/`（2026-06-12 切换完成，裸域 308 → www）；旧域名 `https://www.aitrainstudio.com/` 仍绑定同一项目、继续可用（老版本 APK 的天气代理 / 登录跳转还指向它，**不要下线**）；rebrand 全记录见 `docs-internal/rebrand-ultreia.md`
 - **GitHub repo**：`https://github.com/7Wilf7/training-studio`（**public**；main 分支推送后 Vercel 自动构建）
 - **PWA**：已通过 vite-plugin-pwa 配置（`autoUpdate` 模式，前端发版后用户重开即拿新版）
 - **Android APK**：用 Capacitor 打包，分发走 GitHub Releases；APP 内"检查更新"按钮调 GitHub Releases API 比对版本

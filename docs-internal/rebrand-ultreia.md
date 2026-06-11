@@ -75,9 +75,9 @@
 - [x] `supabase/functions/register-with-invite/index.ts` — emailRedirectTo
 - [x] `scripts/seed-demo.mjs` — 打印的登录链接；**demo 邮箱 `demo@aitrainstudio.com`
       故意不改**（它是 Supabase 里已存在账号的标识，改了脚本会另建孤儿账号）
-- [ ] **Supabase Dashboard** → Authentication → URL Configuration：
-      Site URL → `https://www.ultreia.run`；Redirect URLs 追加
-      `https://www.ultreia.run/**` 和 `https://ultreia.run/**`（旧域名条目保留）——用户操作
+- [x] **Supabase Dashboard** → Authentication → URL Configuration：
+      Site URL → `https://www.ultreia.run`；Redirect URLs 已含
+      `https://www.ultreia.run/**`、`https://ultreia.run/**`（旧域名条目保留）✅ 2026-06-12
 
 ### 3. Edge Function 部署（2026-06-12 完成 ✅）
 
@@ -89,33 +89,63 @@
 - 方向已定：保留深色背景 + 等高线纹理 + 米白山脊线，新增 **Ultreïa 的 ï 两个点**
   做成山脊上方的两颗星（典：Compostela 一说源自 campus stellae「星野」，
   朝圣者沿银河指引而行）。
-- 给图像模型的提示词（定稿版，可直接复制）：
+- **2026-06-12 迭代结论**：v1 提示词从零生成效果不满意；GPT 出过一张接近满意的图
+  （桌面 `ChatGPT Image Jun 12, 2026, 07_39_06 AM.png`）：等高线清晰、山保持断笔
+  形态、右下角有黄色小横杠。用户拍板——等高线就要那张图的清晰度；山保持断笔
+  （**不要**一笔连续）；两个点放**右侧山峰正上方**；小横杠位置大小照旧但改**深苔绿**
+  （不要黄色）。
+- **首选玩法：拿那张图喂给 GPT 做定向修改**（从零生成构图会漂移），提示词 v2：
 
   ```
-  Minimalist flat vector app icon, rounded square (squircle). Background: very dark warm
-  charcoal, almost black (#1B1A17), overlaid with extremely subtle tone-on-tone topographic
-  contour lines, barely visible, matte texture, no gloss.
+  Use the attached app icon as the exact base. Keep EVERYTHING about it unchanged —
+  the dark charcoal background, the clearly visible topographic contour lines, the
+  cream broken-stroke mountain ridgeline with its gaps, the squircle shape, the
+  composition. Make ONLY two precise changes:
 
-  Centerpiece: a clean geometric mountain ridgeline drawn as a single continuous angular
-  stroke in warm off-white / cream (#EDE8DC) — two asymmetric peaks, the left peak taller,
-  sharp angular folds, modern and abstract, like a stylized letter M formed by a mountain
-  ridge. Uniform stroke width, crisp edges.
+  1. Recolor the small horizontal dash near the base of the right slope from
+     yellow-gold to a muted deep moss green (#8A8B5C). Same size, same position.
 
-  Above the ridgeline, slightly right of center: two small round dots in the same cream
-  color, floating like two stars in the night sky — a subtle reference to the diaeresis of
-  the word "Ultreïa". The dots should be clearly intentional, aligned side by side, sized
-  in proportion to the stroke width of the ridge.
+  2. Add two small round dots in the same warm cream color as the mountain strokes,
+     floating directly above the apex of the RIGHT (smaller) peak, side by side,
+     like two stars in the night sky. Each dot's diameter ≈ the stroke width of the
+     ridgeline. Keep a clear gap between the dots and the peak — they must read as
+     floating stars (a subtle nod to the diaeresis of "Ultreïa"), not as part of
+     the mountain. The contour lines should pass behind them undisturbed.
 
-  One tiny accent: a short olive-green (#8A8B5C) dash near the base of the right slope,
-  as a minimal color signature.
-
-  Style: flat 2D vector, no gradients on the mark itself, no text, no shadows, no 3D,
-  generous negative space, premium outdoor-brand aesthetic (think COROS / Arc'teryx
-  minimalism). Composition centered, icon fills ~60% of the canvas.
+  Do not redraw, restyle, or "improve" anything else. Flat matte finish, no gloss,
+  no gradients on the mark.
   ```
 
-  可选追加：带字标版本 `Below the mark, the wordmark "ULTREÏA" in a clean geometric
-  sans-serif, letterspaced, cream color`；让山上两颗星给字标的 ï 当点用：
+- 备用（从零生成）提示词 v2：
+
+  ```
+  Minimalist flat vector app icon, rounded square (squircle). Background: very dark
+  warm charcoal (#1B1A17) covered edge-to-edge with CLEARLY VISIBLE thin topographic
+  contour lines in a slightly lighter charcoal grey — dense, organic, hand-drawn
+  quality, like a real trail map at night. The contours are a key visual feature,
+  not a faint texture.
+
+  Centerpiece: a mountain ridgeline of two peaks (left peak taller) drawn in warm
+  off-white cream strokes with deliberate BROKEN-STROKE construction — the strokes
+  are separate angular segments with small intentional gaps where they meet, like
+  confident brush lifts, NOT one continuous outline. Uniform stroke width, crisp
+  flat edges.
+
+  Directly above the apex of the right peak: two small cream round dots side by
+  side, floating like two stars (a nod to the diaeresis of "Ultreïa"), each dot
+  about as wide as the ridgeline stroke, clearly separated from the peak.
+
+  One small muted deep moss green (#8A8B5C) horizontal dash near the base of the
+  right slope — the only color accent.
+
+  Flat 2D, matte, no gloss, no gradients, no text, no shadows, premium outdoor-brand
+  minimalism. Mark fills ~55% of the canvas, centered.
+  ```
+
+  微调话术：点太大 `make the dots 20% smaller`；离山太近 `raise the dots slightly`；
+  间距 `the gap between the two dots equals one dot's width`。
+  可选追加（带字标）：`Below the mark, the wordmark "ULTREÏA" in a clean geometric
+  sans-serif, letterspaced, cream color`；让山上两颗星给字标的 ï 当点：
   `the two dots above the ridge align vertically with the letter i in the wordmark,
   acting as its diaeresis`。
 

@@ -34,6 +34,7 @@ import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
 import { ReadinessPromptModal } from "./components/ReadinessPromptModal";
 import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
+import { ModalRoot } from "./components/ModalRoot";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
@@ -55,6 +56,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
+import { s } from "./styles";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
@@ -995,7 +997,7 @@ function AppShell({
   const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
   const [showGuide, setShowGuide] = useState(false);
   const [readinessPromptDate, setReadinessPromptDate] = useState(null);
-  const [coachDraft, setCoachDraft] = useState(null);
+  const [coachReviewPrompt, setCoachReviewPrompt] = useState(null);
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
   // "set up daily push" button — draws the eye to where the setting lives.
   const [pushFlash, setPushFlash] = useState(false);
@@ -1039,8 +1041,11 @@ function AppShell({
   function requestCoachReview(workouts, meta = {}) {
     const rows = (Array.isArray(workouts) ? workouts : [workouts]).filter(Boolean).slice(0, 3);
     if (!rows.length) return;
-    setCoachDraft({ id: Date.now(), text: buildWorkoutReviewDraft(rows, { ...meta, count: meta.count || rows.length }) });
-    setTab(3);
+    setCoachReviewPrompt({
+      workouts: rows,
+      count: meta.count || rows.length,
+      text: buildWorkoutReviewDraft(rows, { ...meta, count: meta.count || rows.length }),
+    });
   }
 
   // Jump from the inbox to the daily-push setting. On mobile that's the
@@ -1548,6 +1553,14 @@ Rules:
     setPlanProposal(null);
   }
 
+  function confirmCoachReviewPrompt() {
+    if (!coachReviewPrompt || chatLoading) return;
+    const text = coachReviewPrompt.text;
+    setCoachReviewPrompt(null);
+    setTab(3);
+    sendChat(text);
+  }
+
   // True when ANY long-running AI Coach operation is in flight. Used to
   // render the spinner badge on the AI Coach tab label so the user knows
   // the model is still working even when they've switched to another tab.
@@ -1783,8 +1796,6 @@ Rules:
           memoryProposal={memoryProposal}
           setMemoryProposal={setMemoryProposal}
           proposeMemoryUpdate={proposeMemoryUpdate}
-          externalDraft={coachDraft}
-          clearExternalDraft={() => setCoachDraft(null)}
         />
     );
     // Index 4 — mobile-only Settings page (desktop puts these in the top-right).
@@ -1971,6 +1982,63 @@ Rules:
           onConfirm={confirmImportPlans}
           onCancel={() => setPlanProposal(null)}
         />
+      )}
+
+      {coachReviewPrompt && (
+        <ModalRoot onClose={() => setCoachReviewPrompt(null)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setCoachReviewPrompt(null)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 420, float: true })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 650, margin: "0 0 6px" }}>
+                    {t("activities.coach_review_confirm_title")}
+                  </h2>
+                  <p style={{ ...s.muted, margin: 0, lineHeight: 1.55 }}>
+                    {t("activities.coach_review_confirm_body", {
+                      shown: coachReviewPrompt.workouts.length,
+                      n: coachReviewPrompt.count,
+                    })}
+                  </p>
+                </div>
+                <button onClick={() => setCoachReviewPrompt(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <div style={{
+                border: "1px solid var(--rule)",
+                background: "var(--bg)",
+                borderRadius: 4,
+                padding: "10px 12px",
+                marginBottom: 16,
+                display: "grid",
+                gap: 6,
+              }}>
+                {coachReviewPrompt.workouts.map((w, idx) => (
+                  <div key={w.id || `${w.date}-${idx}`} style={{
+                    fontSize: 12,
+                    color: "var(--ink-2)",
+                    lineHeight: 1.45,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}>
+                    {describeWorkoutForCoach(w, idx)}
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+                <button onClick={() => setCoachReviewPrompt(null)} style={s.btnGhost}>
+                  {t("common.cancel")}
+                </button>
+                <button
+                  onClick={confirmCoachReviewPrompt}
+                  disabled={chatLoading}
+                  style={{ ...s.btn, opacity: chatLoading ? 0.5 : 1 }}
+                >
+                  {chatLoading ? t("coach.thinking") : t("activities.coach_review_send")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
       )}
     </>
   );

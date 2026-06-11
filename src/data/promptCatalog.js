@@ -152,10 +152,10 @@ export function getPromptCatalog() {
     },
     {
       id: "review",
-      title: "④ 新增活动点评草稿",
-      when: "点「让教练看」时预填到输入框（不自动发送）",
+      title: "④ 新增活动点评请求",
+      when: "新增活动后确认发送给 AI Coach",
       source: "src/App.jsx · buildWorkoutReviewDraft()",
-      blocks: [{ label: "草稿模板", text: REVIEW_DRAFT }],
+      blocks: [{ label: "消息模板", text: REVIEW_DRAFT }],
     },
     {
       id: "extract",

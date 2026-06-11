@@ -228,7 +228,6 @@ export function AICoachTab({
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
   memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
-  externalDraft, clearExternalDraft,
 }) {
   // Provider label for the status pill. The memory-update call (which used to
   // need a resolved endpoint + key here) now lives in AppShell.
@@ -292,7 +291,6 @@ export function AICoachTab({
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const hideJumpTimer = useRef(null);
-  const consumedDraftId = useRef(null);
   // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
   // events too — mute the button logic briefly so they don't flash the arrows.
   const suppressJumpUntil = useRef(0);
@@ -369,13 +367,6 @@ export function AICoachTab({
   }, [chatMessages.length, muteAndHideJumps]);
   // Drop the pending hide timer if the tab unmounts mid-countdown.
   useEffect(() => () => clearTimeout(hideJumpTimer.current), []);
-
-  useEffect(() => {
-    if (!externalDraft || consumedDraftId.current === externalDraft.id) return;
-    consumedDraftId.current = externalDraft.id;
-    setChatInput(externalDraft.text || "");
-    requestAnimationFrame(() => chatInputRef.current?.focus?.());
-  }, [externalDraft]);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -512,10 +503,6 @@ export function AICoachTab({
       markHintsSeen();
     }
     setChatInput("");
-    // Consume the injected draft for good — without this, leaving the tab
-    // unmounts AICoachTab (resetting the consumedDraftId ref) and coming back
-    // re-injects the same prefilled review text into the input box.
-    clearExternalDraft?.();
     await sendChat(userMsg);
   }
 

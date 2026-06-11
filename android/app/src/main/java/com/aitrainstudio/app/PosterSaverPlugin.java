@@ -50,7 +50,7 @@ public class PosterSaverPlugin extends Plugin {
             values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
             if (Build.VERSION.SDK_INT >= 29) {
-                values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Training Studio");
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Ultreia");
                 values.put(MediaStore.Images.Media.IS_PENDING, 1);
             }
 

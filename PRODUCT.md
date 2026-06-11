@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Training Studio is used by Chinese runners who track completed training, review progress, prepare for races, and share selected achievements with friends or social platforms.
+Ultreia (formerly Training Studio) is used by Chinese runners who track completed training, review progress, prepare for races, and share selected achievements with friends or social platforms.
 
 ## Product Purpose
 

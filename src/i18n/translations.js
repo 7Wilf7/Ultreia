@@ -3,8 +3,8 @@
 
 const dict = {
   // ===== Header =====
-  "header.title":         { en: "{name}'s Training Studio", zh: "{name} 的训练工作室" },
-  "header.title_empty":   { en: "Training Studio",          zh: "训练工作室" },
+  "header.title":         { en: "{name}'s Ultreia",         zh: "{name} 的 Ultreia" },
+  "header.title_empty":   { en: "Ultreia",                  zh: "Ultreia" },
   "header.subtitle":      { en: "Personal training hub · Built for race goals", zh: "个人训练中心 · 为比赛目标而生" },
   "header.api":           { en: "API",                      zh: "API" },
   "header.api_tooltip":   { en: "API settings",             zh: "API 设置" },
@@ -244,7 +244,7 @@ const dict = {
   "profile.desc_setup":   { en: "This data shapes how AI Coach gives advice. Filled once, edit anytime via the ⚙ icon.", zh: "这些信息会影响 AI 教练的建议方式。只需填写一次，之后可通过 ⚙ 图标随时修改。" },
   "profile.desc_edit":    { en: "Updated values are used in the next AI Coach message.", zh: "修改后从下一次 AI 教练对话开始生效。" },
   "profile.display_name":         { en: "Display Name",     zh: "显示名" },
-  "profile.display_name_hint":    { en: "Shown at the top of the page (e.g. \"Alice\" → \"Alice's Training Studio\")", zh: "显示在页面顶部（例如 \"Alice\" → \"Alice 的训练工作室\"）" },
+  "profile.display_name_hint":    { en: "Shown at the top of the page (e.g. \"Alice\" → \"Alice's Ultreia\")", zh: "显示在页面顶部（例如 \"Alice\" → \"Alice 的 Ultreia\"）" },
   "profile.display_name_placeholder": { en: "Your name",    zh: "你的名字" },
   "profile.birth_date":   { en: "Birth Date",               zh: "出生日期" },
   "profile.age_suffix":   { en: "→ Age {age}",              zh: "→ {age} 岁" },
@@ -652,7 +652,7 @@ const dict = {
   "poster.longest":           { en: "LONGEST",                 zh: "最长单次" },
   "poster.weekly_bars":       { en: "Weekly distance",         zh: "每周距离" },
   "poster.active_days":       { en: "Active days",             zh: "训练天数" },
-  "poster.monthly_note":      { en: "Generated from your Training Studio activity log.", zh: "根据你的 Training Studio 训练记录生成。" },
+  "poster.monthly_note":      { en: "Generated from your Ultreia activity log.", zh: "根据你的 Ultreia 训练记录生成。" },
   "poster.save_png":          { en: "Save PNG",                zh: "保存 PNG" },
   "poster.saving":            { en: "Saving…",                 zh: "保存中…" },
   "poster.downloaded":        { en: "Saved to photos.",         zh: "已保存到相册。" },

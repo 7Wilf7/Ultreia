@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
       let sent = 0;
       const fcmErrors: any[] = [];
       for (const s of subs) {
-        const r = await sendPush(sa.project_id, fcmAccessToken, s.fcm_token, "Training Studio", message);
+        const r = await sendPush(sa.project_id, fcmAccessToken, s.fcm_token, "Ultreia", message);
         if (r.ok) sent++;
         // Surface FCM rejections (invalid/stale token, sender mismatch, etc.)
         // so a manual invoke shows WHY a push didn't land instead of silently

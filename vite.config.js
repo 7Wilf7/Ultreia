@@ -74,8 +74,8 @@ export default defineConfig(({ mode }) => {
       // Files the SW pre-caches so the app shell opens offline.
       includeAssets: ['favicon.jpg'],
       manifest: {
-        name: "Wilf's Training Studio",
-        short_name: 'Training Studio',
+        name: 'Ultreia',
+        short_name: 'Ultreia',
         description: 'Personal training hub — runs, strength, races, AI coach.',
         theme_color: '#f2f1ec',
         background_color: '#f2f1ec',

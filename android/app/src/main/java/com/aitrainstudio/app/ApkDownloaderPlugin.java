@@ -48,7 +48,7 @@ public class ApkDownloaderPlugin extends Plugin {
         if (dest.exists()) { try { dest.delete(); } catch (Exception ignored) {} }
 
         DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
-        req.setTitle("Training Studio");
+        req.setTitle("Ultreia");
         req.setDescription("Downloading update…");
         req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
         req.setDestinationInExternalFilesDir(ctx, Environment.DIRECTORY_DOWNLOADS, fileName);

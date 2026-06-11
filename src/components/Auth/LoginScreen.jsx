@@ -429,7 +429,7 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
           <div />
           <img
             src={productLogoUrl}
-            alt="Training Studio"
+            alt="Ultreia"
             style={{
               width: 72,
               height: 72,

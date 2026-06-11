@@ -60,7 +60,7 @@ jobs:
           echo "=== dist/assets/ ==="
           ls -la dist/assets/
           echo "=== bundle key string presence ==="
-          for s in "Training Studio" "Check for updates" "无法" "登录" "Easy Run" "0.1.0"; do
+          for s in "Ultreia" "Check for updates" "无法" "登录" "Easy Run" "0.1.0"; do
             n=$(grep -ac "$s" dist/assets/index-*.js || echo 0)
             echo "  '$s': $n"
           done
@@ -154,7 +154,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: training-studio-${{ github.ref_name }}.apk
-          name: Training Studio ${{ github.ref_name }}
+          name: Ultreia ${{ github.ref_name }}
           generate_release_notes: false
           fail_on_unmatched_files: true
           body: ${{ env.RELEASE_NOTES }}

@@ -7,7 +7,7 @@
          before our cream splash. Pin it to the app's cream (#F2F1EC) and let
          the launcher icon (the dark mountain tile) serve as the splash icon,
          so the system splash reads as "cream + dark logo" — visually
-         continuous with our own cream "logo + Training Studio" splash that
+         continuous with our own cream "logo + Ultreia" splash that
          follows. android:background keeps our drawable as the post-system
          window background. -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">

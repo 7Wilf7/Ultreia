@@ -47,8 +47,8 @@ const STEPS = [
     emphasis: true,
     title: { zh: "AI 教练 AI Coach", en: "AI Coach" },
     lead: {
-      zh: "这是 Training Studio 的核心 —— 一个真正「懂你」的 AI 跑步教练，不是泛泛而谈的聊天机器人。",
-      en: "This is the heart of Training Studio — an AI running coach that actually knows YOU, not a generic chatbot.",
+      zh: "这是 Ultreia 的核心 —— 一个真正「懂你」的 AI 跑步教练，不是泛泛而谈的聊天机器人。",
+      en: "This is the heart of Ultreia — an AI running coach that actually knows YOU, not a generic chatbot.",
     },
     bullets: [
       { zh: "它实时看到你的资料、近期训练、目标赛、长期记忆，给出**个性化**建议", en: "It sees your profile, recent training, goal races and long-term memory — and gives personalized advice." },

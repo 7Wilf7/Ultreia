@@ -124,7 +124,7 @@ ${rows}`;
 }
 
 // Boot screen — deliberately mirrors the native Android splash (logo +
-// "Training Studio" on the cream background) so on the APK the native splash →
+// "Ultreia" on the cream background) so on the APK the native splash →
 // web-view handoff is visually seamless: the user sees ONE logo screen, then
 // the app. Now also a warm time-of-day greeting + a random sport line.
 // Logo + text use vmin units so they track the stretched native splash size.
@@ -155,7 +155,7 @@ function LoadingScreen({ userId = null }) {
           when swapping the logo, update both assets (see src/assets/logo.js). */}
       <img
         src={productLogoUrl}
-        alt="Training Studio"
+        alt="Ultreia"
         style={{
           width: "min(30vmin, 150px)",
           height: "min(30vmin, 150px)",
@@ -1201,7 +1201,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         return { ...m, content: parsed.text, meta: parsed.meta || null };
       });
       const payload = {
-        app: "Training Studio",
+        app: "Ultreia",
         schemaVersion: 1,
         exportedAt: new Date().toISOString(),
         user: {
@@ -2095,7 +2095,7 @@ Rules:
           fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
           lineHeight: 1.2,
         }}>
-          <img src={productLogoUrl} alt="Training Studio"
+          <img src={productLogoUrl} alt="Ultreia"
             style={{
               width: 28, height: 28,
               borderRadius: 4,

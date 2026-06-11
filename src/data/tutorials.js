@@ -23,8 +23,8 @@ export const TUTORIALS = {
         en: "Verify identity: after login click “Verify now”, choose “Individual developer”. Set industry to “Internet” and use-case to “Weather”, fill in your info + phone code, and submit.",
       },
       {
-        zh: "创建应用：认证通过后新建应用。应用名字填 trainingstudio，接口类型选「天气」，应用场景选「天气服务」。⚠ 不要选任何付费套餐。",
-        en: "Create an app: once verified, create a new application. Name it “trainingstudio”, set API type to “Weather” and scenario to “Weather service”. ⚠ Do NOT select any paid plan.",
+        zh: "创建应用：认证通过后新建应用。应用名字填 ultreia，接口类型选「天气」，应用场景选「天气服务」。⚠ 不要选任何付费套餐。",
+        en: "Create an app: once verified, create a new application. Name it “ultreia”, set API type to “Weather” and scenario to “Weather service”. ⚠ Do NOT select any paid plan.",
       },
       {
         zh: "获取令牌：创建应用后，点进该应用的「访问控制」，复制里面的令牌（Token）。",

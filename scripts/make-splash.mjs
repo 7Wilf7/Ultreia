@@ -1,5 +1,5 @@
 // Regenerate ALL Android splash rasters: a single boot screen of
-//   [rounded logo]  +  "Training Studio"
+//   [rounded logo]  +  "Ultreia"
 // centered on the app's cream background (#f2f1ec).
 //
 // Why per-file regeneration: the splash is wired as the window background
@@ -12,7 +12,7 @@
 // the committed PNGs are authoritative.
 //
 // The React LoadingScreen (src/App.jsx) mirrors this exact layout — same cream
-// bg, same logo, same "Training Studio" — so the native-splash → web-view
+// bg, same logo, same "Ultreia" — so the native-splash → web-view
 // handoff is visually seamless (no second "Loading…" page).
 import sharp from 'sharp';
 import { readdir, stat } from 'node:fs/promises';
@@ -27,7 +27,7 @@ import { readdir, stat } from 'node:fs/promises';
 // the two in sync when the logo changes.
 const LOGO_SRC = 'resources/splash-logo.png';
 const BG = '#f2f1ec';                     // app cream (PWA theme/background color)
-const TEXT = 'Training Studio';
+const TEXT = 'Ultreia';
 const TEXT_COLOR = '#141413';             // ink-1
 const BASE = 'android/app/src/main/res';
 

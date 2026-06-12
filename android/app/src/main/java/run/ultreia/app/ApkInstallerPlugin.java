@@ -1,4 +1,4 @@
-package run.ultreia;
+package run.ultreia.app;
 
 import android.content.Intent;
 import android.net.Uri;

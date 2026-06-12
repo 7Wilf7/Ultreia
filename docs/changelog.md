@@ -4,6 +4,7 @@
 
 ## 2026-06-12
 
+- **0.10.2 启动修复**：修正 Android 包名迁移后的启动 Activity 路径，避免新版 APK 打开时直接闪退；使用手册维护口径改为应用内 Markdown，不再以外部 GitBook 为准。
 - **Android 包名与 Firebase 清理**：Android applicationId 改为 `run.ultreia.app`，Firebase 切到新项目 `ultreia-ce3d9`；发布流程只上传 `ultreia-latest.apk`，不再写旧兼容镜像名。
 - **分享海报背景跟随新 logo**：分享海报背景不再引用旧的线稿资源，改为复用最终版 Ultreia logo，避免海报和应用图标不一致。
 - **产品理念并入总览**：使用手册总览开头加入 Ultreia 名字由来、logo 设计思路和这款工具的使用判断原则。

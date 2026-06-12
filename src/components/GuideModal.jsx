@@ -8,7 +8,7 @@ import { ModalRoot } from "./ModalRoot";
 
 // Bundle the user manual straight into the app. Vite's `?raw` suffix inlines
 // each markdown file as a string at build time, so the guide works offline and
-// opens in-app (no jump to the external GitBook). docs/ lives at the project
+// opens in-app (no jump to external documentation). docs/ lives at the project
 // root, hence the ../../ climb out of src/components.
 import readmeMd from "../../docs/README.md?raw";
 import trainingLogMd from "../../docs/training-log.md?raw";

@@ -1,4 +1,4 @@
-package run.ultreia;
+package run.ultreia.app;
 
 import android.Manifest;
 import android.content.ContentResolver;

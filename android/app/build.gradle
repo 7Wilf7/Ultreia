@@ -9,10 +9,10 @@ if (keystorePropsFile.exists()) {
 }
 
 android {
-    namespace = "com.aitrainstudio.app"
+    namespace = "run.ultreia.app"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.aitrainstudio.app"
+        applicationId "run.ultreia.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         // versionCode + versionName are baked into the APK. Increment

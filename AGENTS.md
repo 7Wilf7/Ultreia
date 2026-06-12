@@ -1,6 +1,6 @@
 # Ultreia
 
-**Ultreia** —— 从 Claude.ai artifact 搬过来的 React 单页应用。2026-06-12 起产品更名为 Ultreia（中世纪朝圣者口号「向更远处去」，读 /ˈul-TREY-a/）；repo 名、`applicationId`（`com.aitrainstudio.app`）和 Supabase 项目**保持不变**，只改用户可见的品牌名。
+**Ultreia** —— 从 Claude.ai artifact 搬过来的 React 单页应用。2026-06-12 起产品更名为 Ultreia（中世纪朝圣者口号「向更远处去」，读 /ˈul-TREY-a/）；GitHub repo 已改为 `7Wilf7/Ultreia`，Android `applicationId` 已改为 `run.ultreia.app`，Firebase 项目已改为 `ultreia-ce3d9`。
 
 ## 技术栈
 - Vite 8 + React 19 (JSX, 非 TypeScript)
@@ -8,8 +8,8 @@
 
 ## 部署 & 分发
 
-- **Web 版**：部署在 Vercel，主域名 `https://www.ultreia.run/`（2026-06-12 切换完成，裸域 308 → www）；旧域名 `https://www.aitrainstudio.com/` 仍绑定同一项目、继续可用（老版本 APK 的天气代理 / 登录跳转还指向它，**不要下线**）；rebrand 全记录见 `docs-internal/rebrand-ultreia.md`
-- **GitHub repo**：`https://github.com/7Wilf7/training-studio`（**public**；main 分支推送后 Vercel 自动构建）
+- **Web 版**：部署在 Vercel，主域名 `https://www.ultreia.run/`（2026-06-12 切换完成，裸域 308 → www）；旧域名已允许下线；rebrand 全记录见 `docs-internal/rebrand-ultreia.md`
+- **GitHub repo**：`https://github.com/7Wilf7/Ultreia`（**public**；main 分支推送后 Vercel 自动构建）
 - **PWA**：已通过 vite-plugin-pwa 配置（`autoUpdate` 模式，前端发版后用户重开即拿新版）
 - **Android APK**：用 Capacitor 打包，分发走 GitHub Releases；APP 内"检查更新"按钮调 GitHub Releases API 比对版本
 

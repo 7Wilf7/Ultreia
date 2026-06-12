@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "588161061395",
-    "project_id": "training-studio-dca47",
-    "storage_bucket": "training-studio-dca47.firebasestorage.app"
+    "project_number": "713015607017",
+    "project_id": "ultreia-ce3d9",
+    "storage_bucket": "ultreia-ce3d9.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:588161061395:android:429662167c22256c4c25e6",
+        "mobilesdk_app_id": "1:713015607017:android:036c0f3bdff82c570b7a78",
         "android_client_info": {
-          "package_name": "com.aitrainstudio.app"
+          "package_name": "run.ultreia.app"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAr_Tsl3Lve2cH2qaUcREOWnVmT70nw-Jo"
+          "current_key": "AIzaSyBBwkwx7Ki9EwwNqZcoJroGLdK68IsnFGM"
         }
       ],
       "services": {

@@ -1,4 +1,4 @@
-package com.aitrainstudio.app;
+package run.ultreia;
 
 import android.os.Bundle;
 

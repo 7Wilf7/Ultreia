@@ -1,6 +1,7 @@
 # 目录
 
 * [Ultreia 总览](README.md)
+* [产品理念](philosophy.md)
 * [训练记录](training-log.md)
 * [AI 教练](ai-coach.md)
 * [赛事管理](races.md)

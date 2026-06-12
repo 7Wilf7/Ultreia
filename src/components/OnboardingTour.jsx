@@ -10,14 +10,15 @@ import { ModalRoot } from "./ModalRoot";
 // desktop has no Settings tab so it's omitted there.
 const STEPS = [
   {
-    title: { zh: "为什么叫 Ultreia", en: "Why Ultreia" },
+    title: { zh: "产品理念", en: "Product philosophy" },
     lead: {
-      zh: "Ultreia 来自圣地亚哥朝圣之路上朝圣者互相鼓励的一句话，意思是「向更远处去」。",
-      en: "Ultreia comes from the Camino de Santiago, where pilgrims used it to encourage each other: go further.",
+      zh: "Ultreia 来自圣地亚哥朝圣之路上的一句古老问候，意思接近「继续向前」「向更远处去」。",
+      en: "Ultreia comes from an old Camino de Santiago greeting, close to: keep going, go further.",
     },
     bullets: [
-      { zh: "它很适合耐力训练：每一次记录、复盘和计划，都是往更远一点走。", en: "It fits endurance training: every log, review, and plan is one more step forward." },
-      { zh: "下面 5 步会带你看训练、日历、比赛、AI 教练和设置。", en: "The next 5 steps cover Training, Calendar, Races, AI Coach, and Settings." },
+      { zh: "这个工具不是普通打卡本。记录是原材料，复盘、计划和 AI 教练建议才是闭环。", en: "This is not just a logbook. Logs are raw material; review, planning and AI coaching close the loop." },
+      { zh: "logo 的山线、等高线和绿色短线，都来自路线、地形和「下一段路」这个设计思路。", en: "The mountain mark, contour lines and small green stroke come from routes, terrain and the next section of road." },
+      { zh: "详细由来在设置里的「使用手册 → 产品理念」。下面 5 步先带你看主要功能。", en: "The full story lives in Settings → Guide → Product philosophy. The next 5 steps cover the main features." },
     ],
   },
   {

@@ -10,11 +10,8 @@ import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
 import { productLogoUrl } from "../assets/logo";
-import posterLineNightUrl from "../../resources/Line Only.png";
-import posterLineDayUrl from "../../resources/line-only-day.png";
 
-// One background line-art image per theme (same artwork, day = dark recolor).
-const POSTER_LINE_URLS = { day: posterLineDayUrl, night: posterLineNightUrl };
+const POSTER_BACKGROUND_URL = productLogoUrl;
 
 // url → Promise<dataUrl>, module-scoped so the fetch + base64 encode happens
 // once per session even across modal remounts. SVG <image> hrefs MUST be data
@@ -390,8 +387,8 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function PosterBackground({ W, H, ratioKey, pal, lineSrc }) {
-  if (!lineSrc) return null;
+function PosterBackground({ W, H, ratioKey, pal, imageSrc }) {
+  if (!imageSrc) return null;
   const size = Math.round(W * 1.22);
   const x = Math.round((W - size) / 2);
   const yFactor = ratioKey === "story" ? 0.135 : ratioKey === "square" ? -0.08 : 0.03;
@@ -399,7 +396,7 @@ function PosterBackground({ W, H, ratioKey, pal, lineSrc }) {
 
   return (
     <image
-      href={lineSrc}
+      href={imageSrc}
       x={x}
       y={y}
       width={size}
@@ -411,7 +408,7 @@ function PosterBackground({ W, H, ratioKey, pal, lineSrc }) {
   );
 }
 
-function Poster({ stats, theme, ratio, svgRef, logoSrc, lineSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc, posterBgSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
   const M = 82;
@@ -523,7 +520,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, lineSrc }) {
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      <PosterBackground W={W} H={H} ratioKey={ratio.key} pal={pal} lineSrc={lineSrc} />
+      <PosterBackground W={W} H={H} ratioKey={ratio.key} pal={pal} imageSrc={posterBgSrc} />
       <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
@@ -591,8 +588,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   // (the in-DOM SVG can fetch them); the effects below swap in data URLs,
   // which the export path requires (see fetchAsDataUrl).
   const [logoSrc, setLogoSrc] = useState(productLogoUrl);
-  const [lineSrcs, setLineSrcs] = useState({ ...POSTER_LINE_URLS });
-  const lineSrc = lineSrcs[theme];
+  const [posterBgSrc, setPosterBgSrc] = useState(POSTER_BACKGROUND_URL);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -622,15 +618,14 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     return () => { alive = false; };
   }, []);
 
-  // Convert only the CURRENT theme's line art (the other theme's image is
-  // never shown unless the user switches, so don't fetch + base64 it upfront).
+  // Convert the poster background to a data URL for PNG export.
   useEffect(() => {
     let alive = true;
-    fetchAsDataUrl(POSTER_LINE_URLS[theme])
-      .then(d => { if (alive) setLineSrcs(prev => (prev[theme] === d ? prev : { ...prev, [theme]: d })); })
+    fetchAsDataUrl(POSTER_BACKGROUND_URL)
+      .then(d => { if (alive) setPosterBgSrc(d); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [theme]);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -667,13 +662,13 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       // flush them into the DOM so the serializer sees them. A failed fetch
       // rejects here and lands in the catch below instead of silently
       // exporting a poster with no logo / background.
-      const [logoData, lineData] = await Promise.all([
+      const [logoData, posterBgData] = await Promise.all([
         fetchAsDataUrl(productLogoUrl),
-        fetchAsDataUrl(POSTER_LINE_URLS[theme]),
+        fetchAsDataUrl(POSTER_BACKGROUND_URL),
       ]);
       flushSync(() => {
         setLogoSrc(logoData);
-        setLineSrcs(prev => (prev[theme] === lineData ? prev : { ...prev, [theme]: lineData }));
+        setPosterBgSrc(posterBgData);
       });
       // No document.fonts.ready wait — the fonts are embedded as base64
       // @font-face INSIDE the serialized SVG, so the export img is self-contained
@@ -818,7 +813,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} lineSrc={lineSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} posterBgSrc={posterBgSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

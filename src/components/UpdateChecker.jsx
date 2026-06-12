@@ -19,7 +19,7 @@ const GITHUB_RELEASES_API =
 // China; the Supabase object isn't, so we try it first.
 const SUPABASE_URL = (import.meta.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "");
 const MIRROR_APK_URL = SUPABASE_URL
-  ? `${SUPABASE_URL}/storage/v1/object/public/releases/training-studio-latest.apk`
+  ? `${SUPABASE_URL}/storage/v1/object/public/releases/ultreia-latest.apk`
   : null;
 
 // Strip leading "v" so "v0.2.1" → "0.2.1"
@@ -182,7 +182,7 @@ export function UpdateChecker() {
             }
           } catch { /* ignore poll errors */ }
         }, 700);
-        const res = await ApkDownloader.download({ url, fileName: "ts-update.apk" });
+        const res = await ApkDownloader.download({ url, fileName: "ultreia-update.apk" });
         clearInterval(poll); poll = null;
         const path = res?.path;
         if (!path) throw new Error("download returned no path");

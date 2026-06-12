@@ -104,7 +104,7 @@ jobs:
       - name: Rename APK with version
         run: |
           mv android/app/build/outputs/apk/release/app-release.apk \
-             "training-studio-${GITHUB_REF_NAME}.apk"
+             "ultreia-${GITHUB_REF_NAME}.apk"
 
       - name: Mirror APK to Supabase Storage (fast download in CN)
         # Uploads the signed APK to a PUBLIC bucket "releases" as a stable name
@@ -121,12 +121,19 @@ jobs:
             exit 0
           fi
           curl -fSL -X POST \
+            "$SUPABASE_URL/storage/v1/object/releases/ultreia-latest.apk" \
+            -H "Authorization: Bearer $SERVICE_ROLE" \
+            -H "apikey: $SERVICE_ROLE" \
+            -H "x-upsert: true" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            --data-binary @"ultreia-${GITHUB_REF_NAME}.apk"
+          curl -fSL -X POST \
             "$SUPABASE_URL/storage/v1/object/releases/training-studio-latest.apk" \
             -H "Authorization: Bearer $SERVICE_ROLE" \
             -H "apikey: $SERVICE_ROLE" \
             -H "x-upsert: true" \
             -H "Content-Type: application/vnd.android.package-archive" \
-            --data-binary @"training-studio-${GITHUB_REF_NAME}.apk"
+            --data-binary @"ultreia-${GITHUB_REF_NAME}.apk"
           echo "Mirror upload done."
 
       - name: Build release notes from commits since last tag
@@ -153,7 +160,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: training-studio-${{ github.ref_name }}.apk
+          files: ultreia-${{ github.ref_name }}.apk
           name: Ultreia ${{ github.ref_name }}
           generate_release_notes: false
           fail_on_unmatched_files: true

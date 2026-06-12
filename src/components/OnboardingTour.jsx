@@ -10,6 +10,17 @@ import { ModalRoot } from "./ModalRoot";
 // desktop has no Settings tab so it's omitted there.
 const STEPS = [
   {
+    title: { zh: "为什么叫 Ultreia", en: "Why Ultreia" },
+    lead: {
+      zh: "Ultreia 来自圣地亚哥朝圣之路上朝圣者互相鼓励的一句话，意思是「向更远处去」。",
+      en: "Ultreia comes from the Camino de Santiago, where pilgrims used it to encourage each other: go further.",
+    },
+    bullets: [
+      { zh: "它很适合耐力训练：每一次记录、复盘和计划，都是往更远一点走。", en: "It fits endurance training: every log, review, and plan is one more step forward." },
+      { zh: "下面 5 步会带你看训练、日历、比赛、AI 教练和设置。", en: "The next 5 steps cover Training, Calendar, Races, AI Coach, and Settings." },
+    ],
+  },
+  {
     tab: 0,
     title: { zh: "训练 Training", en: "Training" },
     lead: { zh: "记录每一次训练 —— 数据越全，AI 教练越懂你。", en: "Log every session — the more data, the better the AI coach knows you." },
@@ -95,6 +106,7 @@ export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
 
   // Drive the real tab so the page being described is actually showing behind.
   useEffect(() => {
+    if (typeof step.tab !== "number") return;
     onChangeTab(step.tab);
   }, [i, step.tab, onChangeTab]);
 

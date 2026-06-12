@@ -62,6 +62,7 @@ function pickApkAsset(assets) {
 }
 
 const NOTE_TRANSLATIONS = {
+  "fix android icon crop and onboarding intro": "修正安卓桌面图标裁切，并补充新手引导名字由来",
   "finalize ultreia logo assets": "定稿 Ultreia logo 并同步图标资源",
   "add horizontal tab motion and cleaner update notes": "优化移动端横滑动画，并清理更新日志",
   "optimize mobile tab gestures and update notes": "优化移动端 tab 手势和更新日志",

@@ -1,19 +1,12 @@
-// Regenerate ALL Android launcher icon rasters from the full-bleed favicon.jpg.
+// Regenerate ALL Android launcher icon rasters from favicon.jpg.
 //
-// Why favicon.jpg (not icon-only.png): favicon.jpg is the same artwork the PWA
-// uses — a FULL-BLEED 512×512 square whose edges are the design's own dark
-// (#1A1A1A). icon-only.png, by contrast, is a rounded tile floating on
-// transparent padding. Feeding the rounded-tile-on-transparent into the
-// adaptive foreground (shrunk to the 66% safe zone) on a flat #1A1A1A
-// background produced a visible "ring": textured tile in the middle, flat
-// color around it.
+// Why favicon.jpg: it is the same complete square artwork the PWA uses.
 //
-// The fix: full-bleed the favicon into the foreground so the artwork reaches
-// the canvas edge. Because the favicon's own border pixels ARE #1A1A1A — the
-// same as the adaptive <background> color — there's no seam no matter how the
-// launcher masks/parallaxes it. The white mountain mark sits centered (~60%
-// wide), so it survives the launcher's inner-66% crop with margin. Net result
-// matches the PWA icon: edge-to-edge artwork, no ring.
+// The fix: keep the adaptive foreground inside Android's launcher safe area.
+// The final Ultreia mark is wider than the old artwork; if the foreground fills
+// the 108dp adaptive canvas, some launchers crop the white mountain stroke. We
+// now center a slightly smaller favicon on the same dark background so the
+// visible mark survives masks, zoom effects, and rounded-square launchers.
 //
 // @capacitor/assets is NOT run in CI (the release workflow only does
 // `cap sync`), so the committed PNGs here are authoritative — this script
@@ -23,10 +16,11 @@ import { mkdir } from 'node:fs/promises';
 
 const SRC = 'public/favicon.jpg';
 const BG = { r: 0x1a, g: 0x1a, b: 0x1a, alpha: 1 };   // matches ic_launcher_background.xml
+const ADAPTIVE_ICON_SCALE = 0.82;
 
 // Adaptive foreground layers (Android 8+). 108dp logical canvas scaled per
-// density. We fill the WHOLE canvas (full bleed) — the launcher applies the
-// mask + safe-zone crop itself.
+// density. The icon is inset because launchers apply their own masks, zoom,
+// and crop behavior around this foreground layer.
 const FOREGROUND = [
   { name: 'mdpi',    px: 108 },
   { name: 'hdpi',    px: 162 },
@@ -54,6 +48,27 @@ async function squarePng(px) {
     .toBuffer();
 }
 
+async function adaptiveForegroundPng(px) {
+  const innerPx = Math.round(px * ADAPTIVE_ICON_SCALE);
+  const icon = await sharp(SRC)
+    .resize(innerPx, innerPx, { fit: 'contain' })
+    .flatten({ background: BG })
+    .png()
+    .toBuffer();
+
+  return sharp({
+    create: {
+      width: px,
+      height: px,
+      channels: 3,
+      background: BG,
+    },
+  })
+    .composite([{ input: icon, gravity: 'centre' }])
+    .png()
+    .toBuffer();
+}
+
 function circleMaskSvg(px) {
   const r = px / 2;
   return Buffer.from(
@@ -64,9 +79,9 @@ function circleMaskSvg(px) {
 for (const { name, px } of FOREGROUND) {
   const dir = `android/app/src/main/res/mipmap-${name}`;
   await mkdir(dir, { recursive: true });
-  const buf = await squarePng(px);
+  const buf = await adaptiveForegroundPng(px);
   await sharp(buf).toFile(`${dir}/ic_launcher_foreground.png`);
-  console.log(`✓ ${dir}/ic_launcher_foreground.png  ${px}x${px} (full-bleed)`);
+  console.log(`✓ ${dir}/ic_launcher_foreground.png  ${px}x${px} (${Math.round(ADAPTIVE_ICON_SCALE * 100)}% safe-zone icon)`);
 }
 
 for (const { name, px } of LEGACY) {
@@ -85,4 +100,4 @@ for (const { name, px } of LEGACY) {
   console.log(`✓ ${dir}/ic_launcher_round.png  ${px}x${px} (circle)`);
 }
 
-console.log('Done. Adaptive <background> stays #1A1A1A (matches favicon edges).');
+console.log('Done. Adaptive <background> stays #1A1A1A.');

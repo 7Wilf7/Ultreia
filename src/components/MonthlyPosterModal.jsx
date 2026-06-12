@@ -695,7 +695,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       ctx.drawImage(img, 0, 0, ratio.w, ratio.h);
       URL.revokeObjectURL(svgUrl);
 
-      const fileName = `training-studio-${stats.fileLabel}-${theme}-${ratioKey}.png`;
+      const fileName = `ultreia-${stats.fileLabel}-${theme}-${ratioKey}.png`;
       // Native: encode the PNG ONCE (toDataURL) and hand it to the saver — the
       // old path encoded twice (toBlob then toDataURL), doubling the cost.
       if (isNativeApp()) {

@@ -1,4 +1,4 @@
-# Ultreia（原 Training Studio）
+# Ultreia
 
 **Ultreia** —— 从 Claude.ai artifact 搬过来的 React 单页应用。2026-06-12 起产品更名为 Ultreia（中世纪朝圣者口号「向更远处去」，读 /ˈul-TREY-a/）；repo 名、`applicationId`（`com.aitrainstudio.app`）和 Supabase 项目**保持不变**，只改用户可见的品牌名。
 

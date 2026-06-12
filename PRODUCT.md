@@ -6,11 +6,11 @@ product
 
 ## Users
 
-Ultreia (formerly Training Studio) is used by Chinese runners who track completed training, review progress, prepare for races, and share selected achievements with friends or social platforms.
+Ultreia is used by Chinese runners who track completed training, review progress, prepare for races, and share selected achievements with friends or social platforms.
 
 ## Product Purpose
 
-The product turns training records, races, charts, and coaching context into a compact personal training studio. Success means users can quickly understand their recent workload, keep their log organized, and export credible visual summaries without manual design work.
+The product turns training records, races, charts, and coaching context into a compact personal training hub. Success means users can quickly understand their recent workload, keep their log organized, and export credible visual summaries without manual design work.
 
 ## Brand Personality
 

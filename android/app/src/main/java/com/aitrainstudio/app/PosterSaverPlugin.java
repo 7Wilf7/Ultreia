@@ -34,7 +34,7 @@ public class PosterSaverPlugin extends Plugin {
             requestPermissionForAlias("storage", call, "savePngPermissionCallback");
             return;
         }
-        String fileName = call.getString("fileName", "training-studio-poster.png");
+        String fileName = call.getString("fileName", "ultreia-poster.png");
         String data = call.getString("data");
         if (data == null || data.isEmpty()) {
             call.reject("missing data");

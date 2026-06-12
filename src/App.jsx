@@ -1242,7 +1242,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `training-studio-backup-${localDateKey(new Date())}.json`;
+      a.download = `ultreia-backup-${localDateKey(new Date())}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -2088,7 +2088,7 @@ Rules:
       }}>
 
         {/* Left: product icon + GMT+8 + date + live time, all inline.
-            Replaces the older 3-line "▲ Training Studio / GMT+8 / date" block. */}
+            Replaces the older 3-line brand / GMT+8 / date block. */}
         <div style={{
           display: "flex", flexWrap: "wrap",
           alignItems: "center", gap: 10,

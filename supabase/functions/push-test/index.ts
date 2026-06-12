@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
         sa.project_id,
         accessToken,
         row.fcm_token,
-        "Training Studio",
+        "Ultreia",
         "✅ Push pipeline works — this is a test from your coach.",
       );
       results.push({ user_id: row.user_id, status: r.status, ok: r.ok, body: r.body });

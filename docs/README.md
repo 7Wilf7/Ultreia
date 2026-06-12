@@ -1,4 +1,4 @@
-# Ultreia（原 Training Studio）
+# Ultreia
 
 一个面向耐力跑者的**个人教练操作台** —— 训练记录、比赛规划、AI 教练对话，集成在同一个网页里。
 

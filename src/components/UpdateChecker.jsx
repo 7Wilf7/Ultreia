@@ -62,6 +62,7 @@ function pickApkAsset(assets) {
 }
 
 const NOTE_TRANSLATIONS = {
+  "finalize ultreia logo assets": "定稿 Ultreia logo 并同步图标资源",
   "add horizontal tab motion and cleaner update notes": "优化移动端横滑动画，并清理更新日志",
   "optimize mobile tab gestures and update notes": "优化移动端 tab 手势和更新日志",
   "remove unused legacy logo resources": "清理不再使用的旧 logo 资源",

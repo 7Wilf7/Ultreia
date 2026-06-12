@@ -150,10 +150,10 @@
   acting as its diaeresis`。
 
 - 定稿后的落地步骤（一次换齐，不然开屏和应用内会出现两个不同 logo）：
-  - [ ] 新图存 `resources/`，更新 `src/assets/logo.js` 的 import
-  - [ ] 替换 `public/favicon.jpg`（PWA/桌面图标）
-  - [ ] 替换 `resources/splash-logo.png` 并跑 `node scripts/make-splash.mjs` 重新生成原生开屏
-  - [ ] Android launcher icon（`android/app/src/main/res/mipmap-*`）用 capacitor-assets 或手动替换
+  - [x] 新图存 `resources/`，更新 `src/assets/logo.js` 的 import
+  - [x] 替换 `public/favicon.jpg`（PWA/桌面图标）
+  - [x] 替换 `resources/splash-logo.png` 并跑 `node scripts/make-splash.mjs` 重新生成原生开屏
+  - [x] Android launcher icon（`android/app/src/main/res/mipmap-*`）用 `node scripts/make-adaptive-foreground.mjs` 重新生成
 
 ### 5. 其他
 

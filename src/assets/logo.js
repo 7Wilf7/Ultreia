@@ -6,6 +6,6 @@
 // resources/splash-logo.png by scripts/make-splash.mjs. When changing the
 // product logo, update BOTH assets (same artwork) or the native-splash →
 // web-view handoff shows two different logos.
-import productLogoUrl from "../../resources/original-ui.png";
+import productLogoUrl from "../../resources/ultreia-logo.png";
 
 export { productLogoUrl };

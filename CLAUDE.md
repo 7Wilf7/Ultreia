@@ -38,12 +38,12 @@ git tag v0.2.0 && git push origin v0.2.0
 |---|---|
 | `ANDROID_KEYSTORE_BASE64` | 签名 keystore 的 base64 编码 |
 | `ANDROID_KEYSTORE_PASSWORD` | keystore 文件密码 |
-| `ANDROID_KEY_ALIAS` | keystore 内 key 的 alias（`training-studio`）|
+| `ANDROID_KEY_ALIAS` | keystore 内 key 的 alias（以 GitHub Secret 当前值为准；新建证书建议用 `ultreia`）|
 | `ANDROID_KEY_PASSWORD` | key 密码（跟 store 密码一致）|
 | `VITE_SUPABASE_URL` | build 时注入前端；缺了 APP 启动白屏 |
 | `VITE_SUPABASE_ANON_KEY` | 同上 |
 
-keystore 文件本地在 `android/app/training-studio-release.jks`（gitignored），passwords 在 Claude 用户级 memory（永远不进 repo）。
+keystore 文件如需本地放置，建议用 `android/app/ultreia-release.jks`（gitignored），passwords 永远不进 repo。
 
 ### Edge Functions 部署（每日推送 / 收件箱）
 

@@ -1659,9 +1659,7 @@ Rules:
     setLang(lang === "en" ? "zh" : "en");
   }
 
-  const titleText = profile.displayName
-    ? t("header.title", { name: profile.displayName })
-    : t("header.title_empty");
+  const titleText = t("header.title_empty");
   const desktopTabs = [
     { label: TABS[0], key: "tabs.training", Icon: FootIcon },
     { label: TABS[1], key: "tabs.calendar", Icon: CalendarIcon },

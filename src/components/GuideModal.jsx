@@ -11,7 +11,6 @@ import { ModalRoot } from "./ModalRoot";
 // opens in-app (no jump to the external GitBook). docs/ lives at the project
 // root, hence the ../../ climb out of src/components.
 import readmeMd from "../../docs/README.md?raw";
-import philosophyMd from "../../docs/philosophy.md?raw";
 import trainingLogMd from "../../docs/training-log.md?raw";
 import runningMd from "../../docs/running.md?raw";
 import dataImportMd from "../../docs/data-import.md?raw";
@@ -25,7 +24,6 @@ import changelogMd from "../../docs/changelog.md?raw";
 // filename so internal [...](races.md) links can resolve to a chapter.
 const CHAPTERS = [
   { file: "README.md",       title: "总览",              md: readmeMd },
-  { file: "philosophy.md",   title: "产品理念",          md: philosophyMd },
   { file: "training-log.md", title: "训练记录",          md: trainingLogMd },
   { file: "ai-coach.md",     title: "AI 教练",           md: aiCoachMd },
   { file: "races.md",        title: "赛事管理",          md: racesMd },

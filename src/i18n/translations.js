@@ -3,7 +3,7 @@
 
 const dict = {
   // ===== Header =====
-  "header.title":         { en: "{name}'s Ultreia",         zh: "{name} 的 Ultreia" },
+  "header.title":         { en: "Ultreia",                  zh: "Ultreia" },
   "header.title_empty":   { en: "Ultreia",                  zh: "Ultreia" },
   "header.subtitle":      { en: "Personal training hub · Built for race goals", zh: "个人训练中心 · 为比赛目标而生" },
   "header.api":           { en: "API",                      zh: "API" },
@@ -244,7 +244,7 @@ const dict = {
   "profile.desc_setup":   { en: "This data shapes how AI Coach gives advice. Filled once, edit anytime via the ⚙ icon.", zh: "这些信息会影响 AI 教练的建议方式。只需填写一次，之后可通过 ⚙ 图标随时修改。" },
   "profile.desc_edit":    { en: "Updated values are used in the next AI Coach message.", zh: "修改后从下一次 AI 教练对话开始生效。" },
   "profile.display_name":         { en: "Display Name",     zh: "显示名" },
-  "profile.display_name_hint":    { en: "Shown at the top of the page (e.g. \"Alice\" → \"Alice's Ultreia\")", zh: "显示在页面顶部（例如 \"Alice\" → \"Alice 的 Ultreia\"）" },
+  "profile.display_name_hint":    { en: "Used for greetings and coach context.", zh: "用于问候语和 AI 教练上下文。" },
   "profile.display_name_placeholder": { en: "Your name",    zh: "你的名字" },
   "profile.birth_date":   { en: "Birth Date",               zh: "出生日期" },
   "profile.age_suffix":   { en: "→ Age {age}",              zh: "→ {age} 岁" },

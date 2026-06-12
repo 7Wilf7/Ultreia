@@ -13,7 +13,7 @@
 //
 // Optional overrides (env vars):
 //   SUPABASE_URL       default https://ihibmkfgfznqwzavaeiq.supabase.co
-//   DEMO_EMAIL         default demo@aitrainstudio.com
+//   DEMO_EMAIL         default demo@ultreia.run
 //   DEMO_PASSWORD      default demo-show-2026
 //   DEMO_NAME          default Kai
 //   DEMO_CITY          default 上海
@@ -23,7 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 // ── Config ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://ihibmkfgfznqwzavaeiq.supabase.co';
 const SERVICE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const EMAIL    = process.env.DEMO_EMAIL    || 'demo@aitrainstudio.com';
+const EMAIL    = process.env.DEMO_EMAIL    || 'demo@ultreia.run';
 const PASSWORD = process.env.DEMO_PASSWORD || 'demo-show-2026';
 const NAME     = process.env.DEMO_NAME     || 'Kai';
 const CITY     = process.env.DEMO_CITY     || '上海';

@@ -12,7 +12,7 @@ const ApkDownloader = registerPlugin("ApkDownloader");
 const isNative = () => Capacitor.isNativePlatform?.() === true;
 
 const GITHUB_RELEASES_API =
-  "https://api.github.com/repos/7Wilf7/training-studio/releases/latest";
+  "https://api.github.com/repos/7Wilf7/ultreia/releases/latest";
 
 // China-friendly mirror of the latest APK on Supabase Storage (public bucket),
 // uploaded by the release workflow. GitHub's asset CDN is throttled in mainland

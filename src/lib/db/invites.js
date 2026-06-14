@@ -17,14 +17,14 @@ function fromRow(row) {
   };
 }
 
-// Random human-readable code: TS-XXXXXXXX (no ambiguous chars I/O/0/1).
+// Random human-readable code: UL-XXXXXXXX (no ambiguous chars I/O/0/1).
 function genCode() {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s = '';
   const arr = new Uint32Array(8);
   crypto.getRandomValues(arr);
   for (let i = 0; i < 8; i++) s += alphabet[arr[i] % alphabet.length];
-  return `TS-${s}`;
+  return `UL-${s}`;
 }
 
 export async function listMyInviteCodes() {

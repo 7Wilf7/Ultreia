@@ -235,6 +235,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // ── Supabase-backed: workouts (3.3c) + races (3.3d) + chatMessages (3.3e)
   //    + dailyNotes (Calendar day-level tags, e.g. ['massage'])
   const [logs, setLogs] = useState([]);
+  // Per-workout write sequence — lets a background save ignore its own result
+  // when a newer optimistic write has already landed (e.g. mark skipped then
+  // immediately undo: the slower skipped response must not clobber pending).
+  const logWriteSeqRef = useRef(new Map());
   const [races, setRaces] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [dailyNotes, setDailyNotes] = useState([]);
@@ -602,13 +606,20 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       return prev.map(l => l.id === id ? { ...l, ...patch } : l);
     });
 
+    const seq = (logWriteSeqRef.current.get(id) || 0) + 1;
+    logWriteSeqRef.current.set(id, seq);
+    const isLatest = () => logWriteSeqRef.current.get(id) === seq;
+
     (async () => {
       try {
         const updated = await db.workouts.updateWorkout(id, patch);
-        setLogs(prev => prev.map(l => l.id === id ? updated : l));
+        // Drop our result if a newer write for this row already landed —
+        // otherwise an earlier-but-slower save would overwrite it, flashing
+        // the UI back to the stale value (see logWriteSeqRef).
+        if (isLatest()) setLogs(prev => prev.map(l => l.id === id ? updated : l));
       } catch (err) {
         console.error("[updateLog] background save failed:", err);
-        if (snapshot) setLogs(prev => prev.map(l => l.id === id ? snapshot : l));
+        if (isLatest() && snapshot) setLogs(prev => prev.map(l => l.id === id ? snapshot : l));
         window.alert("Failed to update workout: " + err.message);
       }
     })();

@@ -278,7 +278,7 @@ function rangeLabel(mode, range, lang) {
   if (mode === "year") return String(range.start.getFullYear());
   if (mode === "month") {
     if (lang === "zh") return `${range.start.getFullYear()}.${String(range.start.getMonth() + 1).padStart(2, "0")}`;
-    return range.start.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+    return range.start.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   }
   const endDisplay = new Date(range.end);
   endDisplay.setDate(endDisplay.getDate() - 1);
@@ -334,7 +334,9 @@ function buildSingleStats(log, gpsTrack, fields) {
   const distance = Number(log?.distance) || 0;
   const duration = Number(log?.duration) || 0;
   const hasDist = distance > 0;
-  const type = (log?.type || "Workout").toUpperCase();
+  // Title Case heading — use the raw type so acronyms keep their case
+  // ("HIIT", "Road Run") instead of being upper- or title-cased wrongly.
+  const typeLabel = log?.type || "Workout";
   // Pace / elevation only make sense for distance-based activities — a Strength
   // or HIIT session shouldn't carry running pace.
   const distType = RUN_GROUP_TYPES.includes(log?.type) || hasDist;
@@ -352,7 +354,7 @@ function buildSingleStats(log, gpsTrack, fields) {
     .map(k => colDefs[k]);
   return {
     mode: "single",
-    title: type,                          // real activity type, not a fixed "SINGLE RUN"
+    title: typeLabel,                     // real activity type, not a fixed "SINGLE RUN"
     kicker: hasDist ? "DISTANCE" : "DURATION",
     heroValue: hasDist ? fmtNum(distance, distance >= 100 ? 0 : 1) : formatPlanDuration(duration),
     heroUnit: hasDist ? "KM" : "",
@@ -379,7 +381,7 @@ function buildPeriodStats(logs, mode, offset, lang) {
   const totalAscent = periodLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
   const longest = periodLogs.reduce((best, l) => (Number(l.distance) || 0) > (Number(best?.distance) || 0) ? l : best, null);
   const days = dailyDistances(periodLogs, range);
-  const title = mode === "week" ? "WEEKLY VOLUME" : mode === "year" ? "YEARLY VOLUME" : "MONTHLY VOLUME";
+  const title = mode === "week" ? "Weekly Volume" : mode === "year" ? "Yearly Volume" : "Monthly Volume";
   return {
     mode,
     title,
@@ -413,7 +415,7 @@ function buildAllStats(logs, lang) {
   const activeDays = new Set(dated).size;
   return {
     mode: "all",
-    title: "ALL-TIME VOLUME",
+    title: "All-Time Volume",
     kicker: "TOTAL DISTANCE",
     heroValue: fmtNum(totalKm, 1),
     heroUnit: "KM",
@@ -478,11 +480,11 @@ function buildPRStats(races, rangeId, t) {
   const records = buildPRRecords(filtered);
   return {
     mode: "pr",
-    title: "PERSONAL RECORDS",
+    title: "Personal Records",
     kicker: "RECORDS SET",
     heroValue: fmtNum(records.length),
     heroUnit: "PR",
-    meta: (t(`poster.pr_range_${rangeId}`) || "").toUpperCase(),
+    meta: t(`poster.pr_range_${rangeId}`) || "",
     fileLabel: `pr-${rangeId}`,
     records,
   };
@@ -621,7 +623,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
       {/* Header */}
-      <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="3" fill={pal.ink}>{stats.title}</text>
+      <text x={M} y={yTitle} fontFamily={FF} fontWeight="800" fontSize={titleSize} letterSpacing="1" fill={pal.ink}>{stats.title}</text>
       <text x={M} y={ySub} fontFamily={FF} fontWeight="600" fontSize={metaSize} letterSpacing="1" fill={pal.sub}>{stats.meta}</text>
       {logoSrc && (
         <image href={logoSrc} x={logoX} y={logoY} width={logoSize} height={logoSize} opacity="0.98" preserveAspectRatio="xMidYMid meet" />

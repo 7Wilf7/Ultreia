@@ -1298,7 +1298,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
     }
   }
 
-  async function sendChat(userMsg) {
+  async function sendChat(userMsg, opts = {}) {
     if (!userMsg || chatLoading) return false;
     const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
     const endpointUrl = apiProvider === "claude"
@@ -1331,6 +1331,18 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       freshLogs = await refreshLogs();
     } catch (err) {
       console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
+    }
+
+    // Coach-review-after-upload: the just-logged sessions may not be in the DB
+    // read yet (the insert can still be propagating when the review fires), so
+    // the training-load / ACWR would be computed on PRE-upload data. Splice the
+    // reviewed rows in, deduped by content key so we never double-count a row
+    // the DB already returned under its real id.
+    if (opts.ensureLogs?.length) {
+      const keyOf = l => `${l.date}|${l.type}|${Math.round(Number(l.duration) || 0)}|${Math.round((Number(l.distance) || 0) * 1000)}`;
+      const present = new Set(freshLogs.map(keyOf));
+      const missing = opts.ensureLogs.filter(l => l && !present.has(keyOf(l)));
+      if (missing.length) freshLogs = [...missing, ...freshLogs];
     }
 
     // Reuse the AppShell-level weather state (populated by useWeatherContext
@@ -1601,9 +1613,12 @@ Rules:
   function confirmCoachReviewPrompt() {
     if (!coachReviewPrompt || chatLoading) return;
     const text = coachReviewPrompt.text;
+    const reviewed = coachReviewPrompt.workouts;
     setCoachReviewPrompt(null);
     setTab(3);
-    sendChat(text);
+    // Guarantee the just-reviewed sessions are in the prompt's training-load
+    // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
+    sendChat(text, { ensureLogs: reviewed });
   }
 
   // True when ANY long-running AI Coach operation is in flight. Used to

@@ -517,7 +517,9 @@ export function AICoachTab({
   const inChat = true;
   const memoryReady = !!coachMemory?.trim();
   const calendarImportOn = coachConfig.showCalendarButton !== false;
-  const providerLabel = provider.label || apiProvider;
+  // The coach surface calls it just "Claude" (the Settings modal keeps the
+  // fuller "Claude API" label where the third-party-relay nuance matters).
+  const providerLabel = apiProvider === "claude" ? "Claude" : (provider.label || apiProvider);
   const coachStyleLabel = t(`enum.coach.${coachConfig.style || "balanced"}`);
   const outputLabel = t(`enum.length.${coachConfig.outputLength || "standard"}`);
   const interventionLabel = t(`enum.intervention.${coachConfig.intervention || "standard"}`);
@@ -608,7 +610,7 @@ export function AICoachTab({
                       }}>
                       <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}><CoachIcon size={14} /></span>
                       <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{p.label}</span>
+                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{p.id === "claude" ? "Claude" : p.label}</span>
                         <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{p.defaultModel}</span>
                       </span>
                       {active && <span style={{ color: "var(--moss)", fontSize: 14 }}>✓</span>}

@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
@@ -49,6 +50,31 @@ export function SettingsMobileTab({
   const [group, setGroup] = useState("other");
   const [groupMotion, setGroupMotion] = useState({ dir: 0, seq: 0 });
   const [signingOut, setSigningOut] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  // Native (APK) updates go through the UpdateChecker + the SW is unregistered
+  // there; the cache-clear cell is a web/PWA convenience for forcing a fresh
+  // version after a deploy.
+  const isNative = Capacitor.isNativePlatform?.() === true;
+
+  // Drop the service worker + all Cache Storage, then hard-reload so the PWA
+  // pulls the freshly-deployed index and assets from the network.
+  async function clearCacheAndReload() {
+    if (clearing) return;
+    setClearing(true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if (typeof caches !== "undefined") {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch (e) {
+      console.warn("[clear-cache] failed:", e);
+    }
+    window.location.reload();
+  }
 
   function toggleAccount() {
     setAccountOpen(open => !open);
@@ -209,6 +235,12 @@ export function SettingsMobileTab({
               rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
               onClick={onToggleLang} />
             <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
+            {!isNative && (
+              <SubCell
+                primary={t("settings.clear_cache")}
+                secondary={clearing ? t("settings.clear_cache_working") : t("settings.clear_cache_desc")}
+                onClick={clearCacheAndReload} />
+            )}
             <UpdateChecker />
           </>
         )}

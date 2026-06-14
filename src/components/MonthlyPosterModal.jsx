@@ -4,7 +4,7 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 import { RACE_CATEGORIES, RUN_GROUP_TYPES, SPARTAN_SUBTYPES } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { workouts as workoutsDb } from "../lib/db";
-import { formatDurationShort, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "../utils/format";
+import { formatDurationShort, formatPlanDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "../utils/format";
 import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -61,6 +61,7 @@ const THEMES = {
     hair: "#d2cbb7",
     accent: "#586340",
     contourOpacity: 0.13,
+    mountainOpacity: 0.17,
     vignetteA: 0.05,
     vignetteB: 0.15,
   },
@@ -71,6 +72,7 @@ const THEMES = {
     hair: "#303426",
     accent: "#77825b",
     contourOpacity: 0.16,
+    mountainOpacity: 0.22,
     vignetteA: 0.16,
     vignetteB: 0.52,
   },
@@ -158,38 +160,58 @@ function clockTime(log) {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-// Compact weather readout from a workout's stored snapshot, e.g. "18°C". null
-// when there's no usable temperature so the weather field can hide itself.
-function weatherReadout(w) {
+// Detailed weather line from a workout's stored snapshot — temperature, feels-
+// like, and humidity, e.g. "18°C  ·  FEELS 19°C  ·  RH 65%". null when the
+// snapshot has nothing usable, so the weather field can hide itself.
+function weatherDetail(w) {
   if (!w || typeof w !== "object") return null;
-  const temp = w.tempC ?? w.apparentC ?? w.temp ?? w.apparentAvgC ?? w.tempAvgC;
-  if (!Number.isFinite(Number(temp))) return null;
-  return `${Math.round(Number(temp))}°C`;
+  const temp = w.tempC ?? w.tempAvgC ?? w.temp;
+  const feels = w.apparentC ?? w.apparentAvgC;
+  let rh = w.humidity;
+  if (Number.isFinite(rh)) rh = rh > 1 ? Math.round(rh) : Math.round(rh * 100);
+  const parts = [];
+  if (Number.isFinite(Number(temp))) parts.push(`${Math.round(Number(temp))}°C`);
+  if (Number.isFinite(Number(feels))) parts.push(`FEELS ${Math.round(Number(feels))}°C`);
+  if (Number.isFinite(rh)) parts.push(`RH ${rh}%`);
+  return parts.length ? parts.join("  ·  ") : null;
 }
 
-// Procedural topographic contour field — parallel wavy lines spanning the full
-// canvas so the background fills any ratio. Deterministic (pure sines) so the
-// live preview and the exported PNG match exactly.
+// Procedural topographic contour field, echoing the logo: many DENSE lines that
+// share one displacement field so they stay parallel (never tangle), all
+// draping up over a central ridge the way real contour lines hug a summit.
+// Deterministic so the live preview and the exported PNG match exactly.
 function contourPaths(W, H, count) {
   const paths = [];
-  const step = H / (count - 1);
-  const segs = 40;
-  for (let i = 0; i < count; i++) {
+  const step = H / (count + 1);
+  const segs = 56;
+  const peakX = W * 0.5;
+  const sigma = W * 0.3;
+  for (let i = 1; i <= count; i++) {
     const baseY = i * step;
-    const amp = 16 + (i % 3) * 12;
-    const freq = (1.3 + (i % 4) * 0.4) * (Math.PI * 2) / W;
-    const phase = i * 0.85;
     let d = "";
     for (let sgi = 0; sgi <= segs; sgi++) {
       const x = (sgi / segs) * W;
-      const y = baseY
-        + Math.sin(x * freq + phase) * amp
-        + Math.sin(x * freq * 0.5 + phase * 1.7) * amp * 0.4;
+      // Shared ridge bump (lines rise together over the centre) + gentle flow,
+      // with a small per-line phase so they read organic but never cross.
+      const ridge = -Math.exp(-((x - peakX) ** 2) / (2 * sigma * sigma)) * H * 0.085;
+      const flow = Math.sin((x / W) * Math.PI * 2 + 0.6 + i * 0.12) * H * 0.015
+        + Math.sin((x / W) * Math.PI * 4 + 1.3 + i * 0.08) * H * 0.008;
+      const y = baseY + ridge + flow;
       d += `${sgi === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)} `;
     }
     paths.push(d);
   }
   return paths;
+}
+
+// Twin-peak ridge silhouette echoing the logo's mountain — two overlapping
+// open strokes. Drawn as a watermark behind the content (the crisp brand mark,
+// with its dots + green tick, still sits in the corner).
+function mountainPath(W, H) {
+  const base = H * 0.47;
+  const p1 = `M ${(W * 0.18).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.40).toFixed(0)} ${(H * 0.20).toFixed(0)} L ${(W * 0.60).toFixed(0)} ${base.toFixed(0)}`;
+  const p2 = `M ${(W * 0.44).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.64).toFixed(0)} ${(H * 0.28).toFixed(0)} L ${(W * 0.84).toFixed(0)} ${base.toFixed(0)}`;
+  return `${p1} ${p2}`;
 }
 
 function paceValue(log) {
@@ -313,31 +335,35 @@ function buildSingleStats(log, gpsTrack, fields) {
   const duration = Number(log?.duration) || 0;
   const hasDist = distance > 0;
   const type = (log?.type || "Workout").toUpperCase();
-  const weatherVal = weatherReadout(log?.weather);
-  // The runner picks which of these to share (e.g. hide heart rate); weather
-  // only appears when this workout actually carries a snapshot.
-  const allFields = {
-    time: { label: "TIME", value: formatDurationShort(duration) },
-    pace: { label: "PACE", value: paceValue(log) },
-    elev: { label: "ELEV", value: `${fmtNum(Number(log?.ascent) || 0)} m` },
+  // Pace / elevation only make sense for distance-based activities — a Strength
+  // or HIIT session shouldn't carry running pace.
+  const distType = RUN_GROUP_TYPES.includes(log?.type) || hasDist;
+  const weatherLine = weatherDetail(log?.weather);
+  // Toggleable metric COLUMNS. Weather isn't a column — it prints as a detailed
+  // line under the metrics (see weatherLine). Pace/elev drop for non-distance.
+  const colDefs = {
+    time: { label: "TIME", value: formatPlanDuration(duration) },
+    pace: distType ? { label: "PACE", value: paceValue(log) } : null,
+    elev: distType ? { label: "ELEV", value: `${fmtNum(Number(log?.ascent) || 0)} m` } : null,
     hr: { label: "AVG HR", value: Number(log?.hr) > 0 ? fmtNum(log.hr) : "—" },
-    weather: { label: "WEATHER", value: weatherVal || "—" },
   };
-  const metrics = SINGLE_FIELDS
-    .filter(k => fields?.[k] && (k !== "weather" || weatherVal))
-    .map(k => allFields[k]);
+  const metrics = ["time", "pace", "elev", "hr"]
+    .filter(k => fields?.[k] && colDefs[k])
+    .map(k => colDefs[k]);
   return {
     mode: "single",
     title: type,                          // real activity type, not a fixed "SINGLE RUN"
     kicker: hasDist ? "DISTANCE" : "DURATION",
-    heroValue: hasDist ? fmtNum(distance, distance >= 100 ? 0 : 1) : formatDurationShort(duration),
+    heroValue: hasDist ? fmtNum(distance, distance >= 100 ? 0 : 1) : formatPlanDuration(duration),
     heroUnit: hasDist ? "KM" : "",
     meta: [startedLabel(log), clockTime(log)].filter(Boolean).join(" · "),
     fileLabel: `single-${log?.date || "workout"}`,
     route,
     bigPace: paceValue(log),
     metrics,
-    hasWeather: !!weatherVal,
+    weatherLine: fields?.weather ? weatherLine : null,
+    hasWeather: !!weatherLine,
+    distType,
   };
 }
 
@@ -464,12 +490,16 @@ function buildPRStats(races, rangeId, t) {
 
 // ── The poster ──────────────────────────────────────────────────────────────
 function PosterBackground({ W, H, pal }) {
-  const paths = useMemo(() => contourPaths(W, H, 16), [W, H]);
+  const paths = useMemo(() => contourPaths(W, H, 26), [W, H]);
+  const mtn = useMemo(() => mountainPath(W, H), [W, H]);
   return (
-    <g opacity={pal.contourOpacity} style={{ pointerEvents: "none" }}>
-      {paths.map((d, i) => (
-        <path key={i} d={d} fill="none" stroke={pal.ink} strokeWidth="1.4" strokeLinecap="round" />
-      ))}
+    <g style={{ pointerEvents: "none" }}>
+      <g opacity={pal.contourOpacity}>
+        {paths.map((d, i) => (
+          <path key={i} d={d} fill="none" stroke={pal.ink} strokeWidth="1.2" strokeLinecap="round" />
+        ))}
+      </g>
+      <path d={mtn} fill="none" stroke={pal.ink} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" opacity={pal.mountainOpacity} />
     </g>
   );
 }
@@ -519,8 +549,9 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
           <circle cx={geo.end[0]} cy={geo.end[1]} r="10" fill={pal.bg} stroke={pal.ink} strokeWidth="4.5" />
         </g>
       );
-    } else {
-      // No GPS — promote pace to a second hero element rather than leave a hole.
+    } else if (stats.distType) {
+      // No GPS but a distance activity — promote pace to a second hero element
+      // rather than leave a hole. (Strength/HIIT have no pace, so skip this.)
       const bandMid = (spineTop + spineBot) / 2;
       spine = (
         <g>
@@ -614,17 +645,24 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
             const n = stats.metrics.length;
             const colW = inner / n;
             const mvSize = n >= 5 ? 40 : n === 1 ? 60 : 52;
+            // Centre each metric in its column → fewer columns sit evenly spaced
+            // and centred (2 metrics land at 1/4 + 3/4, not bunched at the left).
             return stats.metrics.map((m, i) => {
-              const cx = M + i * colW;
+              const cx = M + (i + 0.5) * colW;
               return (
                 <g key={`${m.label}-${i}`}>
-                  <text x={cx} y={yML} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1.5" fill={pal.sub}>{m.label}</text>
-                  <text x={cx} y={yMV} fontFamily={FF} fontWeight="800" fontSize={mvSize} fill={pal.ink}>{m.value}</text>
+                  <text x={cx} y={yML} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1.5" fill={pal.sub}>{m.label}</text>
+                  <text x={cx} y={yMV} textAnchor="middle" fontFamily={FF} fontWeight="800" fontSize={mvSize} fill={pal.ink}>{m.value}</text>
                 </g>
               );
             });
           })()}
         </g>
+      )}
+
+      {/* Weather detail line — temp / feels-like / humidity, under the metrics. */}
+      {stats.weatherLine && (
+        <text x={W / 2} y={H * 0.892} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="26" letterSpacing="1" fill={pal.sub}>{stats.weatherLine}</text>
       )}
 
       {/* Signature */}
@@ -825,7 +863,8 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
               <label style={{ ...s.muted, fontSize: 12, display: "block", margin: "10px 0 4px" }}>{t("poster.field_data")}</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                 {SINGLE_FIELDS.map(k => {
-                  const disabled = k === "weather" && !stats.hasWeather;
+                  const disabled = (k === "weather" && !stats.hasWeather)
+                    || ((k === "pace" || k === "elev") && !stats.distType);
                   const on = !!singleFields[k] && !disabled;
                   return (
                     <button key={k} type="button" disabled={disabled}

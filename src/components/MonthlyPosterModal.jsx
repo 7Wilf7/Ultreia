@@ -89,6 +89,7 @@ const PR_RANGES = ["all", "this_year", "last_year", "last_12m"];
 // CJK (e.g. a location string) falls back to the system stack — the embedded
 // woff2 is Latin-only on purpose (CJK webfonts are megabytes).
 const FF = "TSCond, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif";
+// TSSign = Alex Brush (single 400 weight) — the product's signature mark.
 const FF_SIGN = "TSSign, 'Segoe Script', cursive";
 
 const PosterSaver = registerPlugin("PosterSaver");
@@ -559,7 +560,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, posterBgSrc }) {
       )}
 
       {/* Signature */}
-      <text x={W / 2} y={ySign} textAnchor="middle" fontFamily={FF_SIGN} fontWeight="600" fontSize={H * 0.05} fill={pal.ink} opacity="0.94">Ultreia</text>
+      <text x={W / 2} y={ySign} textAnchor="middle" fontFamily={FF_SIGN} fontWeight="400" fontSize={H * 0.062} fill={pal.ink} opacity="0.94">Ultreia</text>
       <text x={W / 2} y={yUrl} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="24" letterSpacing="1.5" fill={pal.sub}>www.ultreia.run</text>
     </svg>
   );

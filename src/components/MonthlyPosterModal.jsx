@@ -49,10 +49,10 @@ const RATIOS = {
 const RATIO_KEYS = ["portrait", "square", "story"];
 
 // Day / Night finishes. Restraint: paper/ink base + ONE muted moss accent.
-// The background is a full-bleed topographic contour field drawn in `ink` at
-// `contourOpacity` — dark lines on the cream day paper, cream lines on the
-// night ground — so it fills any crop ratio instead of a centered logo that
-// left blank bands on the tall 4:5 / 9:16 crops.
+// The background is the brand mark — the twin-peak mountain (bold strokes), the
+// two dots, and the green tick — redrawn as vector at `markOpacity` so it themes
+// per finish (dark mark on the cream day paper, cream mark on the night ground)
+// while the green tick stays green.
 const THEMES = {
   day: {
     bg: "#f1ede1",
@@ -60,8 +60,7 @@ const THEMES = {
     sub: "#5f6250",
     hair: "#d2cbb7",
     accent: "#586340",
-    contourOpacity: 0.13,
-    mountainOpacity: 0.17,
+    markOpacity: 0.20,
     vignetteA: 0.05,
     vignetteB: 0.15,
   },
@@ -71,12 +70,13 @@ const THEMES = {
     sub: "#aaa98c",
     hair: "#303426",
     accent: "#77825b",
-    contourOpacity: 0.16,
-    mountainOpacity: 0.22,
+    markOpacity: 0.26,
     vignetteA: 0.16,
     vignetteB: 0.52,
   },
 };
+// The brand tick stays green on both finishes (the logo's path marker).
+const MARK_GREEN = "#74824b";
 const THEME_KEYS = ["day", "night"];
 
 const POSTER_MODES = ["single", "week", "month", "year", "all", "pr"];
@@ -176,42 +176,23 @@ function weatherDetail(w) {
   return parts.length ? parts.join("  ·  ") : null;
 }
 
-// Procedural topographic contour field, echoing the logo: many DENSE lines that
-// share one displacement field so they stay parallel (never tangle), all
-// draping up over a central ridge the way real contour lines hug a summit.
-// Deterministic so the live preview and the exported PNG match exactly.
-function contourPaths(W, H, count) {
-  const paths = [];
-  const step = H / (count + 1);
-  const segs = 56;
-  const peakX = W * 0.5;
-  const sigma = W * 0.3;
-  for (let i = 1; i <= count; i++) {
-    const baseY = i * step;
-    let d = "";
-    for (let sgi = 0; sgi <= segs; sgi++) {
-      const x = (sgi / segs) * W;
-      // Shared ridge bump (lines rise together over the centre) + gentle flow,
-      // with a small per-line phase so they read organic but never cross.
-      const ridge = -Math.exp(-((x - peakX) ** 2) / (2 * sigma * sigma)) * H * 0.085;
-      const flow = Math.sin((x / W) * Math.PI * 2 + 0.6 + i * 0.12) * H * 0.015
-        + Math.sin((x / W) * Math.PI * 4 + 1.3 + i * 0.08) * H * 0.008;
-      const y = baseY + ridge + flow;
-      d += `${sgi === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)} `;
-    }
-    paths.push(d);
-  }
-  return paths;
-}
-
-// Twin-peak ridge silhouette echoing the logo's mountain — two overlapping
-// open strokes. Drawn as a watermark behind the content (the crisp brand mark,
-// with its dots + green tick, still sits in the corner).
-function mountainPath(W, H) {
-  const base = H * 0.47;
-  const p1 = `M ${(W * 0.18).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.40).toFixed(0)} ${(H * 0.20).toFixed(0)} L ${(W * 0.60).toFixed(0)} ${base.toFixed(0)}`;
-  const p2 = `M ${(W * 0.44).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.64).toFixed(0)} ${(H * 0.28).toFixed(0)} L ${(W * 0.84).toFixed(0)} ${base.toFixed(0)}`;
-  return `${p1} ${p2}`;
+// The brand mark drawn as bold vector: the logo's two overlapping mountain
+// peaks (thick open strokes), the two dots above the right shoulder (the
+// diaeresis), and the short green path-tick at the foot. Geometry is anchored
+// to W/H so it scales across crop ratios.
+function brandMarkGeometry(W, H) {
+  const base = H * 0.50;
+  const peaks = [
+    `M ${(W * 0.16).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.40).toFixed(0)} ${(H * 0.22).toFixed(0)} L ${(W * 0.56).toFixed(0)} ${base.toFixed(0)}`,
+    `M ${(W * 0.46).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.63).toFixed(0)} ${(H * 0.30).toFixed(0)} L ${(W * 0.84).toFixed(0)} ${base.toFixed(0)}`,
+  ];
+  const dotR = W * 0.016;
+  const dots = [
+    { cx: W * 0.585, cy: H * 0.205, r: dotR },
+    { cx: W * 0.645, cy: H * 0.205, r: dotR },
+  ];
+  const tick = { x1: W * 0.52, x2: W * 0.62, y: base + H * 0.018 };
+  return { peaks, dots, tick };
 }
 
 function paceValue(log) {
@@ -492,16 +473,21 @@ function buildPRStats(races, rangeId, t) {
 
 // ── The poster ──────────────────────────────────────────────────────────────
 function PosterBackground({ W, H, pal }) {
-  const paths = useMemo(() => contourPaths(W, H, 26), [W, H]);
-  const mtn = useMemo(() => mountainPath(W, H), [W, H]);
+  const { peaks, dots, tick } = useMemo(() => brandMarkGeometry(W, H), [W, H]);
+  const stroke = Math.round(W * 0.024); // bold strokes, not hairlines
+  const tickW = Math.round(W * 0.02);
   return (
     <g style={{ pointerEvents: "none" }}>
-      <g opacity={pal.contourOpacity}>
-        {paths.map((d, i) => (
-          <path key={i} d={d} fill="none" stroke={pal.ink} strokeWidth="1.2" strokeLinecap="round" />
+      <g opacity={pal.markOpacity}>
+        {peaks.map((d, i) => (
+          <path key={i} d={d} fill="none" stroke={pal.ink} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+        {dots.map((p, i) => (
+          <circle key={i} cx={p.cx} cy={p.cy} r={p.r} fill={pal.ink} />
         ))}
       </g>
-      <path d={mtn} fill="none" stroke={pal.ink} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" opacity={pal.mountainOpacity} />
+      {/* Green path-tick — kept green on both finishes. */}
+      <line x1={tick.x1} x2={tick.x2} y1={tick.y} y2={tick.y} stroke={MARK_GREEN} strokeWidth={tickW} strokeLinecap="round" opacity="0.62" />
     </g>
   );
 }

@@ -53,7 +53,7 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, setReadiness, weatherCtx, races }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, setReadiness, weatherCtx, races, weatherFlashToken = 0 }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -336,6 +336,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         lastUpdatedAt={weatherCtx?.lastUpdatedAt}
         onRefresh={() => weatherCtx?.refetch?.({ force: true })}
         refreshing={weatherCtx?.status === "loading"}
+        flashToken={weatherFlashToken}
       />
 
       {/* Tap a day → one centered modal (view + long-press-edit + add), with
@@ -376,7 +377,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 // visible. Cards are read-only — clicking a day still opens the day modal
 // from the grid above.
 // ─────────────────────────────────────────────────────────────────────────
-function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile, lastUpdatedAt, onRefresh, refreshing }) {
+function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile, lastUpdatedAt, onRefresh, refreshing, flashToken = 0 }) {
   // Build the 7-day window starting from today (local time). Even when a
   // particular date has no forecast (e.g. Caiyun returned fewer than 7), we
   // still render the slot as a muted placeholder so the layout stays even.
@@ -463,17 +464,24 @@ function WeatherStrip({ forecastByDate, todayKey, lang, t, isMobile, lastUpdated
         gridTemplateColumns: isMobile ? "1fr" : "repeat(7, minmax(0, 1fr))",
         gap: isMobile ? 8 : 6,
       }}>
-        {days.map(({ date, key, forecast }) => (
-          <WeatherCard
-            key={key}
-            date={date}
-            forecast={forecast}
-            isToday={key === todayKey}
-            lang={lang}
-            t={t}
-            isMobile={isMobile}
-          />
-        ))}
+        {days.map(({ date, key, forecast }) => {
+          const isToday = key === todayKey;
+          // Remount the today card on each new flashToken so the ring-pulse
+          // animation replays when the user is sent here from the AI Coach.
+          const cardKey = isToday && flashToken ? `${key}-f${flashToken}` : key;
+          return (
+            <WeatherCard
+              key={cardKey}
+              date={date}
+              forecast={forecast}
+              isToday={isToday}
+              flash={isToday && flashToken > 0}
+              lang={lang}
+              t={t}
+              isMobile={isMobile}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -496,7 +504,8 @@ function formatTimeShort(iso) {
 //   Row 1: weekday · date · [today tag] · icon · temp range
 //   Row 2: feels · RH · wind · AQI   (small mono, single line)
 const WEATHER_CARD_HEIGHT = 68;
-function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
+function WeatherCard({ date, forecast, isToday, flash = false, lang, t, isMobile }) {
+  const cardClass = flash ? "ts-flash-ring" : undefined;
   const weekdays = lang === "zh" ? WEEKDAY_SHORT_ZH : WEEKDAY_SHORT_EN;
   const wkLabel = weekdays[date.getDay()];
   const dateLabel = `${date.getMonth() + 1}-${date.getDate()}`;
@@ -533,7 +542,7 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
 
   if (!forecast) {
     return (
-      <div style={cardStyle}>
+      <div className={cardClass} style={cardStyle}>
         <div style={{
           fontFamily: "var(--font-mono)", fontSize: 11,
           color: "var(--ink-3)", letterSpacing: "0.04em",
@@ -557,7 +566,7 @@ function WeatherCard({ date, forecast, isToday, lang, t, isMobile }) {
         : "—";
 
   return (
-    <div style={cardStyle}>
+    <div className={cardClass} style={cardStyle}>
       {/* Row 1: weekday · date · today tag · icon · temp range. Single line. */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,

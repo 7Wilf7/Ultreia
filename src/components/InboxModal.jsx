@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
@@ -10,14 +10,65 @@ import * as db from "../lib/db";
 // badge derives from the same list — marking read updates the badge with no
 // DB round-trip (that round-trip used to race the write and leave the badge
 // stuck). On open we do a silent background refresh to pick up new pushes.
+//
+// Read semantics: a message is marked read once it has been FULLY scrolled into
+// view (an IntersectionObserver at ~99% visibility). Messages already on screen
+// when the inbox opens read immediately; ones below the fold require scrolling
+// them fully into view, so the unread dot only clears after the user has
+// actually seen each one. Pushes are short (1–2 lines), so 99% visibility is a
+// safe proxy for "completely shown".
 export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
   const t = useT();
+  const scrollRef = useRef(null);
+  const ioRef = useRef(null);
+  const rowEls = useRef(new Map()); // id -> row element, for (re)observing
+  // Latest items for the IO callback, which closes over the first render.
+  const itemsRef = useRef(items);
+  useEffect(() => { itemsRef.current = items; }, [items]);
 
   useEffect(() => {
     let cancelled = false;
     db.pushInbox.listMine().then(rows => { if (!cancelled) setItems(rows); }).catch(() => {});
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function markReadById(id) {
+    const it = itemsRef.current.find(i => i.id === id);
+    if (!it || it.read) return;
+    setItems(prev => prev.map(i => (i.id === id ? { ...i, read: true } : i)));
+    db.pushInbox.markRead(id).catch(() => {
+      setItems(prev => prev.map(i => (i.id === id ? { ...i, read: false } : i)));
+    });
+  }
+
+  // Observe rows; mark an unread one read once it is (almost) fully visible.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting && e.intersectionRatio >= 0.99) {
+          markReadById(e.target.dataset.inboxId);
+        }
+      }
+    }, { root, threshold: 0.99 });
+    ioRef.current = io;
+    for (const el of rowEls.current.values()) io.observe(el); // rows mounted pre-observer
+    return () => { io.disconnect(); ioRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const registerRow = useCallback((el, id) => {
+    const map = rowEls.current;
+    if (el) {
+      el.dataset.inboxId = id;
+      map.set(id, el);
+      ioRef.current?.observe(el);
+    } else {
+      const prev = map.get(id);
+      if (prev) { ioRef.current?.unobserve(prev); map.delete(id); }
+    }
   }, []);
 
   function fmtDate(iso) {
@@ -27,16 +78,10 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
-  // All handlers update the lifted list optimistically (badge recomputes from
-  // it instantly) and persist in the background, rolling back on failure.
-  async function handleTap(item) {
-    if (item.read) return;
-    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, read: true } : i)));
-    try {
-      await db.pushInbox.markRead(item.id);
-    } catch {
-      setItems(prev => prev.map(i => (i.id === item.id ? { ...i, read: false } : i)));
-    }
+  // Tap still marks a single row read — a fallback for anyone who taps instead
+  // of scrolling (the observer handles the common case).
+  function handleTap(item) {
+    markReadById(item.id);
   }
 
   async function handleDelete(item, e) {
@@ -47,17 +92,6 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
       await db.pushInbox.deleteOne(item.id);
     } catch {
       setItems(snapshot); // restore on failure
-    }
-  }
-
-  async function handleMarkAllRead() {
-    if (!items.some(i => !i.read)) return;
-    const snapshot = items;
-    setItems(prev => prev.map(i => ({ ...i, read: true })));
-    try {
-      await db.pushInbox.markAllRead();
-    } catch {
-      setItems(snapshot);
     }
   }
 
@@ -72,8 +106,6 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
       setItems(snapshot);
     }
   }
-
-  const hasUnread = items.some(i => !i.read);
 
   return (
     <ModalRoot onClose={onClose}>
@@ -98,21 +130,7 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
             <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
 
-          {/* Bulk actions — only when there's something to act on. */}
-          {items.length > 0 && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <button onClick={handleMarkAllRead} disabled={!hasUnread}
-                style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", opacity: hasUnread ? 1 : 0.45 }}>
-                {t("inbox.mark_all_read")}
-              </button>
-              <button onClick={handleClearAll}
-                style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", color: "var(--danger)", borderColor: "var(--danger)" }}>
-                {t("inbox.clear_all")}
-              </button>
-            </div>
-          )}
-
-          <div style={{ overflowY: "auto", flex: 1, margin: "0 -4px", padding: "0 4px" }}>
+          <div ref={scrollRef} style={{ overflowY: "auto", flex: 1, margin: "0 -4px", padding: "0 4px" }}>
             {items.length === 0 ? (
               <div style={{ ...s.muted, fontSize: 13, padding: "24px 4px", lineHeight: 1.6 }}>
                 {t("inbox.empty")}
@@ -120,7 +138,7 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
             ) : (
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {items.map(item => (
-                  <div key={item.id} onClick={() => handleTap(item)} style={{
+                  <div key={item.id} ref={el => registerRow(el, item.id)} onClick={() => handleTap(item)} style={{
                     display: "flex", alignItems: "flex-start", gap: 10,
                     padding: "12px 2px",
                     borderBottom: "1px solid var(--rule-soft)",
@@ -157,16 +175,24 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
             )}
           </div>
 
-          {/* Shortcut to the daily-push setting — on mobile this jumps to the
-              Settings tab and flashes the cell so the user learns where it is. */}
-          {onGoToPushSettings && (
-            <button onClick={onGoToPushSettings}
-              style={{
-                ...s.btnGhost, marginTop: 14, width: "100%",
-                fontSize: 12, padding: "8px 12px",
-              }}>
-              {t("inbox.go_push_settings")}
-            </button>
+          {/* Bottom row: Clear all sits alongside the daily-push setting shortcut.
+              On mobile the shortcut jumps to the Settings tab and flashes the
+              cell so the user learns where it is. */}
+          {(items.length > 0 || onGoToPushSettings) && (
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              {items.length > 0 && (
+                <button onClick={handleClearAll}
+                  style={{ ...s.btnGhost, fontSize: 12, padding: "8px 12px", color: "var(--danger)", borderColor: "var(--danger)" }}>
+                  {t("inbox.clear_all")}
+                </button>
+              )}
+              {onGoToPushSettings && (
+                <button onClick={onGoToPushSettings}
+                  style={{ ...s.btnGhost, flex: 1, fontSize: 12, padding: "8px 12px" }}>
+                  {t("inbox.go_push_settings")}
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

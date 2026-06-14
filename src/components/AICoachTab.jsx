@@ -206,11 +206,11 @@ export function AICoachTab({
   chatMessages,
   logs = [], races = [],
   setConfirmDelete,
-  apiProvider, onEditProfile,
+  apiProvider, setApiProvider, onEditProfile,
   // Jump to other tabs from the first-send guidance nudge. coachHintsPending
   // (lifted to AppShell so it survives a tab switch) re-opens the nudge when the
   // user comes back from a setting, so multi-item nudges can be worked through.
-  onGoToTraining, onGoToRaces,
+  onGoToTraining, onGoToRaces, onGoToWeather,
   coachHintsPending, setCoachHintsPending,
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
@@ -239,6 +239,7 @@ export function AICoachTab({
   // stacked row cards). Memoize so we don't rebuild the renderer object on
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
+  const [showModelSwitch, setShowModelSwitch] = useState(false);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -583,6 +584,46 @@ export function AICoachTab({
           this panel" footgun. Modals overlay both desktop and mobile views,
           and the legacy 2-col desktop "memory + prompt" layout is dropped
           (one at a time is fine — these aren't compared often). */}
+      {/* Model switch — opened by tapping the Provider pill. A quick way to
+          flip the active model; keys / endpoints still live in Settings. */}
+      {showModelSwitch && (
+        <ModalRoot onClose={() => setShowModelSwitch(false)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowModelSwitch(false)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 360, float: true })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{lang === "zh" ? "切换模型" : "Switch model"}</h2>
+                <button onClick={() => setShowModelSwitch(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.values(API_PROVIDERS).map(p => {
+                  const active = p.id === apiProvider;
+                  return (
+                    <button key={p.id} type="button"
+                      onClick={() => { if (!active) setApiProvider?.(p.id); setShowModelSwitch(false); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
+                        padding: "11px 13px", borderRadius: 3, cursor: "pointer",
+                        border: "1px solid " + (active ? "var(--moss)" : "var(--rule)"),
+                        background: active ? "var(--moss-bg)" : "var(--bg)",
+                      }}>
+                      <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}><CoachIcon size={14} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{p.label}</span>
+                        <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{p.defaultModel}</span>
+                      </span>
+                      {active && <span style={{ color: "var(--moss)", fontSize: 14 }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ ...s.muted, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
+                {lang === "zh" ? "API Key 与线路在「设置」里配置。" : "API keys & endpoints live in Settings."}
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
       {showCoachConfig && (
         <ModalRoot onClose={() => setShowCoachConfig(false)}>
           <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowCoachConfig(false)}>
@@ -771,7 +812,23 @@ export function AICoachTab({
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
-        {statusPill(<CoachIcon size={12} />, "Provider", providerLabel, true, isMobile)}
+        {/* Provider pill is tappable — opens a small popover to switch the
+            active model (DeepSeek ⇄ Claude) without diving into settings. */}
+        <button type="button" onClick={() => setShowModelSwitch(true)}
+          title={lang === "zh" ? "点击切换模型" : "Tap to switch model"}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            minHeight: 26, padding: "4px 9px",
+            border: "1px solid var(--rule)", borderRadius: 2,
+            background: "var(--bg-elevated)", color: "var(--ink-2)",
+            fontSize: 11, fontFamily: "var(--font-sans)",
+            cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
+          }}>
+          <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
+          {!isMobile && <span style={{ color: "var(--ink-3)" }}>Provider</span>}
+          <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{providerLabel}</span>
+          <span style={{ color: "var(--ink-3)", fontSize: 9 }}>▾</span>
+        </button>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has
             room so it keeps all four. */}
@@ -795,6 +852,22 @@ export function AICoachTab({
             }}>
             <span>☁</span>
             <span style={{ fontWeight: 600 }}>{weatherLabel}</span>
+          </button>
+        ) : onGoToWeather ? (
+          <button type="button" onClick={onGoToWeather}
+            title={lang === "zh" ? "查看日历天气" : "View weather on the calendar"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              minHeight: 26, padding: "4px 9px",
+              border: "1px solid var(--rule)", borderRadius: 2,
+              background: weatherActive ? "var(--bg-elevated)" : "var(--bg)",
+              color: weatherActive ? "var(--ink-2)" : "var(--ink-3)",
+              fontSize: 11, fontFamily: "var(--font-sans)",
+              cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
+            }}>
+            <span style={{ color: weatherActive ? "var(--moss)" : "var(--ink-3)" }}>☁</span>
+            {!isMobile && <span style={{ color: "var(--ink-3)" }}>Weather</span>}
+            <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherLabel}</span>
           </button>
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
 

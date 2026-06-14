@@ -1044,6 +1044,10 @@ function AppShell({
   const [pushFlash, setPushFlash] = useState(false);
   // Same idea as pushFlash, for the "edit profile" jump from the AI Coach.
   const [profileFlash, setProfileFlash] = useState(false);
+  // Token bumped when the AI Coach weather pill sends the user to the calendar;
+  // the calendar flashes today's weather card. A counter (not a bool) so each
+  // click replays the pulse even if the user is already on the calendar.
+  const [calWeatherFlash, setCalWeatherFlash] = useState(0);
 
   // Inbox messages, loaded ONCE at startup so opening the inbox is instant (no
   // per-open fetch) and the unread badge derives from this list — marking read
@@ -1771,6 +1775,9 @@ Rules:
              fetch was wasteful; cache + visibility-change refresh in the
              hook is enough. */
           weatherCtx={weatherCtx}
+          /* Flash today's weather card when sent here from the AI Coach
+             weather pill — bumped each click so the pulse replays. */
+          weatherFlashToken={calWeatherFlash}
         />
     );
     if (which === 2) return (
@@ -1806,6 +1813,7 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
           apiProvider={apiProvider}
+          setApiProvider={setApiProvider}
           apiKey={apiKey}
           claudeApiKey={claudeApiKey}
           claudeEndpointId={claudeEndpointId}
@@ -1813,6 +1821,8 @@ Rules:
           onEditProfile={goToProfileSettings}
           onGoToTraining={() => setTab(0)}
           onGoToRaces={() => setTab(2)}
+          /* Weather pill → jump to the calendar and flash today's card. */
+          onGoToWeather={() => { setTab(1); setCalWeatherFlash(n => n + 1); }}
           coachHintsPending={coachHintsPending}
           setCoachHintsPending={setCoachHintsPending}
           /* Lifted state + handlers — see AppShell top for definitions. */

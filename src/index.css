@@ -159,6 +159,19 @@ summary::-webkit-details-marker { display: none; }
 .ts-flash {
   animation: ts-flash-bg 0.6s ease-in-out 3;
 }
+/* Ring pulse — draws attention to an element jumped-to from elsewhere
+   (e.g. AI Coach weather pill → the calendar's today weather card). Works on
+   any background, unlike ts-flash which swaps the bg. */
+@keyframes ts-flash-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(88, 99, 64, 0); }
+  30%, 70% { box-shadow: 0 0 0 3px var(--moss); }
+}
+.ts-flash-ring {
+  animation: ts-flash-ring 0.7s ease-in-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ts-flash, .ts-flash-ring { animation: none; }
+}
 .ts-spinner {
   display: inline-block;
   vertical-align: middle;

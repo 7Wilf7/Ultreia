@@ -11,8 +11,6 @@ import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
 import { productLogoUrl } from "../assets/logo";
 
-const POSTER_BACKGROUND_URL = productLogoUrl;
-
 // url → Promise<dataUrl>, module-scoped so the fetch + base64 encode happens
 // once per session even across modal remounts. SVG <image> hrefs MUST be data
 // URLs before export: an SVG rasterized through an <img> element cannot fetch
@@ -51,6 +49,10 @@ const RATIOS = {
 const RATIO_KEYS = ["portrait", "square", "story"];
 
 // Day / Night finishes. Restraint: paper/ink base + ONE muted moss accent.
+// The background is a full-bleed topographic contour field drawn in `ink` at
+// `contourOpacity` — dark lines on the cream day paper, cream lines on the
+// night ground — so it fills any crop ratio instead of a centered logo that
+// left blank bands on the tall 4:5 / 9:16 crops.
 const THEMES = {
   day: {
     bg: "#f1ede1",
@@ -58,12 +60,9 @@ const THEMES = {
     sub: "#5f6250",
     hair: "#d2cbb7",
     accent: "#586340",
-    veil: "#f1ede1",
-    veilOpacity: 0.18,
-    imageOpacity: 0.16,
-    lineBlend: "multiply",
-    vignetteA: 0.06,
-    vignetteB: 0.18,
+    contourOpacity: 0.13,
+    vignetteA: 0.05,
+    vignetteB: 0.15,
   },
   night: {
     bg: "#090b08",
@@ -71,18 +70,21 @@ const THEMES = {
     sub: "#aaa98c",
     hair: "#303426",
     accent: "#77825b",
-    veil: "#080a07",
-    veilOpacity: 0.68,
-    imageOpacity: 0.42,
-    lineBlend: "screen",
-    vignetteA: 0.18,
-    vignetteB: 0.58,
+    contourOpacity: 0.16,
+    vignetteA: 0.16,
+    vignetteB: 0.52,
   },
 };
 const THEME_KEYS = ["day", "night"];
 
-const POSTER_MODES = ["single", "week", "month", "year", "pr"];
+const POSTER_MODES = ["single", "week", "month", "year", "all", "pr"];
 const RANGE_MODES = new Set(["week", "month", "year"]);
+// Single-session metric fields the user can toggle on/off for the poster.
+const SINGLE_FIELDS = ["time", "pace", "elev", "hr", "weather"];
+const SINGLE_FIELD_LABELS = {
+  zh: { time: "时间", pace: "配速", elev: "爬升", hr: "心率", weather: "天气" },
+  en: { time: "Time", pace: "Pace", elev: "Elev", hr: "HR", weather: "Weather" },
+};
 const PR_RANGES = ["all", "this_year", "last_year", "last_12m"];
 
 // Latin condensed grotesque for numbers/labels; handwriting for the signature.
@@ -146,16 +148,48 @@ function startedLabel(log) {
   return "";
 }
 
-function timeOfDay(log) {
+// Wall-clock start time "HH:MM" (local) — the single-session poster shows the
+// time to the minute, not just a part-of-day word.
+function clockTime(log) {
   if (!log?.startedAt) return "";
   const d = new Date(log.startedAt);
   if (Number.isNaN(d.getTime())) return "";
-  const h = d.getHours();
-  if (h < 5) return "NIGHT";
-  if (h < 11) return "MORNING";
-  if (h < 15) return "MIDDAY";
-  if (h < 19) return "AFTERNOON";
-  return "EVENING";
+  const p = n => String(n).padStart(2, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// Compact weather readout from a workout's stored snapshot, e.g. "18°C". null
+// when there's no usable temperature so the weather field can hide itself.
+function weatherReadout(w) {
+  if (!w || typeof w !== "object") return null;
+  const temp = w.tempC ?? w.apparentC ?? w.temp ?? w.apparentAvgC ?? w.tempAvgC;
+  if (!Number.isFinite(Number(temp))) return null;
+  return `${Math.round(Number(temp))}°C`;
+}
+
+// Procedural topographic contour field — parallel wavy lines spanning the full
+// canvas so the background fills any ratio. Deterministic (pure sines) so the
+// live preview and the exported PNG match exactly.
+function contourPaths(W, H, count) {
+  const paths = [];
+  const step = H / (count - 1);
+  const segs = 40;
+  for (let i = 0; i < count; i++) {
+    const baseY = i * step;
+    const amp = 16 + (i % 3) * 12;
+    const freq = (1.3 + (i % 4) * 0.4) * (Math.PI * 2) / W;
+    const phase = i * 0.85;
+    let d = "";
+    for (let sgi = 0; sgi <= segs; sgi++) {
+      const x = (sgi / segs) * W;
+      const y = baseY
+        + Math.sin(x * freq + phase) * amp
+        + Math.sin(x * freq * 0.5 + phase * 1.7) * amp * 0.4;
+      d += `${sgi === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)} `;
+    }
+    paths.push(d);
+  }
+  return paths;
 }
 
 function paceValue(log) {
@@ -273,28 +307,37 @@ function dailyDistances(logs, range) {
   return days;
 }
 
-function buildSingleStats(log, gpsTrack) {
+function buildSingleStats(log, gpsTrack, fields) {
   const route = normalizeGpsTrack(gpsTrack);
   const distance = Number(log?.distance) || 0;
   const duration = Number(log?.duration) || 0;
   const hasDist = distance > 0;
   const type = (log?.type || "Workout").toUpperCase();
+  const weatherVal = weatherReadout(log?.weather);
+  // The runner picks which of these to share (e.g. hide heart rate); weather
+  // only appears when this workout actually carries a snapshot.
+  const allFields = {
+    time: { label: "TIME", value: formatDurationShort(duration) },
+    pace: { label: "PACE", value: paceValue(log) },
+    elev: { label: "ELEV", value: `${fmtNum(Number(log?.ascent) || 0)} m` },
+    hr: { label: "AVG HR", value: Number(log?.hr) > 0 ? fmtNum(log.hr) : "—" },
+    weather: { label: "WEATHER", value: weatherVal || "—" },
+  };
+  const metrics = SINGLE_FIELDS
+    .filter(k => fields?.[k] && (k !== "weather" || weatherVal))
+    .map(k => allFields[k]);
   return {
     mode: "single",
-    title: "SINGLE RUN",
-    kicker: type,
+    title: type,                          // real activity type, not a fixed "SINGLE RUN"
+    kicker: hasDist ? "DISTANCE" : "DURATION",
     heroValue: hasDist ? fmtNum(distance, distance >= 100 ? 0 : 1) : formatDurationShort(duration),
     heroUnit: hasDist ? "KM" : "",
-    meta: [startedLabel(log), timeOfDay(log)].filter(Boolean).join("   "),
+    meta: [startedLabel(log), clockTime(log)].filter(Boolean).join(" · "),
     fileLabel: `single-${log?.date || "workout"}`,
     route,
     bigPace: paceValue(log),
-    metrics: [
-      { label: "TIME", value: formatDurationShort(duration) },
-      { label: "PACE", value: paceValue(log) },
-      { label: "ELEV", value: `${fmtNum(Number(log?.ascent) || 0)} m` },
-      { label: "AVG HR", value: Number(log?.hr) > 0 ? fmtNum(log.hr) : "—" },
-    ],
+    metrics,
+    hasWeather: !!weatherVal,
   };
 }
 
@@ -324,6 +367,38 @@ function buildPeriodStats(logs, mode, offset, lang) {
       { label: "SESSIONS", value: fmtNum(periodLogs.length) },
       { label: "TIME", value: formatDurationShort(totalSec) },
       { label: "LONGEST", value: `${fmtNum(Number(longest?.distance) || 0, 1)} km` },
+      { label: "ELEV", value: `${fmtNum(totalAscent)} m` },
+    ],
+  };
+}
+
+// All-time summary across every completed run-group session, no date window.
+function buildAllStats(logs, lang) {
+  const all = (logs || []).filter(l => !l.isPlanned && RUN_GROUP_TYPES.includes(l.type));
+  const totalKm = all.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+  const totalSec = all.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
+  const totalAscent = all.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
+  const longest = all.reduce((best, l) => (Number(l.distance) || 0) > (Number(best?.distance) || 0) ? l : best, null);
+  const dated = all.map(l => l.date).filter(Boolean).sort();
+  const startD = dated.length ? new Date(dated[0]) : new Date();
+  const lastD = dated.length ? new Date(dated[dated.length - 1]) : new Date();
+  const end = new Date(lastD); end.setDate(end.getDate() + 1);
+  const days = dailyDistances(all, { start: startD, end });
+  const activeDays = new Set(dated).size;
+  return {
+    mode: "all",
+    title: "ALL-TIME VOLUME",
+    kicker: "TOTAL DISTANCE",
+    heroValue: fmtNum(totalKm, 1),
+    heroUnit: "KM",
+    meta: dated.length ? `${labelDate(startD)} – ${labelDate(lastD)}` : (lang === "zh" ? "暂无记录" : "NO DATA YET"),
+    fileLabel: "all-time",
+    bars: buildBars(days, 60),
+    metrics: [
+      { label: "SESSIONS", value: fmtNum(all.length) },
+      { label: "TIME", value: formatDurationShort(totalSec) },
+      { label: "LONGEST", value: `${fmtNum(Number(longest?.distance) || 0, 1)} km` },
+      { label: "ACTIVE DAYS", value: fmtNum(activeDays) },
       { label: "ELEV", value: `${fmtNum(totalAscent)} m` },
     ],
   };
@@ -388,28 +463,18 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function PosterBackground({ W, H, ratioKey, pal, imageSrc }) {
-  if (!imageSrc) return null;
-  const size = Math.round(W * 1.22);
-  const x = Math.round((W - size) / 2);
-  const yFactor = ratioKey === "story" ? 0.135 : ratioKey === "square" ? -0.08 : 0.03;
-  const y = Math.round(H * yFactor);
-
+function PosterBackground({ W, H, pal }) {
+  const paths = useMemo(() => contourPaths(W, H, 16), [W, H]);
   return (
-    <image
-      href={imageSrc}
-      x={x}
-      y={y}
-      width={size}
-      height={size}
-      opacity={pal.imageOpacity}
-      preserveAspectRatio="xMidYMid meet"
-      style={{ mixBlendMode: pal.lineBlend }}
-    />
+    <g opacity={pal.contourOpacity} style={{ pointerEvents: "none" }}>
+      {paths.map((d, i) => (
+        <path key={i} d={d} fill="none" stroke={pal.ink} strokeWidth="1.4" strokeLinecap="round" />
+      ))}
+    </g>
   );
 }
 
-function Poster({ stats, theme, ratio, svgRef, logoSrc, posterBgSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
   const M = 82;
@@ -521,8 +586,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, posterBgSrc }) {
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      <PosterBackground W={W} H={H} ratioKey={ratio.key} pal={pal} imageSrc={posterBgSrc} />
-      <rect width={W} height={H} fill={pal.veil} opacity={pal.veilOpacity} />
+      <PosterBackground W={W} H={H} pal={pal} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
       {/* Header */}
@@ -543,19 +607,23 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, posterBgSrc }) {
       {spine}
 
       {/* Metrics */}
-      {showMetrics && (
+      {showMetrics && stats.metrics.length > 0 && (
         <g>
           <line x1={M} x2={W - M} y1={yHair} y2={yHair} stroke={pal.hair} strokeWidth="2" />
-          {stats.metrics.map((m, i) => {
-            const colW = inner / 4;
-            const cx = M + i * colW;
-            return (
-              <g key={`${m.label}-${i}`}>
-                <text x={cx} y={yML} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1.5" fill={pal.sub}>{m.label}</text>
-                <text x={cx} y={yMV} fontFamily={FF} fontWeight="800" fontSize="52" fill={pal.ink}>{m.value}</text>
-              </g>
-            );
-          })}
+          {(() => {
+            const n = stats.metrics.length;
+            const colW = inner / n;
+            const mvSize = n >= 5 ? 40 : n === 1 ? 60 : 52;
+            return stats.metrics.map((m, i) => {
+              const cx = M + i * colW;
+              return (
+                <g key={`${m.label}-${i}`}>
+                  <text x={cx} y={yML} fontFamily={FF} fontWeight="600" fontSize="25" letterSpacing="1.5" fill={pal.sub}>{m.label}</text>
+                  <text x={cx} y={yMV} fontFamily={FF} fontWeight="800" fontSize={mvSize} fill={pal.ink}>{m.value}</text>
+                </g>
+              );
+            });
+          })()}
         </g>
       )}
 
@@ -585,11 +653,14 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const [selectedWorkoutId, setSelectedWorkoutId] = useState("");
   const [singleGpsTrack, setSingleGpsTrack] = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
-  // Initialized with the plain asset URLs so the preview renders instantly
-  // (the in-DOM SVG can fetch them); the effects below swap in data URLs,
-  // which the export path requires (see fetchAsDataUrl).
+  // The corner logo starts as the plain asset URL so the preview renders
+  // instantly (the in-DOM SVG can fetch it); the effect below swaps in a data
+  // URL, which the PNG export path requires (see fetchAsDataUrl). The contour
+  // background is pure vector now, so no background image to convert.
   const [logoSrc, setLogoSrc] = useState(productLogoUrl);
-  const [posterBgSrc, setPosterBgSrc] = useState(POSTER_BACKGROUND_URL);
+  // Which single-session metrics to print. Weather defaults off (only some
+  // workouts carry a snapshot); the UI disables it when there's none.
+  const [singleFields, setSingleFields] = useState({ time: true, pace: true, elev: true, hr: true, weather: false });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -606,25 +677,17 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   }, [mode, lang]);
 
   const stats = useMemo(() => (
-    mode === "single" ? buildSingleStats(selectedWorkout, singleGpsTrack)
+    mode === "single" ? buildSingleStats(selectedWorkout, singleGpsTrack, singleFields)
       : mode === "pr" ? buildPRStats(races, prRange, t)
+      : mode === "all" ? buildAllStats(logs || [], lang)
       : buildPeriodStats(logs || [], mode, rangeOffset, lang)
-  ), [logs, races, selectedWorkout, singleGpsTrack, mode, rangeOffset, prRange, lang, t]);
+  ), [logs, races, selectedWorkout, singleGpsTrack, mode, rangeOffset, prRange, lang, t, singleFields]);
 
   useEffect(() => {
     let alive = true;
     fetchAsDataUrl(productLogoUrl)
       .then(d => { if (alive) setLogoSrc(d); })
       .catch(() => {}); // preview keeps the asset URL; export retries and surfaces the error
-    return () => { alive = false; };
-  }, []);
-
-  // Convert the poster background to a data URL for PNG export.
-  useEffect(() => {
-    let alive = true;
-    fetchAsDataUrl(POSTER_BACKGROUND_URL)
-      .then(d => { if (alive) setPosterBgSrc(d); })
-      .catch(() => {});
     return () => { alive = false; };
   }, []);
 
@@ -657,20 +720,14 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     setBusy(true);
     setMsg("");
     try {
-      // The <image> hrefs must be data URLs before serialization (an <img>-
-      // loaded SVG can't fetch external resources). Await the cached
-      // conversions — instant when the mount effects already finished — and
-      // flush them into the DOM so the serializer sees them. A failed fetch
-      // rejects here and lands in the catch below instead of silently
-      // exporting a poster with no logo / background.
-      const [logoData, posterBgData] = await Promise.all([
-        fetchAsDataUrl(productLogoUrl),
-        fetchAsDataUrl(POSTER_BACKGROUND_URL),
-      ]);
-      flushSync(() => {
-        setLogoSrc(logoData);
-        setPosterBgSrc(posterBgData);
-      });
+      // The corner-logo <image> href must be a data URL before serialization
+      // (an <img>-loaded SVG can't fetch external resources). Await the cached
+      // conversion — instant when the mount effect already finished — and flush
+      // it into the DOM so the serializer sees it. A failed fetch rejects here
+      // and lands in the catch below instead of silently exporting a logo-less
+      // poster. (The contour background is vector, so nothing to convert.)
+      const logoData = await fetchAsDataUrl(productLogoUrl);
+      flushSync(() => { setLogoSrc(logoData); });
       // No document.fonts.ready wait — the fonts are embedded as base64
       // @font-face INSIDE the serialized SVG, so the export img is self-contained
       // and waiting on document-level font loading just stalls (notably on the
@@ -762,6 +819,29 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
               <div style={{ ...s.muted, fontSize: 12, marginTop: 4 }}>
                 {routeLoading ? t("poster.route_loading") : (stats.route?.length >= 2 ? t("poster.route_map") : t("poster.single_no_route"))}
               </div>
+              {/* Pick which metrics to print. Weather only when this workout
+                  carries a snapshot. `minHeight: 0` keeps these chips small —
+                  the global mobile button min-height would otherwise bloat them. */}
+              <label style={{ ...s.muted, fontSize: 12, display: "block", margin: "10px 0 4px" }}>{t("poster.field_data")}</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {SINGLE_FIELDS.map(k => {
+                  const disabled = k === "weather" && !stats.hasWeather;
+                  const on = !!singleFields[k] && !disabled;
+                  return (
+                    <button key={k} type="button" disabled={disabled}
+                      onClick={() => setSingleFields(prev => ({ ...prev, [k]: !prev[k] }))}
+                      style={{
+                        minHeight: 0, padding: "5px 11px", fontSize: 12, borderRadius: 2, cursor: disabled ? "default" : "pointer",
+                        border: "1px solid " + (on ? "var(--moss)" : "var(--rule)"),
+                        background: on ? "var(--moss-bg)" : "var(--bg-elevated)",
+                        color: disabled ? "var(--ink-3)" : on ? "var(--ink-1)" : "var(--ink-2)",
+                        opacity: disabled ? 0.5 : 1,
+                      }}>
+                      {SINGLE_FIELD_LABELS[lang === "zh" ? "zh" : "en"][k]}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
           {RANGE_MODES.has(mode) && (
@@ -814,7 +894,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} posterBgSrc={posterBgSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

@@ -128,7 +128,11 @@ ${rows}`;
 // web-view handoff is visually seamless: the user sees ONE logo screen, then
 // the app. Now also a warm time-of-day greeting + a random sport line.
 // Logo + text use vmin units so they track the stretched native splash size.
-function LoadingScreen({ userId = null }) {
+// `boot` (auth-init, before login): a calm logo + wordmark screen that mirrors
+// the native Android splash for a seamless handoff, with a "Built with" credit
+// pinned to the bottom. Non-boot (post-login data load): the warm personalized
+// greeting + random sport line.
+function LoadingScreen({ userId = null, boot = false }) {
   // Read directly from localStorage — this renders before LanguageProvider /
   // profile are available (during auth + first data load). Name is cached when
   // the profile loads. Cache is per auth user so switching accounts cannot leak
@@ -162,26 +166,52 @@ function LoadingScreen({ userId = null }) {
           objectFit: "contain",
         }}
       />
-      <div style={{
-        fontFamily: "var(--font-sans)",
-        fontSize: "min(5.2vmin, 24px)",
-        fontWeight: 500,
-        color: "var(--ink-1)",
-        letterSpacing: "0.02em",
-      }}>
-        {hello}
-      </div>
-      <div style={{
-        fontFamily: "var(--font-sans)",
-        fontSize: "min(3.6vmin, 15px)",
-        color: "var(--ink-3)",
-        textAlign: "center",
-        maxWidth: 360,
-        lineHeight: 1.5,
-        marginTop: "-2vmin",
-      }}>
-        {line}
-      </div>
+      {boot ? (
+        <div style={{
+          fontFamily: "var(--font-sans)",
+          fontSize: "min(6.5vmin, 30px)",
+          fontWeight: 500,
+          color: "var(--ink-1)",
+          letterSpacing: "0.08em",
+        }}>
+          Ultreia
+        </div>
+      ) : (
+        <>
+          <div style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "min(5.2vmin, 24px)",
+            fontWeight: 500,
+            color: "var(--ink-1)",
+            letterSpacing: "0.02em",
+          }}>
+            {hello}
+          </div>
+          <div style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "min(3.6vmin, 15px)",
+            color: "var(--ink-3)",
+            textAlign: "center",
+            maxWidth: 360,
+            lineHeight: 1.5,
+            marginTop: "-2vmin",
+          }}>
+            {line}
+          </div>
+        </>
+      )}
+      {boot && (
+        <div style={{
+          position: "absolute", left: 0, right: 0, bottom: "max(5vmin, env(safe-area-inset-bottom, 0px))",
+          textAlign: "center",
+          fontFamily: "var(--font-sans)",
+          fontSize: "min(3.1vmin, 12px)",
+          color: "var(--ink-3)",
+          letterSpacing: "0.04em",
+        }}>
+          Built with Claude Code &amp; Codex
+        </div>
+      )}
     </div>
   );
 }
@@ -209,7 +239,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [loading]);
 
-  if (loading) return <LoadingScreen userId={user?.id} />;
+  if (loading) return <LoadingScreen userId={user?.id} boot />;
   if (recoveryMode) {
     return (
       <PasswordRecoveryModal

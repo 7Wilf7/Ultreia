@@ -460,7 +460,9 @@ function buildPRStats(races, rangeId, t) {
 function PosterBackground({ W, H, pal, markSrc }) {
   if (!markSrc) return null;
   const size = W;
-  const y = Math.round(H * 0.5 - W * 0.65);
+  // Centre the (square) mark on the poster's vertical midpoint so it reads as a
+  // centred watermark rather than riding high.
+  const y = Math.round(H * 0.5 - W * 0.5);
   return (
     <image href={markSrc} x={0} y={y} width={size} height={size}
       opacity={pal.markOpacity} preserveAspectRatio="xMidYMid meet"

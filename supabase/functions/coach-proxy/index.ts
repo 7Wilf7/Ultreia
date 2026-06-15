@@ -1,20 +1,38 @@
-// Wallet-backed AI coach proxy (DeepSeek only).
+// Wallet-backed AI coach proxy.
 //
-// The app owner's DeepSeek key stays in Edge Function secrets. This function
-// identifies the caller from their JWT, ensures their wallet exists, calls
-// DeepSeek, then debits the wallet only after a successful upstream reply.
+// The app owner's provider keys stay in Edge Function secrets. This function
+// identifies the caller from their JWT, ensures their wallet exists, calls the
+// selected provider, then debits the wallet only after a successful upstream reply.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
 //   npx supabase functions deploy coach-proxy
 //
-// Secrets: SHARED_DEEPSEEK_KEY (set in Dashboard → Edge Functions → Secrets).
+// Secrets: SHARED_DEEPSEEK_KEY, SHARED_CLAUDE_KEY (set in Dashboard → Edge Functions → Secrets).
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const DEEPSEEK_URL = "https://api.deepseek.com/anthropic/v1/messages";
-const DEEPSEEK_MODEL = "deepseek-v4-pro";
-const AI_CHARGE_CENTS = 10;
+const PROVIDERS = {
+  deepseek: {
+    id: "deepseek",
+    url: "https://api.deepseek.com/anthropic/v1/messages",
+    model: "deepseek-v4-pro",
+    keyEnv: "SHARED_DEEPSEEK_KEY",
+    chargeCents: 10,
+  },
+  claude: {
+    id: "claude",
+    url: "https://gw.claudeapi.com/v1/messages",
+    model: "claude-opus-4-8",
+    keyEnv: "SHARED_CLAUDE_KEY",
+    chargeCents: 20,
+  },
+} as const;
+type ProviderId = keyof typeof PROVIDERS;
+
+function resolveProvider(value: unknown): typeof PROVIDERS[ProviderId] {
+  return value === "claude" ? PROVIDERS.claude : PROVIDERS.deepseek;
+}
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -32,17 +50,18 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return json({ error: "unauthorized" }, 401);
 
-  const key = Deno.env.get("SHARED_DEEPSEEK_KEY");
+  let body: { system?: string; messages?: unknown; max_tokens?: number; provider?: string };
+  try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
+  if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
+
+  const provider = resolveProvider(body.provider);
+  const key = Deno.env.get(provider.keyEnv);
   if (!key) return json({ error: "server_misconfigured" }, 500);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: { user }, error: whoErr } = await admin.auth.getUser(jwt);
   if (whoErr || !user) return json({ error: "unauthorized" }, 401);
   const uid = user.id;
-
-  let body: { system?: string; messages?: unknown; max_tokens?: number };
-  try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
-  if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
   const { error: ensureErr } = await admin.rpc("wallet_ensure", {
     p_user_id: uid,
@@ -55,18 +74,18 @@ Deno.serve(async (req) => {
     .select("balance_cents")
     .eq("user_id", uid)
     .single();
-  if ((wallet?.balance_cents ?? 0) < AI_CHARGE_CENTS) {
+  if ((wallet?.balance_cents ?? 0) < provider.chargeCents) {
     return json({ error: "insufficient_balance" }, 402);
   }
 
-  // Call DeepSeek with the shared key. Failures are NOT counted against quota.
+  // Call the selected provider with the shared key. Failures are NOT charged.
   let upstream: Response;
   try {
-    upstream = await fetch(DEEPSEEK_URL, {
+    upstream = await fetch(provider.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: DEEPSEEK_MODEL,
+        model: provider.model,
         max_tokens: body.max_tokens || 8000,
         system: body.system || "",
         messages: body.messages,
@@ -83,12 +102,13 @@ Deno.serve(async (req) => {
   const requestId = data.id ? `ai:${data.id}` : `ai:${uid}:${Date.now()}`;
   const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
     p_user_id: uid,
-    p_amount_cents: AI_CHARGE_CENTS,
+    p_amount_cents: provider.chargeCents,
     p_kind: "ai_charge",
-    p_provider: "deepseek",
+    p_provider: provider.id,
     p_request_id: requestId,
     p_metadata: {
-      model: DEEPSEEK_MODEL,
+      provider: provider.id,
+      model: provider.model,
       usage: data.usage || null,
     },
   });
@@ -97,5 +117,10 @@ Deno.serve(async (req) => {
     return json({ error: insufficient ? "insufficient_balance" : "wallet_debit_failed" }, insufficient ? 402 : 500);
   }
 
-  return json({ ...data, wallet: { balance_cents: balanceAfter } });
+  return json({
+    ...data,
+    provider: provider.id,
+    model: provider.model,
+    wallet: { balance_cents: balanceAfter, charge_cents: provider.chargeCents },
+  });
 });

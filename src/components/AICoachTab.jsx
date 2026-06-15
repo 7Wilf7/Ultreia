@@ -228,8 +228,10 @@ export function AICoachTab({
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
   memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
+  apiProvider = DEFAULT_API_PROVIDER,
+  setApiProvider,
 }) {
-  const provider = API_PROVIDERS[DEFAULT_API_PROVIDER];
+  const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -584,26 +586,41 @@ export function AICoachTab({
           this panel" footgun. Modals overlay both desktop and mobile views,
           and the legacy 2-col desktop "memory + prompt" layout is dropped
           (one at a time is fine — these aren't compared often). */}
-      {/* Model info — AI calls are wallet-backed through the server proxy. */}
+      {/* Model picker — AI calls are wallet-backed through the server proxy. */}
       {showModelInfo && (
         <ModalRoot onClose={() => setShowModelInfo(false)}>
           <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowModelInfo(false)}>
             <div style={s.modalCard(isMobile, { maxWidth: 360, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{lang === "zh" ? "内置模型" : "Built-in model"}</h2>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{lang === "zh" ? "选择模型" : "Choose model"}</h2>
                 <button onClick={() => setShowModelInfo(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
-              <div style={{
-                display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
-                padding: "11px 13px", borderRadius: 3,
-                border: "1px solid var(--moss)",
-                background: "var(--moss-bg)",
-              }}>
-                <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={14} /></span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{providerLabel}</span>
-                  <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{provider.defaultModel}</span>
-                </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {Object.values(API_PROVIDERS).map((p) => {
+                  const active = p.id === provider.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => {
+                        setApiProvider?.(p.id);
+                        setShowModelInfo(false);
+                      }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
+                        padding: "11px 13px", borderRadius: 3,
+                        border: active ? "1px solid var(--moss)" : "1px solid var(--rule)",
+                        background: active ? "var(--moss-bg)" : "var(--bg-elevated)",
+                        cursor: "pointer",
+                      }}>
+                      <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}><CoachIcon size={14} /></span>
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{p.label}</span>
+                        <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{p.defaultModel}</span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
               <div style={{ ...s.muted, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
                 {lang === "zh" ? "AI Coach 使用钱包扣费，无需自己申请或填写 API Key。" : "AI Coach is billed from Wallet. No personal API key is needed."}
@@ -802,7 +819,7 @@ export function AICoachTab({
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
         <button type="button" onClick={() => setShowModelInfo(true)}
-          title={lang === "zh" ? "查看内置模型" : "View built-in model"}
+          title={lang === "zh" ? "选择模型" : "Choose model"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
@@ -812,9 +829,9 @@ export function AICoachTab({
             cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
           }}>
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
-          {!isMobile && <span style={{ color: "var(--ink-3)" }}>Provider</span>}
+          {!isMobile && <span style={{ color: "var(--ink-3)" }}>Model</span>}
           <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{providerLabel}</span>
-          <span style={{ color: "var(--ink-3)", fontSize: 9 }}>i</span>
+          <span style={{ color: "var(--ink-3)", fontSize: 9 }}>⌄</span>
         </button>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has

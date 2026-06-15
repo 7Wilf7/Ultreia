@@ -4,7 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  API_PROVIDERS, DEFAULT_API_PROVIDER, ACTIVITY_TYPES, ADMIN_EMAIL,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, AI_PROVIDER_CHARGE_CENTS, ACTIVITY_TYPES, ADMIN_EMAIL,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -276,6 +276,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [coachMemory, setCoachMemoryState] = useState("");
   const [coachMemoryZh, setCoachMemoryZhState] = useState("");
+  const [apiProvider, setApiProviderState] = useState(DEFAULT_API_PROVIDER);
   const [lang, setLangState] = useState(DEFAULT_LANG);
   // Default location for weather fetch — used when navigator.geolocation /
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
@@ -327,6 +328,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           });
           setCoachMemoryState(settingsData.coachMemory ?? "");
           setCoachMemoryZhState(settingsData.coachMemoryZh ?? "");
+          setApiProviderState(API_PROVIDERS[settingsData.apiProvider] ? settingsData.apiProvider : DEFAULT_API_PROVIDER);
           setDefaultLocationState({
             lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
             lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
@@ -439,6 +441,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
     if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
     if ("coachMemoryZh" in patch) setCoachMemoryZhState(patch.coachMemoryZh);
+    if ("apiProvider" in patch) setApiProviderState(API_PROVIDERS[patch.apiProvider] ? patch.apiProvider : DEFAULT_API_PROVIDER);
     if ("lang" in patch) setLangState(patch.lang);
     if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
     if ("pushHours" in patch) setPushHoursState(Array.isArray(patch.pushHours) ? patch.pushHours : []);
@@ -458,6 +461,13 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
   const setCoachMemoryZh = (v) => updateSettings({ coachMemoryZh: v });
+  const setApiProvider = (v) => {
+    const nextProvider = API_PROVIDERS[v] ? v : DEFAULT_API_PROVIDER;
+    return updateSettings({
+      apiProvider: nextProvider,
+      apiModel: API_PROVIDERS[nextProvider].defaultModel,
+    });
+  };
   // Save both language versions in one write (used when accepting a bilingual
   // memory proposal so EN + 中 stay in sync).
   const setCoachMemoryBoth = (en, zh) => updateSettings({ coachMemory: en, coachMemoryZh: zh });
@@ -911,6 +921,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         coachConfig={coachConfig} setCoachConfig={setCoachConfig}
         coachMemory={coachMemory} setCoachMemory={setCoachMemory}
         coachMemoryZh={coachMemoryZh} setCoachMemoryZh={setCoachMemoryZh} setCoachMemoryBoth={setCoachMemoryBoth}
+        apiProvider={apiProvider} setApiProvider={setApiProvider}
         lang={lang} setLang={setLang}
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
         wallet={wallet} setWallet={setWallet}
@@ -929,6 +940,7 @@ function AppShell({
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
+  apiProvider, setApiProvider,
   lang, setLang,
   defaultLocation, setDefaultLocation,
   wallet, setWallet,
@@ -1142,6 +1154,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         system: "",
         messages: [{ role: "user", content: memoryPrompt }],
         max_tokens: 8000,
+        provider: apiProvider,
       });
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
@@ -1311,14 +1324,16 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         system: systemPrompt,
         messages: messagesToSend,
         max_tokens: 8000,
+        provider: apiProvider,
       });
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+      const metaProvider = API_PROVIDERS[data.provider] ? data.provider : apiProvider;
       const meta = buildCoachReplyMeta({
-        providerId: "deepseek",
-        model: API_PROVIDERS.deepseek.defaultModel,
+        providerId: metaProvider,
+        model: data.model || API_PROVIDERS[metaProvider].defaultModel,
         usage: data.usage,
-        walletChargeCents: 10,
+        walletChargeCents: data.wallet?.charge_cents ?? AI_PROVIDER_CHARGE_CENTS[metaProvider],
       });
       try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted by wrapper */ }
     } catch (err) {
@@ -1393,6 +1408,7 @@ Rules:
         system: "",
         messages: [{ role: "user", content: extractPrompt }],
         max_tokens: 8000,
+        provider: apiProvider,
       });
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
@@ -1649,8 +1665,9 @@ Rules:
           now={now}
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
-          apiProvider={DEFAULT_API_PROVIDER}
-          apiModel={API_PROVIDERS[DEFAULT_API_PROVIDER].defaultModel}
+          apiProvider={apiProvider}
+          apiModel={API_PROVIDERS[apiProvider]?.defaultModel || API_PROVIDERS[DEFAULT_API_PROVIDER].defaultModel}
+          setApiProvider={setApiProvider}
           onEditProfile={goToProfileSettings}
           onGoToTraining={() => setTab(0)}
           onGoToRaces={() => setTab(2)}

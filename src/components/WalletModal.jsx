@@ -17,6 +17,14 @@ function ledgerLabel(t, kind) {
   return t(`wallet.ledger_${kind || "unknown"}`);
 }
 
+function ledgerProviderLabel(row) {
+  if (row?.kind !== "ai_charge") return "";
+  const provider = String(row.provider || row.metadata?.provider || "").toLowerCase();
+  if (provider === "claude") return "Claude";
+  if (provider === "deepseek") return "DeepSeek";
+  return "";
+}
+
 function formatTime(iso) {
   if (!iso) return "";
   try {
@@ -140,6 +148,7 @@ export function WalletPanel({ wallet, onRefresh }) {
         ) : visibleLedger.map((row, idx) => {
           const amount = Number(row.amountCents || 0);
           const positive = amount > 0;
+          const providerLabel = ledgerProviderLabel(row);
           return (
             <div key={row.id || `${row.createdAt}-${amount}-${idx}`} style={{
               display: "flex",
@@ -159,7 +168,7 @@ export function WalletPanel({ wallet, onRefresh }) {
                   whiteSpace: "nowrap",
                   textOverflow: "ellipsis",
                 }}>
-                  {ledgerLabel(t, row.kind)}
+                  {providerLabel ? `${ledgerLabel(t, row.kind)} · ${providerLabel}` : ledgerLabel(t, row.kind)}
                 </div>
                 <div style={{ ...s.muted, fontSize: 11, marginTop: 2 }}>{formatTime(row.createdAt)}</div>
               </div>

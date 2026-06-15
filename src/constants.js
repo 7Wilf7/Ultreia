@@ -20,11 +20,7 @@ export const API_PROVIDERS = {
   },
   claude: {
     id: "claude",
-    // The "Claude" surface in this app talks to a THIRD-PARTY relay at
-    // claudeapi.com — not Anthropic directly. The label and console URL
-    // reflect that so the user doesn't confuse it with an official Anthropic
-    // account.
-    label: "Claude API",
+    label: "Claude",
     isThirdParty: true,
     consoleUrl: "https://console.claudeapi.com/",
     signupUrl: "https://console.claudeapi.com/",
@@ -60,6 +56,11 @@ export function estimateMessageCost(providerId) {
 }
 
 export const DEFAULT_API_PROVIDER = "deepseek";
+
+export const AI_PROVIDER_CHARGE_CENTS = {
+  deepseek: 10,
+  claude: 20,
+};
 
 // Resolve the endpoint URL to use for a given provider. `endpointId` comes
 // from localStorage (per-device pick); falls back to the first entry when

@@ -1,11 +1,11 @@
 import { supabase } from '../supabase';
 
-// Wallet-backed AI chat via the coach-proxy Edge Function. The shared DeepSeek
-// key stays server-side; successful replies debit the caller's wallet.
+// Wallet-backed AI chat via the coach-proxy Edge Function. Shared provider
+// keys stay server-side; successful replies debit the caller's wallet.
 // Throws an Error with `.code` (e.g. 'insufficient_balance') so the caller can branch.
-export async function coachProxy({ system, messages, max_tokens }) {
+export async function coachProxy({ system, messages, max_tokens, provider }) {
   const { data, error } = await supabase.functions.invoke('coach-proxy', {
-    body: { system, messages, max_tokens },
+    body: { system, messages, max_tokens, provider },
   });
   if (error) {
     let code = '';

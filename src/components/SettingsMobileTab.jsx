@@ -2,11 +2,11 @@ import { useCallback, useState, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
-import { FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT } from "../constants";
-import { CoachIcon, CloudIcon } from "./Icons";
+import { WalletIcon } from "./Icons";
 import { productLogoUrl } from "../assets/logo";
+import { formatWalletAmount } from "../lib/db/wallet";
 
-const GROUP_ORDER = { api: 0, admin: 1, other: 2 };
+const GROUP_ORDER = { wallet: 0, admin: 1, other: 2 };
 
 /**
  * Mobile-only settings page. The old single "tap the email → one long list"
@@ -14,22 +14,17 @@ const GROUP_ORDER = { api: 0, admin: 1, other: 2 };
  * time):
  *   • Account  — tap the identity header → profile / change password / sign
  *                out / delete account.
- *   • API      — chip carries the two configured indicators; expands to the
- *                AI Coach API + Weather API cells.
+ *   • Wallet   — balance + ledger entry point for AI and weather usage.
  *   • Admin    — (admin only) invite codes + prompt catalog.
  *   • Other    — daily push / language / guide / app version.
  */
 export function SettingsMobileTab({
   user,
   profile,
-  apiKey,
-  caiyunApiKey,      // optional — undefined until #9 schema lands
-  freeDeepseekLeft,
-  freeWeatherLeft,
+  wallet,
   lang,
   onOpenProfile,
-  onOpenApiSettings,
-  onOpenWeatherApiSettings,
+  onOpenWallet,
   onOpenPushSettings,
   pushEnabled,
   pushHours,
@@ -173,12 +168,11 @@ export function SettingsMobileTab({
         <SubCell primary={t("settings.delete_account")} danger onClick={onDeleteAccount} />
       </AccountPanel>
 
-      {/* Section chips. API keeps the two "configured" indicators from before. */}
+      {/* Section chips. */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <SectionChip active={group === "api"} onClick={() => selectGroup("api")}>
-          <ApiDot icon={<CoachIcon size={12} />} ok={!!apiKey} active={group === "api"} />
-          <ApiDot icon={<CloudIcon size={12} />} ok={!!caiyunApiKey} active={group === "api"} />
-          <span>{t("settings.section_api")}</span>
+        <SectionChip active={group === "wallet"} onClick={() => selectGroup("wallet")}>
+          <WalletIcon size={12} />
+          <span>{t("settings.section_wallet")}</span>
         </SectionChip>
         {isAdmin && (
           <SectionChip active={group === "admin"} onClick={() => selectGroup("admin")}>
@@ -191,27 +185,11 @@ export function SettingsMobileTab({
       </div>
 
       <GroupPanel motion={groupMotion}>
-        {group === "api" && (
-          <>
-            <SubCell
-              primary={t("settings.ai_api")}
-              secondary={apiKey
-                ? t("settings.api_set")
-                : (typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0
-                    ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
-                    : t("settings.api_missing"))}
-              warn={!apiKey && !(typeof freeDeepseekLeft === "number" && freeDeepseekLeft > 0)}
-              onClick={onOpenApiSettings} />
-            <SubCell
-              primary={t("settings.weather_api")}
-              secondary={caiyunApiKey
-                ? t("settings.api_set")
-                : (typeof freeWeatherLeft === "number" && freeWeatherLeft > 0
-                    ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
-                    : t("settings.weather_api_default"))}
-              warn={!caiyunApiKey && !(typeof freeWeatherLeft === "number" && freeWeatherLeft > 0)}
-              onClick={onOpenWeatherApiSettings} />
-          </>
+        {group === "wallet" && (
+          <SubCell
+            primary={t("settings.wallet")}
+            secondary={formatWalletAmount(wallet?.balanceCents || 0, wallet?.currency || "CNY")}
+            onClick={onOpenWallet} />
         )}
 
         {group === "admin" && isAdmin && (
@@ -302,13 +280,6 @@ function SectionChip({ active, onClick, children }) {
       {children}
     </button>
   );
-}
-
-// Compact configured/missing indicator shown on the API chip (replaces the two
-// "Configured" pills). Green icon = set, warn = needs attention.
-function ApiDot({ icon, ok, active }) {
-  const color = active ? "var(--ink-inv)" : ok ? "var(--moss-deep)" : "var(--warn)";
-  return <span style={{ display: "inline-flex", color }} title={ok ? "configured" : "not set"}>{icon}</span>;
 }
 
 // Oval 中/EN segmented switch — a knob slides to the active side on tap. Stops

@@ -206,7 +206,7 @@ export function AICoachTab({
   chatMessages,
   logs = [], races = [],
   setConfirmDelete,
-  apiProvider, setApiProvider, onEditProfile,
+  onEditProfile,
   // Jump to other tabs from the first-send guidance nudge. coachHintsPending
   // (lifted to AppShell so it survives a tab switch) re-opens the nudge when the
   // user comes back from a setting, so multi-item nudges can be worked through.
@@ -229,9 +229,7 @@ export function AICoachTab({
   showMemory, setShowMemory,
   memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
 }) {
-  // Provider label for the status pill. The memory-update call (which used to
-  // need a resolved endpoint + key here) now lives in AppShell.
-  const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
+  const provider = API_PROVIDERS[DEFAULT_API_PROVIDER];
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -239,7 +237,7 @@ export function AICoachTab({
   // stacked row cards). Memoize so we don't rebuild the renderer object on
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
-  const [showModelSwitch, setShowModelSwitch] = useState(false);
+  const [showModelInfo, setShowModelInfo] = useState(false);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -517,9 +515,7 @@ export function AICoachTab({
   const inChat = true;
   const memoryReady = !!coachMemory?.trim();
   const calendarImportOn = coachConfig.showCalendarButton !== false;
-  // The coach surface calls it just "Claude" (the Settings modal keeps the
-  // fuller "Claude API" label where the third-party-relay nuance matters).
-  const providerLabel = apiProvider === "claude" ? "Claude" : (provider.label || apiProvider);
+  const providerLabel = provider.label || "DeepSeek";
   const coachStyleLabel = t(`enum.coach.${coachConfig.style || "balanced"}`);
   const outputLabel = t(`enum.length.${coachConfig.outputLength || "standard"}`);
   const interventionLabel = t(`enum.intervention.${coachConfig.intervention || "standard"}`);
@@ -538,11 +534,13 @@ export function AICoachTab({
     ? (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
       : wStatus === 'loading' ? '加载中'
       : wStatus === 'no_location' ? '需要位置'
+      : wStatus === 'insufficient_balance' ? '余额不足'
       : wStatus === 'error' ? '出错'
       : '—')
     : (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
       : wStatus === 'loading' ? 'loading'
       : wStatus === 'no_location' ? 'need location'
+      : wStatus === 'insufficient_balance' ? 'low balance'
       : wStatus === 'error' ? 'error'
       : '—');
   const weatherActive = wStatus === 'ready';
@@ -586,40 +584,29 @@ export function AICoachTab({
           this panel" footgun. Modals overlay both desktop and mobile views,
           and the legacy 2-col desktop "memory + prompt" layout is dropped
           (one at a time is fine — these aren't compared often). */}
-      {/* Model switch — opened by tapping the Provider pill. A quick way to
-          flip the active model; keys / endpoints still live in Settings. */}
-      {showModelSwitch && (
-        <ModalRoot onClose={() => setShowModelSwitch(false)}>
-          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowModelSwitch(false)}>
+      {/* Model info — AI calls are wallet-backed through the server proxy. */}
+      {showModelInfo && (
+        <ModalRoot onClose={() => setShowModelInfo(false)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowModelInfo(false)}>
             <div style={s.modalCard(isMobile, { maxWidth: 360, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{lang === "zh" ? "切换模型" : "Switch model"}</h2>
-                <button onClick={() => setShowModelSwitch(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{lang === "zh" ? "内置模型" : "Built-in model"}</h2>
+                <button onClick={() => setShowModelInfo(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {Object.values(API_PROVIDERS).map(p => {
-                  const active = p.id === apiProvider;
-                  return (
-                    <button key={p.id} type="button"
-                      onClick={() => { if (!active) setApiProvider?.(p.id); setShowModelSwitch(false); }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
-                        padding: "11px 13px", borderRadius: 3, cursor: "pointer",
-                        border: "1px solid " + (active ? "var(--moss)" : "var(--rule)"),
-                        background: active ? "var(--moss-bg)" : "var(--bg)",
-                      }}>
-                      <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}><CoachIcon size={14} /></span>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{p.id === "claude" ? "Claude" : p.label}</span>
-                        <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{p.defaultModel}</span>
-                      </span>
-                      {active && <span style={{ color: "var(--moss)", fontSize: 14 }}>✓</span>}
-                    </button>
-                  );
-                })}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
+                padding: "11px 13px", borderRadius: 3,
+                border: "1px solid var(--moss)",
+                background: "var(--moss-bg)",
+              }}>
+                <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={14} /></span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{providerLabel}</span>
+                  <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{provider.defaultModel}</span>
+                </span>
               </div>
               <div style={{ ...s.muted, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
-                {lang === "zh" ? "API Key 与线路在「设置」里配置。" : "API keys & endpoints live in Settings."}
+                {lang === "zh" ? "AI Coach 使用钱包扣费，无需自己申请或填写 API Key。" : "AI Coach is billed from Wallet. No personal API key is needed."}
               </div>
             </div>
           </div>
@@ -814,10 +801,8 @@ export function AICoachTab({
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
-        {/* Provider pill is tappable — opens a small popover to switch the
-            active model (DeepSeek ⇄ Claude) without diving into settings. */}
-        <button type="button" onClick={() => setShowModelSwitch(true)}
-          title={lang === "zh" ? "点击切换模型" : "Tap to switch model"}
+        <button type="button" onClick={() => setShowModelInfo(true)}
+          title={lang === "zh" ? "查看内置模型" : "View built-in model"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
@@ -829,7 +814,7 @@ export function AICoachTab({
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
           {!isMobile && <span style={{ color: "var(--ink-3)" }}>Provider</span>}
           <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{providerLabel}</span>
-          <span style={{ color: "var(--ink-3)", fontSize: 9 }}>▾</span>
+          <span style={{ color: "var(--ink-3)", fontSize: 9 }}>i</span>
         </button>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has
@@ -1067,13 +1052,11 @@ export function AICoachTab({
                         fontFamily: "var(--font-mono)",
                         paddingLeft: 2,
                       }}>
-                        {costMeta.freeTier
-                          ? t("coach.cost_free", { tokens: String(usage.totalTokens || 0) })
-                          : t("coach.cost_paid", {
-                              provider: costMeta.provider || "AI",
-                              tokens: String(usage.totalTokens || 0),
-                              cost: Number(costMeta.costUsd || 0).toFixed(6),
-                            })}
+                        {t("coach.cost_wallet", {
+                          provider: costMeta.provider || "AI",
+                          tokens: String(usage.totalTokens || 0),
+                          amount: `¥${(Number(costMeta.walletChargeCents || 0) / 100).toFixed(2)}`,
+                        })}
                       </div>
                     )}
 

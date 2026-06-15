@@ -2,10 +2,10 @@ import { supabase } from '../supabase';
 import { getCurrentUserId } from './_auth';
 
 const FIELD_MAP = {
-  apiKey:        'api_key',           // DeepSeek key (legacy column kept for that provider)
+  apiKey:        'api_key',           // legacy personal API key column; no longer exposed in UI
   apiModel:      'api_model',
-  apiProvider:   'api_provider',      // 'deepseek' | 'claude'
-  claudeApiKey:  'claude_api_key',    // Anthropic Claude API key
+  apiProvider:   'api_provider',      // legacy provider column
+  claudeApiKey:  'claude_api_key',    // legacy personal API key column
   coachConfig:   'coach_config',      // jsonb — pass plain object, do NOT JSON.stringify
   coachMemory:   'coach_memory',      // canonical (English), sent to the LLM
   coachMemoryZh: 'coach_memory_zh',    // Chinese mirror, display-only (EN/中 toggle)
@@ -15,8 +15,8 @@ const FIELD_MAP = {
   defaultLng:    'default_lng',
   defaultLat:    'default_lat',
   defaultLocationName: 'default_location_name',  // friendly label, e.g. "上海"
-  // User-supplied Caiyun Weather API token. Empty = fall back to the shared
-  // server-side token. Requires column `caiyun_api_key TEXT` on user_settings.
+  // Legacy user-supplied Caiyun token column; weather now uses wallet-backed
+  // Edge Function secrets instead of per-user tokens.
   caiyunApiKey:  'caiyun_api_key',
   // Daily coach push (Android APK). The server-side dispatch reads these to
   // decide who to push to and when. pushHours is up to 3 LOCAL hours (0–23)

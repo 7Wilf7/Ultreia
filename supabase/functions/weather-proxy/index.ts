@@ -1,11 +1,8 @@
-// Free-tier weather proxy (Caiyun).
+// Wallet-backed weather proxy (Caiyun).
 //
-// New users get a one-time free allowance of weather refreshes served from the
-// app owner's Caiyun token, so the app shows live weather before they register
-// their own token. mode="bundle" fetches realtime + 7-day forecast in one shot
-// and counts as ONE quota unit (the dominant cost = the main app refresh).
-// mode="single" fetches one Caiyun endpoint. When the quota is spent it returns
-// 402 so the client turns weather off and prompts for the user's own token.
+// The app owner's Caiyun token stays in Edge Function secrets. mode="bundle"
+// fetches realtime + 7-day forecast in one shot and counts as ONE wallet debit.
+// mode="single" fetches one Caiyun endpoint.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
 //   npx supabase functions deploy weather-proxy
@@ -15,8 +12,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const WEATHER_LIMIT = 30;
 const CAIYUN_BASE = "https://api.caiyunapp.com/v2.6";
+const WEATHER_CHARGE_CENTS = 2;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +36,9 @@ function caiyunUrl(token: string, lng: number, lat: number, type: string, begin?
     case "historical": return `${CAIYUN_BASE}/${token}/${coord}/hourly?hourlysteps=24&begin=${Math.floor(Number(begin))}`;
     default: throw new Error("bad_type");
   }
+}
+function roundCoord(n: number): number {
+  return Math.round(Number(n) * 10000) / 10000;
 }
 async function caiyunGet(url: string): Promise<{ ok: boolean; data: unknown }> {
   const r = await fetch(url);
@@ -67,10 +67,20 @@ Deno.serve(async (req) => {
   const { lng, lat, mode = "bundle", type = "realtime", begin } = body;
   if (!isCoord(lng, -180, 180) || !isCoord(lat, -90, 90)) return json({ error: "bad_coords" }, 400);
 
-  await admin.from("usage_quota").upsert({ user_id: uid }, { onConflict: "user_id", ignoreDuplicates: true });
-  const { data: q } = await admin.from("usage_quota").select("weather_used").eq("user_id", uid).single();
-  const used = q?.weather_used ?? 0;
-  if (used >= WEATHER_LIMIT) return json({ error: "quota_exceeded", remaining: 0 }, 402);
+  const { error: ensureErr } = await admin.rpc("wallet_ensure", {
+    p_user_id: uid,
+    p_initial_cents: 500,
+  });
+  if (ensureErr) return json({ error: "wallet_ensure_failed" }, 500);
+
+  const { data: wallet } = await admin
+    .from("wallets")
+    .select("balance_cents")
+    .eq("user_id", uid)
+    .single();
+  if ((wallet?.balance_cents ?? 0) < WEATHER_CHARGE_CENTS) {
+    return json({ error: "insufficient_balance" }, 402);
+  }
 
   try {
     let payload: Record<string, unknown>;
@@ -86,9 +96,20 @@ Deno.serve(async (req) => {
       if (!one.ok) return json({ error: "upstream_error" }, 502);
       payload = { data: one.data };
     }
-    const next = used + 1;
-    await admin.from("usage_quota").update({ weather_used: next, updated_at: new Date().toISOString() }).eq("user_id", uid);
-    return json({ ...payload, remaining: WEATHER_LIMIT - next });
+    const requestId = `weather:${uid}:${Date.now()}:${mode}:${roundCoord(Number(lng))},${roundCoord(Number(lat))}:${type}:${begin || ""}`;
+    const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
+      p_user_id: uid,
+      p_amount_cents: WEATHER_CHARGE_CENTS,
+      p_kind: "weather_charge",
+      p_provider: "caiyun",
+      p_request_id: requestId,
+      p_metadata: { mode, type, lng: roundCoord(Number(lng)), lat: roundCoord(Number(lat)), begin: begin || null },
+    });
+    if (debitErr) {
+      const insufficient = String(debitErr.message || "").includes("insufficient_balance");
+      return json({ error: insufficient ? "insufficient_balance" : "wallet_debit_failed" }, insufficient ? 402 : 500);
+    }
+    return json({ ...payload, wallet: { balance_cents: balanceAfter } });
   } catch (e) {
     return json({ error: "bad_request", detail: String(e) }, 400);
   }

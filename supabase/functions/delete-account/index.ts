@@ -41,6 +41,9 @@ const USER_TABLES = [
   "push_inbox",
   "push_log",
   "usage_quota",
+  "wallet_ledger",
+  "wallets",
+  "app_admins",
 ];
 
 Deno.serve(async (req) => {

@@ -1,14 +1,6 @@
-// Provider catalog — each entry covers everything the chat client needs:
-// the active endpoint URL, alternative endpoints (Claude has region-routed
-// mirrors), recommended model presets (the user can OVERRIDE these with any
-// custom model name), and the signup URL for new users without a key.
-//
-// `endpoints` is a list — the first entry is the default. Selection is per-
-// device (localStorage), not per-account, so a phone on 4G can pick a
-// different mirror than a desktop on home wifi.
-//
-// `models` is RECOMMENDED only — the UI always offers a free-text input so
-// the user can paste any custom model ID without waiting for a code change.
+// Provider catalog — legacy API-settings metadata plus the current built-in
+// DeepSeek model label. Normal users now call AI through wallet-backed Edge
+// Functions, so provider keys/endpoints are not configured in the UI.
 export const API_PROVIDERS = {
   deepseek: {
     id: "deepseek",
@@ -22,8 +14,8 @@ export const API_PROVIDERS = {
     // Locked to the top model per provider. No UI to change. When a vendor
     // ships a new flagship, bump this here — single source of truth.
     defaultModel: "deepseek-v4-pro",
-    // USD per 1 million tokens. Drives the cost-comparison line in the API
-    // settings dialog and the Guide.
+    // USD per 1 million tokens. Kept for legacy metadata and any future admin
+    // cost review, not shown as a user-facing API-key setup flow.
     pricing: { inputPerM: 0.435, outputPerM: 0.87 },
   },
   claude: {
@@ -84,13 +76,6 @@ export function getEndpointUrl(providerId, endpointId) {
 export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoints[0].url;
 export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
-
-// Free-tier allowance per account, served from the app owner's shared keys via
-// the coach-proxy / weather-proxy Edge Functions. One-time (not recurring).
-// MUST match the limits hardcoded in those functions. Used here only for the
-// "X / N left" countdown UI; the server is the source of truth for enforcement.
-export const FREE_DEEPSEEK_LIMIT = 10;
-export const FREE_WEATHER_LIMIT = 30;
 
 // The one account allowed to mint invite codes. Checked client-side to show
 // the "Generate invite code" affordance; enforced server-side by the

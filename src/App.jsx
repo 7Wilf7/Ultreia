@@ -4,8 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  API_PROVIDERS, DEFAULT_API_PROVIDER, getEndpointUrl, ACTIVITY_TYPES, ADMIN_EMAIL,
-  FREE_DEEPSEEK_LIMIT, FREE_WEATHER_LIMIT,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, ACTIVITY_TYPES, ADMIN_EMAIL,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -21,8 +20,6 @@ import { pickGreeting, timeGreeting } from "./data/greetings";
 import { CalendarTab } from "./components/CalendarTab";
 import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
-import { ApiSettingsModal } from "./components/ApiSettingsModal";
-import { WeatherApiSettingsModal } from "./components/WeatherApiSettingsModal";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
@@ -35,19 +32,19 @@ import { ReadinessPromptModal } from "./components/ReadinessPromptModal";
 import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
 import { ModalRoot } from "./components/ModalRoot";
+import { WalletModal } from "./components/WalletModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
-  BookIcon, CalendarIcon, CloudIcon, CoachIcon, FootIcon, GlobeIcon, KeyIcon, SettingsIcon, TrophyIcon,
+  BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, SettingsIcon, TrophyIcon, WalletIcon,
 } from "./components/Icons";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
 import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
-import { postJson, postJsonStream } from "./lib/apiFetch";
 import { initPushNotifications } from "./lib/push";
 import { productLogoUrl } from "./assets/logo";
 import {
@@ -57,6 +54,7 @@ import {
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { s } from "./styles";
+import { formatWalletAmount } from "./lib/db/wallet";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
@@ -72,20 +70,15 @@ function readinessComplete(readiness) {
   return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
 }
 
-function buildCoachReplyMeta({ providerId, model, usage, freeTier }) {
+function buildCoachReplyMeta({ providerId, model, usage, walletChargeCents }) {
   const normalized = normalizeTokenUsage(usage);
   if (!normalized) return null;
-  const pricing = API_PROVIDERS[providerId]?.pricing;
-  const costUsd = (!freeTier && pricing)
-    ? (normalized.inputTokens / 1_000_000) * pricing.inputPerM
-      + (normalized.outputTokens / 1_000_000) * pricing.outputPerM
-    : 0;
   return {
     provider: providerId,
     model,
-    freeTier: !!freeTier,
+    freeTier: false,
     usage: normalized,
-    costUsd: Math.round(costUsd * 1_000_000) / 1_000_000,
+    walletChargeCents: Number(walletChargeCents || 0),
     createdAt: new Date().toISOString(),
   };
 }
@@ -276,26 +269,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
   const [itraPI, setItraPIState] = useState("");
-  // Provider-aware: keys for BOTH providers are persisted so the user can
-  // flip between DeepSeek and Claude without re-pasting. apiProvider drives
-  // which key + endpoint + model preset list the chat client uses.
-  const [apiProvider, setApiProviderState] = useState(DEFAULT_API_PROVIDER);
-  const [apiKey, setApiKeyState] = useState("");          // DeepSeek key
-  const [claudeApiKey, setClaudeApiKeyState] = useState(""); // Claude key (third-party relay)
-  const [apiModel, setApiModelState] = useState(API_PROVIDERS[DEFAULT_API_PROVIDER].defaultModel);
-  // Claude endpoint pick lives in localStorage (per device, not per account)
-  // because the right mirror depends on the current network — a phone on
-  // mobile data may want the Tokyo/Singapore route, the home laptop may not.
-  // Per-account sync would force one choice across devices, which is worse.
-  const [claudeEndpointId, setClaudeEndpointIdState] = useState(() => {
-    try {
-      return localStorage.getItem("ts.claudeEndpointId") || "default";
-    } catch { return "default"; }
-  });
-  function setClaudeEndpointId(id) {
-    setClaudeEndpointIdState(id);
-    try { localStorage.setItem("ts.claudeEndpointId", id); } catch { /* private mode, etc. */ }
-  }
+  // AI calls are wallet-backed through Edge Functions. Legacy API settings may
+  // still exist in user_settings, but normal users no longer configure or use
+  // personal provider keys from the UI.
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [coachMemory, setCoachMemoryState] = useState("");
   const [coachMemoryZh, setCoachMemoryZhState] = useState("");
@@ -304,20 +280,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
   // (or null when unset), name is a free-text label the user types in.
   const [defaultLocation, setDefaultLocationState] = useState({ lng: null, lat: null, name: "" });
-  // Optional Caiyun Weather token — empty falls back to the shared server
-  // token. Persisted to user_settings.caiyun_api_key so it follows the
-  // user across devices (whereas the AI provider's claudeEndpointId stays
-  // local because the right mirror is per-network not per-user).
-  const [caiyunApiKey, setCaiyunApiKeyState] = useState("");
   const [pushEnabled, setPushEnabledState] = useState(false);
   const [pushHours, setPushHoursState] = useState([]);
   const [pushTimes, setPushTimesState] = useState([]);
   const [pushTimezone, setPushTimezoneState] = useState("");
-  // Free-tier usage counters (served from the owner's shared keys via the
-  // coach-proxy / weather-proxy Edge Functions). Read-only here; the proxies are
-  // the source of truth and return `remaining` which we mirror into these.
-  const [deepseekUsed, setDeepseekUsed] = useState(0);
-  const [weatherUsed, setWeatherUsed] = useState(0);
+  const [wallet, setWallet] = useState({ balanceCents: 0, currency: "CNY", ledger: [] });
   const [dataLoading, setDataLoading] = useState(true);
 
   // Pull-to-refresh in flight (Training tab). Separate from dataLoading so a
@@ -327,14 +294,14 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Fetch + apply all user data. Reused by the boot effect AND pull-to-refresh.
   // Throws on error so each caller can handle it (boot alerts; refresh is quiet).
   const loadData = useCallback(async () => {
-        const [profileData, settingsData, workoutsData, racesData, messagesData, notesData, usageData] = await Promise.all([
+        const [profileData, settingsData, workoutsData, racesData, messagesData, notesData, walletData] = await Promise.all([
           db.profiles.getMyProfile(),
           db.userSettings.getMySettings(),
           db.workouts.listMyWorkouts(),
           db.races.listMyRaces(),
           db.coachMessages.listMyMessages(),
           db.dailyNotes.listMyDailyNotes(),
-          db.usage.getMyUsage(),
+          db.wallet.getMyWallet(),
         ]);
 
         // Profile — null means no row yet (handle_new_user trigger should
@@ -353,17 +320,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
         // Settings — same defensive merge.
         if (settingsData) {
-          const provider = (settingsData.apiProvider && API_PROVIDERS[settingsData.apiProvider])
-            ? settingsData.apiProvider
-            : DEFAULT_API_PROVIDER;
-          setApiProviderState(provider);
-          setApiKeyState(settingsData.apiKey ?? "");
-          setClaudeApiKeyState(settingsData.claudeApiKey ?? "");
-          // Model is now LOCKED to each provider's flagship (defaultModel).
-          // Ignore any stale apiModel in the DB row — when we bump the
-          // flagship in constants, everyone picks it up on next load without
-          // a per-user migration.
-          setApiModelState(API_PROVIDERS[provider].defaultModel);
           setCoachConfigState({
             ...DEFAULT_COACH_CONFIG,
             ...(settingsData.coachConfig || {}),
@@ -375,7 +331,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
             name: settingsData.defaultLocationName || "",
           });
-          setCaiyunApiKeyState(settingsData.caiyunApiKey || "");
           setPushEnabledState(settingsData.pushEnabled === true);
           setPushHoursState(Array.isArray(settingsData.pushHours) ? settingsData.pushHours : []);
           setPushTimesState(Array.isArray(settingsData.pushTimes) ? settingsData.pushTimes : []);
@@ -411,9 +366,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // order isn't critical; we keep the DAL ordering as-is.
         setDailyNotes(notesData);
 
-        // Free-tier usage counters.
-        setDeepseekUsed(usageData?.deepseekUsed ?? 0);
-        setWeatherUsed(usageData?.weatherUsed ?? 0);
+        setWallet(walletData || { balanceCents: 0, currency: "CNY", ledger: [] });
   }, [user.id]);
 
   // Initial load on mount / user change. Owns the full-screen LoadingScreen +
@@ -421,7 +374,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   useEffect(() => {
     let cancelled = false;
     const watchdog = setTimeout(() => {
-      if (!cancelled) reportError("Boot watchdog: data load still pending after 25s (stuck on splash). Likely one of profiles/settings/workouts/races/messages/notes/usage never resolved.");
+      if (!cancelled) reportError("Boot watchdog: data load still pending after 25s (stuck on splash). Likely one of profiles/settings/workouts/races/messages/notes/wallet never resolved.");
     }, 25000);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDataLoading(true);
@@ -482,15 +435,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   }
 
   async function updateSettings(patch) {
-    if ("apiProvider" in patch) setApiProviderState(patch.apiProvider);
-    if ("apiKey" in patch) setApiKeyState(patch.apiKey);
-    if ("claudeApiKey" in patch) setClaudeApiKeyState(patch.claudeApiKey);
-    if ("apiModel" in patch) setApiModelState(patch.apiModel);
     if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
     if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
     if ("coachMemoryZh" in patch) setCoachMemoryZhState(patch.coachMemoryZh);
     if ("lang" in patch) setLangState(patch.lang);
-    if ("caiyunApiKey" in patch) setCaiyunApiKeyState(patch.caiyunApiKey || "");
     if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
     if ("pushHours" in patch) setPushHoursState(Array.isArray(patch.pushHours) ? patch.pushHours : []);
     if ("pushTimes" in patch) setPushTimesState(Array.isArray(patch.pushTimes) ? patch.pushTimes : []);
@@ -503,14 +451,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     }
   }
 
-  // Shims to preserve existing child-component prop shapes (setProfile,
-  // setItraPI, setApiKey, ...) so nothing downstream has to change.
+  // Shims to preserve existing child-component prop shapes.
   const setProfile = (next) => updateProfile(next);
   const setItraPI = (v) => updateProfile({ itraPI: v });
-  const setApiProvider = (v) => updateSettings({ apiProvider: v });
-  const setApiKey = (v) => updateSettings({ apiKey: v });
-  const setClaudeApiKey = (v) => updateSettings({ claudeApiKey: v });
-  const setApiModel = (v) => updateSettings({ apiModel: v });
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setCoachMemory = (v) => updateSettings({ coachMemory: v });
   const setCoachMemoryZh = (v) => updateSettings({ coachMemoryZh: v });
@@ -518,7 +461,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // memory proposal so EN + 中 stay in sync).
   const setCoachMemoryBoth = (en, zh) => updateSettings({ coachMemory: en, coachMemoryZh: zh });
   const setLang = (v) => updateSettings({ lang: v });
-  const setCaiyunApiKey = (v) => updateSettings({ caiyunApiKey: v });
   const setPushSettings = (patch) => updateSettings(patch);
   // Patch the local state immediately AND persist to Supabase. updateSettings()
   // doesn't refresh local state, so we do it eagerly here so the Settings page
@@ -553,7 +495,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         durationSec: workoutData.duration || 0,
         lng: loc.lng,
         lat: loc.lat,
-        caiyunToken: caiyunApiKey,
       });
       return snap;
     } catch (err) {
@@ -694,7 +635,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             try {
               const weather = await captureSnapshotForWorkout({
                 date: w.date, startedAt: w.startedAt, durationSec: w.duration || 0,
-                lng, lat, caiyunToken: caiyunApiKey,
+                lng, lat,
               });
               return weather ? { ...w, weather } : w;
             } catch (err) {
@@ -964,11 +905,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
         dailyNotes={dailyNotes} setDailyTags={setDailyTags} setReadiness={setReadiness}
-        apiProvider={apiProvider} setApiProvider={setApiProvider}
-        apiKey={apiKey} setApiKey={setApiKey}
-        claudeApiKey={claudeApiKey} setClaudeApiKey={setClaudeApiKey}
-        claudeEndpointId={claudeEndpointId} setClaudeEndpointId={setClaudeEndpointId}
-        apiModel={apiModel} setApiModel={setApiModel}
         itraPI={itraPI} setItraPI={setItraPI}
         profile={profile} setProfile={setProfile}
         coachConfig={coachConfig} setCoachConfig={setCoachConfig}
@@ -976,10 +912,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         coachMemoryZh={coachMemoryZh} setCoachMemoryZh={setCoachMemoryZh} setCoachMemoryBoth={setCoachMemoryBoth}
         lang={lang} setLang={setLang}
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
-        caiyunApiKey={caiyunApiKey} setCaiyunApiKey={setCaiyunApiKey}
+        wallet={wallet} setWallet={setWallet}
         pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
-        deepseekUsed={deepseekUsed} setDeepseekUsed={setDeepseekUsed}
-        weatherUsed={weatherUsed} setWeatherUsed={setWeatherUsed}
       />
     </LanguageProvider>
   );
@@ -991,19 +925,13 @@ function AppShell({
   races, addRace, updateRace, deleteRace,
   chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags, setReadiness,
-  apiProvider, setApiProvider,
-  apiKey, setApiKey,
-  claudeApiKey, setClaudeApiKey,
-  claudeEndpointId, setClaudeEndpointId,
-  apiModel, setApiModel,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
   coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
   lang, setLang,
   defaultLocation, setDefaultLocation,
-  caiyunApiKey, setCaiyunApiKey,
+  wallet, setWallet,
   pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings,
-  deepseekUsed, setDeepseekUsed, weatherUsed, setWeatherUsed,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -1025,8 +953,7 @@ function AppShell({
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
-  const [showApiSettings, setShowApiSettings] = useState(false);
-  const [showWeatherApiSettings, setShowWeatherApiSettings] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -1156,18 +1083,25 @@ function AppShell({
   const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } once ready
   const [showMemory, setShowMemory] = useState(false);
 
+  const refreshWallet = useCallback(async () => {
+    const next = await db.wallet.getMyWallet();
+    setWallet(next);
+    return next;
+  }, [setWallet]);
+
+  const applyWalletBalance = useCallback((balanceCents) => {
+    if (typeof balanceCents === "number") {
+      setWallet(prev => ({ ...prev, balanceCents }));
+    }
+    refreshWallet().catch(err => console.warn("[wallet] refresh failed:", err));
+  }, [refreshWallet, setWallet]);
+
   // Ask the LLM to distill an updated memory from the current chat + existing
   // memory. Runs at app scope (not inside AICoachTab) so unmounting that tab
   // mid-request doesn't drop the result. Errors surface via alert; success
   // sets memoryProposal, which both the Memory modal and the top banner react to.
   async function proposeMemoryUpdate() {
-    const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
-    if (!activeKey) { window.alert(t("coach.no_key")); return; }
     if (!chatMessages.length) { window.alert(t("coach.memory_need_chat")); return; }
-    const providerCfg = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
-    const apiEndpoint = apiProvider === "claude"
-      ? getEndpointUrl("claude", claudeEndpointId)
-      : providerCfg.endpoints[0].url;
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
     const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
@@ -1192,31 +1126,24 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
 <中文记忆，每行一条，与英文逐行一一对应>`;
     setMemoryUpdating(true);
     try {
-      const resp = await postJson({
-        url: apiEndpoint,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": activeKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: JSON.stringify({
-          model: apiModel,
-          max_tokens: 8000,
-          messages: [{ role: "user", content: memoryPrompt }],
-        }),
+      const data = await db.usage.coachProxy({
+        system: "",
+        messages: [{ role: "user", content: memoryPrompt }],
+        max_tokens: 8000,
       });
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        window.alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
-        return;
-      }
+      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       if (!text.trim()) { window.alert(t("coach.memory_empty_response")); return; }
       setMemoryProposal(parseBilingualMemory(text));
     } catch (err) {
       console.error("[AI Coach] Memory update error:", err);
-      window.alert(t("coach.network_error", { msg: err.message, url: apiEndpoint }));
+      if (err?.code === "insufficient_balance") {
+        window.alert(t("wallet.insufficient_ai"));
+        setShowWallet(true);
+        refreshWallet().catch(() => {});
+      } else {
+        window.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      }
     } finally {
       setMemoryUpdating(false);
     }
@@ -1228,19 +1155,14 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
   // the same forecastByDate if we lift that later. Status field lets the
   // UI tell the user *why* weather isn't showing up instead of silently
   // dropping it.
-  // Free-tier remaining (one-time allowance from the owner's shared keys).
-  const freeDeepseekLeft = Math.max(0, FREE_DEEPSEEK_LIMIT - deepseekUsed);
-  const freeWeatherLeft = Math.max(0, FREE_WEATHER_LIMIT - weatherUsed);
   // Stable so it doesn't churn the weather hook's effect every render.
-  const onWeatherUsed = useCallback((remaining) => {
-    if (typeof remaining === "number") setWeatherUsed(FREE_WEATHER_LIMIT - remaining);
-  }, [setWeatherUsed]);
+  const onWeatherUsed = useCallback((balanceCents) => {
+    applyWalletBalance(balanceCents);
+  }, [applyWalletBalance]);
 
   const weatherCtx = useWeatherContext({
     defaultLng: defaultLocation?.lng,
     defaultLat: defaultLocation?.lat,
-    caiyunToken: caiyunApiKey,
-    freeWeatherLeft,
     onWeatherUsed,
   });
 
@@ -1273,8 +1195,6 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         profile,
         settings: {
           lang,
-          apiProvider,
-          apiModel,
           coachConfig,
           coachMemory,
           coachMemoryZh,
@@ -1283,9 +1203,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
           pushHours,
           pushTimes,
           pushTimezone,
-          hasDeepseekApiKey: !!apiKey,
-          hasClaudeApiKey: !!claudeApiKey,
-          hasCaiyunApiKey: !!caiyunApiKey,
+          walletBalanceCents: wallet.balanceCents,
         },
         data: {
           workouts: logs,
@@ -1311,24 +1229,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
 
   async function sendChat(userMsg, opts = {}) {
     if (!userMsg || chatLoading) return false;
-    const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
-    const endpointUrl = apiProvider === "claude"
-      ? getEndpointUrl("claude", claudeEndpointId)
-      : provider.endpoints[0].url;
-    const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
-    // Free tier: DeepSeek with no own key but remaining allowance → route through
-    // the coach-proxy (owner's shared key). Claude has no free tier.
-    const useFreeProxy = apiProvider === "deepseek" && !apiKey && freeDeepseekLeft > 0;
-    if (!activeKey && !useFreeProxy) {
-      const exhausted = apiProvider === "deepseek" && !apiKey && freeDeepseekLeft <= 0;
-      appendLocalChatMessage("assistant", exhausted ? t("coach.free_used") : t("coach.no_key"));
-      return false;
-    }
 
-    // Optimistic UI: drop the user's bubble into the chat IMMEDIATELY, before
-    // any awaits, so the user sees their message land the moment they hit
-    // send. The persisted row replaces this placeholder once the DB write
-    // returns; on failure we surface an error bubble and bail.
     const optimisticId = `pending-${Date.now()}`;
     const messagesToSend = [
       ...chatMessages.map(m => ({ role: m.role, content: messageContentForCoach(m.content) })),
@@ -1344,11 +1245,6 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
     }
 
-    // Coach-review-after-upload: the just-logged sessions may not be in the DB
-    // read yet (the insert can still be propagating when the review fires), so
-    // the training-load / ACWR would be computed on PRE-upload data. Splice the
-    // reviewed rows in, deduped by content key so we never double-count a row
-    // the DB already returned under its real id.
     if (opts.ensureLogs?.length) {
       const keyOf = l => `${l.date}|${l.type}|${Math.round(Number(l.duration) || 0)}|${Math.round((Number(l.distance) || 0) * 1000)}`;
       const present = new Set(freshLogs.map(keyOf));
@@ -1356,19 +1252,11 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       if (missing.length) freshLogs = [...missing, ...freshLogs];
     }
 
-    // Reuse the AppShell-level weather state (populated by useWeatherContext
-    // once on mount). On the first send right after page load this *may*
-    // still be 'loading' — that's fine; the prompt just won't include
-    // weather for that turn. Subsequent sends get the data.
     const { currentWeather, forecastByDate, status: weatherStatus } = weatherCtx;
     console.info('[weather] sendChat status:', weatherStatus,
       currentWeather ? `currentTemp=${currentWeather.tempC}°C apparent=${currentWeather.apparentC}°C` : 'no realtime',
       forecastByDate ? `${forecastByDate.size}-day forecast` : 'no forecast');
 
-    // Race-day weather for the NEXT upcoming target race that has a location
-    // (outdoor only — Hyrox is indoor, skipped). Forecast when within ~2 weeks,
-    // else a climate normal. Only the nearest race is included so the coach
-    // doesn't ramble about races months out. Best-effort — never blocks the send.
     let raceDayWeather = null;
     try {
       const nowMs = Date.now();
@@ -1379,8 +1267,9 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         .sort((a, b) => a.date.localeCompare(b.date))[0];
       if (nextRace) {
         const w = await fetchRaceDayWeather({
-          lat: nextRace.locationLat, lng: nextRace.locationLng,
-          date: nextRace.date, caiyunToken: caiyunApiKey,
+          lat: nextRace.locationLat,
+          lng: nextRace.locationLng,
+          date: nextRace.date,
         });
         if (w) raceDayWeather = { name: nextRace.name, date: nextRace.date, ...w };
       }
@@ -1397,123 +1286,41 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
 
     try {
       const saved = await db.coachMessages.appendMessage("user", userMsg);
-      // Swap the optimistic bubble for the persisted row (real id, no isLocal).
       setChatMessages(prev => prev.map(m => m.id === optimisticId ? saved : m));
     } catch (err) {
-      // Drop the optimistic bubble and surface the failure so the user knows
-      // the message wasn't saved.
       setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
       window.alert("Failed to save message: " + err.message);
       setChatLoading(false);
       return false;
     }
 
-    if (useFreeProxy) {
-      // Free tier: the coach-proxy Edge Function calls DeepSeek with the owner's
-      // shared key, enforces + decrements quota, and returns { content, remaining }.
-      try {
-        const data = await db.usage.coachProxy({
-          system: systemPrompt,
-          messages: messagesToSend,
-          max_tokens: 8000,
-        });
-        if (typeof data.remaining === "number") setDeepseekUsed(FREE_DEEPSEEK_LIMIT - data.remaining);
-        const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
-        const meta = buildCoachReplyMeta({
-          providerId: "deepseek",
-          model: API_PROVIDERS.deepseek.defaultModel,
-          usage: data.usage,
-          freeTier: true,
-        });
-        try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted by wrapper */ }
-      } catch (err) {
-        if (err?.code === "quota_exceeded") {
-          setDeepseekUsed(FREE_DEEPSEEK_LIMIT);
-          appendLocalChatMessage("assistant", t("coach.free_used"));
-        } else {
-          console.error("[AI Coach] proxy error:", err);
-          appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
-        }
-      }
-      setChatLoading(false);
-      return true;
-    }
-
-    // Streaming reply. A transient assistant bubble fills in token-by-token,
-    // then we persist the final text and swap the placeholder for the saved row.
-    // postJsonStream uses window.fetch (streams on web + WebView) wrapped in
-    // background grace; if the provider ignores stream:true it falls back to a
-    // single full-text emit, so this path is safe for all providers.
-    const streamId = `stream-${Date.now()}`;
-    let started = false, lastFlush = 0;
     try {
-      const result = await postJsonStream({
-        url: endpointUrl,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": activeKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: {
-          model: apiModel,
-          max_tokens: 8000,
-          system: systemPrompt,
-          messages: messagesToSend,
-          stream: true,
-        },
-        onToken: (full) => {
-          if (!started) {
-            started = true;
-            setChatMessages(prev => [...prev, { id: streamId, role: "assistant", content: full, isLocal: true, isStreaming: true }]);
-            return;
-          }
-          // Throttle re-renders (re-parsing markdown every token janks on phones).
-          const tNow = Date.now();
-          if (tNow - lastFlush < 40) return;
-          lastFlush = tNow;
-          setChatMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: full } : m));
-        },
+      const data = await db.usage.coachProxy({
+        system: systemPrompt,
+        messages: messagesToSend,
+        max_tokens: 8000,
       });
-      if (!result.ok) {
-        setChatMessages(prev => prev.filter(m => m.id !== streamId));
-        const msg = result.errorText || `HTTP ${result.status}`;
-        console.error("[AI Coach] API error:", msg);
-        appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
-      } else if (!started) {
-        // Provider returned nothing to stream — append a normal bubble.
-        const reply = result.text || t("coach.no_response");
-        const meta = buildCoachReplyMeta({
-          providerId: apiProvider,
-          model: apiModel,
-          usage: result.usage,
-          freeTier: false,
-        });
-        try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted */ }
-      } else {
-        // Finalize the streamed bubble IN PLACE (no flash), then persist in the
-        // background and swap the placeholder for the saved row (real id → the
-        // calendar-import button then appears).
-        const reply = result.text || t("coach.no_response");
-        const meta = buildCoachReplyMeta({
-          providerId: apiProvider,
-          model: apiModel,
-          usage: result.usage,
-          freeTier: false,
-        });
-        const storedReply = appendCoachMessageMeta(reply, meta);
-        setChatMessages(prev => prev.map(m => m.id === streamId ? { ...m, content: reply, isStreaming: false } : m));
-        try {
-          const saved = await db.coachMessages.appendMessage("assistant", storedReply);
-          setChatMessages(prev => prev.map(m => m.id === streamId ? saved : m));
-        } catch (e) { console.error("[AI Coach] persist failed:", e); }
-      }
+      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
+      const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+      const meta = buildCoachReplyMeta({
+        providerId: "deepseek",
+        model: API_PROVIDERS.deepseek.defaultModel,
+        usage: data.usage,
+        walletChargeCents: 10,
+      });
+      try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted by wrapper */ }
     } catch (err) {
-      console.error("[AI Coach] Network error:", err);
-      setChatMessages(prev => prev.filter(m => m.id !== streamId));
-      appendLocalChatMessage("assistant", t("coach.network_error", { msg: err.message, url: endpointUrl }));
+      if (err?.code === "insufficient_balance") {
+        appendLocalChatMessage("assistant", t("wallet.insufficient_ai"));
+        setShowWallet(true);
+        refreshWallet().catch(() => {});
+      } else {
+        console.error("[AI Coach] proxy error:", err);
+        appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
+      }
+    } finally {
+      setChatLoading(false);
     }
-    setChatLoading(false);
     return true;
   }
 
@@ -1525,15 +1332,6 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
   async function importToCalendar(assistantContent, msgId, { force = false } = {}) {
     if (!force && msgId && planImportCache[msgId]?.plans?.length) {
       setPlanProposal({ msgId, assistantContent, plans: planImportCache[msgId].plans });
-      return;
-    }
-    const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
-    const endpointUrl = apiProvider === "claude"
-      ? getEndpointUrl("claude", claudeEndpointId)
-      : provider.endpoints[0].url;
-    const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
-    if (!activeKey) {
-      alert(t("coach.no_key"));
       return;
     }
     setExtractingForMsgId(msgId);
@@ -1579,28 +1377,12 @@ Rules:
 - Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
 
     try {
-      // Same native-HTTP-aware POST as sendChat — the plan-extraction call
-      // benefits from backgrounding tolerance too (it can run for several
-      // seconds, and the user might tab away).
-      const resp = await postJson({
-        url: endpointUrl,
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": activeKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
-        },
-        body: {
-          model: apiModel,
-          max_tokens: 8000,
-          messages: [{ role: "user", content: extractPrompt }],
-        },
+      const data = await db.usage.coachProxy({
+        system: "",
+        messages: [{ role: "user", content: extractPrompt }],
+        max_tokens: 8000,
       });
-      const data = await resp.json();
-      if (!resp.ok || data.error) {
-        alert(t("coach.api_error", { msg: data.error?.message || `HTTP ${resp.status}` }));
-        return;
-      }
+      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
       if (plans.length === 0) {
@@ -1611,7 +1393,13 @@ Rules:
       setPlanProposal({ msgId, assistantContent, plans });
     } catch (err) {
       console.error("[AI Coach] Plan-extract error:", err);
-      alert(t("coach.network_error", { msg: err.message, url: endpointUrl }));
+      if (err?.code === "insufficient_balance") {
+        alert(t("wallet.insufficient_ai"));
+        setShowWallet(true);
+        refreshWallet().catch(() => {});
+      } else {
+        alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      }
     } finally {
       setExtractingForMsgId(null);
     }
@@ -1849,12 +1637,8 @@ Rules:
           now={now}
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
-          apiProvider={apiProvider}
-          setApiProvider={setApiProvider}
-          apiKey={apiKey}
-          claudeApiKey={claudeApiKey}
-          claudeEndpointId={claudeEndpointId}
-          apiModel={apiModel}
+          apiProvider={DEFAULT_API_PROVIDER}
+          apiModel={API_PROVIDERS[DEFAULT_API_PROVIDER].defaultModel}
           onEditProfile={goToProfileSettings}
           onGoToTraining={() => setTab(0)}
           onGoToRaces={() => setTab(2)}
@@ -1889,14 +1673,10 @@ Rules:
         <SettingsMobileTab
           user={user}
           profile={profile}
-          apiKey={apiKey}
-          caiyunApiKey={caiyunApiKey}
-          freeDeepseekLeft={freeDeepseekLeft}
-          freeWeatherLeft={freeWeatherLeft}
+          wallet={wallet}
           lang={lang}
           onOpenProfile={() => setProfileEditorMode("preview")}
-          onOpenApiSettings={() => setShowApiSettings(true)}
-          onOpenWeatherApiSettings={() => setShowWeatherApiSettings(true)}
+          onOpenWallet={() => setShowWallet(true)}
           onOpenPushSettings={() => setShowPushSettings(true)}
           pushEnabled={pushEnabled}
           pushHours={pushHours}
@@ -1965,20 +1745,11 @@ Rules:
         />
       )}
 
-      {showApiSettings && (
-        <ApiSettingsModal
-          apiProvider={apiProvider}
-          setApiProvider={setApiProvider}
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          claudeApiKey={claudeApiKey}
-          setClaudeApiKey={setClaudeApiKey}
-          claudeEndpointId={claudeEndpointId}
-          setClaudeEndpointId={setClaudeEndpointId}
-          apiModel={apiModel}
-          setApiModel={setApiModel}
-          freeDeepseekLeft={freeDeepseekLeft}
-          onClose={() => setShowApiSettings(false)}
+      {showWallet && (
+        <WalletModal
+          wallet={wallet}
+          onRefresh={refreshWallet}
+          onClose={() => setShowWallet(false)}
         />
       )}
 
@@ -2012,15 +1783,6 @@ Rules:
           isMobile={isMobile}
           onChangeTab={setTab}
           onClose={() => setShowTour(false)}
-        />
-      )}
-
-      {showWeatherApiSettings && (
-        <WeatherApiSettingsModal
-          caiyunApiKey={caiyunApiKey}
-          setCaiyunApiKey={setCaiyunApiKey}
-          freeWeatherLeft={freeWeatherLeft}
-          onClose={() => setShowWeatherApiSettings(false)}
         />
       )}
 
@@ -2240,24 +2002,10 @@ Rules:
               <GlobeIcon size={13} />
               {lang === "en" ? "中" : "EN"}
             </button>
-            <button onClick={() => setShowApiSettings(true)} title={t("header.api_tooltip")}
-              style={{
-                ...headerCell,
-                background: apiKey ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)",
-                color: apiKey ? "var(--ink-2)" : "var(--warn)",
-              }}>
-              <KeyIcon size={13} />
-              {t("header.api")}
-              {!apiKey && (
-                <span style={{
-                  width: 6, height: 6, borderRadius: "50%",
-                  background: "var(--warn)", display: "inline-block",
-                }} />
-              )}
-            </button>
-            <button onClick={() => setShowWeatherApiSettings(true)} title={t("settings.weather_api")}
-              style={{ ...headerCell, width: 38, padding: 0 }}>
-              <CloudIcon size={13} />
+            <button onClick={() => setShowWallet(true)} title={t("wallet.title")}
+              style={headerCell}>
+              <WalletIcon size={13} />
+              {formatWalletAmount(wallet.balanceCents, wallet.currency)}
             </button>
             <button onClick={() => setProfileEditorMode("preview")} title={t("header.profile")}
               style={{ ...headerCell, width: 38, padding: 0 }}>

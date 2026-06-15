@@ -3,8 +3,9 @@
 // Triggered by pg_cron every ~30 min. For each user who has daily push enabled
 // and whose chosen local hour matches "now" in their timezone (and who hasn't
 // been pushed today), it: pulls their recent training + target race, asks their
-// configured LLM for ONE short check-in line, and pushes it to their devices
-// via FCM. Dedup is enforced by push_log (unique on user_id + local date).
+// wallet-backed shared DeepSeek key for ONE short check-in line, debits the
+// wallet after a successful reply, and pushes it to their devices via FCM.
+// Dedup is enforced by push_log (unique on user_id + local date).
 //
 // Auth: this function runs with Verify JWT = OFF (it's called by cron, not a
 // logged-in user). It instead checks a shared header x-cron-secret == CRON_SECRET.
@@ -12,15 +13,14 @@
 // Secrets (Edge Function → Secrets):
 //   FCM_SERVICE_ACCOUNT  – service-account JSON (same one push-test uses)
 //   CRON_SECRET          – random string; must match what the cron SQL sends
+//   SHARED_DEEPSEEK_KEY  – owner DeepSeek key used server-side only
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-// ── Anthropic-compatible providers (same endpoints the app uses) ──
-const PROVIDERS: Record<string, { url: string; model: string }> = {
-  deepseek: { url: "https://api.deepseek.com/anthropic/v1/messages", model: "deepseek-v4-pro" },
-  claude: { url: "https://gw.claudeapi.com/v1/messages", model: "claude-opus-4-7" },
-};
+const DEEPSEEK_URL = "https://api.deepseek.com/anthropic/v1/messages";
+const DEEPSEEK_MODEL = "deepseek-v4-pro";
+const AI_CHARGE_CENTS = 10;
 
 // ── FCM HTTP v1 auth (mirrors push-test) ──
 function pemToArrayBuffer(pem: string): ArrayBuffer {
@@ -151,9 +151,8 @@ function buildPrompt(opts: {
   return { system, user };
 }
 
-async function callLLM(provider: string, key: string, system: string, user: string): Promise<string> {
-  const cfg = PROVIDERS[provider] || PROVIDERS.deepseek;
-  const resp = await fetch(cfg.url, {
+async function callLLM(key: string, system: string, user: string): Promise<string> {
+  const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -165,7 +164,7 @@ async function callLLM(provider: string, key: string, system: string, user: stri
       // tokens count against max_tokens — too low and the visible answer comes
       // back empty. The notification stays short via the prompt, not the cap;
       // billing is by actual tokens so unused headroom costs nothing.
-      model: cfg.model,
+      model: DEEPSEEK_MODEL,
       max_tokens: 8000,
       system,
       messages: [{ role: "user", content: user }],
@@ -189,13 +188,15 @@ Deno.serve(async (req) => {
     const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
     if (!saRaw) return json({ error: "FCM_SERVICE_ACCOUNT not set" }, 500);
     const sa = JSON.parse(saRaw);
+    const deepseekKey = Deno.env.get("SHARED_DEEPSEEK_KEY");
+    if (!deepseekKey) return json({ error: "SHARED_DEEPSEEK_KEY not set" }, 500);
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Everyone with push enabled; we filter by local half-hour slot in JS.
     const { data: settings, error: sErr } = await supabase
       .from("user_settings")
-      .select("user_id, push_hours, push_times, push_timezone, api_provider, api_key, claude_api_key, coach_memory, lang")
+      .select("user_id, push_hours, push_times, push_timezone, coach_memory, lang")
       .eq("push_enabled", true);
     if (sErr) return json({ error: sErr.message }, 500);
 
@@ -230,9 +231,20 @@ Deno.serve(async (req) => {
         .from("push_log").insert({ user_id: u.user_id, sent_on: date, hour: slotIdx });
       if (claimErr) { summary.push({ user: u.user_id, skipped: "already-claimed" }); continue; }
 
-      const provider = u.api_provider === "claude" ? "claude" : "deepseek";
-      const key = provider === "claude" ? u.claude_api_key : u.api_key;
-      if (!key) { summary.push({ user: u.user_id, error: "no api key" }); continue; }
+      const { error: ensureErr } = await supabase.rpc("wallet_ensure", {
+        p_user_id: u.user_id,
+        p_initial_cents: 500,
+      });
+      if (ensureErr) { summary.push({ user: u.user_id, error: "wallet_ensure_failed" }); continue; }
+      const { data: wallet } = await supabase
+        .from("wallets")
+        .select("balance_cents")
+        .eq("user_id", u.user_id)
+        .single();
+      if ((wallet?.balance_cents ?? 0) < AI_CHARGE_CENTS) {
+        summary.push({ user: u.user_id, skipped: "insufficient_balance" });
+        continue;
+      }
 
       const { data: workouts } = await supabase
         .from("workouts")
@@ -264,12 +276,26 @@ Deno.serve(async (req) => {
 
       let message = "";
       try {
-        message = await callLLM(provider, key, system, user);
+        message = await callLLM(deepseekKey, system, user);
       } catch (e) {
         summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
         continue;
       }
       if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+
+      const { error: debitErr } = await supabase.rpc("wallet_debit", {
+        p_user_id: u.user_id,
+        p_amount_cents: AI_CHARGE_CENTS,
+        p_kind: "ai_charge",
+        p_provider: "deepseek",
+        p_request_id: `daily-coach:${u.user_id}:${date}:${slotIdx}`,
+        p_metadata: { source: "daily_coach_dispatch", model: DEEPSEEK_MODEL },
+      });
+      if (debitErr) {
+        const insufficient = String(debitErr.message || "").includes("insufficient_balance");
+        summary.push({ user: u.user_id, error: insufficient ? "insufficient_balance" : "wallet_debit_failed" });
+        continue;
+      }
 
       const { data: subs } = await supabase
         .from("push_subscriptions").select("fcm_token").eq("user_id", u.user_id);

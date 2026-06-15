@@ -1,11 +1,8 @@
-// Free-tier AI coach proxy (DeepSeek only).
+// Wallet-backed AI coach proxy (DeepSeek only).
 //
-// New users get a one-time free allowance of DeepSeek messages served from the
-// app owner's key, so they can try the coach without registering their own API
-// key. This function: identifies the caller from their JWT, checks their
-// per-user quota in usage_quota, calls DeepSeek with the SHARED_DEEPSEEK_KEY,
-// counts the call, and returns the Anthropic-shaped reply. When the quota is
-// spent it returns 402 so the client prompts the user to add their own key.
+// The app owner's DeepSeek key stays in Edge Function secrets. This function
+// identifies the caller from their JWT, ensures their wallet exists, calls
+// DeepSeek, then debits the wallet only after a successful upstream reply.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
 //   npx supabase functions deploy coach-proxy
@@ -15,9 +12,9 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const DEEPSEEK_LIMIT = 10;
 const DEEPSEEK_URL = "https://api.deepseek.com/anthropic/v1/messages";
 const DEEPSEEK_MODEL = "deepseek-v4-pro";
+const AI_CHARGE_CENTS = 10;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -47,11 +44,20 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
-  // Ensure a quota row exists, then read current usage.
-  await admin.from("usage_quota").upsert({ user_id: uid }, { onConflict: "user_id", ignoreDuplicates: true });
-  const { data: q } = await admin.from("usage_quota").select("deepseek_used").eq("user_id", uid).single();
-  const used = q?.deepseek_used ?? 0;
-  if (used >= DEEPSEEK_LIMIT) return json({ error: "quota_exceeded", remaining: 0 }, 402);
+  const { error: ensureErr } = await admin.rpc("wallet_ensure", {
+    p_user_id: uid,
+    p_initial_cents: 500,
+  });
+  if (ensureErr) return json({ error: "wallet_ensure_failed" }, 500);
+
+  const { data: wallet } = await admin
+    .from("wallets")
+    .select("balance_cents")
+    .eq("user_id", uid)
+    .single();
+  if ((wallet?.balance_cents ?? 0) < AI_CHARGE_CENTS) {
+    return json({ error: "insufficient_balance" }, 402);
+  }
 
   // Call DeepSeek with the shared key. Failures are NOT counted against quota.
   let upstream: Response;
@@ -74,9 +80,22 @@ Deno.serve(async (req) => {
     return json({ error: (data as { error?: { message?: string } })?.error?.message || "upstream_error", detail: data }, upstream.status || 502);
   }
 
-  // Count the successful call.
-  const next = used + 1;
-  await admin.from("usage_quota").update({ deepseek_used: next, updated_at: new Date().toISOString() }).eq("user_id", uid);
+  const requestId = data.id ? `ai:${data.id}` : `ai:${uid}:${Date.now()}`;
+  const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
+    p_user_id: uid,
+    p_amount_cents: AI_CHARGE_CENTS,
+    p_kind: "ai_charge",
+    p_provider: "deepseek",
+    p_request_id: requestId,
+    p_metadata: {
+      model: DEEPSEEK_MODEL,
+      usage: data.usage || null,
+    },
+  });
+  if (debitErr) {
+    const insufficient = String(debitErr.message || "").includes("insufficient_balance");
+    return json({ error: insufficient ? "insufficient_balance" : "wallet_debit_failed" }, insufficient ? 402 : 500);
+  }
 
-  return json({ ...data, remaining: DEEPSEEK_LIMIT - next });
+  return json({ ...data, wallet: { balance_cents: balanceAfter } });
 });

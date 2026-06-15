@@ -4,7 +4,8 @@ import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
-import { FREE_WEATHER_LIMIT } from "../constants";
+
+const LEGACY_FREE_WEATHER_LIMIT = 30;
 
 function maskedKey(k) {
   if (!k) return "";
@@ -98,7 +99,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
               color: freeWeatherLeft > 0 ? "var(--moss-deep)" : "var(--ink-2)",
             }}>
               {freeWeatherLeft > 0
-                ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(FREE_WEATHER_LIMIT) })
+                ? t("quota.weather_left", { n: String(freeWeatherLeft), total: String(LEGACY_FREE_WEATHER_LIMIT) })
                 : t("quota.weather_used")}
             </div>
           )}

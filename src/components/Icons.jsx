@@ -209,6 +209,17 @@ export function KeyIcon({ size = 13 }) {
   );
 }
 
+export function WalletIcon({ size = 13 }) {
+  return (
+    <svg {...baseProps(size)}>
+      <path d="M2.2 4.2 H11.8 V11.2 H2.2 Z" />
+      <path d="M3.2 4.2 V2.8 H9.8 C10.8 2.8 11.4 3.3 11.4 4.2" />
+      <path d="M9 7.4 H12.2 V9.4 H9 C8.4 9.4 8 9 8 8.4 C8 7.8 8.4 7.4 9 7.4 Z" />
+      <path d="M10 8.4 H10.1" />
+    </svg>
+  );
+}
+
 export function GlobeIcon({ size = 13 }) {
   return (
     <svg {...baseProps(size)}>

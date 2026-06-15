@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { s } from "../styles";
-import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPUT_TOKENS, FREE_DEEPSEEK_LIMIT } from "../constants";
+import { API_PROVIDERS, estimateMessageCost, TYPICAL_INPUT_TOKENS, TYPICAL_OUTPUT_TOKENS } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
 import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
+
+const LEGACY_FREE_DEEPSEEK_LIMIT = 10;
 
 function maskedKey(k) {
   if (!k) return "";
@@ -224,7 +226,7 @@ export function ApiSettingsModal({
             color: freeDeepseekLeft > 0 ? "var(--moss-deep)" : "var(--ink-2)",
           }}>
             {freeDeepseekLeft > 0
-              ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(FREE_DEEPSEEK_LIMIT) })
+              ? t("quota.ai_left", { n: String(freeDeepseekLeft), total: String(LEGACY_FREE_DEEPSEEK_LIMIT) })
               : t("quota.ai_used")}
           </div>
         )}

@@ -1184,6 +1184,16 @@ function MetricWeather({ w, full = false }) {
   // Realtime + historical: tempC / apparentC. Daily forecast: tempAvgC / apparentAvgC.
   const temp = w.tempC ?? w.tempAvgC;
   const apparent = w.apparentC ?? w.apparentAvgC;
+  const series = Array.isArray(w.series) && w.series.length > 1 ? w.series : null;
+  const rangeLabel = (values) => {
+    const nums = values.filter(Number.isFinite).map(Math.round);
+    if (!nums.length) return null;
+    const min = Math.min(...nums);
+    const max = Math.max(...nums);
+    return min === max ? String(min) : `${min}-${max}`;
+  };
+  const tempRange = full && series ? rangeLabel(series.map(p => p.tempC)) : null;
+  const apparentRange = full && series ? rangeLabel(series.map(p => Number.isFinite(p.apparentC) ? p.apparentC : p.tempC)) : null;
   // Compact: apparent (fall back to raw). Expanded: raw (fall back to apparent).
   const headline = full
     ? (Number.isFinite(temp) ? temp : apparent)
@@ -1195,8 +1205,15 @@ function MetricWeather({ w, full = false }) {
       color: "var(--ink-2)",
     }}>
       {meta && <span aria-hidden="true">{meta.icon}</span>}
-      {Number.isFinite(headline) && (
+      {tempRange ? (
+        <span>{tempRange}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
+      ) : Number.isFinite(headline) && (
         <span>{Math.round(headline)}<span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 1 }}>°C</span></span>
+      )}
+      {full && apparentRange && apparentRange !== tempRange && (
+        <span style={{ color: "var(--ink-3)", fontSize: 11 }}>
+          · feels {apparentRange}°C
+        </span>
       )}
       {full && Number.isFinite(w.humidity) && (
         <span style={{ color: "var(--ink-3)", fontSize: 11 }}>

@@ -29,7 +29,7 @@ function normalizeWallet(data) {
 
 export async function getMyWallet() {
   const { data, error } = await supabase.functions.invoke('wallet-status', {
-    body: { limit: 30 },
+    body: { limit: 100 },
   });
   if (error) {
     let code = '';

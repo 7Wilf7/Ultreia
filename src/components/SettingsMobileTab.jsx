@@ -1,10 +1,10 @@
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { WalletIcon } from "./Icons";
+import { WalletPanel } from "./WalletModal";
 import { productLogoUrl } from "../assets/logo";
-import { formatWalletAmount } from "../lib/db/wallet";
 
 const GROUP_ORDER = { wallet: 0, admin: 1, other: 2 };
 
@@ -24,7 +24,7 @@ export function SettingsMobileTab({
   wallet,
   lang,
   onOpenProfile,
-  onOpenWallet,
+  onRefreshWallet,
   onOpenPushSettings,
   pushEnabled,
   pushHours,
@@ -39,6 +39,7 @@ export function SettingsMobileTab({
   onGenerateInvite,
   onOpenPromptCatalog,
   signOut,
+  focusGroup,
 }) {
   const t = useT();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -46,6 +47,7 @@ export function SettingsMobileTab({
   const [groupMotion, setGroupMotion] = useState({ dir: 0, seq: 0 });
   const [signingOut, setSigningOut] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const handledFocusTickRef = useRef(null);
   // Native (APK) updates go through the UpdateChecker + the SW is unregistered
   // there; the cache-clear cell is a web/PWA convenience for forcing a fresh
   // version after a deploy.
@@ -92,6 +94,11 @@ export function SettingsMobileTab({
   useEffect(() => { if (profileFlash) setAccountOpen(true); }, [profileFlash]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (!isAdmin && group === "admin") setGroup("other"); }, [isAdmin, group]);
+  useEffect(() => {
+    if (!focusGroup?.group || handledFocusTickRef.current === focusGroup.tick) return;
+    handledFocusTickRef.current = focusGroup.tick;
+    selectGroup(focusGroup.group);
+  }, [focusGroup, selectGroup]);
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
@@ -186,10 +193,9 @@ export function SettingsMobileTab({
 
       <GroupPanel motion={groupMotion}>
         {group === "wallet" && (
-          <SubCell
-            primary={t("settings.wallet")}
-            secondary={formatWalletAmount(wallet?.balanceCents || 0, wallet?.currency || "CNY")}
-            onClick={onOpenWallet} />
+          <div style={{ padding: 14 }}>
+            <WalletPanel wallet={wallet} onRefresh={onRefreshWallet} />
+          </div>
         )}
 
         {group === "admin" && isAdmin && (

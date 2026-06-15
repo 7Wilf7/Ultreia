@@ -954,6 +954,7 @@ function AppShell({
   const [now, setNow] = useState(new Date());
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showWallet, setShowWallet] = useState(false);
+  const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -1042,6 +1043,15 @@ function AppShell({
       setTimeout(() => setProfileFlash(false), 2200);
     } else {
       setProfileEditorMode("preview");
+    }
+  }
+
+  function openWalletSurface() {
+    if (isMobile) {
+      setTab(4);
+      setMobileSettingsFocus({ group: "wallet", tick: Date.now() });
+    } else {
+      setShowWallet(true);
     }
   }
 
@@ -1139,7 +1149,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       console.error("[AI Coach] Memory update error:", err);
       if (err?.code === "insufficient_balance") {
         window.alert(t("wallet.insufficient_ai"));
-        setShowWallet(true);
+        openWalletSurface();
         refreshWallet().catch(() => {});
       } else {
         window.alert(t("coach.api_error", { msg: err?.message || String(err) }));
@@ -1312,7 +1322,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
     } catch (err) {
       if (err?.code === "insufficient_balance") {
         appendLocalChatMessage("assistant", t("wallet.insufficient_ai"));
-        setShowWallet(true);
+        openWalletSurface();
         refreshWallet().catch(() => {});
       } else {
         console.error("[AI Coach] proxy error:", err);
@@ -1395,7 +1405,7 @@ Rules:
       console.error("[AI Coach] Plan-extract error:", err);
       if (err?.code === "insufficient_balance") {
         alert(t("wallet.insufficient_ai"));
-        setShowWallet(true);
+        openWalletSurface();
         refreshWallet().catch(() => {});
       } else {
         alert(t("coach.api_error", { msg: err?.message || String(err) }));
@@ -1676,7 +1686,7 @@ Rules:
           wallet={wallet}
           lang={lang}
           onOpenProfile={() => setProfileEditorMode("preview")}
-          onOpenWallet={() => setShowWallet(true)}
+          onRefreshWallet={refreshWallet}
           onOpenPushSettings={() => setShowPushSettings(true)}
           pushEnabled={pushEnabled}
           pushHours={pushHours}
@@ -1691,6 +1701,7 @@ Rules:
           onGenerateInvite={() => setShowInviteCodes(true)}
           onOpenPromptCatalog={() => setShowPromptCatalog(true)}
           signOut={signOut}
+          focusGroup={mobileSettingsFocus}
         />
     );
     return null;
@@ -2002,7 +2013,7 @@ Rules:
               <GlobeIcon size={13} />
               {lang === "en" ? "中" : "EN"}
             </button>
-            <button onClick={() => setShowWallet(true)} title={t("wallet.title")}
+            <button onClick={openWalletSurface} title={t("wallet.title")}
               style={headerCell}>
               <WalletIcon size={13} />
               {formatWalletAmount(wallet.balanceCents, wallet.currency)}

@@ -99,7 +99,7 @@ const dict = {
 
   // ===== Wallet =====
   "wallet.title":               { en: "Wallet",               zh: "钱包" },
-  "wallet.desc":                { en: "AI Coach and weather use your wallet balance. Provider keys stay on Ultreia's server and are never exposed in the app.", zh: "AI Coach 和天气会从钱包余额扣费。服务商 Key 只保存在 Ultreia 服务端，不会暴露在 App 里。" },
+  "wallet.desc":                { en: "AI Coach and weather use your wallet balance.", zh: "AI Coach 和天气会从钱包余额扣费。" },
   "wallet.balance":             { en: "Balance",              zh: "余额" },
   "wallet.topup":               { en: "Top up",               zh: "充值" },
   "wallet.topup_hint":          { en: "Top-up is not connected to payments yet. Contact the admin to add balance.", zh: "充值暂未接入自动支付。请联系管理员加余额。" },

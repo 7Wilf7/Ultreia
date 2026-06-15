@@ -195,7 +195,7 @@ export function SettingsMobileTab({
       <GroupPanel motion={groupMotion}>
         {group === "wallet" && (
           <div style={{ padding: 14 }}>
-            <WalletPanel wallet={wallet} onRefresh={onRefreshWallet} />
+            <WalletPanel wallet={wallet} onRefresh={onRefreshWallet} userEmail={user?.email || ""} />
           </div>
         )}
 

@@ -80,3 +80,30 @@ export async function adminGrantWallet({ email, amountCents, note }) {
   }
   return data;
 }
+
+export async function notifyAdminPayment({ amountCents }) {
+  const { data, error } = await supabase.functions.invoke('payment-notify-admin', {
+    body: {
+      amount_cents: amountCents,
+    },
+  });
+  if (error) {
+    let code = '';
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === 'function') {
+        const b = await ctx.json();
+        code = b?.error || '';
+      }
+    } catch { /* ignore */ }
+    const e = new Error(code || error.message || 'payment_notify_failed');
+    e.code = code;
+    throw e;
+  }
+  if (data?.error) {
+    const e = new Error(data.error);
+    e.code = data.error;
+    throw e;
+  }
+  return data;
+}

@@ -1780,6 +1780,7 @@ Rules:
         <WalletModal
           wallet={wallet}
           onRefresh={refreshWallet}
+          userEmail={user?.email || ""}
           onClose={() => setShowWallet(false)}
         />
       )}

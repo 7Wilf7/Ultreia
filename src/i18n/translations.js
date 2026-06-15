@@ -100,7 +100,7 @@ const dict = {
 
   // ===== Wallet =====
   "wallet.title":               { en: "Wallet",               zh: "钱包" },
-  "wallet.desc":                { en: "AI Coach and weather use your wallet balance.", zh: "AI Coach 和天气会从钱包余额扣费。" },
+  "wallet.desc":                { en: "AI Coach is billed in CNY at actual model cost × 1.2, rounded to cents with a ¥0.01 minimum. Weather is ¥0.01 per successful request.", zh: "AI Coach 按模型实际成本 × 1.2 以人民币扣费，四舍五入到分，最低 ¥0.01；天气每次成功获取扣 ¥0.01。" },
   "wallet.balance":             { en: "Balance",              zh: "余额" },
   "wallet.topup":               { en: "Top up",               zh: "充值" },
   "wallet.topup_hint":          { en: "Top-up is not connected to payments yet. Contact the admin to add balance.", zh: "充值暂未接入自动支付。请联系管理员加余额。" },
@@ -936,7 +936,7 @@ const dict = {
   "coach.no_response":        { en: "No response.",         zh: "无响应。" },
   "coach.cost_free":          { en: "Wallet · {tokens} tokens", zh: "钱包 · {tokens} tokens" },
   "coach.cost_paid":          { en: "{provider} · {tokens} tokens · ≈ ${cost}", zh: "{provider} · {tokens} tokens · 约 ${cost}" },
-  "coach.cost_wallet":        { en: "{provider} · {tokens} tokens · wallet {amount}", zh: "{provider} · {tokens} tokens · 钱包 {amount}" },
+  "coach.cost_wallet":        { en: "{provider} · {tokens} tokens · wallet charged {amount}", zh: "{provider} · {tokens} tokens · 钱包扣费 {amount}" },
   "coach.network_error":      { en: "Network request failed ({msg}). If you switched apps while waiting, the browser may have paused the connection — tap Resend below your message to try again.", zh: "网络请求失败（{msg}）。如果在等待回复时切换了 app，浏览器可能暂停了连接 —— 点击消息下方的「重新发送」再试一次。" },
   "coach.endpoint_error":     { en: "The API endpoint returned a page instead of an API response (HTTP {status}). The endpoint URL is probably wrong, or the provider's service is down.\n\nURL: {url}\nResponse start: {snippet}", zh: "API 端点返回了一个网页而不是 API 响应（HTTP {status}）。最可能的原因：endpoint URL 不对，或者 provider 服务出问题了。\n\nURL：{url}\n返回内容开头：{snippet}" },
   "coach.input_placeholder":  { en: "Type anything you want the coach to see here", zh: "Type anything you want the coach to see here" },

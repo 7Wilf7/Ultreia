@@ -1,8 +1,8 @@
 // Wallet-backed weather proxy (Caiyun).
 //
-// The app owner's Caiyun token stays in Edge Function secrets. mode="bundle"
-// fetches realtime + 7-day forecast in one shot and counts as ONE wallet debit.
-// mode="single" fetches one Caiyun endpoint.
+// The app owner's Caiyun token stays in Edge Function secrets. Every successful
+// weather request counts as one wallet debit, even when mode="bundle" fetches
+// realtime + 7-day forecast together.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
 //   npx supabase functions deploy weather-proxy
@@ -13,7 +13,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const CAIYUN_BASE = "https://api.caiyunapp.com/v2.6";
-const WEATHER_CHARGE_CENTS = 2;
+const WEATHER_CHARGE_CENTS = 1;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -103,13 +103,20 @@ Deno.serve(async (req) => {
       p_kind: "weather_charge",
       p_provider: "caiyun",
       p_request_id: requestId,
-      p_metadata: { mode, type, lng: roundCoord(Number(lng)), lat: roundCoord(Number(lat)), begin: begin || null },
+      p_metadata: {
+        mode,
+        type,
+        lng: roundCoord(Number(lng)),
+        lat: roundCoord(Number(lat)),
+        begin: begin || null,
+        charge_cents: WEATHER_CHARGE_CENTS,
+      },
     });
     if (debitErr) {
       const insufficient = String(debitErr.message || "").includes("insufficient_balance");
       return json({ error: insufficient ? "insufficient_balance" : "wallet_debit_failed" }, insufficient ? 402 : 500);
     }
-    return json({ ...payload, wallet: { balance_cents: balanceAfter } });
+    return json({ ...payload, wallet: { balance_cents: balanceAfter, charge_cents: WEATHER_CHARGE_CENTS } });
   } catch (e) {
     return json({ error: "bad_request", detail: String(e) }, 400);
   }

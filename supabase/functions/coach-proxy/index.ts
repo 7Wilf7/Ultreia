@@ -18,20 +18,43 @@ const PROVIDERS = {
     url: "https://api.deepseek.com/anthropic/v1/messages",
     model: "deepseek-v4-pro",
     keyEnv: "SHARED_DEEPSEEK_KEY",
-    chargeCents: 10,
+    pricingCnyPerM: { input: 3.16, output: 6.32 },
   },
   claude: {
     id: "claude",
     url: "https://gw.claudeapi.com/v1/messages",
     model: "claude-opus-4-8",
     keyEnv: "SHARED_CLAUDE_KEY",
-    chargeCents: 20,
+    pricingCnyPerM: { input: 29.1, output: 145.5 },
   },
 } as const;
 type ProviderId = keyof typeof PROVIDERS;
+const AI_MARKUP_RATE = 1.2;
+const MIN_AI_CHARGE_CENTS = 1;
 
 function resolveProvider(value: unknown): typeof PROVIDERS[ProviderId] {
   return value === "claude" ? PROVIDERS.claude : PROVIDERS.deepseek;
+}
+
+function tokenUsage(usage: unknown): { input: number; output: number; total: number } {
+  const u = (usage && typeof usage === "object") ? usage as Record<string, unknown> : {};
+  const input = Number(u.input_tokens ?? u.prompt_tokens ?? u.inputTokens ?? u.promptTokens ?? 0);
+  const output = Number(u.output_tokens ?? u.completion_tokens ?? u.outputTokens ?? u.completionTokens ?? 0);
+  const total = Number(u.total_tokens ?? u.totalTokens ?? input + output);
+  return {
+    input: Number.isFinite(input) ? input : 0,
+    output: Number.isFinite(output) ? output : 0,
+    total: Number.isFinite(total) ? total : 0,
+  };
+}
+
+function calcChargeCents(provider: typeof PROVIDERS[ProviderId], usage: unknown): { actualCostCents: number; chargeCents: number } {
+  const tokens = tokenUsage(usage);
+  const actualCny = (tokens.input / 1_000_000) * provider.pricingCnyPerM.input
+    + (tokens.output / 1_000_000) * provider.pricingCnyPerM.output;
+  const actualCostCents = Math.round(actualCny * 100);
+  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
+  return { actualCostCents, chargeCents };
 }
 
 const CORS = {
@@ -74,9 +97,7 @@ Deno.serve(async (req) => {
     .select("balance_cents")
     .eq("user_id", uid)
     .single();
-  if ((wallet?.balance_cents ?? 0) < provider.chargeCents) {
-    return json({ error: "insufficient_balance" }, 402);
-  }
+  if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) return json({ error: "insufficient_balance" }, 402);
 
   // Call the selected provider with the shared key. Failures are NOT charged.
   let upstream: Response;
@@ -99,10 +120,12 @@ Deno.serve(async (req) => {
     return json({ error: (data as { error?: { message?: string } })?.error?.message || "upstream_error", detail: data }, upstream.status || 502);
   }
 
+  const { actualCostCents, chargeCents } = calcChargeCents(provider, data.usage || null);
+
   const requestId = data.id ? `ai:${data.id}` : `ai:${uid}:${Date.now()}`;
   const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
     p_user_id: uid,
-    p_amount_cents: provider.chargeCents,
+    p_amount_cents: chargeCents,
     p_kind: "ai_charge",
     p_provider: provider.id,
     p_request_id: requestId,
@@ -110,6 +133,8 @@ Deno.serve(async (req) => {
       provider: provider.id,
       model: provider.model,
       usage: data.usage || null,
+      actual_cost_cents: actualCostCents,
+      markup_rate: AI_MARKUP_RATE,
     },
   });
   if (debitErr) {
@@ -121,6 +146,11 @@ Deno.serve(async (req) => {
     ...data,
     provider: provider.id,
     model: provider.model,
-    wallet: { balance_cents: balanceAfter, charge_cents: provider.chargeCents },
+    wallet: {
+      balance_cents: balanceAfter,
+      charge_cents: chargeCents,
+      actual_cost_cents: actualCostCents,
+      markup_rate: AI_MARKUP_RATE,
+    },
   });
 });

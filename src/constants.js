@@ -57,11 +57,6 @@ export function estimateMessageCost(providerId) {
 
 export const DEFAULT_API_PROVIDER = "deepseek";
 
-export const AI_PROVIDER_CHARGE_CENTS = {
-  deepseek: 10,
-  claude: 20,
-};
-
 // Resolve the endpoint URL to use for a given provider. `endpointId` comes
 // from localStorage (per-device pick); falls back to the first entry when
 // the saved id no longer matches a known endpoint.

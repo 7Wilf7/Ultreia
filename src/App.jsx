@@ -4,7 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  API_PROVIDERS, DEFAULT_API_PROVIDER, AI_PROVIDER_CHARGE_CENTS, ACTIVITY_TYPES, ADMIN_EMAIL,
+  API_PROVIDERS, DEFAULT_API_PROVIDER, ACTIVITY_TYPES, ADMIN_EMAIL,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -1333,7 +1333,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         providerId: metaProvider,
         model: data.model || API_PROVIDERS[metaProvider].defaultModel,
         usage: data.usage,
-        walletChargeCents: data.wallet?.charge_cents ?? AI_PROVIDER_CHARGE_CENTS[metaProvider],
+        walletChargeCents: data.wallet?.charge_cents ?? 0,
       });
       try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted by wrapper */ }
     } catch (err) {

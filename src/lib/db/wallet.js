@@ -52,12 +52,13 @@ export async function getMyWallet() {
   return normalizeWallet(data);
 }
 
-export async function adminGrantWallet({ email, amountCents, note }) {
+export async function adminGrantWallet({ email, amountCents, note, requestId }) {
   const { data, error } = await supabase.functions.invoke('admin-wallet-grant', {
     body: {
       email,
       amount_cents: amountCents,
       note: note || '',
+      request_id: requestId || '',
     },
   });
   if (error) {

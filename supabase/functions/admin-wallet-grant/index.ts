@@ -51,12 +51,13 @@ Deno.serve(async (req) => {
   if (whoErr || !user) return json({ error: "unauthorized" }, 401);
   if ((user.email || "").toLowerCase() !== ADMIN_EMAIL.toLowerCase()) return json({ error: "forbidden" }, 403);
 
-  let body: { email?: string; amount_cents?: number; note?: string };
+  let body: { email?: string; amount_cents?: number; note?: string; request_id?: string };
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
 
   const email = (body.email || "").trim().toLowerCase();
   const amountCents = Math.round(Number(body.amount_cents) || 0);
   const note = (body.note || "").trim().slice(0, 200);
+  const clientRequestId = (body.request_id || "").trim().slice(0, 120);
   if (!EMAIL_RE.test(email) || amountCents <= 0 || amountCents > MAX_GRANT_CENTS) {
     return json({ error: "bad_input" }, 400);
   }
@@ -80,6 +81,25 @@ Deno.serve(async (req) => {
     .single();
   if (readErr) return json({ error: "wallet_read_failed", detail: readErr.message }, 500);
 
+  const requestId = clientRequestId || `admin-grant:${target.id}:${crypto.randomUUID()}`;
+  const { data: existingLedger, error: existingErr } = await admin
+    .from("wallet_ledger")
+    .select("request_id, amount_cents, balance_after_cents")
+    .eq("user_id", target.id)
+    .eq("request_id", requestId)
+    .maybeSingle();
+  if (existingErr) return json({ error: "ledger_read_failed", detail: existingErr.message }, 500);
+  if (existingLedger) {
+    return json({
+      ok: true,
+      duplicate: true,
+      user: { id: target.id, email },
+      wallet: { balance_cents: existingLedger.balance_after_cents, currency: wallet?.currency || CURRENCY },
+      ledger: { request_id: existingLedger.request_id, amount_cents: existingLedger.amount_cents },
+    });
+  }
+
+  const balanceBefore = Number(wallet?.balance_cents || 0);
   const balanceAfter = Number(wallet?.balance_cents || 0) + amountCents;
   const { error: updateErr } = await admin
     .from("wallets")
@@ -87,12 +107,11 @@ Deno.serve(async (req) => {
     .eq("user_id", target.id);
   if (updateErr) return json({ error: "wallet_update_failed", detail: updateErr.message }, 500);
 
-  const requestId = `admin-grant:${target.id}:${crypto.randomUUID()}`;
   const { error: ledgerErr } = await admin
     .from("wallet_ledger")
     .insert({
       user_id: target.id,
-      kind: "admin_grant",
+      kind: "welcome_grant",
       amount_cents: amountCents,
       balance_after_cents: balanceAfter,
       provider: "admin",
@@ -103,7 +122,13 @@ Deno.serve(async (req) => {
         note: note || null,
       },
     });
-  if (ledgerErr) return json({ error: "ledger_insert_failed", detail: ledgerErr.message }, 500);
+  if (ledgerErr) {
+    await admin
+      .from("wallets")
+      .update({ balance_cents: balanceBefore, currency: wallet?.currency || CURRENCY })
+      .eq("user_id", target.id);
+    return json({ error: "ledger_insert_failed", detail: ledgerErr.message }, 500);
+  }
 
   return json({
     ok: true,

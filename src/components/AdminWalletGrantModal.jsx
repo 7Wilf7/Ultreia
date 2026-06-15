@@ -47,6 +47,7 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
   const [amount, setAmount] = useState("");
   const [requests, setRequests] = useState([]);
   const [selectedRequestId, setSelectedRequestId] = useState("");
+  const [manualRequestId, setManualRequestId] = useState(() => crypto.randomUUID?.() || `${Date.now()}`);
   const [busy, setBusy] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [msg, setMsg] = useState("");
@@ -54,6 +55,7 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
   const amountNumber = Number(amount);
   const amountCents = Number.isFinite(amountNumber) ? Math.round(amountNumber * 100) : 0;
   const canSubmit = email.trim() && amountCents > 0 && !busy;
+  const selectedRequest = requests.find(req => req.id === selectedRequestId) || null;
 
   const loadRequests = useCallback(async () => {
     setLoadingRequests(true);
@@ -97,6 +99,7 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
       const res = await wallet.adminGrantWallet({
         email: email.trim(),
         amountCents,
+        requestId: selectedRequestId ? `payment-reminder:${selectedRequestId}` : `manual:${manualRequestId}`,
       });
       if (selectedRequestId) {
         await pushInbox.deleteOne(selectedRequestId).catch(() => {});
@@ -108,6 +111,7 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
       setEmail("");
       setAmount("");
       setSelectedRequestId("");
+      setManualRequestId(crypto.randomUUID?.() || `${Date.now()}`);
       loadRequests();
       onGranted?.();
     } catch (e) {
@@ -117,6 +121,24 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
           ? "wallet.admin_grant_forbidden"
           : "wallet.admin_grant_failed";
       setMsg(t(key, { msg: e?.message || String(e) }));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function dismissSelectedRequest() {
+    if (!selectedRequestId || busy) return;
+    setBusy(true);
+    setMsg("");
+    try {
+      await pushInbox.deleteOne(selectedRequestId);
+      setSelectedRequestId("");
+      setEmail("");
+      setAmount("");
+      setMsg(t("wallet.admin_payment_dismissed"));
+      loadRequests();
+    } catch (e) {
+      setMsg(t("wallet.admin_payment_dismiss_failed", { msg: e?.message || String(e) }));
     } finally {
       setBusy(false);
     }
@@ -228,6 +250,17 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
               style={{ ...s.input, fontFamily: "var(--font-mono)" }}
             />
           </label>
+
+          {selectedRequest && (
+            <button
+              type="button"
+              onClick={dismissSelectedRequest}
+              disabled={busy}
+              style={{ ...s.btnGhost, width: "100%", marginBottom: 12, opacity: busy ? 0.65 : 1 }}
+            >
+              {t("wallet.admin_payment_dismiss")}
+            </button>
+          )}
 
           {msg && (
             <div style={{

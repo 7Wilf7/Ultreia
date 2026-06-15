@@ -22,6 +22,13 @@ function ledgerLabel(t, kind) {
   return t(`wallet.ledger_${kind || "unknown"}`);
 }
 
+function walletLedgerLabel(t, row) {
+  if (row?.kind === "welcome_grant" && String(row.provider || row.metadata?.provider || "").toLowerCase() === "admin") {
+    return t("wallet.ledger_admin_grant");
+  }
+  return ledgerLabel(t, row?.kind);
+}
+
 function ledgerProviderLabel(row) {
   if (row?.kind !== "ai_charge") return "";
   const provider = String(row.provider || row.metadata?.provider || "").toLowerCase();
@@ -52,6 +59,39 @@ function filterLedgerByPeriod(ledger, periodId) {
     const ts = row?.createdAt ? new Date(row.createdAt).getTime() : NaN;
     return Number.isFinite(ts) && ts >= cutoff;
   });
+}
+
+function PricingInfo() {
+  const t = useT();
+  const rows = [
+    { title: t("wallet.pricing_deepseek_title"), body: t("wallet.pricing_deepseek_body") },
+    { title: t("wallet.pricing_claude_title"), body: t("wallet.pricing_claude_body") },
+    { title: t("wallet.pricing_weather_title"), body: t("wallet.pricing_weather_body") },
+  ];
+  return (
+    <div style={{
+      border: "1px solid var(--rule)",
+      borderRadius: 8,
+      padding: "11px 12px",
+      background: "var(--bg-elevated)",
+      marginBottom: 14,
+      fontSize: 12,
+      lineHeight: 1.55,
+      color: "var(--ink-2)",
+    }}>
+      <div style={{ fontWeight: 700, color: "var(--ink-1)", marginBottom: 8 }}>
+        {t("wallet.pricing_title")}
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {rows.map((row) => (
+          <div key={row.title}>
+            <div style={{ fontWeight: 700, color: "var(--ink-1)", marginBottom: 2 }}>{row.title}</div>
+            <div>{row.body}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 async function imageUrlToPngDataUrl(url) {
@@ -298,23 +338,7 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
         </div>
       </div>
 
-      {showInfo && (
-        <div style={{
-          border: "1px solid var(--rule)",
-          borderRadius: 8,
-          padding: "11px 12px",
-          background: "var(--bg-elevated)",
-          marginBottom: 14,
-          fontSize: 12,
-          lineHeight: 1.6,
-          color: "var(--ink-2)",
-        }}>
-          <div style={{ fontWeight: 700, color: "var(--ink-1)", marginBottom: 4 }}>
-            {t("wallet.pricing_title")}
-          </div>
-          <div>{t("wallet.pricing_body")}</div>
-        </div>
-      )}
+      {showInfo && <PricingInfo />}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
         <button type="button" onClick={topUp} style={{ ...s.btn, flex: 1 }}>
@@ -389,7 +413,7 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
                   whiteSpace: "nowrap",
                   textOverflow: "ellipsis",
                 }}>
-                  {providerLabel ? `${ledgerLabel(t, row.kind)} · ${providerLabel}` : ledgerLabel(t, row.kind)}
+                  {providerLabel ? `${walletLedgerLabel(t, row)} · ${providerLabel}` : walletLedgerLabel(t, row)}
                 </div>
                 <div style={{ ...s.muted, fontSize: 11, marginTop: 2 }}>{formatTime(row.createdAt)}</div>
               </div>

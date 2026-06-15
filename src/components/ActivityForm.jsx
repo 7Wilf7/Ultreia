@@ -129,12 +129,15 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const showDistance = (isRun && form.type !== "Floor Climbing") || isCycling || isSwimming;
   // Ascent: all Run-group types + Cycling (road climbing). Swimming has none.
   const showAscent = isRun || isCycling;
+  const formDurationSec = (parseInt(form.durationH) || 0) * 3600
+    + (parseInt(form.durationM) || 0) * 60
+    + (parseInt(form.durationS) || 0);
 
   // Weather toggle is offered ONLY when Caiyun could actually return weather for
-  // this moment: now / past 24h / future. A session older than 24h has no
-  // usable Caiyun data, so we hide the toggle entirely (any type — strength
-  // done outdoors counts too). No start time + today's date counts as "now".
-  const weatherEligible = weatherWindowEligible({ startedAt: form.startedAtLocal, date: form.date });
+  // this moment: now / past 24h / future. Ultra sessions that overlap the past
+  // 24h can still get the recent part of their weather range. No start time +
+  // today's date counts as "now".
+  const weatherEligible = weatherWindowEligible({ startedAt: form.startedAtLocal, date: form.date, durationSec: formDurationSec });
 
   const pickedPace = isRoadRun ? (form.subTypes.find(t => RUN_PACE_TYPES.includes(t)) || "") : "";
   const pickedFlags = isRun ? form.subTypes.filter(t => RUN_FLAGS.includes(t)) : [];
@@ -176,9 +179,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
 
   function handleSave() {
     if (!form.date) { alert(t("form.alert_date")); return; }
-    const dur = (parseInt(form.durationH) || 0) * 3600
-      + (parseInt(form.durationM) || 0) * 60
-      + (parseInt(form.durationS) || 0);
+    const dur = formDurationSec;
     if (!dur) { alert(t("form.alert_duration")); return; }
     if (form.type === "Strength" && form.subTypes.length === 0) {
       alert(t("form.alert_body"));

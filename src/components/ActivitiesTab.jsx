@@ -646,7 +646,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           {/* Weather toggle — only when at least one selected row falls inside
               Caiyun's 24h window (older rows can't get weather). Uses the FIT's
               own GPS for location; default on. */}
-          {parsedRows.some(r => r._selected && weatherWindowEligible({ startedAt: r.startedAt, date: r.date })) && (
+          {parsedRows.some(r => r._selected && weatherWindowEligible({ startedAt: r.startedAt, date: r.date, durationSec: r.duration })) && (
             <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0", cursor: "pointer" }}>
               <input type="checkbox" checked={importWeather}
                 onChange={e => setImportWeather(e.target.checked)}

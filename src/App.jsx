@@ -608,9 +608,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // fetchWeather is the user's per-entry choice (default on for outdoor,
         // off for indoor). Undefined (older callers) → treat as on for back-compat.
         // Only fetch when (a) the user left the toggle on and (b) Caiyun has
-        // data for this moment (now / past 24h / future). A >24h-old session
-        // would otherwise get current weather wrongly stamped on it.
-        const wantWeather = workoutData.fetchWeather !== false && weatherWindowEligible(workoutData);
+        // data for this session: now / past 24h / future, plus the recent
+        // overlapping segment of an ultra-length session. We never stamp
+        // current weather onto an old workout.
+        const wantWeather = workoutData.fetchWeather !== false && weatherWindowEligible({ ...workoutData, durationSec: workoutData.duration || 0 });
         if (source === "manual" && wantWeather && !workoutData.weather && !workoutData.isPlanned) {
           const weather = await captureWeatherForNewWorkout(workoutData);
           if (weather) payload = { ...workoutData, weather };
@@ -681,14 +682,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         if (replacePlannedDates) await db.workouts.deletePlannedOnDates(planDates);
         let toInsert = workouts;
         // FIT import can request weather for rows that fall inside Caiyun's
-        // window (now / past 24h). Use the FIT's own GPS start point for the
-        // location (more accurate than current GPS — you may upload from home a
-        // run done elsewhere); fall back to the saved default location when a
-        // row has no GPS (e.g. pool swim). Rows older than 24h are skipped by
-        // weatherWindowEligible, so a bulk historical import does no fetching.
+        // window (now / past 24h), or long rows whose tail overlaps that
+        // window. Use the FIT's own GPS start point for the location; fall back
+        // to the saved default location when a row has no GPS.
         if (fetchWeather) {
           toInsert = await Promise.all(workouts.map(async (w) => {
-            if (w.weather || !weatherWindowEligible(w)) return w;
+            if (w.weather || !weatherWindowEligible({ ...w, durationSec: w.duration || 0 })) return w;
             const start = Array.isArray(w.gpsTrack) && w.gpsTrack.length ? w.gpsTrack[0] : null;
             const lng = start ? start[1] : defaultLocation.lng;
             const lat = start ? start[0] : defaultLocation.lat;

@@ -66,7 +66,7 @@ export const DATA_LABELS = {
     recent: "[Recent Activities (last 10) — RPE=1–10 effort; note=runner's comment; weather=at training time]",
     dayNotes: "[Day Notes — recovery/context flags]",
     adherence: "[Plan Adherence — last 14d, planned vs done/missed/skipped]",
-    upcoming: "[Upcoming Planned Sessions — next ~21 days; assess feasibility; forecast attached when within 7d]",
+    upcoming: "[Planned Sessions — today/future only; planned means scheduled, NOT completed; forecast attached when within 7d]",
     focus: "[Coaching Focus This Message — conditions that fired right now; weight these in your reply]",
     none: "None",
     priorityTag: (p) => `[Priority ${p}]`,
@@ -84,7 +84,7 @@ export const DATA_LABELS = {
     recent: "[近期活动（最近 10 条）—— RPE=1–10 自觉用力；note=跑者备注；weather=训练当时天气]",
     dayNotes: "[当日标记 —— 恢复/状态标记]",
     adherence: "[计划依从 —— 近 14 天，计划 vs 完成/漏掉/主动跳过]",
-    upcoming: "[未来计划训练 —— 接下来约 21 天；评估可行性；7 天内附当天预报]",
+    upcoming: "[计划训练 —— 仅今天/未来；planned 表示已安排，不代表已完成；7 天内附当天预报]",
     focus: "[本次教练重点 —— 当前触发的条件，回复时重点权衡这些]",
     none: "无",
     priorityTag: (p) => `[${p} 级目标]`,
@@ -505,16 +505,24 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   // 7-day forecast horizon). Forecast is attached only when available for that
   // date (≤7d out). Decoupling this from forecastByDate fixed the old bug where
   // the whole plan block vanished whenever weather was unavailable.
-  const todayMs = now.getTime();
+  const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+  const todayMs = startToday.getTime();
   const twentyOneDaysMs = 21 * DAY_MS;
   const upcomingPlans = logs.filter(l => l.isPlanned && l.date)
     .filter(l => {
       const planMs = new Date(`${l.date}T00:00:00`).getTime();
-      return planMs >= todayMs - 12 * 60 * 60 * 1000 && planMs <= todayMs + twentyOneDaysMs;
+      return planMs >= todayMs && planMs <= todayMs + twentyOneDaysMs;
     })
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
     .map(l => {
-      const planParts = [`${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`];
+      const isTodayPlan = l.date === formatLocalDateTime(now).slice(0, 10);
+      const tod = l.startedAt ? new Date(l.startedAt).getHours() < 12 ? "AM" : "PM" : "";
+      const status = isTodayPlan
+        ? (tod === "PM" && now.getHours() < 18
+          ? "scheduled later today, NOT completed yet"
+          : "scheduled today, NOT completed unless a completed workout also appears in Recent Activities")
+        : "future planned, NOT completed";
+      const planParts = [`${l.date}${tod ? ` ${tod}` : ""} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`, `[${status}]`];
       if (l.distance > 0) planParts.push(`${l.distance}km`);
       if (l.ascent > 0) planParts.push(`+${l.ascent}m`);
       if (l.planDetail?.speed > 0) planParts.push(`${l.planDetail.speed}km/h`);
@@ -645,7 +653,7 @@ export function buildPromptSkeleton(lang = "en") {
     "[Recent Activities (last 10)] with RPE / notes / weather",
     "[Recent Day Notes] recovery / sick / mobility",
     "[Plan Adherence — last 14d planned vs done/missed/skipped]",
-    "[Upcoming Planned Sessions — next ~21 days]",
+    "[Planned Sessions — today/future only; planned means scheduled, not completed]",
     "[Coaching Focus — periodization / heat / load / missed-session cues that fired]",
   ].join("\n");
 }

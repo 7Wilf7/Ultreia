@@ -1133,6 +1133,18 @@ function AppShell({
   const [chatLoading, setChatLoading] = useState(false);
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
+  const [planImportCache, setPlanImportCache] = useState(() => {
+    try {
+      const raw = localStorage.getItem("ts.coachPlanImportCache.v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("ts.coachPlanImportCache.v1", JSON.stringify(planImportCache)); } catch { /* ignore cache write failure */ }
+  }, [planImportCache]);
   // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
   // so it survives a tab switch — the nudge re-opens when the user returns.
   const [coachHintsPending, setCoachHintsPending] = useState(null);
@@ -1511,7 +1523,11 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
   //    JSON array, then open the review modal. Tagged by message id (not
   //    index, since indices shift across re-renders) so AICoachTab can
   //    show per-message extraction state.
-  async function importToCalendar(assistantContent, msgId) {
+  async function importToCalendar(assistantContent, msgId, { force = false } = {}) {
+    if (!force && msgId && planImportCache[msgId]?.plans?.length) {
+      setPlanProposal({ msgId, assistantContent, plans: planImportCache[msgId].plans });
+      return;
+    }
     const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
     const endpointUrl = apiProvider === "claude"
       ? getEndpointUrl("claude", claudeEndpointId)
@@ -1522,7 +1538,7 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       return;
     }
     setExtractingForMsgId(msgId);
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = localDateKey(now);
     const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
     const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
     const extractPrompt = `You are a structured-data extractor. The user's AI running coach just produced the reply below. Extract any concrete training suggestions into a JSON array.
@@ -1543,7 +1559,6 @@ Output a JSON array. Each item:
   "speed": number (km/h, cycling target, optional),
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
-  "subTypeDurations": { "Upper Body": number, "Lower Body": number, "Core": number } (MINUTES per area; Strength only, optional),
   "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/afternoon/下午/晚上),
   "notes": string (brief — optional)
 }
@@ -1556,7 +1571,7 @@ Rules:
   - Floor Climbing: "ascent" only.
   - Cycling: "distance" and "speed" (km/h) when given.
   - Swimming: "duration" only.
-  - Strength: "subTypes" = area(s) ("Upper Body"/"Lower Body"/"Core"); when the coach gives per-area minutes, emit "subTypeDurations" mapping each area to its minutes.
+  - Strength: "subTypes" = area(s) ("Upper Body"/"Lower Body"/"Core"). Do NOT invent per-area minutes.
   - HIIT: emit ONLY "timeOfDay" (and notes); no distance/duration.
 - A heart-rate zone may go in notes as "Z1".."Z5" when the coach names one.
 - Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
@@ -1593,7 +1608,8 @@ Rules:
         alert(t("coach.import_no_plans"));
         return;
       }
-      setPlanProposal({ plans });
+      if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans } }));
+      setPlanProposal({ msgId, assistantContent, plans });
     } catch (err) {
       console.error("[AI Coach] Plan-extract error:", err);
       alert(t("coach.network_error", { msg: err.message, url: endpointUrl }));
@@ -1608,6 +1624,13 @@ Rules:
     // alert (which used to compete with a possible later failure alert).
     bulkAddLogs(workouts, { source: "ai_coach_plan", replacePlannedDates: true });
     setPlanProposal(null);
+  }
+
+  function reExtractPlanProposal() {
+    if (!planProposal?.msgId || !planProposal?.assistantContent) return;
+    const { msgId, assistantContent } = planProposal;
+    setPlanProposal(null);
+    importToCalendar(assistantContent, msgId, { force: true });
   }
 
   function confirmCoachReviewPrompt() {
@@ -2045,6 +2068,7 @@ Rules:
           plans={planProposal.plans}
           onConfirm={confirmImportPlans}
           onCancel={() => setPlanProposal(null)}
+          onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}
         />
       )}
 

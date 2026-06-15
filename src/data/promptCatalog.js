@@ -48,7 +48,6 @@ Output a JSON array. Each item:
   "speed": number (km/h, cycling target, optional),
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional),
-  "subTypeDurations": { "Upper Body": number, "Lower Body": number, "Core": number } (MINUTES per area; Strength only, optional),
   "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/afternoon/下午/晚上),
   "notes": string (brief — optional)
 }
@@ -61,7 +60,7 @@ Rules:
   - Floor Climbing: "ascent" only.
   - Cycling: "distance" + "speed" (km/h) when given.
   - Swimming: "duration" only.
-  - Strength: "subTypes" = area(s); per-area minutes → "subTypeDurations".
+  - Strength: "subTypes" = area(s); do NOT invent per-area minutes.
   - HIIT: ONLY "timeOfDay" (+ notes); no distance/duration.
 - HR zone may go in notes as "Z1".."Z5".
 - Skip vague advice, past references, analysis-only text. Rest days get NO entry.
@@ -120,7 +119,7 @@ const DATA_BLOCK_SECTIONS = `每条消息实时拼上的你的数据（有内容
 [Recent Activities (last 10)] 最近 10 条训练（RPE / 备注 / 当时天气）
 [Day Notes] 最近 21 天当日标记
 [Plan Adherence] 近 14 天计划 vs 完成/部分/漏/跳过
-[Upcoming Planned Sessions] 未来约 21 天计划（距离/爬升/速度/力量分部位/预报）
+[Planned Sessions] 今天和未来约 21 天计划（只代表已安排，不代表已完成；距离/爬升/速度/预报）
 [Coaching Focus This Message] 本次触发的周期/热适应/负荷/漏练提醒`;
 
 // Each entry: { id, title, when, source, blocks: [{ label, text }] }

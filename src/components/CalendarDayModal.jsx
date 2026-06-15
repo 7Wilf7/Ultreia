@@ -20,7 +20,7 @@ import { evaluatePlanOutcome } from "../utils/planMatch";
 //   Floor Climbing  → ascent
 //   Cycling         → distance + speed
 //   Swimming        → duration
-//   Strength        → body area(s) + per-area minutes
+//   Strength        → body area(s)
 //   HIIT            → time-of-day only
 export function planFields(type) {
   return {
@@ -157,7 +157,6 @@ export function CalendarDayModal({
   const [planRunType, setPlanRunType] = useState("");      // Road Run: Easy/Aerobic/Tempo/Interval
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
-  const [planPartDurations, setPlanPartDurations] = useState({}); // strength: { area: minutes-string }
   const [editingId, setEditingId] = useState(null);
   // Long-press a workout row → a centered Edit/Delete action card (same
   // pattern as the Training list's ItemActionModal). actionTarget = the log.
@@ -183,11 +182,6 @@ export function CalendarDayModal({
 
   function togglePlanSub(sub) {
     setPlanSubTypes(prev => prev.includes(sub) ? prev.filter(x => x !== sub) : [...prev, sub]);
-    // Drop a per-area duration when its area is unchecked.
-    setPlanPartDurations(prev => {
-      if (!prev[sub]) return prev;
-      const next = { ...prev }; delete next[sub]; return next;
-    });
   }
 
   function resetPlanForm() {
@@ -199,7 +193,6 @@ export function CalendarDayModal({
     setPlanRunType("");
     setPlanTimeOfDay("");
     setPlanSubTypes([]);
-    setPlanPartDurations({});
     setEditingId(null);
   }
 
@@ -215,10 +208,16 @@ export function CalendarDayModal({
     setPlanRunType(l.type === "Road Run" ? (subs.find(s => RUN_PACE_TYPES.includes(s)) || "") : "");
     setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
     setPlanSubTypes(subs);
-    const pd = l.planDetail?.subTypeDurations || {};
-    setPlanPartDurations(Object.fromEntries(Object.entries(pd).map(([k, v]) => [k, String(v)])));
     setActionTarget(null);
     setPanel("plan");
+  }
+
+  function needsBackfillConfirm() {
+    if (editingId) return false;
+    const today = new Date();
+    const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (dateKey < todayKey) return true;
+    return dateKey === todayKey && today.getHours() >= 12 && planTimeOfDay === "am";
   }
 
   async function savePlan() {
@@ -235,14 +234,6 @@ export function CalendarDayModal({
       subTypes = planRunType ? [planRunType] : [];
     } else if (f.strength) {
       subTypes = planSubTypes;
-      const parts = {};
-      let total = 0;
-      for (const area of planSubTypes) {
-        const m = Math.round(parseFloat(planPartDurations[area]) || 0);
-        if (m > 0) { parts[area] = m; total += m; }
-      }
-      if (Object.keys(parts).length) planDetail = { subTypeDurations: parts };
-      durSec = total * 60; // total drives duration-based completion
     }
     if (f.speed && speedNum > 0) planDetail = { ...(planDetail || {}), speed: speedNum };
 
@@ -253,6 +244,7 @@ export function CalendarDayModal({
       alert(t("calendar.plan_empty_warning"));
       return;
     }
+    if (needsBackfillConfirm() && !window.confirm(t("calendar.plan_backfill_confirm"))) return;
     const payload = {
       type: planType,
       subTypes,
@@ -445,12 +437,10 @@ export function CalendarDayModal({
                 );
               })}
             </div>
-            {isFuture && (
-              <button onClick={() => setPanel("plan")}
-                style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
-                {t("calendar.add_short")}
-              </button>
-            )}
+            <button onClick={() => setPanel("plan")}
+              style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
+              {t("calendar.add_short")}
+            </button>
           </div>
         ) : (
           <div style={{
@@ -460,12 +450,10 @@ export function CalendarDayModal({
             <span style={{ color: "var(--ink-3)", fontSize: 13, fontFamily: "var(--font-mono)" }}>
               {isFuture ? t("calendar.empty_future") : t("calendar.empty_past")}
             </span>
-            {isFuture && (
-              <button onClick={() => setPanel("plan")}
-                style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
-                {t("calendar.add_short")}
-              </button>
-            )}
+            <button onClick={() => setPanel("plan")}
+              style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
+              {t("calendar.add_short")}
+            </button>
           </div>
         )}
 
@@ -617,11 +605,11 @@ export function CalendarDayModal({
                     </div>
                   )}
                 </div>
-                {/* Strength: area(s) + per-area minutes (e.g. Upper 20 / Core 10). */}
+                {/* Strength: area(s). */}
                 {planF.strength && (
                   <div style={{ marginBottom: 12 }}>
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 6 }}>{t("calendar.plan_strength_area")}</div>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: planSubTypes.length ? 10 : 0 }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {STRENGTH_SUBS.map(sub => (
                         <button key={sub} type="button" onClick={() => togglePlanSub(sub)}
                           style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "6px 12px", fontSize: 13 }}>
@@ -629,16 +617,6 @@ export function CalendarDayModal({
                         </button>
                       ))}
                     </div>
-                    {planSubTypes.map(area => (
-                      <div key={area} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                        <span style={{ ...s.muted, fontSize: 12, width: 90, flexShrink: 0 }}>{t(`enum.subtype.${area}`)}</span>
-                        <input type="number" step="5" min="0" value={planPartDurations[area] || ""}
-                          onChange={e => setPlanPartDurations(prev => ({ ...prev, [area]: e.target.value }))}
-                          placeholder="—"
-                          style={{ ...s.input, padding: "6px 10px", fontSize: 13, width: 90 }} />
-                        <span style={{ ...s.muted, fontSize: 12 }}>{t("calendar.plan_part_minutes")}</span>
-                      </div>
-                    ))}
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

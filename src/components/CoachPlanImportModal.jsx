@@ -16,12 +16,6 @@ function buildDraft(p, idx) {
   const type = ACTIVITY_TYPES.includes(p.type) ? p.type : "Road Run";
   const f = planFields(type);
   const subs = Array.isArray(p.subTypes) ? p.subTypes : [];
-  const partDurations = {};
-  if (f.strength && p.subTypeDurations && typeof p.subTypeDurations === "object") {
-    for (const [k, v] of Object.entries(p.subTypeDurations)) {
-      if (STRENGTH_SUBS.includes(k)) partDurations[k] = String(v);
-    }
-  }
   return {
     _id: `proposal-${idx}`,
     _selected: true,
@@ -33,10 +27,14 @@ function buildDraft(p, idx) {
     durationMin: f.duration && p.duration != null ? String(p.duration) : "",
     runType: f.runType ? (subs.find(st => RUN_PACE_TYPES.includes(st)) || "") : "",
     subTypes: f.strength ? subs.filter(st => STRENGTH_SUBS.includes(st)) : [],
-    partDurations,
     timeOfDay: (p.timeOfDay === "am" || p.timeOfDay === "pm") ? p.timeOfDay : "",
     notes: p.notes || "",
   };
+}
+
+function compactDateLabel(date) {
+  const m = String(date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[2]}-${m[3]}` : (date || "—");
 }
 
 function parseAscentMeters(notes) {
@@ -45,7 +43,7 @@ function parseAscentMeters(notes) {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
+export function CoachPlanImportModal({ plans, onConfirm, onCancel, onReExtract }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [items, setItems] = useState(() => plans.map(buildDraft));
@@ -85,14 +83,6 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
         subTypes = it.runType ? [it.runType] : [];
       } else if (f.strength) {
         subTypes = it.subTypes || [];
-        const parts = {};
-        let total = 0;
-        for (const area of subTypes) {
-          const m = Math.round(parseFloat(it.partDurations?.[area]) || 0);
-          if (m > 0) { parts[area] = m; total += m; }
-        }
-        if (Object.keys(parts).length) planDetail = { subTypeDurations: parts };
-        durationMin = total;
       }
       if (f.speed && speed > 0) planDetail = { ...(planDetail || {}), speed };
       return {
@@ -151,6 +141,12 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
         <div style={{ ...s.muted, marginTop: 10, lineHeight: 1.5, fontSize: 13 }}>
           {t("coach.import_modal_hint")}
         </div>
+        {onReExtract && (
+          <button onClick={onReExtract} disabled={importing}
+            style={{ ...s.btnGhost, marginTop: 10, minHeight: 0, padding: "6px 10px", fontSize: 12, opacity: importing ? 0.5 : 1 }}>
+            {t("coach.import_reextract")}
+          </button>
+        )}
 
         <div style={{ height: 1, background: "var(--rule)", margin: "16px 0" }} />
 
@@ -220,14 +216,22 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                       metric inputs switch per type (planFields). */}
                   <div style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                    gridTemplateColumns: "86px minmax(126px, 1fr) 72px",
                     gap: 8,
+                    alignItems: "end",
                   }}>
                     <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.date")}</div>
-                      <input type="date" value={it.date}
-                        onChange={e => patch(it._id, { date: e.target.value })}
-                        style={{ ...s.input, padding: "5px 8px", fontSize: 12 }} />
+                      <label style={{ display: "block", position: "relative" }}>
+                        <input type="date" value={it.date}
+                          onChange={e => patch(it._id, { date: e.target.value })}
+                          style={{ ...s.input, padding: "5px 7px", height: 30, fontSize: 12, color: "transparent", caretColor: "transparent" }} />
+                        <span style={{
+                          position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
+                          pointerEvents: "none", fontFamily: "var(--font-mono)", fontSize: 12,
+                          color: it.date ? "var(--ink-1)" : "var(--ink-3)",
+                        }}>{compactDateLabel(it.date)}</span>
+                      </label>
                     </div>
                     <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
@@ -236,6 +240,8 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                         options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
                         value={it.type}
                         onChange={(v) => patch(it._id, { type: v })}
+                        fontSize={12}
+                        triggerStyle={{ padding: "5px 8px", height: 30, minHeight: 0, fontSize: 12 }}
                       />
                     </div>
                     <div>
@@ -249,6 +255,8 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                         ]}
                         value={it.timeOfDay}
                         onChange={(v) => patch(it._id, { timeOfDay: v })}
+                        fontSize={12}
+                        triggerStyle={{ padding: "5px 7px", height: 30, minHeight: 0, fontSize: 12 }}
                       />
                     </div>
                     {f.distance && (
@@ -291,7 +299,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                     )}
                   </div>
 
-                  {/* Road Run: run type. Strength: area(s) + per-area minutes. */}
+                  {/* Road Run: run type. Strength: area(s). */}
                   {f.runType && (
                     <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
                       {RUN_PACE_TYPES.map(rt => {
@@ -315,9 +323,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                             <button key={sub} type="button"
                               onClick={() => {
                                 const nextSubs = on ? it.subTypes.filter(x => x !== sub) : [...(it.subTypes || []), sub];
-                                const nextParts = { ...(it.partDurations || {}) };
-                                if (on) delete nextParts[sub];
-                                patch(it._id, { subTypes: nextSubs, partDurations: nextParts });
+                                patch(it._id, { subTypes: nextSubs });
                               }}
                               style={{ ...s.chip(on), minHeight: 0, padding: "4px 10px", fontSize: 12 }}>
                               {t(`enum.subtype.${sub}`)}
@@ -325,16 +331,6 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel }) {
                           );
                         })}
                       </div>
-                      {(it.subTypes || []).map(area => (
-                        <div key={area} style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
-                          <span style={{ ...s.muted, fontSize: 11, width: 84, flexShrink: 0 }}>{t(`enum.subtype.${area}`)}</span>
-                          <input type="number" step="5" min="0" value={(it.partDurations || {})[area] || ""}
-                            onChange={e => patch(it._id, { partDurations: { ...(it.partDurations || {}), [area]: e.target.value } })}
-                            placeholder="—"
-                            style={{ ...s.input, padding: "4px 8px", fontSize: 12, width: 76 }} />
-                          <span style={{ ...s.muted, fontSize: 11 }}>{t("calendar.plan_part_minutes")}</span>
-                        </div>
-                      ))}
                     </div>
                   )}
                 </div>

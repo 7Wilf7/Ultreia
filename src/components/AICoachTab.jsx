@@ -1018,7 +1018,7 @@ export function AICoachTab({
                 const displayContent = parsedMessage.text;
                 const costMeta = parsedMessage.meta;
                 const usage = costMeta?.usage;
-                const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton;
+                const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton !== false;
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
                 return (

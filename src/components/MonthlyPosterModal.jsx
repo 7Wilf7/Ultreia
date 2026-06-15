@@ -477,23 +477,24 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, markSrc }) {
   const inner = W - M * 2;
 
   // Vertical anchors as fractions of H — keeps the composition coherent across crops.
-  const yTitle = H * 0.108;
-  const ySub = H * 0.143;
-  const yHeadRule = H * 0.178;
-  const yKick = H * 0.262;
-  const yHero = H * 0.452;
-  const spineTop = H * 0.527;
-  const spineBot = H * 0.745;
-  const yHair = H * 0.788;
-  const yML = H * 0.816;
-  const yMV = H * 0.853;
+  const compactSingle = stats.mode === "single" && stats.weatherLine;
+  const yTitle = H * (compactSingle ? 0.092 : 0.108);
+  const ySub = H * (compactSingle ? 0.127 : 0.143);
+  const yHeadRule = H * (compactSingle ? 0.160 : 0.178);
+  const yKick = H * (compactSingle ? 0.238 : 0.262);
+  const yHero = H * (compactSingle ? 0.420 : 0.452);
+  const spineTop = H * (compactSingle ? 0.492 : 0.527);
+  const spineBot = H * (compactSingle ? 0.710 : 0.745);
+  const yHair = H * (compactSingle ? 0.754 : 0.788);
+  const yML = H * (compactSingle ? 0.783 : 0.816);
+  const yMV = H * (compactSingle ? 0.820 : 0.853);
   const ySign = H * 0.940;
   const yUrl = H * 0.963;
 
   const heroStr = String(stats.heroValue);
   const heroSize = Math.min(H * 0.255, inner / (Math.max(heroStr.length, 1) * 0.50 + 0.7));
   const unitSize = heroSize * 0.26;
-  const logoSize = Math.round(W * 0.18);
+  const logoSize = Math.round(W * (ratio.key === "story" ? 0.20 : 0.18));
   const logoMargin = 28;
   const logoX = W - logoMargin - logoSize;
   const logoY = logoMargin;
@@ -628,7 +629,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, markSrc }) {
 
       {/* Weather detail line — temp / feels-like / humidity, under the metrics. */}
       {stats.weatherLine && (
-        <text x={W / 2} y={H * 0.892} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="26" letterSpacing="1" fill={pal.sub}>{stats.weatherLine}</text>
+        <text x={W / 2} y={H * 0.878} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="26" letterSpacing="1" fill={pal.sub}>{stats.weatherLine}</text>
       )}
 
       {/* Signature */}

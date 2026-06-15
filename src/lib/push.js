@@ -14,19 +14,26 @@
 import { Capacitor } from '@capacitor/core';
 import * as db from './db';
 
-let initialized = false;
+let initializedForUserId = "";
+const PUSH_TOKEN_STORAGE_KEY = "ultreia.push.fcmToken";
 
-export async function initPushNotifications() {
-  if (initialized) return;
+export async function initPushNotifications(userId) {
+  if (!userId) return;
+  if (initializedForUserId === userId) return;
   // Android-only for now. iOS would need APNs setup; web has no FCM token.
   if (Capacitor.getPlatform() !== 'android') return;
-  initialized = true;
+  initializedForUserId = userId;
 
   // Import lazily so the web bundle never pulls the native plugin shim into a
   // code path that runs on load.
   const { PushNotifications } = await import('@capacitor/push-notifications');
 
   PushNotifications.addListener('registration', (token) => {
+    try {
+      localStorage.setItem(PUSH_TOKEN_STORAGE_KEY, token.value);
+    } catch (err) {
+      console.warn('[push] token cache failed (non-fatal):', err);
+    }
     db.pushSubscriptions.upsertMyToken(token.value, 'android').catch((err) => {
       console.error('[push] token upsert failed:', err);
     });
@@ -61,6 +68,34 @@ export async function initPushNotifications() {
     }
     await PushNotifications.register();
   } catch (err) {
+    initializedForUserId = "";
     console.error('[push] init failed:', err);
+  }
+}
+
+export async function clearPushRegistrationForCurrentUser() {
+  if (Capacitor.getPlatform() !== 'android') return;
+  let token = "";
+  try {
+    token = localStorage.getItem(PUSH_TOKEN_STORAGE_KEY) || "";
+  } catch (err) {
+    console.warn('[push] token cache read failed (non-fatal):', err);
+  }
+  if (token) {
+    await db.pushSubscriptions.deleteMyToken(token).catch((err) => {
+      console.warn('[push] token delete failed:', err);
+    });
+  }
+  try {
+    localStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
+  } catch (err) {
+    console.warn('[push] token cache clear failed (non-fatal):', err);
+  }
+  initializedForUserId = "";
+  try {
+    const { PushNotifications } = await import('@capacitor/push-notifications');
+    await PushNotifications.removeAllListeners();
+  } catch (err) {
+    console.warn('[push] remove listeners failed (non-fatal):', err);
   }
 }

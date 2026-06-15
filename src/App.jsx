@@ -407,7 +407,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // internally so re-mounts don't stack listeners.
   useEffect(() => {
     if (!user?.id) return;
-    void initPushNotifications();
+    void initPushNotifications(user.id);
   }, [user.id]);
 
   // One-time cleanup: remove the legacy localStorage blob now that every

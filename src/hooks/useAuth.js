@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { registerWithInvite } from "../lib/db/invites";
+import { clearPushRegistrationForCurrentUser } from "../lib/push";
 
 const AUTH_REDIRECT_TO = "https://www.ultreia.run/";
 
@@ -63,6 +64,7 @@ export function useAuth() {
   }
 
   async function signOut() {
+    await clearPushRegistrationForCurrentUser();
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }

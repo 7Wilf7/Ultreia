@@ -16,6 +16,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const ADMIN_EMAIL = "wilf7wufan@gmail.com";
 const MAX_AMOUNT_CENTS = 1_000_000; // ¥10,000 guardrail.
 const PAYMENT_REQUEST_TITLE = "wallet_payment_request";
+const PAYMENT_REQUEST_TITLE_PREFIX = `${PAYMENT_REQUEST_TITLE}:`;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -135,12 +136,13 @@ Deno.serve(async (req) => {
     amount_cents: amountCents,
     created_at: new Date().toISOString(),
   };
+  const notifyBody = `${email} 提交 ${formatCny(amountCents)} 充值提醒`;
   const { data: inbox, error: inboxErr } = await admin
     .from("push_inbox")
     .insert({
       user_id: adminUser.id,
-      title: PAYMENT_REQUEST_TITLE,
-      body: JSON.stringify(payload),
+      title: `${PAYMENT_REQUEST_TITLE_PREFIX}${base64url(JSON.stringify(payload))}`,
+      body: notifyBody,
       read: false,
     })
     .select("id")
@@ -166,7 +168,7 @@ Deno.serve(async (req) => {
             accessToken,
             sub.fcm_token,
             "Ultreia 充值提醒",
-            `${email} 提交 ${formatCny(amountCents)} 充值提醒`,
+            notifyBody,
           );
           if (r.ok) sent += 1;
           else fcmErrors.push({ status: r.status, body: r.body });

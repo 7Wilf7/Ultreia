@@ -7,11 +7,37 @@ import { formatWalletAmount } from "../lib/db/wallet";
 import { ModalRoot } from "./ModalRoot";
 
 const PAYMENT_REQUEST_TITLE = "wallet_payment_request";
+const PAYMENT_REQUEST_TITLE_PREFIX = `${PAYMENT_REQUEST_TITLE}:`;
+
+function decodeBase64Url(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const bin = atob(padded);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
 
 function parsePaymentRequest(item) {
-  if (item?.title !== PAYMENT_REQUEST_TITLE) return null;
+  let payload = null;
+  if (item?.title?.startsWith(PAYMENT_REQUEST_TITLE_PREFIX)) {
+    try {
+      payload = JSON.parse(decodeBase64Url(item.title.slice(PAYMENT_REQUEST_TITLE_PREFIX.length)));
+    } catch {
+      payload = null;
+    }
+  } else if (item?.title === PAYMENT_REQUEST_TITLE) {
+    // Legacy reminders stored the structured payload directly in body, which
+    // made the normal inbox show JSON. Keep parsing them so old reminders still
+    // appear in the admin grant list.
+    try {
+      payload = JSON.parse(item.body || "{}");
+    } catch {
+      payload = null;
+    }
+  }
+  if (!payload) return null;
   try {
-    const payload = JSON.parse(item.body || "{}");
     const amountCents = Math.round(Number(payload.amount_cents) || 0);
     const email = String(payload.email || "").trim();
     if (!email || amountCents <= 0) return null;

@@ -10,6 +10,8 @@ import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
 import { productLogoUrl } from "../assets/logo";
+import markDayUrl from "../../resources/poster-mark-day.webp";
+import markNightUrl from "../../resources/poster-mark-night.webp";
 
 // url → Promise<dataUrl>, module-scoped so the fetch + base64 encode happens
 // once per session even across modal remounts. SVG <image> hrefs MUST be data
@@ -60,7 +62,7 @@ const THEMES = {
     sub: "#5f6250",
     hair: "#d2cbb7",
     accent: "#586340",
-    markOpacity: 0.20,
+    markOpacity: 0.18,
     vignetteA: 0.05,
     vignetteB: 0.15,
   },
@@ -70,13 +72,11 @@ const THEMES = {
     sub: "#aaa98c",
     hair: "#303426",
     accent: "#77825b",
-    markOpacity: 0.26,
+    markOpacity: 0.22,
     vignetteA: 0.16,
     vignetteB: 0.52,
   },
 };
-// The brand tick stays green on both finishes (the logo's path marker).
-const MARK_GREEN = "#74824b";
 const THEME_KEYS = ["day", "night"];
 
 const POSTER_MODES = ["single", "week", "month", "year", "all", "pr"];
@@ -174,25 +174,6 @@ function weatherDetail(w) {
   if (Number.isFinite(Number(feels))) parts.push(`FEELS ${Math.round(Number(feels))}°C`);
   if (Number.isFinite(rh)) parts.push(`RH ${rh}%`);
   return parts.length ? parts.join("  ·  ") : null;
-}
-
-// The brand mark drawn as bold vector: the logo's two overlapping mountain
-// peaks (thick open strokes), the two dots above the right shoulder (the
-// diaeresis), and the short green path-tick at the foot. Geometry is anchored
-// to W/H so it scales across crop ratios.
-function brandMarkGeometry(W, H) {
-  const base = H * 0.50;
-  const peaks = [
-    `M ${(W * 0.16).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.40).toFixed(0)} ${(H * 0.22).toFixed(0)} L ${(W * 0.56).toFixed(0)} ${base.toFixed(0)}`,
-    `M ${(W * 0.46).toFixed(0)} ${base.toFixed(0)} L ${(W * 0.63).toFixed(0)} ${(H * 0.30).toFixed(0)} L ${(W * 0.84).toFixed(0)} ${base.toFixed(0)}`,
-  ];
-  const dotR = W * 0.016;
-  const dots = [
-    { cx: W * 0.585, cy: H * 0.205, r: dotR },
-    { cx: W * 0.645, cy: H * 0.205, r: dotR },
-  ];
-  const tick = { x1: W * 0.52, x2: W * 0.62, y: base + H * 0.018 };
-  return { peaks, dots, tick };
 }
 
 function paceValue(log) {
@@ -472,27 +453,22 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-function PosterBackground({ W, H, pal }) {
-  const { peaks, dots, tick } = useMemo(() => brandMarkGeometry(W, H), [W, H]);
-  const stroke = Math.round(W * 0.024); // bold strokes, not hairlines
-  const tickW = Math.round(W * 0.02);
+// The themed line-art mark (the logo's actual mountain + dots + green tick,
+// extracted per theme by scripts/make-poster-mark.mjs). It's a square; place it
+// centred with its foot near mid-height so it reads as a watermark behind the
+// content across crop ratios.
+function PosterBackground({ W, H, pal, markSrc }) {
+  if (!markSrc) return null;
+  const size = W;
+  const y = Math.round(H * 0.5 - W * 0.65);
   return (
-    <g style={{ pointerEvents: "none" }}>
-      <g opacity={pal.markOpacity}>
-        {peaks.map((d, i) => (
-          <path key={i} d={d} fill="none" stroke={pal.ink} strokeWidth={stroke} strokeLinejoin="round" strokeLinecap="round" />
-        ))}
-        {dots.map((p, i) => (
-          <circle key={i} cx={p.cx} cy={p.cy} r={p.r} fill={pal.ink} />
-        ))}
-      </g>
-      {/* Green path-tick — kept green on both finishes. */}
-      <line x1={tick.x1} x2={tick.x2} y1={tick.y} y2={tick.y} stroke={MARK_GREEN} strokeWidth={tickW} strokeLinecap="round" opacity="0.62" />
-    </g>
+    <image href={markSrc} x={0} y={y} width={size} height={size}
+      opacity={pal.markOpacity} preserveAspectRatio="xMidYMid meet"
+      style={{ pointerEvents: "none" }} />
   );
 }
 
-function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
+function Poster({ stats, theme, ratio, svgRef, logoSrc, markSrc }) {
   const W = ratio.w, H = ratio.h;
   const pal = THEMES[theme];
   const M = 82;
@@ -605,7 +581,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
         </radialGradient>
       </defs>
       <rect width={W} height={H} fill={pal.bg} />
-      <PosterBackground W={W} H={H} pal={pal} />
+      <PosterBackground W={W} H={H} pal={pal} markSrc={markSrc} />
       <rect width={W} height={H} fill={`url(#poster-vignette-${theme})`} />
 
       {/* Header */}
@@ -684,6 +660,11 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
   // URL, which the PNG export path requires (see fetchAsDataUrl). The contour
   // background is pure vector now, so no background image to convert.
   const [logoSrc, setLogoSrc] = useState(productLogoUrl);
+  // Themed background marks (logo line-art). Same asset-URL → data-URL dance as
+  // the corner logo so the PNG export's serialized SVG carries them inline.
+  const [markDaySrc, setMarkDaySrc] = useState(markDayUrl);
+  const [markNightSrc, setMarkNightSrc] = useState(markNightUrl);
+  const markSrc = theme === "day" ? markDaySrc : markNightSrc;
   // Which single-session metrics to print. Weather defaults off (only some
   // workouts carry a snapshot); the UI disables it when there's none.
   const [singleFields, setSingleFields] = useState({ time: true, pace: true, elev: true, hr: true, weather: false });
@@ -714,6 +695,8 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     fetchAsDataUrl(productLogoUrl)
       .then(d => { if (alive) setLogoSrc(d); })
       .catch(() => {}); // preview keeps the asset URL; export retries and surfaces the error
+    fetchAsDataUrl(markDayUrl).then(d => { if (alive) setMarkDaySrc(d); }).catch(() => {});
+    fetchAsDataUrl(markNightUrl).then(d => { if (alive) setMarkNightSrc(d); }).catch(() => {});
     return () => { alive = false; };
   }, []);
 
@@ -746,14 +729,21 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
     setBusy(true);
     setMsg("");
     try {
-      // The corner-logo <image> href must be a data URL before serialization
-      // (an <img>-loaded SVG can't fetch external resources). Await the cached
-      // conversion — instant when the mount effect already finished — and flush
-      // it into the DOM so the serializer sees it. A failed fetch rejects here
-      // and lands in the catch below instead of silently exporting a logo-less
-      // poster. (The contour background is vector, so nothing to convert.)
-      const logoData = await fetchAsDataUrl(productLogoUrl);
-      flushSync(() => { setLogoSrc(logoData); });
+      // Every <image> href (corner logo + the themed background mark) must be a
+      // data URL before serialization (an <img>-loaded SVG can't fetch external
+      // resources). Await the cached conversions — instant when the mount effect
+      // already finished — and flush them into the DOM so the serializer sees
+      // them. A failed fetch rejects here and lands in the catch below instead
+      // of silently exporting a poster missing its logo / mark.
+      const markUrl = theme === "day" ? markDayUrl : markNightUrl;
+      const [logoData, markData] = await Promise.all([
+        fetchAsDataUrl(productLogoUrl),
+        fetchAsDataUrl(markUrl),
+      ]);
+      flushSync(() => {
+        setLogoSrc(logoData);
+        if (theme === "day") setMarkDaySrc(markData); else setMarkNightSrc(markData);
+      });
       // No document.fonts.ready wait — the fonts are embedded as base64
       // @font-face INSIDE the serialized SVG, so the export img is self-contained
       // and waiting on document-level font loading just stalls (notably on the
@@ -921,7 +911,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
             width: "100%", maxWidth: previewW, margin: "0 auto 14px",
             border: "1px solid var(--rule)", background: "var(--bg-elevated)",
           }}>
-            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} />
+            <Poster stats={stats} theme={theme} ratio={ratio} svgRef={svgRef} logoSrc={logoSrc} markSrc={markSrc} />
           </div>
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>

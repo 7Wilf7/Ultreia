@@ -126,6 +126,7 @@ function TopUpModal({ userEmail, onClose }) {
   const isMobile = useIsMobile();
   const [amount, setAmount] = useState("");
   const [notifyFormOpen, setNotifyFormOpen] = useState(false);
+  const [notifySent, setNotifySent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notifying, setNotifying] = useState(false);
   const [msg, setMsg] = useState("");
@@ -163,7 +164,7 @@ function TopUpModal({ userEmail, onClose }) {
     setMsg("");
     try {
       await notifyAdminPayment({ amountCents });
-      setMsg(t("wallet.topup_notify_success"));
+      setNotifySent(true);
       setAmount("");
     } catch (e) {
       setMsg(t("wallet.topup_notify_failed", { msg: e?.message || String(e) }));
@@ -178,11 +179,34 @@ function TopUpModal({ userEmail, onClose }) {
         <div onClick={(e) => e.stopPropagation()} style={s.modalCard(isMobile, { maxWidth: 440, float: true })}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
             <h2 style={{ fontSize: 19, fontWeight: 600, margin: 0, color: "var(--ink-1)" }}>
-              {t("wallet.topup_title")}
+              {notifySent ? t("wallet.topup_notify_sent_title") : t("wallet.topup_title")}
             </h2>
             <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
 
+          {notifySent ? (
+            <>
+              <div style={{
+                border: "1px solid var(--rule)",
+                borderRadius: 8,
+                padding: "14px 14px",
+                background: "var(--bg-sunken)",
+                marginBottom: 14,
+                lineHeight: 1.65,
+                fontSize: 13,
+                color: "var(--ink-2)",
+              }}>
+                <div style={{ fontWeight: 700, color: "var(--ink-1)", marginBottom: 6 }}>
+                  {t("wallet.topup_notify_sent_heading")}
+                </div>
+                <div>{t("wallet.topup_notify_sent_body")}</div>
+              </div>
+              <button type="button" onClick={onClose} style={{ ...s.btn, width: "100%" }}>
+                {t("common.done")}
+              </button>
+            </>
+          ) : (
+            <>
           <div style={{
             border: "1px solid var(--rule)",
             borderRadius: 8,
@@ -250,6 +274,8 @@ function TopUpModal({ userEmail, onClose }) {
             }}>
               {msg}
             </div>
+          )}
+            </>
           )}
         </div>
       </div>

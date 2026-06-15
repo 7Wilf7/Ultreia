@@ -26,6 +26,71 @@ function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
 
+function formatCny(cents: number): string {
+  return `¥${(cents / 100).toFixed(2)}`;
+}
+
+function pemToArrayBuffer(pem: string): ArrayBuffer {
+  const b64 = pem.replace(/-----BEGIN PRIVATE KEY-----/, "").replace(/-----END PRIVATE KEY-----/, "").replace(/\s+/g, "");
+  const bin = atob(b64);
+  const buf = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf.buffer;
+}
+
+function base64url(input: string | Uint8Array): string {
+  const bytes = typeof input === "string" ? new TextEncoder().encode(input) : input;
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function getAccessToken(sa: { client_email: string; private_key: string; token_uri: string }): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const header = base64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  const claims = base64url(JSON.stringify({
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: sa.token_uri,
+    iat: now,
+    exp: now + 3600,
+  }));
+  const signingInput = `${header}.${claims}`;
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    pemToArrayBuffer(sa.private_key),
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(signingInput));
+  const jwt = `${signingInput}.${base64url(new Uint8Array(sig))}`;
+  const resp = await fetch(sa.token_uri, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: jwt }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(`token exchange failed: ${JSON.stringify(data)}`);
+  return data.access_token as string;
+}
+
+async function sendPush(projectId: string, accessToken: string, token: string, title: string, body: string) {
+  const resp = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: {
+        token,
+        notification: { title, body },
+        android: { priority: "high", notification: { channel_id: "daily_coach" } },
+      },
+    }),
+  });
+  const respBody = await resp.json().catch(() => ({}));
+  return { ok: resp.ok, status: resp.status, body: respBody };
+}
+
 async function findUserByEmail(admin: ReturnType<typeof createClient>, email: string) {
   let page = 1;
   const perPage = 1000;
@@ -130,10 +195,46 @@ Deno.serve(async (req) => {
     return json({ error: "ledger_insert_failed", detail: ledgerErr.message }, 500);
   }
 
+  const notifyBody = `你的钱包已充值 ${formatCny(amountCents)}，当前余额 ${formatCny(balanceAfter)}。`;
+  const { error: inboxErr } = await admin
+    .from("push_inbox")
+    .insert({
+      user_id: target.id,
+      title: "wallet_topup_done",
+      body: notifyBody,
+      read: false,
+    });
+  if (inboxErr) console.error("wallet top-up inbox insert failed:", inboxErr.message);
+
+  let pushSent = 0;
+  const fcmErrors: unknown[] = [];
+  const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
+  if (saRaw) {
+    try {
+      const sa = JSON.parse(saRaw);
+      const { data: subs, error: subsErr } = await admin
+        .from("push_subscriptions")
+        .select("fcm_token")
+        .eq("user_id", target.id);
+      if (subsErr) throw subsErr;
+      if (subs && subs.length > 0) {
+        const accessToken = await getAccessToken(sa);
+        for (const sub of subs) {
+          const r = await sendPush(sa.project_id, accessToken, sub.fcm_token, "Ultreia 钱包充值完成", notifyBody);
+          if (r.ok) pushSent += 1;
+          else fcmErrors.push({ status: r.status, body: r.body });
+        }
+      }
+    } catch (e) {
+      fcmErrors.push(String(e));
+    }
+  }
+
   return json({
     ok: true,
     user: { id: target.id, email },
     wallet: { balance_cents: balanceAfter, currency: wallet?.currency || CURRENCY },
     ledger: { request_id: requestId, amount_cents: amountCents },
+    notification: { inbox: !inboxErr, push_sent: pushSent, fcm_errors: fcmErrors },
   });
 });

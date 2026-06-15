@@ -25,6 +25,7 @@ import { InboxModal } from "./components/InboxModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { DeleteAccountModal } from "./components/DeleteAccountModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
+import { AdminWalletGrantModal } from "./components/AdminWalletGrantModal";
 import { PromptCatalogModal } from "./components/PromptCatalogModal";
 import { OnboardingTour, TOUR_FLAG } from "./components/OnboardingTour";
 import { CoachPlanImportModal } from "./components/CoachPlanImportModal";
@@ -960,6 +961,7 @@ function AppShell({
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showInviteCodes, setShowInviteCodes] = useState(false);
+  const [showAdminWalletGrant, setShowAdminWalletGrant] = useState(false);
   const [showPromptCatalog, setShowPromptCatalog] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const isAdmin = (user?.email || "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
@@ -1699,6 +1701,7 @@ Rules:
           onDeleteAccount={() => setShowDeleteAccount(true)}
           isAdmin={isAdmin}
           onGenerateInvite={() => setShowInviteCodes(true)}
+          onOpenAdminWalletGrant={() => setShowAdminWalletGrant(true)}
           onOpenPromptCatalog={() => setShowPromptCatalog(true)}
           signOut={signOut}
           focusGroup={mobileSettingsFocus}
@@ -1781,6 +1784,13 @@ Rules:
 
       {showInviteCodes && (
         <InviteCodeModal onClose={() => setShowInviteCodes(false)} />
+      )}
+
+      {isAdmin && showAdminWalletGrant && (
+        <AdminWalletGrantModal
+          onClose={() => setShowAdminWalletGrant(false)}
+          onGranted={() => refreshWallet().catch(() => {})}
+        />
       )}
 
       {/* Admin-only prompt catalog viewer (gated on isAdmin so the entry never

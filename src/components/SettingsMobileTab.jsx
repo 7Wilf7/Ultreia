@@ -37,6 +37,7 @@ export function SettingsMobileTab({
   onDeleteAccount,
   isAdmin,
   onGenerateInvite,
+  onOpenAdminWalletGrant,
   onOpenPromptCatalog,
   signOut,
   focusGroup,
@@ -201,6 +202,7 @@ export function SettingsMobileTab({
         {group === "admin" && isAdmin && (
           <>
             <SubCell primary={t("settings.generate_invite")} onClick={onGenerateInvite} />
+            <SubCell primary={t("settings.admin_wallet_grant")} onClick={onOpenAdminWalletGrant} />
             <SubCell primary={t("settings.prompt_catalog")} onClick={onOpenPromptCatalog} />
           </>
         )}

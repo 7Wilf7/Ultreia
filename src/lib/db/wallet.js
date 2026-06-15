@@ -51,3 +51,32 @@ export async function getMyWallet() {
   }
   return normalizeWallet(data);
 }
+
+export async function adminGrantWallet({ email, amountCents, note }) {
+  const { data, error } = await supabase.functions.invoke('admin-wallet-grant', {
+    body: {
+      email,
+      amount_cents: amountCents,
+      note: note || '',
+    },
+  });
+  if (error) {
+    let code = '';
+    try {
+      const ctx = error.context;
+      if (ctx && typeof ctx.json === 'function') {
+        const b = await ctx.json();
+        code = b?.error || '';
+      }
+    } catch { /* ignore */ }
+    const e = new Error(code || error.message || 'admin_wallet_grant_failed');
+    e.code = code;
+    throw e;
+  }
+  if (data?.error) {
+    const e = new Error(data.error);
+    e.code = data.error;
+    throw e;
+  }
+  return data;
+}

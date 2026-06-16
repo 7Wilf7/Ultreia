@@ -207,7 +207,7 @@ function CreateAccountModal({ initialEmail, register, tt, isMobile, onClose, onR
             value={invite}
             onChange={e => setInvite(e.target.value)}
             disabled={submitting}
-            placeholder="TS-XXXXXXXX"
+            placeholder="UL-XXXXXXXX"
             style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 13 }}
           />
         </div>

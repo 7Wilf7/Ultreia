@@ -623,7 +623,7 @@ export function AICoachTab({
                 })}
               </div>
               <div style={{ ...s.muted, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
-                {lang === "zh" ? "AI Coach 使用钱包扣费，无需自己申请或填写 API Key。" : "AI Coach is billed from Wallet. No personal API key is needed."}
+                {lang === "zh" ? "AI Coach 使用钱包扣费，无需自己申请或填写第三方密钥。" : "AI Coach is billed from Wallet. No third-party key setup is needed."}
               </div>
             </div>
           </div>

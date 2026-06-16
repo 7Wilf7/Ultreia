@@ -987,7 +987,7 @@ const dict = {
   "coach.import_no_plans":    { en: "No concrete training plans found in that reply. The coach may have only given analysis / advice without specific dates.", zh: "未在这条回复中识别到具体训练计划。教练可能只给了分析或建议，没有明确的日期与训练内容。" },
   "coach.import_modal_eyebrow": { en: "Review before import",  zh: "导入前审核" },
   "coach.import_modal_title":   { en: "Import {n} plan(s) into Calendar", zh: "导入 {n} 条计划到日历" },
-  "coach.import_modal_hint":    { en: "Adjust dates, types, distance, and duration before importing. Imported items show as dashed-line plans on the Calendar (is_planned=true) — they don't count toward distance totals, PR, or Charts until you mark them done.", zh: "导入前可调整日期、类型、距离、时长。导入后的项目在日历上以虚线计划形式显示（is_planned=true），在你标记完成之前不会计入总距离、PR 或图表统计。" },
+  "coach.import_modal_hint":    { en: "Adjust dates, types, distance, and duration before importing. Imported items show as dashed-line plans on the Calendar. They don't count toward distance totals, PR, or Charts until you mark them done.", zh: "导入前可调整日期、类型、距离、时长。导入后的项目会在日历上以虚线计划显示；在你标记完成之前，不会计入总距离、PR 或图表统计。" },
   "coach.import_reextract":      { en: "Re-extract from reply", zh: "重新提炼这条回复" },
   "coach.import_all_removed":   { en: "All proposals removed. Click Cancel to dismiss.", zh: "所有计划都已移除。点击取消关闭此窗口。" },
   "coach.import_confirm":       { en: "Import {n} selected",   zh: "导入选中的 {n} 条" },

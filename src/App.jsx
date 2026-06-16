@@ -56,6 +56,7 @@ import {
 } from "./utils/coachPrompt";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
+import { POSTER_FONT_CSS } from "./data/posterFonts";
 
 // One random sport line per launch, stable across the auth→data loading remounts.
 const BOOT_GREETING = pickGreeting();
@@ -146,6 +147,7 @@ function LoadingScreen({ userId = null, boot = false }) {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       gap: "5vmin", background: "var(--bg)", padding: "0 24px",
     }}>
+      {boot && <style>{POSTER_FONT_CSS}</style>}
       {/* Lightweight (384px) display version of the product logo. The native
           Android splash renders the SAME artwork from a separate hi-res source
           (resources/splash-logo.png via scripts/make-splash.mjs) so the
@@ -162,11 +164,13 @@ function LoadingScreen({ userId = null, boot = false }) {
       />
       {boot ? (
         <div style={{
-          fontFamily: "var(--font-sans)",
-          fontSize: "min(6.5vmin, 30px)",
-          fontWeight: 500,
+          fontFamily: "TSSign, 'Segoe Script', cursive",
+          fontSize: "min(12vmin, 62px)",
+          fontWeight: 400,
           color: "var(--ink-1)",
-          letterSpacing: "0.08em",
+          letterSpacing: 0,
+          lineHeight: 1,
+          marginTop: "-1vmin",
         }}>
           Ultreia
         </div>

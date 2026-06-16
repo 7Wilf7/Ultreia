@@ -160,19 +160,43 @@ function clockTime(log) {
   return `${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+function roundedRange(values, unit = "") {
+  const nums = values.map(Number).filter(Number.isFinite).map(v => Math.round(v));
+  if (!nums.length) return null;
+  const min = Math.min(...nums);
+  const max = Math.max(...nums);
+  return min === max ? `${min}${unit}` : `${min}-${max}${unit}`;
+}
+
+function humidityPercent(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return n > 1 ? n : n * 100;
+}
+
 // Detailed weather line from a workout's stored snapshot — temperature, feels-
-// like, and humidity, e.g. "18°C  ·  FEELS 19°C  ·  RH 65%". null when the
-// snapshot has nothing usable, so the weather field can hide itself.
+// like, and humidity. Long workouts can carry a `series` of snapshots; show a
+// range when that data exists, e.g. "18-23°C  ·  FEELS 19-25°C  ·  RH 58-70%".
+// null when the snapshot has nothing usable, so the weather field can hide.
 function weatherDetail(w) {
   if (!w || typeof w !== "object") return null;
-  const temp = w.tempC ?? w.tempAvgC ?? w.temp;
-  const feels = w.apparentC ?? w.apparentAvgC;
-  let rh = w.humidity;
-  if (Number.isFinite(rh)) rh = rh > 1 ? Math.round(rh) : Math.round(rh * 100);
+  const series = Array.isArray(w.series) ? w.series : [];
+  const temps = series.length > 1
+    ? series.map(pt => pt?.tempC ?? pt?.tempAvgC ?? pt?.temp)
+    : [w.tempC ?? w.tempAvgC ?? w.temp];
+  const feels = series.length > 1
+    ? series.map(pt => pt?.apparentC ?? pt?.apparentAvgC)
+    : [w.apparentC ?? w.apparentAvgC];
+  const humidities = series.length > 1
+    ? series.map(pt => humidityPercent(pt?.humidity))
+    : [humidityPercent(w.humidity)];
   const parts = [];
-  if (Number.isFinite(Number(temp))) parts.push(`${Math.round(Number(temp))}°C`);
-  if (Number.isFinite(Number(feels))) parts.push(`FEELS ${Math.round(Number(feels))}°C`);
-  if (Number.isFinite(rh)) parts.push(`RH ${rh}%`);
+  const tempLabel = roundedRange(temps, "°C");
+  const feelsLabel = roundedRange(feels, "°C");
+  const rhLabel = roundedRange(humidities, "%");
+  if (tempLabel) parts.push(tempLabel);
+  if (feelsLabel) parts.push(`FEELS ${feelsLabel}`);
+  if (rhLabel) parts.push(`RH ${rhLabel}`);
   return parts.length ? parts.join("  ·  ") : null;
 }
 
@@ -629,7 +653,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, markSrc }) {
 
       {/* Weather detail line — temp / feels-like / humidity, under the metrics. */}
       {stats.weatherLine && (
-        <text x={W / 2} y={H * 0.878} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="26" letterSpacing="1" fill={pal.sub}>{stats.weatherLine}</text>
+        <text x={W / 2} y={H * 0.866} textAnchor="middle" fontFamily={FF} fontWeight="600" fontSize="26" letterSpacing="1" fill={pal.sub}>{stats.weatherLine}</text>
       )}
 
       {/* Signature */}

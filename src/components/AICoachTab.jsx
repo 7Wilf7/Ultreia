@@ -1001,8 +1001,21 @@ export function AICoachTab({
         contain: "layout paint",
       }}>
         {chatMessages.length === 0 ? (
-          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, whiteSpace: "pre-line" }}>
-            {t("coach.empty")}
+          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, lineHeight: 1.6 }}>
+            <div style={{ whiteSpace: "pre-line" }}>{t("coach.empty")}</div>
+            <button
+              type="button"
+              onClick={() => setShowModelInfo(true)}
+              style={{
+                ...s.btnGhost,
+                marginTop: 14,
+                fontSize: 12,
+                padding: "6px 12px",
+                minHeight: 0,
+              }}
+            >
+              {t("coach.choose_model_hint")}
+            </button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

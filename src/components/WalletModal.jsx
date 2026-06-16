@@ -224,6 +224,18 @@ function TopUpModal({ userEmail, onClose }) {
           <p style={{ ...s.muted, lineHeight: 1.65, fontSize: 12, margin: "0 0 12px" }}>
             {t("wallet.topup_instruction", { email: userEmail || t("wallet.topup_email_unknown") })}
           </p>
+          <div style={{
+            background: "rgba(181,78,26,0.07)",
+            color: "var(--ink-2)",
+            border: "1px solid rgba(181,78,26,0.22)",
+            borderRadius: 6,
+            padding: "9px 11px",
+            fontSize: 12,
+            lineHeight: 1.55,
+            marginBottom: 12,
+          }}>
+            {t("wallet.topup_manual_notice")}
+          </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
             <button type="button" onClick={saveQr} disabled={saving} style={{ ...s.btnGhost, minHeight: 40, opacity: saving ? 0.65 : 1 }}>

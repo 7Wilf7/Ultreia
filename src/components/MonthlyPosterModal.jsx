@@ -716,6 +716,9 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
       : mode === "all" ? buildAllStats(logs || [], lang)
       : buildPeriodStats(logs || [], mode, rangeOffset, lang)
   ), [logs, races, selectedWorkout, singleGpsTrack, mode, rangeOffset, prRange, lang, t, singleFields]);
+  const selectedWeatherSeriesCount = Array.isArray(selectedWorkout?.weather?.series)
+    ? selectedWorkout.weather.series.length
+    : 0;
 
   useEffect(() => {
     let alive = true;
@@ -886,6 +889,15 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
                   );
                 })}
               </div>
+              {selectedWorkout && (
+                <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.45, marginTop: 6 }}>
+                  {!stats.hasWeather
+                    ? t("poster.weather_unavailable")
+                    : selectedWeatherSeriesCount > 1
+                      ? t("poster.weather_range_ready")
+                      : t("poster.weather_single_point")}
+                </div>
+              )}
             </div>
           )}
           {RANGE_MODES.has(mode) && (

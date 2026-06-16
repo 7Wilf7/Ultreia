@@ -20,7 +20,44 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/anthropic/v1/messages";
 const DEEPSEEK_MODEL = "deepseek-v4-pro";
-const AI_CHARGE_CENTS = 10;
+const DEEPSEEK_PRICING_CNY_PER_M = { input: 3.16, inputCacheHit: 0.026, output: 6.32 };
+const AI_MARKUP_RATE = 1.2;
+const MIN_AI_CHARGE_CENTS = 1;
+
+function tokenUsage(usage: unknown): {
+  input: number;
+  output: number;
+  total: number;
+  inputCacheHit: number;
+  inputCacheMiss: number;
+} {
+  const u = (usage && typeof usage === "object") ? usage as Record<string, unknown> : {};
+  const input = Number(u.input_tokens ?? u.prompt_tokens ?? u.inputTokens ?? u.promptTokens ?? 0);
+  const output = Number(u.output_tokens ?? u.completion_tokens ?? u.outputTokens ?? u.completionTokens ?? 0);
+  const total = Number(u.total_tokens ?? u.totalTokens ?? input + output);
+  const inputCacheHit = Number(u.prompt_cache_hit_tokens ?? u.cache_read_input_tokens ?? 0);
+  const inputCacheMiss = Number(u.prompt_cache_miss_tokens ?? 0);
+  return {
+    input: Number.isFinite(input) ? input : 0,
+    output: Number.isFinite(output) ? output : 0,
+    total: Number.isFinite(total) ? total : 0,
+    inputCacheHit: Number.isFinite(inputCacheHit) ? inputCacheHit : 0,
+    inputCacheMiss: Number.isFinite(inputCacheMiss) ? inputCacheMiss : 0,
+  };
+}
+
+function calcChargeCents(usage: unknown): { actualCostCents: number; chargeCents: number } {
+  const tokens = tokenUsage(usage);
+  const hasInputCacheBreakdown = tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0;
+  const inputCny = hasInputCacheBreakdown
+    ? (tokens.inputCacheHit / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.inputCacheHit
+      + (tokens.inputCacheMiss / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input
+    : (tokens.input / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input;
+  const actualCny = inputCny + (tokens.output / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.output;
+  const actualCostCents = Math.round(actualCny * 100);
+  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
+  return { actualCostCents, chargeCents };
+}
 
 // ── FCM HTTP v1 auth (mirrors push-test) ──
 function pemToArrayBuffer(pem: string): ArrayBuffer {
@@ -151,7 +188,7 @@ function buildPrompt(opts: {
   return { system, user };
 }
 
-async function callLLM(key: string, system: string, user: string): Promise<string> {
+async function callLLM(key: string, system: string, user: string): Promise<{ text: string; usage: unknown; id: string }> {
   const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",
     headers: {
@@ -172,7 +209,11 @@ async function callLLM(key: string, system: string, user: string): Promise<strin
   });
   const data = await resp.json();
   if (!resp.ok) throw new Error(`LLM ${resp.status}: ${JSON.stringify(data).slice(0, 200)}`);
-  return (data.content?.filter((b: any) => b.type === "text").map((b: any) => b.text).join("") || "").trim();
+  return {
+    text: (data.content?.filter((b: any) => b.type === "text").map((b: any) => b.text).join("") || "").trim(),
+    usage: data.usage || null,
+    id: String(data.id || ""),
+  };
 }
 
 function json(obj: unknown, status = 200): Response {
@@ -241,7 +282,7 @@ Deno.serve(async (req) => {
         .select("balance_cents")
         .eq("user_id", u.user_id)
         .single();
-      if ((wallet?.balance_cents ?? 0) < AI_CHARGE_CENTS) {
+      if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) {
         summary.push({ user: u.user_id, skipped: "insufficient_balance" });
         continue;
       }
@@ -275,21 +316,33 @@ Deno.serve(async (req) => {
       });
 
       let message = "";
+      let usage: unknown = null;
+      let upstreamId = "";
       try {
-        message = await callLLM(deepseekKey, system, user);
+        const llm = await callLLM(deepseekKey, system, user);
+        message = llm.text;
+        usage = llm.usage;
+        upstreamId = llm.id;
       } catch (e) {
         summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
         continue;
       }
       if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
 
+      const { actualCostCents, chargeCents } = calcChargeCents(usage);
       const { error: debitErr } = await supabase.rpc("wallet_debit", {
         p_user_id: u.user_id,
-        p_amount_cents: AI_CHARGE_CENTS,
+        p_amount_cents: chargeCents,
         p_kind: "ai_charge",
         p_provider: "deepseek",
-        p_request_id: `daily-coach:${u.user_id}:${date}:${slotIdx}`,
-        p_metadata: { source: "daily_coach_dispatch", model: DEEPSEEK_MODEL },
+        p_request_id: upstreamId ? `daily-coach:${upstreamId}` : `daily-coach:${u.user_id}:${date}:${slotIdx}`,
+        p_metadata: {
+          source: "daily_coach_dispatch",
+          model: DEEPSEEK_MODEL,
+          usage,
+          actual_cost_cents: actualCostCents,
+          markup_rate: AI_MARKUP_RATE,
+        },
       });
       if (debitErr) {
         const insufficient = String(debitErr.message || "").includes("insufficient_balance");
@@ -320,7 +373,7 @@ Deno.serve(async (req) => {
         .from("push_inbox").insert({ user_id: u.user_id, body: message });
       if (inboxErr) summary.push({ user: u.user_id, warn: `inbox insert: ${inboxErr.message}` });
 
-      summary.push({ user: u.user_id, sent, devices: subs.length, fcmErrors, message });
+      summary.push({ user: u.user_id, sent, devices: subs.length, fcmErrors, chargeCents, actualCostCents, message });
     }
 
     return json({ processed: summary.length, summary });

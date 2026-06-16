@@ -102,7 +102,7 @@ const dict = {
   "wallet.title":               { en: "Wallet",               zh: "钱包" },
   "wallet.pricing_title":       { en: "Billing rules",         zh: "计费说明" },
   "wallet.pricing_deepseek_title": { en: "DeepSeek",           zh: "DeepSeek" },
-  "wallet.pricing_deepseek_body": { en: "Input ¥3.16 / 1M tokens, output ¥6.32 / 1M tokens. Charged as actual model cost × 1.2, rounded to cents, minimum ¥0.01 per successful reply.", zh: "输入 ¥3.16 / 百万 tokens，输出 ¥6.32 / 百万 tokens。按实际模型成本 × 1.2 扣费，四舍五入到分，每次成功回复最低 ¥0.01。" },
+  "wallet.pricing_deepseek_body": { en: "Input ¥3.16 / 1M tokens, cache-hit input ¥0.026 / 1M tokens, output ¥6.32 / 1M tokens. AI Coach chat and daily push are charged as actual model cost × 1.2, rounded to cents, minimum ¥0.01 per successful reply.", zh: "输入 ¥3.16 / 百万 tokens，缓存命中输入 ¥0.026 / 百万 tokens，输出 ¥6.32 / 百万 tokens。AI Coach 对话和每日推送都按实际模型成本 × 1.2 扣费，四舍五入到分，每次成功回复最低 ¥0.01。" },
   "wallet.pricing_claude_title": { en: "Claude",               zh: "Claude" },
   "wallet.pricing_claude_body":  { en: "Input ¥29.10 / 1M tokens, output ¥145.50 / 1M tokens. Charged as actual model cost × 1.2, rounded to cents, minimum ¥0.01 per successful reply.", zh: "输入 ¥29.10 / 百万 tokens，输出 ¥145.50 / 百万 tokens。按实际模型成本 × 1.2 扣费，四舍五入到分，每次成功回复最低 ¥0.01。" },
   "wallet.pricing_weather_title": { en: "Weather",             zh: "天气" },

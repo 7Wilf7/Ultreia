@@ -18,7 +18,7 @@ const PROVIDERS = {
     url: "https://api.deepseek.com/anthropic/v1/messages",
     model: "deepseek-v4-pro",
     keyEnv: "SHARED_DEEPSEEK_KEY",
-    pricingCnyPerM: { input: 3.16, output: 6.32 },
+    pricingCnyPerM: { input: 3.16, inputCacheHit: 0.026, output: 6.32 },
   },
   claude: {
     id: "claude",
@@ -36,22 +36,36 @@ function resolveProvider(value: unknown): typeof PROVIDERS[ProviderId] {
   return value === "claude" ? PROVIDERS.claude : PROVIDERS.deepseek;
 }
 
-function tokenUsage(usage: unknown): { input: number; output: number; total: number } {
+function tokenUsage(usage: unknown): {
+  input: number;
+  output: number;
+  total: number;
+  inputCacheHit: number;
+  inputCacheMiss: number;
+} {
   const u = (usage && typeof usage === "object") ? usage as Record<string, unknown> : {};
   const input = Number(u.input_tokens ?? u.prompt_tokens ?? u.inputTokens ?? u.promptTokens ?? 0);
   const output = Number(u.output_tokens ?? u.completion_tokens ?? u.outputTokens ?? u.completionTokens ?? 0);
   const total = Number(u.total_tokens ?? u.totalTokens ?? input + output);
+  const inputCacheHit = Number(u.prompt_cache_hit_tokens ?? u.cache_read_input_tokens ?? 0);
+  const inputCacheMiss = Number(u.prompt_cache_miss_tokens ?? 0);
   return {
     input: Number.isFinite(input) ? input : 0,
     output: Number.isFinite(output) ? output : 0,
     total: Number.isFinite(total) ? total : 0,
+    inputCacheHit: Number.isFinite(inputCacheHit) ? inputCacheHit : 0,
+    inputCacheMiss: Number.isFinite(inputCacheMiss) ? inputCacheMiss : 0,
   };
 }
 
 function calcChargeCents(provider: typeof PROVIDERS[ProviderId], usage: unknown): { actualCostCents: number; chargeCents: number } {
   const tokens = tokenUsage(usage);
-  const actualCny = (tokens.input / 1_000_000) * provider.pricingCnyPerM.input
-    + (tokens.output / 1_000_000) * provider.pricingCnyPerM.output;
+  const hasInputCacheBreakdown = tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0;
+  const inputCny = hasInputCacheBreakdown
+    ? (tokens.inputCacheHit / 1_000_000) * (provider.pricingCnyPerM.inputCacheHit ?? provider.pricingCnyPerM.input)
+      + (tokens.inputCacheMiss / 1_000_000) * provider.pricingCnyPerM.input
+    : (tokens.input / 1_000_000) * provider.pricingCnyPerM.input;
+  const actualCny = inputCny + (tokens.output / 1_000_000) * provider.pricingCnyPerM.output;
   const actualCostCents = Math.round(actualCny * 100);
   const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
   return { actualCostCents, chargeCents };

@@ -62,6 +62,16 @@ function pickApkAsset(assets) {
 }
 
 const NOTE_TRANSLATIONS = {
+  "poster mark: centre the watermark": "分享海报水印位置居中",
+  "poster mark: extract the real logo line-art, themed per finish": "分享海报背景改用真实 logo 线稿，并跟随风格切换",
+  "poster background: brand mark (bold peaks + dots + green tick), drop contours": "分享海报背景改为品牌山形标志",
+  "poster: title case headings, keep data labels uppercase": "分享海报标题改为首字母大写，数据标签保留全大写",
+  "pwa cache-clear, fresh acwr on review, poster contour+mountain & fixes": "修复 PWA 缓存、训练负荷刷新和海报细节",
+  "poster overhaul: contour background, all-time type, single-session controls": "分享海报重做背景、历史类型和单次训练控制",
+  "inbox read-on-view; ai coach model switch + weather→calendar": "收件箱完整显示后自动已读，AI Coach 支持切换模型和天气跳转日历",
+  "poster signature font: caveat -> alex brush": "分享海报签名字体更新",
+  "boot splash: logo + wordmark + built credit": "开屏页改为 logo 和产品名",
+  "fix plan-status flash, ul- invite prefix, brand dots in docs": "修复日历计划状态闪动，邀请码改为 UL- 前缀，并补充品牌说明",
   "fix android icon crop and onboarding intro": "修正安卓桌面图标裁切，并补充新手引导名字由来",
   "finalize ultreia logo assets": "定稿 Ultreia logo 并同步图标资源",
   "add horizontal tab motion and cleaner update notes": "优化移动端横滑动画，并清理更新日志",
@@ -81,18 +91,28 @@ const NOTE_TRANSLATIONS = {
 };
 
 function localizeNoteLine(line) {
+  if (/^\s*full changelog\s*:/i.test(line)) return "";
   const prefix = line.match(/^(\s*[-*]\s*)/)?.[1] || "";
   let text = line.replace(/^\s*[-*]\s*/, "").trim();
   if (!text) return "";
+  text = text
+    .replace(/^#+\s*/, "")
+    .replace(/\*\*/g, "")
+    .replace(/`/g, "")
+    .trim();
   if (/^(bump|reset)\s+version\s+to\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
   if (/^version\s+bump\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
   text = text
-    .replace(/[;,]?\s*(bump|reset)\s+version\s+to\s+v?\d+\.\d+\.\d+/gi, "")
+    .replace(/[;,]?\s*(bump|reset)\s+(version\s+)?(to\s+)?v?\d+\.\d+\.\d+/gi, "")
     .replace(/\bv?\d+\.\d+\.\d+\b/g, "")
+    .replace(/\s*\(\s*\)/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
   if (!text) return "";
   const translated = NOTE_TRANSLATIONS[text.toLowerCase()] || text;
+  // Unknown GitHub release lines are usually raw English commit subjects.
+  // Drop them instead of leaking internal/dev wording into the in-app updater.
+  if (!/[\u4e00-\u9fff]/.test(translated) && /[a-z]/i.test(translated)) return "";
   return `${prefix}${translated}`;
 }
 
@@ -109,6 +129,29 @@ function cleanNotes(notes) {
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function renderNotes(notes, maxChars) {
+  const cleaned = cleanNotes(notes).slice(0, maxChars);
+  if (!cleaned) return null;
+  const lines = cleaned.split("\n").map(l => l.trim()).filter(Boolean);
+  return (
+    <div style={notesBlockStyle}>
+      {lines.map((line, idx) => {
+        const isBullet = /^[-*]\s+/.test(line);
+        const text = line.replace(/^[-*]\s+/, "");
+        return (
+          <div key={`${idx}-${text.slice(0, 12)}`} style={isBullet ? noteItemStyle : noteHeadingStyle}>
+            {isBullet ? `- ${text}` : text}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReleaseNotes({ notes, maxChars }) {
+  return renderNotes(notes, maxChars);
 }
 
 export function UpdateChecker() {
@@ -250,7 +293,7 @@ export function UpdateChecker() {
         <div style={updatePanelStyle}>
           <div style={panelTitleStyle}>{t("settings.update_recent_title", { v: release.version })}</div>
           {cleanNotes(release.notes)
-            ? <pre style={notesStyle}>{cleanNotes(release.notes).slice(0, 1200)}</pre>
+            ? <ReleaseNotes notes={release.notes} maxChars={1200} />
             : <div style={resultOkStyle}>✓ {t("settings.update_latest")}</div>}
         </div>
       )}
@@ -301,10 +344,10 @@ export function UpdateChecker() {
               {installMsg}
             </div>
           )}
-          {/* This release's changes, below the actions. No internal scroll
-              (see notesStyle) so it never traps the page scroll. */}
+          {/* This release's changes, below the actions. The notes flow with the
+              page so they never trap touch scrolling. */}
           {cleanNotes(release.notes)
-            ? <pre style={notesStyle}>{cleanNotes(release.notes).slice(0, 800)}</pre>
+            ? <ReleaseNotes notes={release.notes} maxChars={800} />
             : <div style={{ ...secondaryStyle, marginTop: 0 }}>v{release.version}</div>}
         </div>
       )}
@@ -372,15 +415,24 @@ const updatePanelStyle = {
   gap: 10,
 };
 
-const notesStyle = {
-  whiteSpace: "pre-wrap",
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
+const notesBlockStyle = {
+  fontFamily: "var(--font-sans)",
+  fontSize: 13,
   color: "var(--ink-2)",
-  margin: 0,
-  // No internal scroll on purpose — a nested scroller swallows the touch
-  // gesture and the page can't scroll on to the buttons. The notes flow and
-  // the page (MobileShell <main>) does the scrolling. Notes are short now.
+  lineHeight: 1.55,
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+};
+
+const noteItemStyle = {
+  color: "var(--ink-2)",
+};
+
+const noteHeadingStyle = {
+  color: "var(--ink-1)",
+  fontWeight: 600,
+  marginTop: 2,
 };
 
 const downloadBtnStyle = {

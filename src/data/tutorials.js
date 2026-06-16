@@ -1,7 +1,6 @@
-// In-app setup tutorials for the three third-party API keys the user has to
-// apply for themselves (Caiyun weather, DeepSeek, Claude relay). Rendered by
-// TutorialModal as a numbered step list. Bilingual: each string is { zh, en }
-// and the modal picks by current UI language.
+// Legacy in-app setup tutorials for the old BYOK flow. Normal users now use
+// wallet-backed server keys and should not see these screens; keep the content
+// only for compatibility with any older hidden entry points.
 //
 // Shape per tutorial:
 //   title:    { zh, en }

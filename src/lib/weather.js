@@ -187,7 +187,7 @@ function buildSnapshot({
 }
 
 // Reduce a raw Caiyun realtime payload to a snapshot. Shared by the direct
-// (own-token) path and the free-tier proxy bundle.
+// legacy own-token path and the current wallet-backed proxy bundle.
 function snapshotFromRealtimeData(data, lng, lat) {
   const r = data?.result?.realtime;
   if (!r) throw new Error('caiyun_realtime_missing_result');
@@ -257,7 +257,7 @@ export async function fetchHistoricalSnapshot({ lng, lat, when }) {
 // and by the AI Coach for planned workout days. Returns an array of
 // snapshots, one per day, keyed by YYYY-MM-DD (local).
 // Reduce a raw Caiyun daily payload to the forecast array. Shared by the direct
-// (own-token) path and the free-tier proxy bundle.
+// legacy own-token path and the current wallet-backed proxy bundle.
 function forecastsFromDailyData(data) {
   const d = data?.result?.daily;
   if (!d) throw new Error('caiyun_daily_missing_result');
@@ -439,8 +439,8 @@ export async function captureSnapshotForWorkout({ date, startedAt, durationSec =
 // Cache invalidates wholesale when coords change (user updates default
 // location) — old data is for the wrong city.
 const CACHE_KEY = 'ts.weather.v1';
-// 3h: weather doesn't change minute-to-minute, and a longer TTL means far fewer
-// Caiyun calls (matters for the shared free-tier quota — see weather-proxy).
+// 3h: weather doesn't change minute-to-minute, and a longer TTL means fewer
+// wallet-backed Caiyun calls (see weather-proxy).
 const REALTIME_TTL_MS = 3 * 60 * 60 * 1000;
 
 function readCache() {

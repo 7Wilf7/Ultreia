@@ -1,16 +1,21 @@
-# React + Vite
+# Ultreia
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Ultreia 是一个面向耐力跑者的个人教练操作台：训练记录、日历计划、赛事管理、AI Coach、天气和钱包扣费集中在同一个 React/Vite 单页应用里。
 
-Currently, two official plugins are available:
+## 常用命令
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- `npm run dev`：本地开发
+- `npm run lint`：ESLint 检查
+- `npm run build`：生产构建
+- `npm run preview`：本地预览构建产物
 
-## React Compiler
+## 项目文档
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- `AGENTS.md` / `CLAUDE.md`：协作规则、部署流程、Supabase/Edge Function 约定
+- `docs/`：应用内用户手册，会被打包进使用指南
+- `docs/changelog.md`：用户可感知更新日志
+- `docs-internal/`：内部产品与迁移记录
 
-## Expanding the ESLint configuration
+## 发版提示
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Web 版随 `main` 分支推送自动部署到 Vercel。Android APK 只在明确要发版时 bump 版本并推 `vX.Y.Z` tag，由 GitHub Actions 构建 release APK。

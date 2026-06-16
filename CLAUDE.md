@@ -59,14 +59,17 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - **`--no-verify-jwt` 看函数加不加**：靠登录用户 JWT 鉴权的（`coach-proxy` / `weather-proxy` / `delete-account`）部署时**不要**加；不靠用户 JWT 的（`daily-coach-dispatch` 由 pg_cron 定时调用、靠 header `x-cron-secret` 鉴权；`register-with-invite` 注册前调用、还没 JWT）**必须加** `--no-verify-jwt`，否则被网关挡掉。
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
 - 函数：
-  - `daily-coach-dispatch`（pg_cron 定时生成 AI 打卡 → FCM 推送 → 写 `push_inbox`；部署加 `--no-verify-jwt`）
-  - `coach-proxy`（免费额度 AI Coach 代理，DeepSeek；新用户体验额度从 owner 的 key 走，查/记 `usage_quota`，超额返 402 提示用户填自己的 key）
-  - `weather-proxy`（免费额度天气代理，彩云；`mode=bundle` 实时+7天预报算一次额度，`mode=single` 单端点；超额返 402）
+  - `daily-coach-dispatch`（pg_cron 定时生成 AI 打卡 → 钱包扣费 → FCM 推送 → 写 `push_inbox`；部署加 `--no-verify-jwt`）
+  - `coach-proxy`（钱包版 AI Coach 代理，支持 DeepSeek / Claude；共享 key 只在服务端 Secrets，成功回复后按实际 token 成本 ×1.2 扣钱包，余额不足返 402）
+  - `weather-proxy`（钱包版彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；成功天气请求固定扣 ¥0.01）
+  - `wallet-status`（读取/初始化钱包余额与最近流水）
+  - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
+  - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
   - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
   - `delete-account`（自助注销；清各用户表数据 → 删 auth 用户）
   - `push-test`（早期冒烟测试，可退役）
 
-**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（coach-proxy 免费额度用的 owner DeepSeek key）、`SHARED_CAIYUN_TOKEN`（weather-proxy 免费额度用的 owner 彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CLAUDE_KEY`（服务端 Claude key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
 
 ### 历史教训（避免重蹈）
 
@@ -120,7 +123,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - `docs/data-import.md` —— FIT / CSV 导入
 - `docs/races.md` —— 赛事 + PR bar
 - `docs/ai-coach.md` —— AI Coach 全流程
-- `docs/weather.md` —— 天气（实时 / 预报 / 训练快照、24h 窗口、彩云 token）
+- `docs/weather.md` —— 天气（实时 / 预报 / 训练快照、24h 窗口、钱包扣费）
 - `docs/charts.md` —— 图表
 - `docs/SUMMARY.md` —— 应用内使用手册目录顺序
 - `docs/changelog.md` —— 版本变更
@@ -188,6 +191,9 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `push_subscriptions` — 设备推送订阅（FCM token）
 - `push_inbox` — 推送收件箱（每日打卡等推送落库）
 - `invite_codes` — 一次性邀请码（注册用，service_role 烧码）
-- `usage_quota` — 免费额度计数（coach-proxy / weather-proxy 按用户记）
+- `wallets` — 钱包余额（人民币分）
+- `wallet_ledger` — 钱包流水（AI / 天气 / 充值 / 退款等）
+- `app_admins` — 管理员账号白名单（钱包充值、邀请码等）
+- `usage_quota` — 旧免费额度表，仅保留删除账号兼容；新扣费逻辑不要继续依赖它
 
 公共字段约定：`id uuid PK`、`user_id uuid → auth.users(id)`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤。

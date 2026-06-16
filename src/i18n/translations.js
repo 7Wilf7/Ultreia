@@ -106,7 +106,7 @@ const dict = {
   "wallet.pricing_claude_title": { en: "Claude",               zh: "Claude" },
   "wallet.pricing_claude_body":  { en: "Input ¥29.10 / 1M tokens, output ¥145.50 / 1M tokens. Charged as actual model cost × 1.2, rounded to cents, minimum ¥0.01 per successful reply.", zh: "输入 ¥29.10 / 百万 tokens，输出 ¥145.50 / 百万 tokens。按实际模型成本 × 1.2 扣费，四舍五入到分，每次成功回复最低 ¥0.01。" },
   "wallet.pricing_weather_title": { en: "Weather",             zh: "天气" },
-  "wallet.pricing_weather_body": { en: "¥0.01 per successful weather request.", zh: "每次成功获取天气固定扣 ¥0.01。" },
+  "wallet.pricing_weather_body": { en: "¥0.01 per successful weather request. Current weather + 7-day forecast are fetched together and cached: normal app opens within about 3 hours usually do not charge again, and forecasts refresh at most once per day unless you manually refresh or change location. Workout weather is fetched when Fetch weather is on; sessions of 2h or more may sample about every 2h, capped at 8 points, so long sessions can use several weather requests.", zh: "每次成功天气请求固定扣 ¥0.01。当前天气 + 未来 7 天预报会合并请求并缓存：正常打开 App，约 3 小时内通常不会重复扣费；预报通常每天刷新一次，除非你手动刷新或更换位置。训练天气只在勾选「获取天气」时抓取；2 小时及以上训练会尽量每约 2 小时采样一次，最多 8 个点，所以长训练可能产生多次天气请求。" },
   "wallet.info_toggle":         { en: "Show or hide billing rules", zh: "显示或隐藏计费说明" },
   "wallet.balance":             { en: "Balance",              zh: "余额" },
   "wallet.topup":               { en: "Top up",               zh: "充值" },

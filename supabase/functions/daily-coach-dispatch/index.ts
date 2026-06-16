@@ -34,29 +34,35 @@ function tokenUsage(usage: unknown): {
   const u = (usage && typeof usage === "object") ? usage as Record<string, unknown> : {};
   const input = Number(u.input_tokens ?? u.prompt_tokens ?? u.inputTokens ?? u.promptTokens ?? 0);
   const output = Number(u.output_tokens ?? u.completion_tokens ?? u.outputTokens ?? u.completionTokens ?? 0);
-  const total = Number(u.total_tokens ?? u.totalTokens ?? input + output);
   const inputCacheHit = Number(u.prompt_cache_hit_tokens ?? u.cache_read_input_tokens ?? 0);
   const inputCacheMiss = Number(u.prompt_cache_miss_tokens ?? 0);
+  const totalInput = Math.max(input, inputCacheHit + inputCacheMiss);
+  const total = Number(u.total_tokens ?? u.totalTokens ?? totalInput + output);
   return {
     input: Number.isFinite(input) ? input : 0,
     output: Number.isFinite(output) ? output : 0,
-    total: Number.isFinite(total) ? total : 0,
+    total: Number.isFinite(total) ? Math.max(total, totalInput + output) : 0,
     inputCacheHit: Number.isFinite(inputCacheHit) ? inputCacheHit : 0,
     inputCacheMiss: Number.isFinite(inputCacheMiss) ? inputCacheMiss : 0,
   };
 }
 
-function calcChargeCents(usage: unknown): { actualCostCents: number; chargeCents: number } {
+function calcChargeCents(usage: unknown): {
+  actualCostCents: number;
+  chargeCents: number;
+  billableUsage: ReturnType<typeof tokenUsage>;
+} {
   const tokens = tokenUsage(usage);
   const hasInputCacheBreakdown = tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0;
   const inputCny = hasInputCacheBreakdown
     ? (tokens.inputCacheHit / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.inputCacheHit
       + (tokens.inputCacheMiss / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input
+      + (Math.max(0, tokens.input - tokens.inputCacheHit - tokens.inputCacheMiss) / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input
     : (tokens.input / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input;
   const actualCny = inputCny + (tokens.output / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.output;
   const actualCostCents = Math.round(actualCny * 100);
   const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
-  return { actualCostCents, chargeCents };
+  return { actualCostCents, chargeCents, billableUsage: tokens };
 }
 
 // ── FCM HTTP v1 auth (mirrors push-test) ──
@@ -329,7 +335,7 @@ Deno.serve(async (req) => {
       }
       if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
 
-      const { actualCostCents, chargeCents } = calcChargeCents(usage);
+      const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(usage);
       const { error: debitErr } = await supabase.rpc("wallet_debit", {
         p_user_id: u.user_id,
         p_amount_cents: chargeCents,
@@ -340,6 +346,7 @@ Deno.serve(async (req) => {
           source: "daily_coach_dispatch",
           model: DEEPSEEK_MODEL,
           usage,
+          billable_usage: billableUsage,
           actual_cost_cents: actualCostCents,
           markup_rate: AI_MARKUP_RATE,
         },

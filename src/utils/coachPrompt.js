@@ -38,13 +38,30 @@ export function normalizeTokenUsage(usage) {
   if (!usage || typeof usage !== "object") return null;
   const input = Number(usage.input_tokens ?? usage.prompt_tokens ?? usage.inputTokens ?? usage.promptTokens ?? 0);
   const output = Number(usage.output_tokens ?? usage.completion_tokens ?? usage.outputTokens ?? usage.completionTokens ?? 0);
-  const total = Number(usage.total_tokens ?? usage.totalTokens ?? input + output);
+  const deepseekCacheHit = Number(usage.prompt_cache_hit_tokens ?? 0);
+  const deepseekCacheMiss = Number(usage.prompt_cache_miss_tokens ?? 0);
+  const anthropicCacheRead = Number(usage.cache_read_input_tokens ?? 0);
+  const anthropicCacheWrite = Number(usage.cache_creation_input_tokens ?? 0);
+  const inputCacheHit = Number.isFinite(deepseekCacheHit) && deepseekCacheHit > 0 ? deepseekCacheHit
+    : Number.isFinite(anthropicCacheRead) ? anthropicCacheRead
+    : 0;
+  const inputCacheMiss = Number.isFinite(deepseekCacheMiss) ? deepseekCacheMiss : 0;
+  const inputCacheWrite = Number.isFinite(anthropicCacheWrite) ? anthropicCacheWrite : 0;
+  const hasDeepseekBreakdown = Number.isFinite(deepseekCacheHit) && deepseekCacheHit > 0
+    || Number.isFinite(deepseekCacheMiss) && deepseekCacheMiss > 0;
+  const totalInput = hasDeepseekBreakdown
+    ? Math.max(input, inputCacheHit + inputCacheMiss)
+    : input + inputCacheHit + inputCacheWrite;
+  const total = Number(usage.total_tokens ?? usage.totalTokens ?? totalInput + output);
   if (![input, output, total].every(Number.isFinite)) return null;
   if (input <= 0 && output <= 0 && total <= 0) return null;
   return {
     inputTokens: Math.max(0, Math.round(input)),
     outputTokens: Math.max(0, Math.round(output)),
-    totalTokens: Math.max(0, Math.round(total || input + output)),
+    totalTokens: Math.max(0, Math.round(total || totalInput + output)),
+    inputCacheHitTokens: Math.max(0, Math.round(inputCacheHit)),
+    inputCacheMissTokens: Math.max(0, Math.round(inputCacheMiss)),
+    inputCacheWriteTokens: Math.max(0, Math.round(inputCacheWrite)),
   };
 }
 

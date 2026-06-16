@@ -25,10 +25,16 @@ const PROVIDERS = {
     url: "https://gw.claudeapi.com/v1/messages",
     model: "claude-opus-4-8",
     keyEnv: "SHARED_CLAUDE_KEY",
-    pricingCnyPerM: { input: 29.1, output: 145.5 },
+    pricingCnyPerM: { input: 29.1, inputCacheHit: 2.91, inputCacheWrite: 36.375, output: 145.5 },
   },
 } as const;
 type ProviderId = keyof typeof PROVIDERS;
+type Pricing = {
+  input: number;
+  inputCacheHit?: number;
+  inputCacheWrite?: number;
+  output: number;
+};
 const AI_MARKUP_RATE = 1.2;
 const MIN_AI_CHARGE_CENTS = 1;
 
@@ -42,33 +48,56 @@ function tokenUsage(usage: unknown): {
   total: number;
   inputCacheHit: number;
   inputCacheMiss: number;
+  inputCacheWrite: number;
 } {
   const u = (usage && typeof usage === "object") ? usage as Record<string, unknown> : {};
   const input = Number(u.input_tokens ?? u.prompt_tokens ?? u.inputTokens ?? u.promptTokens ?? 0);
   const output = Number(u.output_tokens ?? u.completion_tokens ?? u.outputTokens ?? u.completionTokens ?? 0);
-  const total = Number(u.total_tokens ?? u.totalTokens ?? input + output);
-  const inputCacheHit = Number(u.prompt_cache_hit_tokens ?? u.cache_read_input_tokens ?? 0);
-  const inputCacheMiss = Number(u.prompt_cache_miss_tokens ?? 0);
+  const deepseekCacheHit = Number(u.prompt_cache_hit_tokens ?? 0);
+  const deepseekCacheMiss = Number(u.prompt_cache_miss_tokens ?? 0);
+  const anthropicCacheRead = Number(u.cache_read_input_tokens ?? 0);
+  const anthropicCacheWrite = Number(u.cache_creation_input_tokens ?? 0);
+  const inputCacheHit = Number.isFinite(deepseekCacheHit) && deepseekCacheHit > 0 ? deepseekCacheHit
+    : Number.isFinite(anthropicCacheRead) ? anthropicCacheRead
+    : 0;
+  const inputCacheMiss = Number.isFinite(deepseekCacheMiss) ? deepseekCacheMiss : 0;
+  const inputCacheWrite = Number.isFinite(anthropicCacheWrite) ? anthropicCacheWrite : 0;
+  const hasDeepseekBreakdown = Number.isFinite(deepseekCacheHit) && deepseekCacheHit > 0
+    || Number.isFinite(deepseekCacheMiss) && deepseekCacheMiss > 0;
+  const totalInput = hasDeepseekBreakdown
+    ? Math.max(input, inputCacheHit + inputCacheMiss)
+    : input + inputCacheHit + inputCacheWrite;
+  const total = Number(u.total_tokens ?? u.totalTokens ?? totalInput + output);
   return {
     input: Number.isFinite(input) ? input : 0,
     output: Number.isFinite(output) ? output : 0,
-    total: Number.isFinite(total) ? total : 0,
+    total: Number.isFinite(total) ? Math.max(total, totalInput + output) : 0,
     inputCacheHit: Number.isFinite(inputCacheHit) ? inputCacheHit : 0,
     inputCacheMiss: Number.isFinite(inputCacheMiss) ? inputCacheMiss : 0,
+    inputCacheWrite: Number.isFinite(inputCacheWrite) ? inputCacheWrite : 0,
   };
 }
 
-function calcChargeCents(provider: typeof PROVIDERS[ProviderId], usage: unknown): { actualCostCents: number; chargeCents: number } {
+function calcChargeCents(provider: typeof PROVIDERS[ProviderId], usage: unknown): {
+  actualCostCents: number;
+  chargeCents: number;
+  billableUsage: ReturnType<typeof tokenUsage>;
+} {
   const tokens = tokenUsage(usage);
-  const hasInputCacheBreakdown = tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0;
-  const inputCny = hasInputCacheBreakdown
-    ? (tokens.inputCacheHit / 1_000_000) * (provider.pricingCnyPerM.inputCacheHit ?? provider.pricingCnyPerM.input)
-      + (tokens.inputCacheMiss / 1_000_000) * provider.pricingCnyPerM.input
-    : (tokens.input / 1_000_000) * provider.pricingCnyPerM.input;
-  const actualCny = inputCny + (tokens.output / 1_000_000) * provider.pricingCnyPerM.output;
+  const pricing = provider.pricingCnyPerM as Pricing;
+  const cacheHitPrice = pricing.inputCacheHit ?? pricing.input;
+  const cacheWritePrice = pricing.inputCacheWrite ?? pricing.input;
+  const inputCny = provider.id === "deepseek" && (tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0)
+    ? (tokens.inputCacheHit / 1_000_000) * cacheHitPrice
+      + (tokens.inputCacheMiss / 1_000_000) * pricing.input
+      + (Math.max(0, tokens.input - tokens.inputCacheHit - tokens.inputCacheMiss) / 1_000_000) * pricing.input
+    : (tokens.input / 1_000_000) * pricing.input
+      + (tokens.inputCacheHit / 1_000_000) * cacheHitPrice
+      + (tokens.inputCacheWrite / 1_000_000) * cacheWritePrice;
+  const actualCny = inputCny + (tokens.output / 1_000_000) * pricing.output;
   const actualCostCents = Math.round(actualCny * 100);
   const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
-  return { actualCostCents, chargeCents };
+  return { actualCostCents, chargeCents, billableUsage: tokens };
 }
 
 const CORS = {
@@ -134,7 +163,7 @@ Deno.serve(async (req) => {
     return json({ error: (data as { error?: { message?: string } })?.error?.message || "upstream_error", detail: data }, upstream.status || 502);
   }
 
-  const { actualCostCents, chargeCents } = calcChargeCents(provider, data.usage || null);
+  const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(provider, data.usage || null);
 
   const requestId = data.id ? `ai:${data.id}` : `ai:${uid}:${Date.now()}`;
   const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
@@ -147,6 +176,7 @@ Deno.serve(async (req) => {
       provider: provider.id,
       model: provider.model,
       usage: data.usage || null,
+      billable_usage: billableUsage,
       actual_cost_cents: actualCostCents,
       markup_rate: AI_MARKUP_RATE,
     },
@@ -165,6 +195,7 @@ Deno.serve(async (req) => {
       charge_cents: chargeCents,
       actual_cost_cents: actualCostCents,
       markup_rate: AI_MARKUP_RATE,
+      billable_usage: billableUsage,
     },
   });
 });

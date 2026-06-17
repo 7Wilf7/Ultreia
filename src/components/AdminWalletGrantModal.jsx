@@ -8,6 +8,8 @@ import { ModalRoot } from "./ModalRoot";
 
 const PAYMENT_REQUEST_TITLE = "wallet_payment_request";
 const PAYMENT_REQUEST_TITLE_PREFIX = `${PAYMENT_REQUEST_TITLE}:`;
+const PAYMENT_REQUEST_LIST_LIMIT = 500;
+const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
 function decodeBase64Url(value) {
   const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
@@ -18,24 +20,47 @@ function decodeBase64Url(value) {
   return new TextDecoder().decode(bytes);
 }
 
+function tryJson(value) {
+  try {
+    return JSON.parse(value || "{}");
+  } catch {
+    return null;
+  }
+}
+
+function parseTitlePayload(title) {
+  if (!title?.startsWith(PAYMENT_REQUEST_TITLE_PREFIX)) return null;
+  const raw = title.slice(PAYMENT_REQUEST_TITLE_PREFIX.length).trim();
+  if (!raw) return null;
+  return tryJson(decodeBase64Url(raw)) || tryJson(raw) || tryJson(decodeURIComponent(raw));
+}
+
+function parseHumanReadablePaymentRequest(body) {
+  const text = String(body || "").trim();
+  if (!text || !/(充值|支付|付款|payment|top[- ]?up|recharge)/i.test(text)) return null;
+  const email = text.match(EMAIL_RE)?.[0] || "";
+  const amountMatch = text.match(/[¥￥]\s*([0-9]+(?:\.[0-9]{1,2})?)/)
+    || text.match(/(?:充值|支付|付款|amount|paid|payment|top[- ]?up|recharge)[^0-9]{0,12}([0-9]+(?:\.[0-9]{1,2})?)/i);
+  const amount = amountMatch ? Number(amountMatch[1]) : 0;
+  if (!email || !Number.isFinite(amount) || amount <= 0) return null;
+  return {
+    type: PAYMENT_REQUEST_TITLE,
+    email,
+    amount_cents: Math.round(amount * 100),
+  };
+}
+
 function parsePaymentRequest(item) {
   let payload = null;
   if (item?.title?.startsWith(PAYMENT_REQUEST_TITLE_PREFIX)) {
-    try {
-      payload = JSON.parse(decodeBase64Url(item.title.slice(PAYMENT_REQUEST_TITLE_PREFIX.length)));
-    } catch {
-      payload = null;
-    }
+    payload = parseTitlePayload(item.title);
   } else if (item?.title === PAYMENT_REQUEST_TITLE) {
     // Legacy reminders stored the structured payload directly in body, which
     // made the normal inbox show JSON. Keep parsing them so old reminders still
     // appear in the admin grant list.
-    try {
-      payload = JSON.parse(item.body || "{}");
-    } catch {
-      payload = null;
-    }
+    payload = tryJson(item.body);
   }
+  payload = payload || parseHumanReadablePaymentRequest(item?.body);
   if (!payload) return null;
   try {
     const amountCents = Math.round(Number(payload.amount_cents) || 0);
@@ -45,7 +70,7 @@ function parsePaymentRequest(item) {
       id: item.id,
       email,
       amountCents,
-      createdAt: item.createdAt,
+      createdAt: payload.created_at || item.createdAt,
     };
   } catch {
     return null;
@@ -86,7 +111,7 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
   const loadRequests = useCallback(async () => {
     setLoadingRequests(true);
     try {
-      const rows = await pushInbox.listMine(100);
+      const rows = await pushInbox.listMine(PAYMENT_REQUEST_LIST_LIMIT);
       setRequests(rows.map(parsePaymentRequest).filter(Boolean));
     } catch {
       setRequests([]);
@@ -97,7 +122,7 @@ export function AdminWalletGrantModal({ onClose, onGranted }) {
 
   useEffect(() => {
     let cancelled = false;
-    pushInbox.listMine(100)
+    pushInbox.listMine(PAYMENT_REQUEST_LIST_LIMIT)
       .then(rows => {
         if (!cancelled) setRequests(rows.map(parsePaymentRequest).filter(Boolean));
       })

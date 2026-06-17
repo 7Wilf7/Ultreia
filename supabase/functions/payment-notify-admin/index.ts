@@ -93,6 +93,17 @@ async function sendPush(projectId: string, accessToken: string, token: string, t
   return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
+function tokenPreview(token: string): string {
+  return `${token.slice(0, 12)}...`;
+}
+
+function getFcmErrorCode(body: unknown): string {
+  if (!body || typeof body !== "object") return "";
+  const error = (body as { error?: { status?: string; details?: Array<Record<string, unknown>> } }).error;
+  const detailCode = error?.details?.find((item) => typeof item.errorCode === "string")?.errorCode;
+  return detailCode || error?.status || "";
+}
+
 async function findUserByEmail(admin: ReturnType<typeof createClient>, email: string) {
   let page = 1;
   const perPage = 1000;
@@ -148,6 +159,12 @@ Deno.serve(async (req) => {
     .select("id")
     .single();
   if (inboxErr) return json({ error: "inbox_insert_failed", detail: inboxErr.message }, 500);
+  console.info("payment reminder inbox created", {
+    inbox_id: inbox?.id,
+    admin_user_id: adminUser.id,
+    sender_user_id: user.id,
+    amount_cents: amountCents,
+  });
 
   let sent = 0;
   let subscriptionCount = 0;
@@ -162,6 +179,12 @@ Deno.serve(async (req) => {
         .eq("user_id", adminUser.id);
       if (subsErr) throw subsErr;
       subscriptionCount = subs?.length || 0;
+      console.info("payment reminder push subscriptions", {
+        inbox_id: inbox?.id,
+        admin_user_id: adminUser.id,
+        subscription_count: subscriptionCount,
+        fcm_project_id: sa.project_id,
+      });
       if (subs && subs.length > 0) {
         const accessToken = await getAccessToken(sa);
         for (const sub of subs) {
@@ -172,13 +195,44 @@ Deno.serve(async (req) => {
             "Ultreia 充值提醒",
             notifyBody,
           );
-          if (r.ok) sent += 1;
-          else fcmErrors.push({ status: r.status, body: r.body });
+          if (r.ok) {
+            sent += 1;
+            console.info("payment reminder push sent", {
+              inbox_id: inbox?.id,
+              token: tokenPreview(sub.fcm_token),
+            });
+          } else {
+            const errorCode = getFcmErrorCode(r.body);
+            console.error("payment reminder push failed", {
+              inbox_id: inbox?.id,
+              token: tokenPreview(sub.fcm_token),
+              status: r.status,
+              error_code: errorCode,
+              body: r.body,
+            });
+            fcmErrors.push({ status: r.status, error_code: errorCode, body: r.body });
+            if (errorCode === "UNREGISTERED") {
+              await admin
+                .from("push_subscriptions")
+                .delete()
+                .eq("user_id", adminUser.id)
+                .eq("fcm_token", sub.fcm_token);
+            }
+          }
         }
       }
     } catch (e) {
+      console.error("payment reminder push exception", {
+        inbox_id: inbox?.id,
+        error: String(e),
+      });
       fcmErrors.push(String(e));
     }
+  } else {
+    console.warn("payment reminder push skipped: FCM_SERVICE_ACCOUNT missing", {
+      inbox_id: inbox?.id,
+      admin_user_id: adminUser.id,
+    });
   }
 
   return json({

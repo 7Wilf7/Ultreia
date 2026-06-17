@@ -150,6 +150,7 @@ Deno.serve(async (req) => {
   if (inboxErr) return json({ error: "inbox_insert_failed", detail: inboxErr.message }, 500);
 
   let sent = 0;
+  let subscriptionCount = 0;
   const fcmErrors: unknown[] = [];
   const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
   if (saRaw) {
@@ -160,6 +161,7 @@ Deno.serve(async (req) => {
         .select("fcm_token")
         .eq("user_id", adminUser.id);
       if (subsErr) throw subsErr;
+      subscriptionCount = subs?.length || 0;
       if (subs && subs.length > 0) {
         const accessToken = await getAccessToken(sa);
         for (const sub of subs) {
@@ -183,6 +185,7 @@ Deno.serve(async (req) => {
     ok: true,
     inbox_id: inbox?.id,
     sent,
+    subscription_count: subscriptionCount,
     fcm_errors: fcmErrors,
   });
 });

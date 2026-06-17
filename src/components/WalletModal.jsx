@@ -163,8 +163,15 @@ function TopUpModal({ userEmail, onClose }) {
     setNotifying(true);
     setMsg("");
     try {
-      await notifyAdminPayment({ amountCents });
+      const res = await notifyAdminPayment({ amountCents });
       setNotifySent(true);
+      if (Number(res?.sent || 0) <= 0) {
+        const hasToken = Number(res?.subscription_count || 0) > 0;
+        const key = hasToken
+          ? "wallet.topup_notify_push_failed"
+          : "wallet.topup_notify_push_no_device";
+        setMsg(t(key));
+      }
       setAmount("");
     } catch (e) {
       setMsg(t("wallet.topup_notify_failed", { msg: e?.message || String(e) }));
@@ -200,6 +207,18 @@ function TopUpModal({ userEmail, onClose }) {
                   {t("wallet.topup_notify_sent_heading")}
                 </div>
                 <div>{t("wallet.topup_notify_sent_body")}</div>
+                {msg && (
+                  <div style={{
+                    marginTop: 10,
+                    padding: "8px 10px",
+                    borderRadius: 6,
+                    background: "rgba(181,78,26,0.07)",
+                    border: "1px solid rgba(181,78,26,0.22)",
+                    color: "var(--ink-2)",
+                  }}>
+                    {msg}
+                  </div>
+                )}
               </div>
               <button type="button" onClick={onClose} style={{ ...s.btn, width: "100%" }}>
                 {t("common.done")}

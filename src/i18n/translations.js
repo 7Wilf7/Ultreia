@@ -128,6 +128,8 @@ const dict = {
   "wallet.topup_notify_sent_title": { en: "Reminder sent",      zh: "提醒已发送" },
   "wallet.topup_notify_sent_heading": { en: "We will process it as soon as possible.", zh: "会尽快处理" },
   "wallet.topup_notify_sent_body": { en: "The admin has received your top-up reminder. After the payment is checked and your balance is added, you will receive an in-app message and a phone notification if notifications are enabled.", zh: "管理员已经收到你的充值提醒。核对收款并加余额后，你会收到一条 App 内消息；如果手机通知已开启，也会收到系统推送。" },
+  "wallet.topup_notify_push_no_device": { en: "The reminder is in the admin inbox, but no admin device is currently registered for phone notifications. This can happen when testing with another account on the same phone.", zh: "提醒已进入管理员收件箱，但当前没有管理员设备可接收系统通知。用同一台手机切到小号测试时通常会出现这种情况。" },
+  "wallet.topup_notify_push_failed": { en: "The reminder is in the admin inbox, but the phone notification was not delivered. The admin can still process it from the in-app inbox.", zh: "提醒已进入管理员收件箱，但系统通知发送失败。管理员仍可在 App 内收件箱处理。" },
   "wallet.topup_notify_failed": { en: "✕ Reminder failed: {msg}", zh: "✕ 提醒失败：{msg}" },
   "wallet.refresh":             { en: "Refresh",              zh: "刷新" },
   "wallet.ledger":              { en: "Ledger",               zh: "流水" },

@@ -334,7 +334,7 @@ export function UpdateChecker() {
                   // looping bar so the user still sees motion.
                   ...(downloadPct != null
                     ? { width: `${downloadPct}%` }
-                    : { width: "40%", animation: "ts-indeterminate 1.1s ease-in-out infinite" }),
+                    : { width: "40%", animation: "ultreia-indeterminate 1.1s ease-in-out infinite" }),
                 }}
               />
             </div>

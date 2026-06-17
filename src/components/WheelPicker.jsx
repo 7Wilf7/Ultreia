@@ -34,7 +34,7 @@ function WheelColumn({ items, value, onChange, ariaLabel }) {
 
   return (
     <div style={{ position: "relative", height: ITEM_H * VISIBLE, flex: 1, minWidth: 0 }}>
-      <div ref={ref} className="ts-wheel" onScroll={onScroll}
+      <div ref={ref} className="ultreia-wheel" onScroll={onScroll}
         role="listbox" aria-label={ariaLabel}
         style={{
           height: "100%", overflowY: "auto",
@@ -82,13 +82,13 @@ export function TimeWheelModal({ value = "08:00", onConfirm, onClose, title }) {
 
   return (
     <ModalRoot onClose={onClose}>
-      <div onClick={onClose} className="ts-overlay-in" style={{
+      <div onClick={onClose} className="ultreia-overlay-in" style={{
         position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
         backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 10000, padding: 16, overscrollBehavior: "contain",
       }}>
-        <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
+        <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{
           background: "var(--bg-elevated)", border: "1px solid var(--rule)",
           borderRadius: 14, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
           width: "100%", maxWidth: 320, padding: "16px 18px 18px",

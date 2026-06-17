@@ -414,7 +414,7 @@ export function TrainingTab({
   );
 
   const viewMotionClass = isMobile
-    ? (viewMotion.dir > 0 ? "ts-tab-in-right" : viewMotion.dir < 0 ? "ts-tab-in-left" : undefined)
+    ? (viewMotion.dir > 0 ? "ultreia-tab-in-right" : viewMotion.dir < 0 ? "ultreia-tab-in-left" : undefined)
     : undefined;
 
   return (

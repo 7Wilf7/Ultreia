@@ -58,13 +58,13 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
   // reloads) instead of snapping back to the 4-week default every time.
   const [chartPeriod, setChartPeriod] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("ts-chart-period"));
+      const saved = JSON.parse(localStorage.getItem("ultreia.chartPeriod"));
       if (saved && saved.type && saved.count) return saved;
     } catch { /* ignore bad/missing value */ }
     return { type: "week", count: 4 };
   });
   useEffect(() => {
-    try { localStorage.setItem("ts-chart-period", JSON.stringify(chartPeriod)); } catch { /* ignore */ }
+    try { localStorage.setItem("ultreia.chartPeriod", JSON.stringify(chartPeriod)); } catch { /* ignore */ }
   }, [chartPeriod]);
 
   const config = useMemo(() => getChartConfig(filter), [filter]);

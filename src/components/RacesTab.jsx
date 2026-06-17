@@ -641,13 +641,13 @@ export function RacesTab({
       )}
       {editingRaceId && (
         <ModalRoot onClose={attemptCloseEdit}>
-          <div onClick={attemptCloseEdit} className="ts-overlay-in" style={{
+          <div onClick={attemptCloseEdit} className="ultreia-overlay-in" style={{
             position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
             backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 9999, padding: 16, overflowY: "auto", overscrollBehavior: "contain",
           }}>
-            <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
+            <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
               {renderRaceForm("edit")}
             </div>
           </div>
@@ -655,13 +655,13 @@ export function RacesTab({
       )}
       {addingMode && !editingRaceId && (
         <ModalRoot onClose={attemptCloseAdd}>
-          <div onClick={attemptCloseAdd} className="ts-overlay-in" style={{
+          <div onClick={attemptCloseAdd} className="ultreia-overlay-in" style={{
             position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
             backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 9999, padding: 16, overflowY: "auto", overscrollBehavior: "contain",
           }}>
-            <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
+            <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{ width: "100%", maxWidth: 640, margin: "16px 0" }}>
               {renderRaceForm("add")}
             </div>
           </div>
@@ -675,8 +675,8 @@ export function RacesTab({
   // sub-tabs Target / History; the count lives in the sub-tab label so the
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
-    const topMotionClass = topMotion.dir > 0 ? "ts-tab-in-right" : topMotion.dir < 0 ? "ts-tab-in-left" : undefined;
-    const subMotionClass = subMotion.dir > 0 ? "ts-tab-in-right" : subMotion.dir < 0 ? "ts-tab-in-left" : undefined;
+    const topMotionClass = topMotion.dir > 0 ? "ultreia-tab-in-right" : topMotion.dir < 0 ? "ultreia-tab-in-left" : undefined;
+    const subMotionClass = subMotion.dir > 0 ? "ultreia-tab-in-right" : subMotion.dir < 0 ? "ultreia-tab-in-left" : undefined;
     return (
       <div
         key={`${mobileTopTab}-${topMotion.seq}`}

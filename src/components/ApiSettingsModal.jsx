@@ -58,7 +58,7 @@ export function ApiSettingsModal({
   // into the "!" button unless the user taps it. `firstTime` also drives a
   // one-shot "tap to collapse" hint by the "!".
   const [firstTime] = useState(() => {
-    try { return !localStorage.getItem("ts-api-info-seen"); } catch { return false; }
+    try { return !localStorage.getItem("ultreia.apiInfoSeen"); } catch { return false; }
   });
   const [pricingOpen, setPricingOpen] = useState(firstTime);
   // The "tap to collapse" tooltip is a brief one-shot — it would otherwise sit
@@ -66,7 +66,7 @@ export function ApiSettingsModal({
   // few seconds (or the moment the user taps "!").
   const [showHint, setShowHint] = useState(firstTime);
   useEffect(() => {
-    try { localStorage.setItem("ts-api-info-seen", "1"); } catch { /* private mode */ }
+    try { localStorage.setItem("ultreia.apiInfoSeen", "1"); } catch { /* private mode */ }
   }, []);
   useEffect(() => {
     if (!showHint) return;

@@ -766,7 +766,7 @@ export async function fetchHistoryRaceWeather({ lat, lng, date }) {
 // a race entering the forecast window flips from climate → forecast). Real
 // forecasts refresh daily → cache until next local midnight.
 function _raceWxKey(lat, lng, date) {
-  return `ts_race_wx:${roundCoord(lat)}:${roundCoord(lng)}:${date}`;
+  return `ultreia.raceWeather:${roundCoord(lat)}:${roundCoord(lng)}:${date}`;
 }
 function _readRaceWx(lat, lng, date) {
   try {

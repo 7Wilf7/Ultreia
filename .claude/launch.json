@@ -2,13 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "training-studio-dev",
+      "name": "ultreia-dev",
       "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
     },
     {
-      "name": "training-studio-preview",
+      "name": "ultreia-preview",
       "runtimeExecutable": "npm.cmd",
       "runtimeArgs": ["run", "preview", "--", "--port", "4173"],
       "port": 4173

@@ -19,9 +19,9 @@ export function ConfirmDeleteModal({ confirmDelete, setConfirmDelete, onConfirm 
 
   return (
     <ModalRoot onClose={() => setConfirmDelete(null)}>
-    <div onClick={() => setConfirmDelete(null)} className="ts-overlay-in"
+    <div onClick={() => setConfirmDelete(null)} className="ultreia-overlay-in"
       style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} className="ts-modal-in"
+      <div onClick={e => e.stopPropagation()} className="ultreia-modal-in"
         style={{ background: "#fff", borderRadius: 12, padding: "20px 22px", maxWidth: 360, width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
         <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>{title}</div>
         <div style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>

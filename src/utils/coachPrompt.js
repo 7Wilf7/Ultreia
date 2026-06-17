@@ -8,7 +8,7 @@ import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
 import { evaluatePlanOutcome } from "./planMatch";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const COACH_META_RE = /<!--\s*ts-meta:(.*?)\s*-->/s;
+const COACH_META_RE = /<!--\s*ultreia-meta:(.*?)\s*-->/s;
 
 export function parseCoachMessageMeta(content = "") {
   const raw = String(content || "");
@@ -28,7 +28,7 @@ export function messageContentForCoach(content = "") {
 export function appendCoachMessageMeta(content, meta) {
   if (!meta) return content;
   try {
-    return `${String(content || "").trim()}\n\n<!-- ts-meta:${JSON.stringify(meta)} -->`;
+    return `${String(content || "").trim()}\n\n<!-- ultreia-meta:${JSON.stringify(meta)} -->`;
   } catch {
     return content;
   }

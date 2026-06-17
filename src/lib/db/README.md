@@ -62,9 +62,7 @@ silent retry, etc.). Don't swallow errors inside the DAL.
 **Migration complete (3.4).** All 6 user-level data domains (profile,
 user_settings, workouts, races, coach_messages, plus the `itra_pi` field
 co-located on `profiles`) live on Supabase. `localStorage` is no longer used
-by any business code; the legacy `wilf_training_studio_v1` blob is removed
-one-time on first login post-migration. `src/utils/migrate.js` has been
-deleted.
+by any business code. `src/utils/migrate.js` has been deleted.
 
 | Module | Status | Notes |
 |--------|--------|-------|

@@ -283,7 +283,7 @@ export function CalendarDayModal({
     <ModalRoot onClose={onClose}>
     <div
       onClick={onClose}
-      className="ts-overlay-in"
+      className="ultreia-overlay-in"
       style={{
         position: "fixed", inset: 0,
         background: "rgba(20,20,19,0.45)",
@@ -294,7 +294,7 @@ export function CalendarDayModal({
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="ts-modal-in"
+        className="ultreia-modal-in"
         style={{
           background: "var(--bg)",
           border: "1px solid var(--rule)",

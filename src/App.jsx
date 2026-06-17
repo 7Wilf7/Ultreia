@@ -134,9 +134,9 @@ function LoadingScreen({ userId = null, boot = false }) {
   // the previous account's name into the boot greeting.
   let lang = "en", name = "";
   try {
-    const l = localStorage.getItem("ts-lang");
+    const l = localStorage.getItem("ultreia.lang");
     if (l === "zh" || l === "en") lang = l;
-    name = userId ? (localStorage.getItem(`ts-display-name:${userId}`) || "") : "";
+    name = userId ? (localStorage.getItem(`ultreia.displayName:${userId}`) || "") : "";
   } catch { /* private mode */ }
   const hello = timeGreeting(lang) + (name ? `，${name}` : "");
   const line = BOOT_GREETING[lang === "zh" ? "zh" : "en"];
@@ -320,8 +320,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Cache the name so the next launch's splash greeting can show it before
         // the profile finishes loading.
         try {
-          localStorage.setItem(`ts-display-name:${user.id}`, mergedProfile.displayName || "");
-          localStorage.removeItem("ts-display-name");
+          localStorage.setItem(`ultreia.displayName:${user.id}`, mergedProfile.displayName || "");
         } catch { /* private mode */ }
 
         // Settings — same defensive merge.
@@ -350,7 +349,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // side and the onboarding tour opens in their chosen language.
         let preLang = null;
         try {
-          const v = localStorage.getItem("ts-lang");
+          const v = localStorage.getItem("ultreia.lang");
           if (v === "zh" || v === "en") preLang = v;
         } catch { /* private mode */ }
         const savedLang = settingsData?.lang;
@@ -413,21 +412,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     if (!user?.id) return;
     void initPushNotifications(user.id);
   }, [user.id]);
-
-  // One-time cleanup: remove the legacy localStorage blob now that every
-  // domain (profile / user_settings / workouts / races / chatMessages) lives
-  // on Supabase. After the first run on each device this becomes a no-op.
-  useEffect(() => {
-    if (!user?.id) return;
-    try {
-      if (localStorage.getItem("wilf_training_studio_v1")) {
-        localStorage.removeItem("wilf_training_studio_v1");
-        console.info("[migration] removed legacy localStorage key");
-      }
-    } catch {
-      // localStorage may be unavailable (private mode, quotas, etc.) — fine to skip.
-    }
-  }, [user?.id]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────
   async function updateProfile(patch) {
@@ -998,14 +982,14 @@ function AppShell({
     if (now.getHours() < 5 || readinessComplete(note?.readiness)) return;
     if (profileEditorMode || showTour || readinessPromptDate) return;
     try {
-      if (localStorage.getItem(`ts.readinessPrompt.${today}`)) return;
+      if (localStorage.getItem(`ultreia.readinessPrompt.${today}`)) return;
     } catch { /* private mode */ }
     const id = setTimeout(() => setReadinessPromptDate(today), 0);
     return () => clearTimeout(id);
   }, [dailyNotes, now, profileEditorMode, readinessPromptDate, showTour]);
 
   function markReadinessPromptHandled(dateKey) {
-    try { localStorage.setItem(`ts.readinessPrompt.${dateKey}`, "1"); } catch { /* private mode */ }
+    try { localStorage.setItem(`ultreia.readinessPrompt.${dateKey}`, "1"); } catch { /* private mode */ }
     setReadinessPromptDate(null);
   }
 
@@ -1077,7 +1061,7 @@ function AppShell({
   const [planProposal, setPlanProposal] = useState(null);
   const [planImportCache, setPlanImportCache] = useState(() => {
     try {
-      const raw = localStorage.getItem("ts.coachPlanImportCache.v1");
+      const raw = localStorage.getItem("ultreia.coachPlanImportCache.v1");
       const parsed = raw ? JSON.parse(raw) : {};
       return parsed && typeof parsed === "object" ? parsed : {};
     } catch {
@@ -1085,7 +1069,7 @@ function AppShell({
     }
   });
   useEffect(() => {
-    try { localStorage.setItem("ts.coachPlanImportCache.v1", JSON.stringify(planImportCache)); } catch { /* ignore cache write failure */ }
+    try { localStorage.setItem("ultreia.coachPlanImportCache.v1", JSON.stringify(planImportCache)); } catch { /* ignore cache write failure */ }
   }, [planImportCache]);
   // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
   // so it survives a tab switch — the nudge re-opens when the user returns.
@@ -1753,7 +1737,7 @@ Rules:
       {memoryProposal && !showMemory && (
         <button
           onClick={() => { setTab(3); setShowMemory(true); }}
-          className="ts-overlay-in"
+          className="ultreia-overlay-in"
           style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
             background: "var(--moss)", color: "var(--ink-inv)", border: "none",

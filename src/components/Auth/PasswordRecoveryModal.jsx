@@ -5,7 +5,7 @@ import { ModalRoot } from "../ModalRoot";
 
 function initialLang() {
   try {
-    const saved = localStorage.getItem("ts-lang");
+    const saved = localStorage.getItem("ultreia.lang");
     if (saved === "zh" || saved === "en") return saved;
   } catch { /* private mode */ }
   try {

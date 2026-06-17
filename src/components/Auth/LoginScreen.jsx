@@ -5,8 +5,8 @@ import { ModalRoot } from "../ModalRoot";
 import { translate } from "../../i18n/translations";
 import { productLogoUrl } from "../../assets/logo";
 
-const LANG_KEY = "ts-lang";
-const SAVED_LOGINS_KEY = "ts-saved-logins";
+const LANG_KEY = "ultreia.lang";
+const SAVED_LOGINS_KEY = "ultreia.savedLogins";
 const MAX_SAVED_LOGINS = 8;
 
 function initialLang() {

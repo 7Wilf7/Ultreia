@@ -477,7 +477,7 @@ export function AICoachTab({
   // user gives, the more tailored the coach is; so before their first message
   // we point out what's still empty (coach style on defaults / few workouts /
   // no target race), each with a jump button. They can also just send anyway.
-  const HINTS_FLAG = "ts-coach-hints-seen";
+  const HINTS_FLAG = "ultreia.coachHintsSeen";
   function computeCoachHints() {
     const out = [];
     const cfgDefault = (coachConfig?.style ?? DEFAULT_COACH_CONFIG.style) === DEFAULT_COACH_CONFIG.style
@@ -1047,7 +1047,7 @@ export function AICoachTab({
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
                 return (
-                  <div key={i} className="ts-msg-in" style={{
+                  <div key={i} className="ultreia-msg-in" style={{
                     alignSelf: isUser ? "flex-end" : "flex-start",
                     // Mobile bubbles get wider so long messages don't squeeze into
                     // a narrow column the user has to keep scrolling to read.
@@ -1270,13 +1270,13 @@ export function AICoachTab({
         };
         return (
           <ModalRoot onClose={dismiss}>
-            <div onClick={dismiss} className="ts-overlay-in" style={{
+            <div onClick={dismiss} className="ultreia-overlay-in" style={{
               position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
               backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
               display: "flex", alignItems: "center", justifyContent: "center",
               zIndex: 9999, overscrollBehavior: "contain", padding: 16,
             }}>
-              <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
+              <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{
                 background: "var(--bg-elevated)", border: "1px solid var(--rule)",
                 borderRadius: 12, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
                 width: "100%", maxWidth: 420, maxHeight: "calc(100dvh - 32px)",
@@ -1335,14 +1335,14 @@ export function AICoachTab({
         );
         return (
           <ModalRoot onClose={() => setShowCoachMenu(false)}>
-            <div onClick={() => setShowCoachMenu(false)} className="ts-overlay-in" style={{
+            <div onClick={() => setShowCoachMenu(false)} className="ultreia-overlay-in" style={{
               position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
               backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
               display: "flex", alignItems: "center", justifyContent: "center",
               // Below the sub-modals (9999) it opens, so closing a sub returns here.
               zIndex: 9990, overscrollBehavior: "contain", padding: 16,
             }}>
-              <div onClick={e => e.stopPropagation()} className="ts-modal-in" style={{
+              <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{
                 background: "var(--bg-elevated)",
                 border: "1px solid var(--rule)", borderRadius: 14,
                 boxShadow: "0 18px 50px rgba(0,0,0,0.25)",

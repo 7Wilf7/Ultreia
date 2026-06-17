@@ -28,7 +28,7 @@ export function ReadinessPromptModal({ initial, onSave, onSkip }) {
     <ModalRoot onClose={onSkip}>
       <div style={s.modalOverlay(isMobile, { float: true })} onClick={onSkip}>
         <div
-          className="ts-overlay-in"
+          className="ultreia-overlay-in"
           style={s.modalCard(isMobile, { maxWidth: 420, float: true })}
           onClick={e => e.stopPropagation()}
         >

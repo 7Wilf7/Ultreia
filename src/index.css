@@ -139,40 +139,40 @@ summary::-webkit-details-marker { display: none; }
    stays visible across tab switches (state is held in AppShell, not in
    AICoachTab) so the user has a constant visual cue that the model is
    still working even after they leave the chat tab. */
-@keyframes ts-spin {
+@keyframes ultreia-spin {
   to { transform: rotate(360deg); }
 }
 
 /* Indeterminate progress bar — used by the in-app APK update download when
    the server gives no Content-Length, so we can't show a real percentage. */
-@keyframes ts-indeterminate {
+@keyframes ultreia-indeterminate {
   0%   { margin-left: -40%; }
   100% { margin-left: 100%; }
 }
 
 /* Attention flash — pulses a settings cell's background a few times when the
    user is sent there from elsewhere (e.g. the inbox → daily-push shortcut). */
-@keyframes ts-flash-bg {
+@keyframes ultreia-flash-bg {
   0%, 100% { background: var(--bg-elevated); }
   25%, 75% { background: var(--moss-bg); }
 }
-.ts-flash {
-  animation: ts-flash-bg 0.6s ease-in-out 3;
+.ultreia-flash {
+  animation: ultreia-flash-bg 0.6s ease-in-out 3;
 }
 /* Ring pulse — draws attention to an element jumped-to from elsewhere
    (e.g. AI Coach weather pill → the calendar's today weather card). Works on
-   any background, unlike ts-flash which swaps the bg. */
-@keyframes ts-flash-ring {
+   any background, unlike ultreia-flash which swaps the bg. */
+@keyframes ultreia-flash-ring {
   0%, 100% { box-shadow: 0 0 0 0 rgba(88, 99, 64, 0); }
   30%, 70% { box-shadow: 0 0 0 3px var(--moss); }
 }
-.ts-flash-ring {
-  animation: ts-flash-ring 0.7s ease-in-out 3;
+.ultreia-flash-ring {
+  animation: ultreia-flash-ring 0.7s ease-in-out 3;
 }
 @media (prefers-reduced-motion: reduce) {
-  .ts-flash, .ts-flash-ring { animation: none; }
+  .ultreia-flash, .ultreia-flash-ring { animation: none; }
 }
-.ts-spinner {
+.ultreia-spinner {
   display: inline-block;
   vertical-align: middle;
   border-radius: 50%;
@@ -180,75 +180,75 @@ summary::-webkit-details-marker { display: none; }
   border-color: currentColor;
   border-right-color: transparent;
   border-top-color: transparent;
-  animation: ts-spin 0.8s linear infinite;
+  animation: ultreia-spin 0.8s linear infinite;
 }
 
 /* Second-level modal entrance — the overlay fades in while the card grows
    from slightly small. Keeps the appearance from feeling abrupt. Respect
    reduced-motion below. */
-@keyframes ts-overlay-in {
+@keyframes ultreia-overlay-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-@keyframes ts-modal-in {
+@keyframes ultreia-modal-in {
   from { opacity: 0; transform: scale(0.94); }
   to   { opacity: 1; transform: scale(1); }
 }
-.ts-overlay-in {
-  animation: ts-overlay-in 0.16s ease-out;
+.ultreia-overlay-in {
+  animation: ultreia-overlay-in 0.16s ease-out;
 }
-.ts-modal-in {
-  animation: ts-modal-in 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+.ultreia-modal-in {
+  animation: ultreia-modal-in 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
   transform-origin: center center;
   will-change: transform, opacity;
 }
 @media (prefers-reduced-motion: reduce) {
-  .ts-overlay-in, .ts-modal-in { animation: none; }
+  .ultreia-overlay-in, .ultreia-modal-in { animation: none; }
 }
 
 /* Calendar month-change slide. Vertical so it matches the up=next / down=prev
    swipe and never causes horizontal overflow. */
-@keyframes ts-cal-next { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes ts-cal-prev { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
-.ts-cal-in-next { animation: ts-cal-next 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
-.ts-cal-in-prev { animation: ts-cal-prev 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
+@keyframes ultreia-cal-next { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ultreia-cal-prev { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
+.ultreia-cal-in-next { animation: ultreia-cal-next 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ultreia-cal-in-prev { animation: ultreia-cal-prev 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .ts-cal-in-next, .ts-cal-in-prev { animation: none; }
+  .ultreia-cal-in-next, .ultreia-cal-in-prev { animation: none; }
 }
 
 /* Tab-switch slide — the content slides in from the side you swiped toward
    (left swipe → next tab enters from the right, and vice-versa), so changing
    tabs reads as motion instead of a hard cut. Short + subtle. */
-@keyframes ts-tab-slide-r {
+@keyframes ultreia-tab-slide-r {
   from { opacity: 0.3; transform: translateX(30px); }
   to   { opacity: 1;   transform: translateX(0); }
 }
-@keyframes ts-tab-slide-l {
+@keyframes ultreia-tab-slide-l {
   from { opacity: 0.3; transform: translateX(-30px); }
   to   { opacity: 1;   transform: translateX(0); }
 }
-.ts-tab-in-right { animation: ts-tab-slide-r 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
-.ts-tab-in-left  { animation: ts-tab-slide-l 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ultreia-tab-in-right { animation: ultreia-tab-slide-r 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ultreia-tab-in-left  { animation: ultreia-tab-slide-l 0.24s cubic-bezier(0.2, 0.7, 0.3, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .ts-tab-in-right, .ts-tab-in-left { animation: none; }
+  .ultreia-tab-in-right, .ultreia-tab-in-left { animation: none; }
 }
 
-@keyframes ts-settings-panel-in {
+@keyframes ultreia-settings-panel-in {
   from { opacity: 0; transform: translateY(-4px) scale(0.99); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
-@keyframes ts-settings-slide-left {
+@keyframes ultreia-settings-slide-left {
   from { opacity: 0.35; transform: translateX(18px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-@keyframes ts-settings-slide-right {
+@keyframes ultreia-settings-slide-right {
   from { opacity: 0.35; transform: translateX(-18px); }
   to   { opacity: 1; transform: translateX(0); }
 }
-.ts-settings-slide-left  { animation: ts-settings-slide-left 0.18s cubic-bezier(0.2, 0.7, 0.3, 1); }
-.ts-settings-slide-right { animation: ts-settings-slide-right 0.18s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ultreia-settings-slide-left  { animation: ultreia-settings-slide-left 0.18s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ultreia-settings-slide-right { animation: ultreia-settings-slide-right 0.18s cubic-bezier(0.2, 0.7, 0.3, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .ts-settings-slide-left, .ts-settings-slide-right { animation: none; }
+  .ultreia-settings-slide-left, .ultreia-settings-slide-right { animation: none; }
 }
 
 /* Chat message entrance — a single subtle fade + 6px rise as a bubble lands.
@@ -256,23 +256,23 @@ summary::-webkit-details-marker { display: none; }
    existing ones on append, so only a genuinely NEW message animates (the coach
    reply settling in). On tab switch the whole list mounts and settles together.
    Uniform timing, no per-index stagger — a long history shouldn't crawl in. */
-@keyframes ts-msg-in {
+@keyframes ultreia-msg-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.ts-msg-in { animation: ts-msg-in 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
+.ultreia-msg-in { animation: ultreia-msg-in 0.26s cubic-bezier(0.2, 0.7, 0.3, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .ts-msg-in { animation: none; }
+  .ultreia-msg-in { animation: none; }
 }
 
 /* Scroll-snap wheel picker (push times) — hide the scrollbar so it reads as a
    clean rotating wheel, not a scroll box. */
-.ts-wheel {
+.ultreia-wheel {
   scrollbar-width: none;          /* Firefox */
   -ms-overflow-style: none;       /* old Edge */
   -webkit-overflow-scrolling: touch;
 }
-.ts-wheel::-webkit-scrollbar { display: none; }  /* Chromium / WebView / Safari */
+.ultreia-wheel::-webkit-scrollbar { display: none; }  /* Chromium / WebView / Safari */
 
 /* ============================================================
    Mobile-only overrides

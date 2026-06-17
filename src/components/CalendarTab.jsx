@@ -283,7 +283,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
           slide-in (direction set by gotoPrev/Next). */}
       <div
         key={`${view.year}-${view.month}`}
-        className={dir > 0 ? "ts-cal-in-next" : dir < 0 ? "ts-cal-in-prev" : undefined}
+        className={dir > 0 ? "ultreia-cal-in-next" : dir < 0 ? "ultreia-cal-in-prev" : undefined}
         style={{
         display: "grid",
         gridTemplateColumns: "repeat(7, 1fr)",
@@ -505,7 +505,7 @@ function formatTimeShort(iso) {
 //   Row 2: feels · RH · wind · AQI   (small mono, single line)
 const WEATHER_CARD_HEIGHT = 68;
 function WeatherCard({ date, forecast, isToday, flash = false, lang, t, isMobile }) {
-  const cardClass = flash ? "ts-flash-ring" : undefined;
+  const cardClass = flash ? "ultreia-flash-ring" : undefined;
   const weekdays = lang === "zh" ? WEEKDAY_SHORT_ZH : WEEKDAY_SHORT_EN;
   const wkLabel = weekdays[date.getDay()];
   const dateLabel = `${date.getMonth() + 1}-${date.getDate()}`;

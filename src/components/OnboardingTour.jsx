@@ -93,7 +93,7 @@ function renderRich(text) {
   );
 }
 
-export const TOUR_FLAG = "ts-tour-done-v1";
+export const TOUR_FLAG = "ultreia.tourDone.v1";
 
 export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
   const t = useT();
@@ -130,7 +130,7 @@ export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
         paddingBottom: isMobile ? "calc(86px + env(safe-area-inset-bottom))" : 16,
         overscrollBehavior: "contain",
       }}>
-        <div key={i} className="ts-modal-in" style={{
+        <div key={i} className="ultreia-modal-in" style={{
           background: "var(--bg-elevated)",
           border: "1px solid var(--rule)",
           borderRadius: 10,

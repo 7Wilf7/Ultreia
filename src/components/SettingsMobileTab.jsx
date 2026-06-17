@@ -168,7 +168,7 @@ export function SettingsMobileTab({
         <SubCell
           primary={signingOut
             ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                <span className="ts-spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
+                <span className="ultreia-spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
                 {t("settings.signing_out")}
               </span>
             : t("settings.sign_out")}
@@ -256,7 +256,7 @@ function AccountPanel({ open, children }) {
 }
 
 function GroupPanel({ motion, children }) {
-  const cls = motion.dir > 0 ? "ts-settings-slide-left" : motion.dir < 0 ? "ts-settings-slide-right" : undefined;
+  const cls = motion.dir > 0 ? "ultreia-settings-slide-left" : motion.dir < 0 ? "ultreia-settings-slide-right" : undefined;
   return (
     <div style={{
       border: "1px solid var(--rule-soft)",
@@ -335,7 +335,7 @@ function LangSwitch({ lang, onToggle }) {
 function SubCell({ primary, secondary, warn, danger, rightValue, flash, onClick }) {
   return (
     <button onClick={onClick}
-      className={flash ? "ts-flash" : undefined}
+      className={flash ? "ultreia-flash" : undefined}
       style={{
         display: "flex", alignItems: "center", width: "100%",
         textAlign: "left",

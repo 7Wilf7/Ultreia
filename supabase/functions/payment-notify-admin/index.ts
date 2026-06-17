@@ -85,7 +85,16 @@ async function sendPush(projectId: string, accessToken: string, token: string, t
       message: {
         token,
         notification: { title, body },
-        android: { priority: "high", notification: { channel_id: "daily_coach" } },
+        android: {
+          priority: "high",
+          ttl: "60s",
+          notification: {
+            channel_id: "daily_coach",
+            notification_priority: "PRIORITY_HIGH",
+            default_sound: true,
+            default_vibrate_timings: true,
+          },
+        },
       },
     }),
   });
@@ -187,7 +196,7 @@ Deno.serve(async (req) => {
       });
       if (subs && subs.length > 0) {
         const accessToken = await getAccessToken(sa);
-        for (const sub of subs) {
+        const results = await Promise.allSettled(subs.map(async (sub) => {
           const r = await sendPush(
             sa.project_id,
             accessToken,
@@ -195,6 +204,18 @@ Deno.serve(async (req) => {
             "Ultreia 充值提醒",
             notifyBody,
           );
+          return { sub, r };
+        }));
+        for (const result of results) {
+          if (result.status === "rejected") {
+            console.error("payment reminder push request failed", {
+              inbox_id: inbox?.id,
+              error: String(result.reason),
+            });
+            fcmErrors.push(String(result.reason));
+            continue;
+          }
+          const { sub, r } = result.value;
           if (r.ok) {
             sent += 1;
             console.info("payment reminder push sent", {

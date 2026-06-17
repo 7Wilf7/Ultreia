@@ -87,9 +87,8 @@ async function sendPush(projectId: string, accessToken: string, token: string, t
         notification: { title, body },
         android: {
           priority: "high",
-          ttl: "60s",
           notification: {
-            channel_id: "daily_coach",
+            channel_id: "wallet_alerts_v1",
             notification_priority: "PRIORITY_HIGH",
             default_sound: true,
             default_vibrate_timings: true,

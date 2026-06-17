@@ -16,6 +16,38 @@ import * as db from './db';
 
 let initializedForUserId = "";
 const PUSH_TOKEN_STORAGE_KEY = "ultreia.push.fcmToken";
+const PUSH_DEBUG_STORAGE_KEY = "ultreia.push.debug";
+const DAILY_COACH_CHANNEL_ID = "daily_coach";
+const WALLET_ALERTS_CHANNEL_ID = "wallet_alerts_v1";
+
+function appendPushDebug(event, detail = {}) {
+  try {
+    const rows = JSON.parse(localStorage.getItem(PUSH_DEBUG_STORAGE_KEY) || "[]");
+    rows.unshift({ event, detail, at: new Date().toISOString() });
+    localStorage.setItem(PUSH_DEBUG_STORAGE_KEY, JSON.stringify(rows.slice(0, 20)));
+  } catch (err) {
+    console.warn('[push] debug log failed (non-fatal):', err);
+  }
+}
+
+async function deleteCachedPushToken() {
+  let token = "";
+  try {
+    token = localStorage.getItem(PUSH_TOKEN_STORAGE_KEY) || "";
+  } catch (err) {
+    console.warn('[push] token cache read failed (non-fatal):', err);
+  }
+  if (token) {
+    await db.pushSubscriptions.deleteMyToken(token).catch((err) => {
+      console.warn('[push] token delete failed:', err);
+    });
+  }
+  try {
+    localStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
+  } catch (err) {
+    console.warn('[push] token cache clear failed (non-fatal):', err);
+  }
+}
 
 export async function initPushNotifications(userId) {
   if (!userId) return;
@@ -37,9 +69,27 @@ export async function initPushNotifications(userId) {
     db.pushSubscriptions.upsertMyToken(token.value, 'android').catch((err) => {
       console.error('[push] token upsert failed:', err);
     });
+    appendPushDebug('registration', { tokenPrefix: `${token.value.slice(0, 12)}...` });
   });
   PushNotifications.addListener('registrationError', (err) => {
     console.error('[push] registration error:', err);
+    appendPushDebug('registrationError', err);
+  });
+  PushNotifications.addListener('pushNotificationReceived', (notification) => {
+    console.info('[push] notification received:', notification);
+    appendPushDebug('received', {
+      title: notification?.title || "",
+      body: notification?.body || "",
+      data: notification?.data || null,
+    });
+  });
+  PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+    console.info('[push] notification action:', action);
+    appendPushDebug('action', {
+      actionId: action?.actionId || "",
+      title: action?.notification?.title || "",
+      data: action?.notification?.data || null,
+    });
   });
 
   try {
@@ -49,48 +99,46 @@ export async function initPushNotifications(userId) {
     }
     if (perm.receive !== 'granted') {
       console.info('[push] notification permission not granted:', perm.receive);
+      appendPushDebug('permissionDenied', { receive: perm.receive });
+      await deleteCachedPushToken();
       return;
     }
+    appendPushDebug('permissionGranted', { receive: perm.receive });
     // Android 8+ requires a notification channel or the tray notification is
-    // silently dropped. Must match the channel_id the dispatch sends
-    // (android.notification.channel_id = 'daily_coach'). importance 5 = HIGH
-    // (heads-up). Safe to call repeatedly — Android upserts by id.
+    // silently dropped. Safe to call repeatedly — Android upserts by id.
     try {
       await PushNotifications.createChannel({
-        id: 'daily_coach',
+        id: DAILY_COACH_CHANNEL_ID,
         name: 'Daily coach',
         description: 'Your daily AI coach check-in',
         importance: 5,
         visibility: 1,
       });
+      await PushNotifications.createChannel({
+        id: WALLET_ALERTS_CHANNEL_ID,
+        name: 'Wallet alerts',
+        description: 'Wallet top-up and payment reminders',
+        importance: 5,
+        visibility: 1,
+      });
+      appendPushDebug('channelsCreated', {
+        channels: [DAILY_COACH_CHANNEL_ID, WALLET_ALERTS_CHANNEL_ID],
+      });
     } catch (err) {
       console.warn('[push] createChannel failed (non-fatal):', err);
+      appendPushDebug('createChannelFailed', { message: err?.message || String(err) });
     }
     await PushNotifications.register();
   } catch (err) {
     initializedForUserId = "";
     console.error('[push] init failed:', err);
+    appendPushDebug('initFailed', { message: err?.message || String(err) });
   }
 }
 
 export async function clearPushRegistrationForCurrentUser() {
   if (Capacitor.getPlatform() !== 'android') return;
-  let token = "";
-  try {
-    token = localStorage.getItem(PUSH_TOKEN_STORAGE_KEY) || "";
-  } catch (err) {
-    console.warn('[push] token cache read failed (non-fatal):', err);
-  }
-  if (token) {
-    await db.pushSubscriptions.deleteMyToken(token).catch((err) => {
-      console.warn('[push] token delete failed:', err);
-    });
-  }
-  try {
-    localStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
-  } catch (err) {
-    console.warn('[push] token cache clear failed (non-fatal):', err);
-  }
+  await deleteCachedPushToken();
   initializedForUserId = "";
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');

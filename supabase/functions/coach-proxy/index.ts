@@ -109,6 +109,31 @@ function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 }
 
+const STREAM_HEADERS = {
+  ...CORS,
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache, no-transform",
+  "Connection": "keep-alive",
+};
+
+function streamEvent(controller: ReadableStreamDefaultController<Uint8Array>, event: unknown) {
+  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`));
+}
+
+function extractText(data: unknown): string {
+  const content = (data && typeof data === "object" ? (data as { content?: unknown }).content : null);
+  return Array.isArray(content)
+    ? content
+      .filter((block): block is { type: string; text: string } => {
+        return !!block && typeof block === "object"
+          && (block as { type?: unknown }).type === "text"
+          && typeof (block as { text?: unknown }).text === "string";
+      })
+      .map(block => block.text)
+      .join("")
+    : "";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -116,7 +141,7 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return json({ error: "unauthorized" }, 401);
 
-  let body: { system?: string; messages?: unknown; max_tokens?: number; provider?: string };
+  let body: { system?: string; messages?: unknown; max_tokens?: number; provider?: string; stream?: boolean };
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
@@ -153,11 +178,132 @@ Deno.serve(async (req) => {
         max_tokens: body.max_tokens || 8000,
         system: body.system || "",
         messages: body.messages,
+        stream: body.stream === true,
       }),
     });
   } catch (e) {
     return json({ error: "upstream_failed", detail: String(e) }, 502);
   }
+  if (body.stream) {
+    if (!upstream.ok || !upstream.body) {
+      const detail = await upstream.json().catch(() => null);
+      return json({ error: (detail as { error?: { message?: string } })?.error?.message || "upstream_error", detail }, upstream.status || 502);
+    }
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const reader = upstream.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let finalMessage: Record<string, unknown> | null = null;
+        let usage: unknown = null;
+        let upstreamError = "";
+
+        const mergeUsage = (next: unknown) => {
+          if (!next || typeof next !== "object") return;
+          usage = { ...((usage && typeof usage === "object") ? usage as Record<string, unknown> : {}), ...next as Record<string, unknown> };
+        };
+
+        const finishWithError = (message: string) => {
+          streamEvent(controller, { type: "error", error: { message } });
+          controller.close();
+        };
+
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let nl;
+            while ((nl = buffer.indexOf("\n")) >= 0) {
+              const line = buffer.slice(0, nl).trim();
+              buffer = buffer.slice(nl + 1);
+              if (!line.startsWith("data:")) continue;
+              const payload = line.slice(5).trim();
+              if (!payload || payload === "[DONE]") continue;
+              let evt: Record<string, unknown>;
+              try { evt = JSON.parse(payload); } catch { continue; }
+
+              if (evt.type === "message_start") {
+                const message = evt.message as Record<string, unknown> | undefined;
+                if (message) {
+                  finalMessage = { ...message };
+                  mergeUsage(message.usage);
+                }
+              } else if (evt.type === "message_delta") {
+                mergeUsage(evt.usage);
+              } else if (evt.type === "message_stop") {
+                // Finalize after the upstream stream closes so the wallet event is
+                // the last data frame the client needs to read.
+              } else if (evt.type === "error") {
+                const err = evt.error as { message?: unknown } | undefined;
+                upstreamError = typeof err?.message === "string" ? err.message : "stream error";
+              }
+
+              streamEvent(controller, evt);
+            }
+          }
+
+          if (upstreamError) {
+            finishWithError(upstreamError);
+            return;
+          }
+
+          if (!usage) {
+            finishWithError("missing_usage");
+            return;
+          }
+
+          const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(provider, usage);
+          const upstreamId = typeof finalMessage?.id === "string" ? finalMessage.id : "";
+          const requestId = upstreamId ? `ai:${upstreamId}` : `ai:${uid}:${Date.now()}`;
+          const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
+            p_user_id: uid,
+            p_amount_cents: chargeCents,
+            p_kind: "ai_charge",
+            p_provider: provider.id,
+            p_request_id: requestId,
+            p_metadata: {
+              provider: provider.id,
+              model: provider.model,
+              usage,
+              billable_usage: billableUsage,
+              actual_cost_cents: actualCostCents,
+              markup_rate: AI_MARKUP_RATE,
+            },
+          });
+          if (debitErr) {
+            const insufficient = String(debitErr.message || "").includes("insufficient_balance");
+            finishWithError(insufficient ? "insufficient_balance" : "wallet_debit_failed");
+            return;
+          }
+
+          streamEvent(controller, {
+            type: "wallet",
+            provider: provider.id,
+            model: provider.model,
+            usage,
+            wallet: {
+              balance_cents: balanceAfter,
+              charge_cents: chargeCents,
+              actual_cost_cents: actualCostCents,
+              markup_rate: AI_MARKUP_RATE,
+              billable_usage: billableUsage,
+            },
+          });
+          controller.close();
+        } catch (e) {
+          finishWithError(String(e));
+        }
+      },
+      cancel() {
+        upstream.body?.cancel().catch(() => {});
+      },
+    });
+
+    return new Response(stream, { headers: STREAM_HEADERS });
+  }
+
   const data = await upstream.json().catch(() => null);
   if (!upstream.ok || !data) {
     return json({ error: (data as { error?: { message?: string } })?.error?.message || "upstream_error", detail: data }, upstream.status || 502);
@@ -188,6 +334,7 @@ Deno.serve(async (req) => {
 
   return json({
     ...data,
+    content: Array.isArray(data.content) ? data.content : [{ type: "text", text: extractText(data) }],
     provider: provider.id,
     model: provider.model,
     wallet: {

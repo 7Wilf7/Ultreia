@@ -126,8 +126,7 @@ deleted.
   render top-to-bottom without sorting.
 - `clearAllMessages()` deletes with an explicit `.eq('user_id', uid)` filter
   in addition to RLS — defence-in-depth in case RLS is ever misconfigured.
-- The current DeepSeek call in `AICoachTab.sendChat` is **non-streaming** —
-  `resp.json()` returns the full assistant turn at once, so one `appendMessage`
-  call per assistant reply is correct. If streaming is ever added, do NOT
-  call `appendMessage` per token: hold the partial text in local state and
-  commit one row at completion.
+- The main AI Coach chat streams replies into a local in-memory message while
+  tokens arrive, then commits one final `appendMessage` row when the stream
+  completes. Do NOT call `appendMessage` per token; the chat table remains
+  append-only at one row per completed assistant turn.

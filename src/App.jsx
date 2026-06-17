@@ -785,20 +785,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return Promise.resolve();
   }
 
-  // ── Coach message mutations (3.3e). Chat is append-only at the row level;
-  // streaming responses are NOT used (DeepSeek call is one-shot await
-  // resp.json), so a single append per assistant turn is correct. ─────────
-  async function appendChatMessage(role, content) {
-    try {
-      const msg = await db.coachMessages.appendMessage(role, content);
-      setChatMessages(prev => [...prev, msg]);
-      return msg;
-    } catch (err) {
-      window.alert("Failed to save message: " + err.message);
-      throw err;
-    }
-  }
-
+  // ── Coach message mutations (3.3e). Chat is append-only at the row level.
+  // Streaming replies stay local while tokens arrive, then commit one final
+  // assistant row when the stream completes. ───────────────────────────────
   function clearAllChatMessages() {
     // Optimistic clear so the user sees the panel empty instantly.
     let snapshot = [];
@@ -916,7 +905,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
         chatMessages={chatMessages}
         setChatMessages={setChatMessages}
-        appendChatMessage={appendChatMessage}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
         dailyNotes={dailyNotes} setDailyTags={setDailyTags} setReadiness={setReadiness}
@@ -939,7 +927,7 @@ function AppShell({
   user, signOut, changePassword, deleteAccount,
   logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, setChatMessages, appendChatMessage, appendLocalChatMessage, clearAllChatMessages,
+  chatMessages, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -1195,12 +1183,11 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
     onWeatherUsed,
   });
 
-  // ── Lifted sendChat — talks to DeepSeek's Anthropic-compat endpoint.
+  // ── Lifted sendChat — talks to the wallet-backed coach proxy.
   //    Takes the user's typed message; reads everything else from props/
-  //    state in this scope. Persists user + assistant turns via the
-  //    appendChatMessage wrapper (which writes to Supabase + updates the
-  //    chatMessages prop coming from AuthedApp). On API or network errors,
-  //    emits a transient local-only bubble that won't pollute the DB.
+  //    state in this scope. Streams the assistant turn locally, then persists
+  //    one final row. On API or network errors, emits a transient local-only
+  //    bubble that won't pollute the DB.
   function exportJsonBackup() {
     try {
       const coachMessagesForBackup = chatMessages.map(m => {
@@ -1323,12 +1310,27 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
       return false;
     }
 
+    const streamingId = `stream-${Date.now()}`;
+    setChatMessages(prev => [...prev, {
+      id: streamingId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+      isLocal: true,
+      isStreaming: true,
+    }]);
+
     try {
-      const data = await db.usage.coachProxy({
+      const data = await db.usage.coachProxyStream({
         system: systemPrompt,
         messages: messagesToSend,
         max_tokens: 8000,
         provider: apiProvider,
+        onToken: (text) => {
+          setChatMessages(prev => prev.map(m => (
+            m.id === streamingId ? { ...m, content: text } : m
+          )));
+        },
       });
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
@@ -1339,8 +1341,18 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
         usage: data.usage,
         walletChargeCents: data.wallet?.charge_cents ?? 0,
       });
-      try { await appendChatMessage("assistant", appendCoachMessageMeta(reply, meta)); } catch { /* alerted by wrapper */ }
+      const finalContent = appendCoachMessageMeta(reply, meta);
+      try {
+        const saved = await db.coachMessages.appendMessage("assistant", finalContent);
+        setChatMessages(prev => prev.map(m => m.id === streamingId ? saved : m));
+      } catch (err) {
+        setChatMessages(prev => prev.map(m => (
+          m.id === streamingId ? { ...m, content: finalContent, isStreaming: false } : m
+        )));
+        window.alert("Failed to save message: " + err.message);
+      }
     } catch (err) {
+      setChatMessages(prev => prev.filter(m => m.id !== streamingId));
       if (err?.code === "insufficient_balance") {
         appendLocalChatMessage("assistant", t("wallet.insufficient_ai"));
         openWalletSurface();

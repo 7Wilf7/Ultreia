@@ -143,11 +143,11 @@ export async function postJsonStream({ url, headers = {}, body, onToken }) {
       if (data && data.error) return { ok: false, status: resp.status, text: "", errorText: data.error?.message || "error" };
       const text = data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       if (text && onToken) onToken(text);
-      return { ok: true, status: resp.status, text, usage: data?.usage || null };
+      return { ok: true, status: resp.status, text, usage: data?.usage || null, data };
     }
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
-    let buffer = "", full = "", errMsg = "", usage = null;
+    let buffer = "", full = "", errMsg = "", usage = null, data = null;
     const mergeUsage = (next) => {
       if (!next || typeof next !== "object") return;
       usage = { ...(usage || {}), ...next };
@@ -172,12 +172,15 @@ export async function postJsonStream({ url, headers = {}, body, onToken }) {
           mergeUsage(evt.message?.usage);
         } else if (evt.type === "message_delta") {
           mergeUsage(evt.usage);
+        } else if (evt.type === "wallet") {
+          data = evt;
+          mergeUsage(evt.usage);
         } else if (evt.type === "error") {
           errMsg = evt.error?.message || "stream error";
         }
       }
     }
     if (errMsg) return { ok: false, status: resp.status, text: full, errorText: errMsg };
-    return { ok: true, status: resp.status, text: full, usage };
+    return { ok: true, status: resp.status, text: full, usage, data };
   });
 }

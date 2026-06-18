@@ -428,20 +428,18 @@ export async function captureSnapshotForWorkout({ date, startedAt, durationSec =
   return await fetchRealtimeSnapshot({ lng, lat });
 }
 
-// localStorage-backed cache for weather data. Two freshness rules:
-//   • realtime → 1 hour TTL. AI Coach status pill + prompt context want
-//     "roughly now" — a stale hour is fine, more than that and a runner
-//     deciding pace mid-afternoon shouldn't trust this morning's temp.
-//   • forecasts → cached until the next local midnight. The daily forecast
-//     for today + 6 future days only changes meaningfully day-over-day, so
-//     once-per-day matches actual freshness. Refetches when the user opens
-//     the app on a new calendar day.
-// Cache invalidates wholesale when coords change (user updates default
-// location) — old data is for the wrong city.
+// localStorage-backed cache for weather data. Auto refresh is a rolling
+// interval from the last successful update, not a midnight schedule: if the
+// app first fetches at 07:00 and the interval is 3h, the next eligible refresh
+// is 10:00 while the app is open/foregrounded.
+//
+// Forecasts ride on the same bundle request as realtime weather. Manual
+// refresh and location changes still bypass the interval.
 const CACHE_KEY = 'ts.weather.v1';
-// 3h: weather doesn't change minute-to-minute, and a longer TTL means fewer
-// wallet-backed Caiyun calls (see weather-proxy).
-const REALTIME_TTL_MS = 3 * 60 * 60 * 1000;
+export const WEATHER_AUTO_UPDATE_KEY = 'ultreia.weather.autoUpdate.v1';
+export const WEATHER_UPDATE_INTERVAL_KEY = 'ultreia.weather.updateIntervalHours.v1';
+export const DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS = 3;
+export const WEATHER_UPDATE_INTERVAL_OPTIONS = [3, 6, 12, 24];
 
 function readCache() {
   try {
@@ -457,12 +455,33 @@ function localDateKey(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function realtimeFresh(cache, now = Date.now()) {
-  if (!cache?.realtime || !cache?.realtimeAt) return false;
-  return now - new Date(cache.realtimeAt).getTime() < REALTIME_TTL_MS;
+export function getStoredWeatherSettings() {
+  try {
+    const rawAuto = localStorage.getItem(WEATHER_AUTO_UPDATE_KEY);
+    const rawHours = localStorage.getItem(WEATHER_UPDATE_INTERVAL_KEY);
+    const intervalHours = WEATHER_UPDATE_INTERVAL_OPTIONS.includes(Number(rawHours))
+      ? Number(rawHours)
+      : DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS;
+    return {
+      autoUpdate: rawAuto == null ? true : rawAuto !== 'false',
+      intervalHours,
+    };
+  } catch {
+    return { autoUpdate: true, intervalHours: DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS };
+  }
 }
-function forecastFresh(cache, today = localDateKey()) {
-  return !!cache?.forecasts && cache?.forecastDay === today;
+export function setStoredWeatherSettings({ autoUpdate, intervalHours }) {
+  try {
+    if (typeof autoUpdate === 'boolean') localStorage.setItem(WEATHER_AUTO_UPDATE_KEY, autoUpdate ? 'true' : 'false');
+    if (WEATHER_UPDATE_INTERVAL_OPTIONS.includes(Number(intervalHours))) {
+      localStorage.setItem(WEATHER_UPDATE_INTERVAL_KEY, String(Number(intervalHours)));
+    }
+  } catch { /* private mode */ }
+}
+function realtimeFresh(cache, intervalHours, now = Date.now()) {
+  if (!cache?.realtime || !cache?.realtimeAt) return false;
+  const ttlMs = Math.max(1, Number(intervalHours) || DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS) * 60 * 60 * 1000;
+  return now - new Date(cache.realtimeAt).getTime() < ttlMs;
 }
 function coordsMatch(cache, lng, lat) {
   if (!cache) return false;
@@ -473,7 +492,7 @@ function coordsMatch(cache, lng, lat) {
 // exposes { currentWeather, forecastByDate, status, error, refetch }. Both
 // AICoachTab and AppShell.sendChat consume this so the prompt preview
 // matches what's actually sent. Pass `force: true` to refetch() to bypass
-// the cache (used by the "refresh" affordance + the hourly timer).
+// the cache (used by the "refresh" affordance).
 //
 // status values:
 //   'idle'        — never fetched (initial mount, before effect runs)
@@ -484,7 +503,7 @@ function coordsMatch(cache, lng, lat) {
 // `lastUpdatedAt` is the ISO timestamp of the most recent successful
 //   realtime fetch — surfaced so the UI can render "updated HH:MM" labels
 //   and decide when a manual refresh is meaningful.
-export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed } = {}) {
+export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed, autoUpdate = true, intervalHours = DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS } = {}) {
   // Hydrate from cache synchronously on mount so the AI Coach status pill
   // doesn't flash 'idle' on every page load. The freshness check below
   // decides whether to actually refetch.
@@ -498,13 +517,25 @@ export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed } = {}
 
   const run = useCallback(async (opts = {}) => {
     const force = !!opts.force;
+    const allowAuto = autoUpdate !== false;
+    const effectiveHours = WEATHER_UPDATE_INTERVAL_OPTIONS.includes(Number(intervalHours))
+      ? Number(intervalHours)
+      : DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS;
     const cachedNow = readCache();
+    if (!force && !allowAuto) {
+      if (cachedNow?.realtime) {
+        const m = new Map();
+        if (Array.isArray(cachedNow.forecasts)) for (const f of cachedNow.forecasts) m.set(f.date, f);
+        setState({ currentWeather: cachedNow.realtime, forecastByDate: m, status: 'ready', error: null, lastUpdatedAt: cachedNow.realtimeAt || null });
+      }
+      return;
+    }
     // Fast path: both realtime + forecast are still fresh → serve straight from
     // cache WITHOUT touching device geolocation. This is the common case on
     // app-foreground refresh; calling getCurrentLocation() here is what popped
     // the Android "Location Accuracy" dialog every time the user switched back
     // to the app. Only invoke GPS when something is actually stale (or forced).
-    if (!force && cachedNow && realtimeFresh(cachedNow) && forecastFresh(cachedNow)) {
+    if (!force && cachedNow && realtimeFresh(cachedNow, effectiveHours)) {
       const m = new Map();
       if (Array.isArray(cachedNow.forecasts)) for (const f of cachedNow.forecasts) m.set(f.date, f);
       setState({ currentWeather: cachedNow.realtime, forecastByDate: m, status: 'ready', error: null, lastUpdatedAt: cachedNow.realtimeAt || null });
@@ -520,9 +551,8 @@ export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed } = {}
     // Cache check — when the user opened the app inside the TTL window, we
     // serve straight from localStorage without hitting the proxy.
     const cache = readCache();
-    const needRealtime = force || !coordsMatch(cache, loc.lng, loc.lat) || !realtimeFresh(cache);
-    const needForecast = force || !coordsMatch(cache, loc.lng, loc.lat) || !forecastFresh(cache);
-    if (!needRealtime && !needForecast && cache) {
+    const shouldFetch = force || !coordsMatch(cache, loc.lng, loc.lat) || !realtimeFresh(cache, effectiveHours);
+    if (!shouldFetch && cache) {
       // Pure cache hit — already hydrated in initial state, but re-set to
       // make sure 'ready' is reflected when the user changes default loc
       // between renders.
@@ -544,9 +574,9 @@ export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed } = {}
         lng: loc.lng,
         lat: loc.lat,
         realtime: rt || null,
-        realtimeAt: needRealtime ? new Date().toISOString() : cache?.realtimeAt || null,
+        realtimeAt: new Date().toISOString(),
         forecasts: daily || null,
-        forecastDay: needForecast ? today : cache?.forecastDay || null,
+        forecastDay: today,
       };
       writeCache(nextCache);
       const m = new Map();
@@ -562,7 +592,7 @@ export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed } = {}
       const status = e?.code === 'insufficient_balance' ? 'insufficient_balance' : 'error';
       setState({ currentWeather: null, forecastByDate: null, status, error: status === 'error' ? (e.message || String(e)) : null, lastUpdatedAt: null });
     }
-  }, [defaultLng, defaultLat, onWeatherUsed]);
+  }, [defaultLng, defaultLat, onWeatherUsed, autoUpdate, intervalHours]);
 
   // run() is async — the setState calls inside happen on later ticks, not
   // synchronously inside the effect body. The lint rule still flags this

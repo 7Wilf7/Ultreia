@@ -6,6 +6,7 @@
 
 - **AI Coach 改为 DeepSeek only**：取消 DeepSeek / Claude 模型切换，AI Coach 对话、Memory 自动更新、导入日历提炼和每日教练推送都统一使用 DeepSeek。
 - **AI 扣费取消加价倍率**：AI Coach 和每日教练推送改为按 DeepSeek 实际模型成本扣费，四舍五入到分，每次成功回复最低 ¥0.01，不再乘以 1.2。
+- **天气自动更新频率可调**：Settings 里新增 Weather updates，默认开启，可选每 3 / 6 / 12 小时或每天一次；自动更新按上次成功更新时间滚动计算，只在打开 App 或回到前台时检查，不做后台静默更新。
 
 ## 2026-06-17
 

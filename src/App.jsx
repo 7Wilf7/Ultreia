@@ -34,6 +34,7 @@ import { GuideModal } from "./components/GuideModal";
 import { Spinner } from "./components/Spinner";
 import { ModalRoot } from "./components/ModalRoot";
 import { WalletModal } from "./components/WalletModal";
+import { WeatherSettingsModal } from "./components/WeatherSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
@@ -45,7 +46,15 @@ import {
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import * as db from "./lib/db";
-import { getCurrentLocation, captureSnapshotForWorkout, weatherWindowEligible, useWeatherContext, fetchRaceDayWeather } from "./lib/weather";
+import {
+  getCurrentLocation,
+  captureSnapshotForWorkout,
+  weatherWindowEligible,
+  useWeatherContext,
+  fetchRaceDayWeather,
+  getStoredWeatherSettings,
+  setStoredWeatherSettings,
+} from "./lib/weather";
 import { initPushNotifications } from "./lib/push";
 import { productLogoUrl } from "./assets/logo";
 import {
@@ -933,6 +942,7 @@ function AppShell({
   const [showWallet, setShowWallet] = useState(false);
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
   const [showPushSettings, setShowPushSettings] = useState(false);
+  const [showWeatherSettings, setShowWeatherSettings] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -953,6 +963,7 @@ function AppShell({
   // the calendar flashes today's weather card. A counter (not a bool) so each
   // click replays the pulse even if the user is already on the calendar.
   const [calWeatherFlash, setCalWeatherFlash] = useState(0);
+  const [weatherSettings, setWeatherSettingsState] = useState(() => getStoredWeatherSettings());
 
   // Inbox messages, loaded ONCE at startup so opening the inbox is instant (no
   // per-open fetch) and the unread badge derives from this list — marking read
@@ -1152,7 +1163,15 @@ Output the updated memory in BOTH English and Simplified Chinese — the SAME fa
     defaultLng: defaultLocation?.lng,
     defaultLat: defaultLocation?.lat,
     onWeatherUsed,
+    autoUpdate: weatherSettings.autoUpdate,
+    intervalHours: weatherSettings.intervalHours,
   });
+
+  function setWeatherSettings(patch) {
+    const next = { ...weatherSettings, ...patch };
+    setWeatherSettingsState(next);
+    setStoredWeatherSettings(next);
+  }
 
   // ── Lifted sendChat — talks to the wallet-backed coach proxy.
   //    Takes the user's typed message; reads everything else from props/
@@ -1688,6 +1707,9 @@ Rules:
           onOpenProfile={() => setProfileEditorMode("preview")}
           onRefreshWallet={refreshWallet}
           onOpenPushSettings={() => setShowPushSettings(true)}
+          onOpenWeatherSettings={() => setShowWeatherSettings(true)}
+          weatherAutoUpdate={weatherSettings.autoUpdate}
+          weatherIntervalHours={weatherSettings.intervalHours}
           pushEnabled={pushEnabled}
           pushHours={pushHours}
           pushTimes={pushTimes}
@@ -1814,6 +1836,15 @@ Rules:
           pushTimezone={pushTimezone}
           setPushSettings={setPushSettings}
           onClose={() => setShowPushSettings(false)}
+        />
+      )}
+
+      {showWeatherSettings && (
+        <WeatherSettingsModal
+          weatherAutoUpdate={weatherSettings.autoUpdate}
+          weatherIntervalHours={weatherSettings.intervalHours}
+          setWeatherSettings={setWeatherSettings}
+          onClose={() => setShowWeatherSettings(false)}
         />
       )}
 

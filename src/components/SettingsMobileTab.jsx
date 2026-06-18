@@ -26,6 +26,9 @@ export function SettingsMobileTab({
   onOpenProfile,
   onRefreshWallet,
   onOpenPushSettings,
+  onOpenWeatherSettings,
+  weatherAutoUpdate,
+  weatherIntervalHours,
   pushEnabled,
   pushHours,
   pushTimes,
@@ -216,6 +219,16 @@ export function SettingsMobileTab({
                 ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
                 : t("settings.daily_push_off")}
               onClick={onOpenPushSettings} />
+            <SubCell
+              primary={t("settings.weather_updates")}
+              secondary={weatherAutoUpdate !== false
+                ? t("settings.weather_updates_on", {
+                    interval: Number(weatherIntervalHours) === 24
+                      ? t("settings.weather_updates_daily")
+                      : t("settings.weather_updates_hours", { n: String(Number(weatherIntervalHours) || 3) }),
+                  })
+                : t("settings.weather_updates_off")}
+              onClick={onOpenWeatherSettings} />
             <SubCell
               primary={t("settings.language")}
               rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}

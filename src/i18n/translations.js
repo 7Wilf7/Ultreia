@@ -76,6 +76,11 @@ const dict = {
   "settings.daily_push":        { en: "Daily coach push",     zh: "每日教练推送" },
   "settings.daily_push_on":     { en: "On · {time}",          zh: "开 · 每天 {time}" },
   "settings.daily_push_off":    { en: "Off",                  zh: "关闭" },
+  "settings.weather_updates":   { en: "Weather updates",      zh: "天气更新" },
+  "settings.weather_updates_on": { en: "On · every {interval}", zh: "开 · 每 {interval}" },
+  "settings.weather_updates_off": { en: "Off",                zh: "关闭" },
+  "settings.weather_updates_hours": { en: "{n}h",             zh: "{n} 小时" },
+  "settings.weather_updates_daily": { en: "day",              zh: "天" },
   "settings.export_backup":     { en: "Export backup",        zh: "导出备份" },
   "settings.export_backup_short": { en: "Backup",             zh: "备份" },
   "settings.export_backup_desc":{ en: "Keep a local JSON copy for emergencies. Includes training data, not API keys.", zh: "留一份本地 JSON 副本，误删或账号异常时可人工查看；不含 API 密钥。" },
@@ -104,7 +109,7 @@ const dict = {
   "wallet.pricing_deepseek_title": { en: "DeepSeek",           zh: "DeepSeek" },
   "wallet.pricing_deepseek_body": { en: "Input ¥3.16 / 1M tokens, cache-hit input ¥0.026 / 1M tokens, output ¥6.32 / 1M tokens. Cache-hit input is much cheaper, so a long prompt can still hit the ¥0.01 minimum when most input is cached. AI Coach chat and daily push are charged as actual DeepSeek model cost, rounded to cents, minimum ¥0.01 per successful reply.", zh: "输入 ¥3.16 / 百万 tokens，缓存命中输入 ¥0.026 / 百万 tokens，输出 ¥6.32 / 百万 tokens。缓存命中的输入非常便宜，所以当大部分输入命中缓存时，很长的 prompt 也可能只触发 ¥0.01 最低扣费。AI Coach 对话和每日推送都按 DeepSeek 实际模型成本扣费，四舍五入到分，每次成功回复最低 ¥0.01。" },
   "wallet.pricing_weather_title": { en: "Weather",             zh: "天气" },
-  "wallet.pricing_weather_body": { en: "¥0.01 per successful weather request. Current weather + 7-day forecast are fetched together and cached: normal app opens within about 3 hours usually do not charge again, and forecasts refresh at most once per day unless you manually refresh or change location. Workout weather is fetched when Fetch weather is on; sessions of 2h or more may sample about every 2h, capped at 8 points, so long sessions can use several weather requests.", zh: "每次成功天气请求固定扣 ¥0.01。当前天气 + 未来 7 天预报会合并请求并缓存：正常打开 App，约 3 小时内通常不会重复扣费；预报通常每天刷新一次，除非你手动刷新或更换位置。训练天气只在勾选「获取天气」时抓取；2 小时及以上训练会尽量每约 2 小时采样一次，最多 8 个点，所以长训练可能产生多次天气请求。" },
+  "wallet.pricing_weather_body": { en: "¥0.01 per successful weather request. Current weather + 7-day forecast are fetched together and cached. Automatic weather updates follow the interval selected in Settings, counted from the last successful update, and only check while the app is open or returns to the foreground. Manual refresh or location changes fetch immediately. Workout weather is fetched when Fetch weather is on; sessions of 2h or more may sample about every 2h, capped at 8 points, so long sessions can use several weather requests.", zh: "每次成功天气请求固定扣 ¥0.01。当前天气 + 未来 7 天预报会合并请求并缓存。自动天气更新按设置里的频率执行，从上一次成功更新开始计时，并且只在打开 App 或回到前台时检查；手动刷新或更换位置会立即重新获取。训练天气只在勾选「获取天气」时抓取；2 小时及以上训练会尽量每约 2 小时采样一次，最多 8 个点，所以长训练可能产生多次天气请求。" },
   "wallet.info_toggle":         { en: "Show or hide billing rules", zh: "显示或隐藏计费说明" },
   "wallet.balance":             { en: "Balance",              zh: "余额" },
   "wallet.topup":               { en: "Top up",               zh: "充值" },
@@ -585,6 +590,15 @@ const dict = {
   "calendar.weather_today_tag":   { en: "Today",              zh: "今天" },
   "calendar.weather_updated_at":  { en: "updated {time}",     zh: "更新于 {time}" },
   "calendar.weather_refresh_tooltip": { en: "Refresh weather now", zh: "立即刷新天气" },
+
+  // ===== Weather update settings =====
+  "weather_settings.title":      { en: "Weather updates",      zh: "天气更新" },
+  "weather_settings.auto_update": { en: "Auto update weather", zh: "自动更新天气" },
+  "weather_settings.auto_update_desc": { en: "Checks when the app opens or returns to the foreground.", zh: "打开 App 或回到前台时检查是否需要更新。" },
+  "weather_settings.interval":   { en: "Update interval",      zh: "更新频率" },
+  "weather_settings.hours":      { en: "{n}h",                 zh: "{n} 小时" },
+  "weather_settings.daily":      { en: "Daily",                zh: "每天" },
+  "weather_settings.behavior_note": { en: "The timer starts from the last successful weather update. If the app first updates at 07:00 with a 3h interval, the next eligible update is 10:00 while the app is active; it does not run a hidden midnight schedule.", zh: "计时从上一次成功更新开始。比如 7:00 第一次更新、频率设为 3 小时，下一次符合条件是 10:00 且 App 正在使用或回到前台时；不会在后台按凌晨整点表偷偷更新。" },
 
   // ===== Global filter =====
   "filter.type_label":        { en: "Type:",                zh: "类型：" },

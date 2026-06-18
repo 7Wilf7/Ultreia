@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import {
-  API_PROVIDERS, DEFAULT_API_PROVIDER,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
   DEFAULT_COACH_CONFIG,
 } from "../constants";
@@ -238,10 +237,7 @@ export function AICoachTab({
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
   memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
-  apiProvider = DEFAULT_API_PROVIDER,
-  setApiProvider,
 }) {
-  const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS[DEFAULT_API_PROVIDER];
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -249,7 +245,6 @@ export function AICoachTab({
   // stacked row cards). Memoize so we don't rebuild the renderer object on
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
-  const [showModelInfo, setShowModelInfo] = useState(false);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -527,7 +522,7 @@ export function AICoachTab({
   const inChat = true;
   const memoryReady = !!coachMemory?.trim();
   const calendarImportOn = coachConfig.showCalendarButton !== false;
-  const providerLabel = provider.label || "DeepSeek";
+  const providerLabel = "DeepSeek";
   const coachStyleLabel = t(`enum.coach.${coachConfig.style || "balanced"}`);
   const outputLabel = t(`enum.length.${coachConfig.outputLength || "standard"}`);
   const interventionLabel = t(`enum.intervention.${coachConfig.intervention || "standard"}`);
@@ -596,50 +591,6 @@ export function AICoachTab({
           this panel" footgun. Modals overlay both desktop and mobile views,
           and the legacy 2-col desktop "memory + prompt" layout is dropped
           (one at a time is fine — these aren't compared often). */}
-      {/* Model picker — AI calls are wallet-backed through the server proxy. */}
-      {showModelInfo && (
-        <ModalRoot onClose={() => setShowModelInfo(false)}>
-          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowModelInfo(false)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 360, float: true })} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{lang === "zh" ? "选择模型" : "Choose model"}</h2>
-                <button onClick={() => setShowModelInfo(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {Object.values(API_PROVIDERS).map((p) => {
-                  const active = p.id === provider.id;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => {
-                        setApiProvider?.(p.id);
-                        setShowModelInfo(false);
-                      }}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 10, textAlign: "left", width: "100%",
-                        padding: "11px 13px", borderRadius: 3,
-                        border: active ? "1px solid var(--moss)" : "1px solid var(--rule)",
-                        background: active ? "var(--moss-bg)" : "var(--bg-elevated)",
-                        cursor: "pointer",
-                      }}>
-                      <span style={{ color: active ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}><CoachIcon size={14} /></span>
-                      <span style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ display: "block", fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{p.label}</span>
-                        <span style={{ display: "block", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>{p.defaultModel}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ ...s.muted, fontSize: 11, marginTop: 12, lineHeight: 1.5 }}>
-                {lang === "zh" ? "AI Coach 使用钱包扣费，无需自己申请或填写第三方密钥。" : "AI Coach is billed from Wallet. No third-party key setup is needed."}
-              </div>
-            </div>
-          </div>
-        </ModalRoot>
-      )}
-
       {showCoachConfig && (
         <ModalRoot onClose={() => setShowCoachConfig(false)}>
           <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowCoachConfig(false)}>
@@ -828,21 +779,20 @@ export function AICoachTab({
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
-        <button type="button" onClick={() => setShowModelInfo(true)}
-          title={lang === "zh" ? "选择模型" : "Choose model"}
+        <span
+          title={lang === "zh" ? "AI Coach 当前使用 DeepSeek" : "AI Coach currently uses DeepSeek"}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
             border: "1px solid var(--rule)", borderRadius: 2,
             background: "var(--bg-elevated)", color: "var(--ink-2)",
             fontSize: 11, fontFamily: "var(--font-sans)",
-            cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
+            whiteSpace: "nowrap",
           }}>
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
           {!isMobile && <span style={{ color: "var(--ink-3)" }}>Model</span>}
           <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{providerLabel}</span>
-          <span style={{ color: "var(--ink-3)", fontSize: 9 }}>⌄</span>
-        </button>
+        </span>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has
             room so it keeps all four. */}
@@ -1013,19 +963,6 @@ export function AICoachTab({
         {chatMessages.length === 0 ? (
           <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, lineHeight: 1.6 }}>
             <div style={{ whiteSpace: "pre-line" }}>{t("coach.empty")}</div>
-            <button
-              type="button"
-              onClick={() => setShowModelInfo(true)}
-              style={{
-                ...s.btnGhost,
-                marginTop: 14,
-                fontSize: 12,
-                padding: "6px 12px",
-                minHeight: 0,
-              }}
-            >
-              {t("coach.choose_model_hint")}
-            </button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>

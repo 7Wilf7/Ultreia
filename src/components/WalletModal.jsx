@@ -65,7 +65,6 @@ function PricingInfo() {
   const t = useT();
   const rows = [
     { title: t("wallet.pricing_deepseek_title"), body: t("wallet.pricing_deepseek_body") },
-    { title: t("wallet.pricing_claude_title"), body: t("wallet.pricing_claude_body") },
     { title: t("wallet.pricing_weather_title"), body: t("wallet.pricing_weather_body") },
   ];
   return (

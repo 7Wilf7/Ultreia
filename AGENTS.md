@@ -60,7 +60,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
 - 函数：
   - `daily-coach-dispatch`（pg_cron 定时生成 AI 打卡 → 钱包扣费 → FCM 推送 → 写 `push_inbox`；部署加 `--no-verify-jwt`）
-  - `coach-proxy`（钱包版 AI Coach 代理，支持 DeepSeek / Claude；共享 key 只在服务端 Secrets，成功回复后按实际 token 成本 ×1.2 扣钱包，余额不足返 402）
+  - `coach-proxy`（钱包版 AI Coach 代理，只走 DeepSeek；共享 key 只在服务端 Secrets，成功回复后按 DeepSeek 实际 token 成本扣钱包，四舍五入到分且最低 ¥0.01，余额不足返 402）
   - `weather-proxy`（钱包版彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；成功天气请求固定扣 ¥0.01）
   - `wallet-status`（读取/初始化钱包余额与最近流水）
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
@@ -69,7 +69,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `delete-account`（自助注销；清各用户表数据 → 删 auth 用户）
   - `push-test`（早期冒烟测试，可退役）
 
-**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CLAUDE_KEY`（服务端 Claude key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
 
 ### 历史教训（避免重蹈）
 

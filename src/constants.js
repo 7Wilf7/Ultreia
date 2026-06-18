@@ -18,25 +18,6 @@ export const API_PROVIDERS = {
     // cost review, not shown as a user-facing API-key setup flow.
     pricing: { inputPerM: 0.435, outputPerM: 0.87 },
   },
-  claude: {
-    id: "claude",
-    label: "Claude",
-    isThirdParty: true,
-    consoleUrl: "https://console.claudeapi.com/",
-    signupUrl: "https://console.claudeapi.com/",
-    endpoints: [
-      // Path is /v1/messages — the Anthropic-compatible standard. The relay
-      // docs page sometimes shows it as "/messages" but the actual route is
-      // /v1/messages, same as the official Anthropic API and DeepSeek's
-      // compat surface.
-      { id: "default", label: "默认线路",  url: "https://gw.claudeapi.com/v1/messages" },
-      { id: "hk",      label: "香港线路",  url: "https://hk.claudeapi.com/v1/messages" },
-      { id: "jp",      label: "日本线路",  url: "https://jp.claudeapi.com/v1/messages" },
-      { id: "sg",      label: "新加坡线路", url: "https://sg.claudeapi.com/v1/messages" },
-    ],
-    defaultModel: "claude-opus-4-8",
-    pricing: { inputPerM: 4, outputPerM: 20 },
-  },
 };
 
 // Typical AI Coach turn (rough — used only for the relative-cost example):

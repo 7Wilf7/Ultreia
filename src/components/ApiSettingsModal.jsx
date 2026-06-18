@@ -15,8 +15,8 @@ function maskedKey(k) {
   return k.slice(0, 7) + "…" + k.slice(-4);
 }
 
-// "$0.028 / msg" formatting — keep 3 sig figs so DeepSeek's much-smaller
-// number stays meaningful next to Claude's.
+// "$0.028 / msg" formatting — keep 3 sig figs so DeepSeek's small numbers
+// stay meaningful.
 function fmtCost(usd) {
   if (usd == null) return "—";
   if (usd >= 0.01)  return `$${usd.toFixed(3)}`;
@@ -24,28 +24,13 @@ function fmtCost(usd) {
 }
 
 /**
- * API settings — one Provider active at a time. Only the active provider's
- * inputs render so the user isn't confused by a second provider's fields
- * sitting open. Both providers' keys + endpoint picks persist independently,
- * so flipping the provider switch doesn't lose anything.
- *
- * Model is LOCKED to each provider's flagship (deepseek-v4-pro and
- * claude-opus-4-8 as of this build). There's no UI to change it; when a
- * vendor ships a new top model, bump it in constants.js and every user
- * picks it up on next load. The Active Model line below is informational
- * only.
- *
- * Claude here is a THIRD-PARTY relay (claudeapi.com), not Anthropic. That's
- * called out inline so the user doesn't paste an official Anthropic key by
- * mistake. The relay offers region-routed mirrors — the user picks which
- * one (stored per-device in localStorage; passed in / out by the parent).
+ * Legacy API settings. Normal AI Coach calls now go through the wallet-backed
+ * DeepSeek Edge Function, so this component is no longer mounted by App.jsx.
  */
 export function ApiSettingsModal({
-  apiProvider, setApiProvider,
+  apiProvider,
   apiKey, setApiKey,
-  claudeApiKey, setClaudeApiKey,
-  claudeEndpointId, setClaudeEndpointId,
-  apiModel, setApiModel,
+  apiModel,
   freeDeepseekLeft,
   onClose,
 }) {
@@ -74,9 +59,10 @@ export function ApiSettingsModal({
     return () => clearTimeout(id);
   }, [showHint]);
 
-  const provider = API_PROVIDERS[apiProvider] || API_PROVIDERS.deepseek;
-  const activeKey = apiProvider === "claude" ? claudeApiKey : apiKey;
-  const setActiveKey = apiProvider === "claude" ? setClaudeApiKey : setApiKey;
+  const providerId = API_PROVIDERS[apiProvider] ? apiProvider : "deepseek";
+  const provider = API_PROVIDERS[providerId];
+  const activeKey = apiKey;
+  const setActiveKey = setApiKey;
 
   function saveKey() {
     if (!keyDraft.trim()) return;
@@ -84,20 +70,7 @@ export function ApiSettingsModal({
     setKeyDraft("");
   }
 
-  // Provider switch also resets the locked model to that provider's flagship.
-  function switchProvider(next) {
-    if (next === apiProvider) return;
-    setApiProvider(next);
-    setApiModel(API_PROVIDERS[next].defaultModel);
-    setKeyDraft("");
-  }
-
   const sectionH = { fontSize: 16, fontWeight: 600, color: "var(--ink-1)", margin: "0 0 4px" };
-
-  // Side-by-side estimated cost for a typical AI Coach turn.
-  const dsCost = estimateMessageCost("deepseek");
-  const clCost = estimateMessageCost("claude");
-  const ratio = (dsCost && clCost && dsCost.total > 0) ? (clCost.total / dsCost.total) : null;
 
   return (
     <ModalRoot onClose={onClose}>
@@ -192,9 +165,6 @@ export function ApiSettingsModal({
               input: String(TYPICAL_INPUT_TOKENS),
               output: String(TYPICAL_OUTPUT_TOKENS),
             })}
-            {ratio && ratio > 1.5 && (
-              <> {t("api.pricing_ratio", { ratio: ratio.toFixed(0) })}</>
-            )}
           </div>
           <div style={{ ...s.muted, fontSize: 11, marginTop: 10, lineHeight: 1.55, borderTop: "1px solid var(--rule)", paddingTop: 10 }}>
             {t("api.model_locked_hint")}
@@ -202,22 +172,11 @@ export function ApiSettingsModal({
         </div>
         </div>
 
-        {/* Provider switch */}
-        <div style={{ ...s.label, marginBottom: 6 }}>{t("api.provider_label")}</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 22, flexWrap: "wrap" }}>
-          {Object.values(API_PROVIDERS).map(p => (
-            <button key={p.id} onClick={() => switchProvider(p.id)}
-              style={s.chip(apiProvider === p.id)}>
-              {p.label}
-            </button>
-          ))}
-        </div>
-
         <h3 style={{ ...sectionH, marginBottom: 10 }}>{provider.label}</h3>
 
         {/* Free-tier allowance — only for DeepSeek when the user has no own key
             yet (served from the app owner's shared key via coach-proxy). */}
-        {apiProvider === "deepseek" && !activeKey && (
+        {providerId === "deepseek" && !activeKey && (
           <div style={{
             border: "1px solid var(--rule)", borderRadius: 6,
             padding: "9px 12px", marginBottom: 14,
@@ -231,14 +190,13 @@ export function ApiSettingsModal({
           </div>
         )}
 
-        {TUTORIALS[apiProvider] && (
-          <button type="button" onClick={() => setTutId(apiProvider)} style={{ ...s.btnGhost, marginBottom: 18 }}>
+        {TUTORIALS[providerId] && (
+          <button type="button" onClick={() => setTutId(providerId)} style={{ ...s.btnGhost, marginBottom: 18 }}>
             {t("tutorial.view")}
           </button>
         )}
 
-        {/* API key for the active provider only — the other provider's key
-            persists silently in state, untouched. */}
+        {/* Legacy personal API key editor, hidden from the current app shell. */}
         <div style={{ ...s.label, marginBottom: 6 }}>{t("api.key_label")}</div>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input
@@ -259,38 +217,6 @@ export function ApiSettingsModal({
               {t("api.clear_key")}
             </button>
           </div>
-        )}
-
-        {/* Endpoint picker — only when the provider offers more than one (e.g.
-            the Claude relay's region-routed mirrors). Stored per-device, not
-            per-account. */}
-        {provider.endpoints.length > 1 && (
-          <>
-            <div style={{ ...s.label, marginBottom: 6, marginTop: 12 }}>{t("api.endpoint_pick_label")}</div>
-            <div style={{ ...s.muted, marginBottom: 8, lineHeight: 1.5 }}>{t("api.endpoint_pick_hint")}</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
-              {provider.endpoints.map(e => {
-                const active = (claudeEndpointId || "default") === e.id;
-                return (
-                  <button key={e.id} onClick={() => setClaudeEndpointId(e.id)}
-                    style={{
-                      ...s.chip(active),
-                      padding: "8px 12px",
-                      textAlign: "left",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      alignItems: "baseline",
-                    }}>
-                    <span style={{ fontWeight: 500 }}>{e.label}</span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: active ? "var(--ink-inv)" : "var(--ink-3)" }}>
-                      {e.url}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </>
         )}
 
         {/* Active model — informational only, locked per provider. (The

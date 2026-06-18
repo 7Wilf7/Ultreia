@@ -66,35 +66,4 @@ export const TUTORIALS = {
       en: "About $0.4 per million input tokens — a single coach reply costs a fraction of a cent.",
     },
   },
-
-  claude: {
-    title: { zh: "Claude API 申请教程", en: "Claude API setup" },
-    warn: {
-      zh: "这是第三方中转服务（claudeapi.com），不是 Anthropic 官方；请勿填写官方 Anthropic 的密钥。",
-      en: "This is a third-party relay (claudeapi.com), not Anthropic’s official API — do not paste an official Anthropic key.",
-    },
-    steps: [
-      {
-        zh: "注册登录：打开中转站控制台注册登录。",
-        en: "Sign up: open the relay console and register.",
-        link: "https://console.claudeapi.com/",
-      },
-      {
-        zh: "充值：按站点指引充值。",
-        en: "Top up: add credit following the site’s instructions.",
-      },
-      {
-        zh: "创建密钥：在控制台创建一个 API key 并复制。",
-        en: "Create a key: generate an API key in the console and copy it.",
-      },
-      {
-        zh: "回到本页：Provider 选 Claude，粘贴密钥保存；若默认线路慢，可在下方切换香港 / 日本 / 新加坡线路。",
-        en: "Back here: set Provider to Claude, paste the key, and save; if the default route is slow, switch to the HK / JP / SG mirror below.",
-      },
-    ],
-    footnote: {
-      zh: "比 DeepSeek 贵不少（约 $4/百万输入 token），回复质量更高，按需选择。",
-      en: "Noticeably pricier than DeepSeek (~$4 per million input tokens) but higher reply quality — choose as needed.",
-    },
-  },
 };

@@ -21,8 +21,8 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const DEEPSEEK_URL = "https://api.deepseek.com/anthropic/v1/messages";
 const DEEPSEEK_MODEL = "deepseek-v4-pro";
 const DEEPSEEK_PRICING_CNY_PER_M = { input: 3.16, inputCacheHit: 0.026, output: 6.32 };
-const AI_MARKUP_RATE = 1.2;
 const MIN_AI_CHARGE_CENTS = 1;
+const AI_CHARGE_POLICY = "actual_cost_min_1_cent";
 
 function tokenUsage(usage: unknown): {
   input: number;
@@ -61,7 +61,7 @@ function calcChargeCents(usage: unknown): {
     : (tokens.input / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input;
   const actualCny = inputCny + (tokens.output / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.output;
   const actualCostCents = Math.round(actualCny * 100);
-  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
+  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, actualCostCents);
   return { actualCostCents, chargeCents, billableUsage: tokens };
 }
 
@@ -348,7 +348,7 @@ Deno.serve(async (req) => {
           usage,
           billable_usage: billableUsage,
           actual_cost_cents: actualCostCents,
-          markup_rate: AI_MARKUP_RATE,
+          charge_policy: AI_CHARGE_POLICY,
         },
       });
       if (debitErr) {

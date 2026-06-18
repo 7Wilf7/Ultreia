@@ -1,46 +1,26 @@
 // Wallet-backed AI coach proxy.
 //
-// The app owner's provider keys stay in Edge Function secrets. This function
-// identifies the caller from their JWT, ensures their wallet exists, calls the
-// selected provider, then debits the wallet only after a successful upstream reply.
+// The app owner's DeepSeek key stays in Edge Function secrets. This function
+// identifies the caller from their JWT, ensures their wallet exists, calls
+// DeepSeek, then debits the wallet only after a successful upstream reply.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
 //   npx supabase functions deploy coach-proxy
 //
-// Secrets: SHARED_DEEPSEEK_KEY, SHARED_CLAUDE_KEY (set in Dashboard → Edge Functions → Secrets).
+// Secrets: SHARED_DEEPSEEK_KEY (set in Dashboard → Edge Functions → Secrets).
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const PROVIDERS = {
-  deepseek: {
-    id: "deepseek",
-    url: "https://api.deepseek.com/anthropic/v1/messages",
-    model: "deepseek-v4-pro",
-    keyEnv: "SHARED_DEEPSEEK_KEY",
-    pricingCnyPerM: { input: 3.16, inputCacheHit: 0.026, output: 6.32 },
-  },
-  claude: {
-    id: "claude",
-    url: "https://gw.claudeapi.com/v1/messages",
-    model: "claude-opus-4-8",
-    keyEnv: "SHARED_CLAUDE_KEY",
-    pricingCnyPerM: { input: 29.1, inputCacheHit: 2.91, inputCacheWrite: 36.375, output: 145.5 },
-  },
+const DEEPSEEK = {
+  id: "deepseek",
+  url: "https://api.deepseek.com/anthropic/v1/messages",
+  model: "deepseek-v4-pro",
+  keyEnv: "SHARED_DEEPSEEK_KEY",
+  pricingCnyPerM: { input: 3.16, inputCacheHit: 0.026, output: 6.32 },
 } as const;
-type ProviderId = keyof typeof PROVIDERS;
-type Pricing = {
-  input: number;
-  inputCacheHit?: number;
-  inputCacheWrite?: number;
-  output: number;
-};
-const AI_MARKUP_RATE = 1.2;
 const MIN_AI_CHARGE_CENTS = 1;
-
-function resolveProvider(value: unknown): typeof PROVIDERS[ProviderId] {
-  return value === "claude" ? PROVIDERS.claude : PROVIDERS.deepseek;
-}
+const AI_CHARGE_POLICY = "actual_cost_min_1_cent";
 
 function tokenUsage(usage: unknown): {
   input: number;
@@ -78,25 +58,19 @@ function tokenUsage(usage: unknown): {
   };
 }
 
-function calcChargeCents(provider: typeof PROVIDERS[ProviderId], usage: unknown): {
+function calcChargeCents(usage: unknown): {
   actualCostCents: number;
   chargeCents: number;
   billableUsage: ReturnType<typeof tokenUsage>;
 } {
   const tokens = tokenUsage(usage);
-  const pricing = provider.pricingCnyPerM as Pricing;
-  const cacheHitPrice = pricing.inputCacheHit ?? pricing.input;
-  const cacheWritePrice = pricing.inputCacheWrite ?? pricing.input;
-  const inputCny = provider.id === "deepseek" && (tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0)
-    ? (tokens.inputCacheHit / 1_000_000) * cacheHitPrice
-      + (tokens.inputCacheMiss / 1_000_000) * pricing.input
-      + (Math.max(0, tokens.input - tokens.inputCacheHit - tokens.inputCacheMiss) / 1_000_000) * pricing.input
-    : (tokens.input / 1_000_000) * pricing.input
-      + (tokens.inputCacheHit / 1_000_000) * cacheHitPrice
-      + (tokens.inputCacheWrite / 1_000_000) * cacheWritePrice;
+  const pricing = DEEPSEEK.pricingCnyPerM;
+  const inputCny = (tokens.inputCacheHit / 1_000_000) * pricing.inputCacheHit
+    + (tokens.inputCacheMiss / 1_000_000) * pricing.input
+    + (Math.max(0, tokens.input - tokens.inputCacheHit - tokens.inputCacheMiss) / 1_000_000) * pricing.input;
   const actualCny = inputCny + (tokens.output / 1_000_000) * pricing.output;
   const actualCostCents = Math.round(actualCny * 100);
-  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, Math.round(actualCny * AI_MARKUP_RATE * 100));
+  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, actualCostCents);
   return { actualCostCents, chargeCents, billableUsage: tokens };
 }
 
@@ -141,12 +115,11 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return json({ error: "unauthorized" }, 401);
 
-  let body: { system?: string; messages?: unknown; max_tokens?: number; provider?: string; stream?: boolean };
+  let body: { system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
-  const provider = resolveProvider(body.provider);
-  const key = Deno.env.get(provider.keyEnv);
+  const key = Deno.env.get(DEEPSEEK.keyEnv);
   if (!key) return json({ error: "server_misconfigured" }, 500);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -167,14 +140,14 @@ Deno.serve(async (req) => {
     .single();
   if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) return json({ error: "insufficient_balance" }, 402);
 
-  // Call the selected provider with the shared key. Failures are NOT charged.
+  // Call DeepSeek with the shared key. Failures are NOT charged.
   let upstream: Response;
   try {
-    upstream = await fetch(provider.url, {
+    upstream = await fetch(DEEPSEEK.url, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({
-        model: provider.model,
+        model: DEEPSEEK.model,
         max_tokens: body.max_tokens || 8000,
         system: body.system || "",
         messages: body.messages,
@@ -254,22 +227,22 @@ Deno.serve(async (req) => {
             return;
           }
 
-          const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(provider, usage);
+          const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(usage);
           const upstreamId = typeof finalMessage?.id === "string" ? finalMessage.id : "";
           const requestId = upstreamId ? `ai:${upstreamId}` : `ai:${uid}:${Date.now()}`;
           const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
             p_user_id: uid,
             p_amount_cents: chargeCents,
             p_kind: "ai_charge",
-            p_provider: provider.id,
+            p_provider: DEEPSEEK.id,
             p_request_id: requestId,
             p_metadata: {
-              provider: provider.id,
-              model: provider.model,
+              provider: DEEPSEEK.id,
+              model: DEEPSEEK.model,
               usage,
               billable_usage: billableUsage,
               actual_cost_cents: actualCostCents,
-              markup_rate: AI_MARKUP_RATE,
+              charge_policy: AI_CHARGE_POLICY,
             },
           });
           if (debitErr) {
@@ -280,14 +253,14 @@ Deno.serve(async (req) => {
 
           streamEvent(controller, {
             type: "wallet",
-            provider: provider.id,
-            model: provider.model,
+            provider: DEEPSEEK.id,
+            model: DEEPSEEK.model,
             usage,
             wallet: {
               balance_cents: balanceAfter,
               charge_cents: chargeCents,
               actual_cost_cents: actualCostCents,
-              markup_rate: AI_MARKUP_RATE,
+              charge_policy: AI_CHARGE_POLICY,
               billable_usage: billableUsage,
             },
           });
@@ -309,22 +282,22 @@ Deno.serve(async (req) => {
     return json({ error: (data as { error?: { message?: string } })?.error?.message || "upstream_error", detail: data }, upstream.status || 502);
   }
 
-  const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(provider, data.usage || null);
+  const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(data.usage || null);
 
   const requestId = data.id ? `ai:${data.id}` : `ai:${uid}:${Date.now()}`;
   const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
     p_user_id: uid,
     p_amount_cents: chargeCents,
     p_kind: "ai_charge",
-    p_provider: provider.id,
+    p_provider: DEEPSEEK.id,
     p_request_id: requestId,
     p_metadata: {
-      provider: provider.id,
-      model: provider.model,
+      provider: DEEPSEEK.id,
+      model: DEEPSEEK.model,
       usage: data.usage || null,
       billable_usage: billableUsage,
       actual_cost_cents: actualCostCents,
-      markup_rate: AI_MARKUP_RATE,
+      charge_policy: AI_CHARGE_POLICY,
     },
   });
   if (debitErr) {
@@ -335,13 +308,13 @@ Deno.serve(async (req) => {
   return json({
     ...data,
     content: Array.isArray(data.content) ? data.content : [{ type: "text", text: extractText(data) }],
-    provider: provider.id,
-    model: provider.model,
+    provider: DEEPSEEK.id,
+    model: DEEPSEEK.model,
     wallet: {
       balance_cents: balanceAfter,
       charge_cents: chargeCents,
       actual_cost_cents: actualCostCents,
-      markup_rate: AI_MARKUP_RATE,
+      charge_policy: AI_CHARGE_POLICY,
       billable_usage: billableUsage,
     },
   });

@@ -2,12 +2,12 @@ import { supabase } from '../supabase';
 import { postJsonStream } from '../apiFetch';
 import { supabaseFunctionUrl, supabasePublicAnonKey } from '../supabase';
 
-// Wallet-backed AI chat via the coach-proxy Edge Function. Shared provider
-// keys stay server-side; successful replies debit the caller's wallet.
+// Wallet-backed AI chat via the coach-proxy Edge Function. The shared DeepSeek
+// key stays server-side; successful replies debit the caller's wallet.
 // Throws an Error with `.code` (e.g. 'insufficient_balance') so the caller can branch.
-export async function coachProxy({ system, messages, max_tokens, provider }) {
+export async function coachProxy({ system, messages, max_tokens }) {
   const { data, error } = await supabase.functions.invoke('coach-proxy', {
-    body: { system, messages, max_tokens, provider },
+    body: { system, messages, max_tokens },
   });
   if (error) {
     let code = '';
@@ -23,7 +23,7 @@ export async function coachProxy({ system, messages, max_tokens, provider }) {
   return data;
 }
 
-export async function coachProxyStream({ system, messages, max_tokens, provider, onToken }) {
+export async function coachProxyStream({ system, messages, max_tokens, onToken }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
@@ -39,7 +39,7 @@ export async function coachProxyStream({ system, messages, max_tokens, provider,
       apikey: supabasePublicAnonKey,
       Authorization: `Bearer ${accessToken}`,
     },
-    body: { system, messages, max_tokens, provider, stream: true },
+    body: { system, messages, max_tokens, stream: true },
     onToken,
   });
 
@@ -60,7 +60,7 @@ export async function coachProxyStream({ system, messages, max_tokens, provider,
   return {
     content: [{ type: 'text', text: result.text || '' }],
     usage: result.usage || meta.usage || null,
-    provider: meta.provider || provider,
+    provider: meta.provider || 'deepseek',
     model: meta.model,
     wallet: meta.wallet,
   };

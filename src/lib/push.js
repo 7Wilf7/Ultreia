@@ -12,13 +12,18 @@
 // the "enable daily push" toggle so we only prompt when the user opts in.
 
 import { Capacitor } from '@capacitor/core';
+import { registerPlugin } from '@capacitor/core';
 import * as db from './db';
 
 let initializedForUserId = "";
+let getuiListener = null;
 const PUSH_TOKEN_STORAGE_KEY = "ultreia.push.fcmToken";
+const GETUI_CID_STORAGE_KEY = "ultreia.push.getuiCid";
 const PUSH_DEBUG_STORAGE_KEY = "ultreia.push.debug";
 const DAILY_COACH_CHANNEL_ID = "daily_coach";
 const WALLET_ALERTS_CHANNEL_ID = "wallet_alerts_v1";
+
+const UltreiaGetui = registerPlugin('UltreiaGetui');
 
 function appendPushDebug(event, detail = {}) {
   try {
@@ -46,6 +51,37 @@ async function deleteCachedPushToken() {
     localStorage.removeItem(PUSH_TOKEN_STORAGE_KEY);
   } catch (err) {
     console.warn('[push] token cache clear failed (non-fatal):', err);
+  }
+}
+
+async function upsertGetuiClientId(cid) {
+  if (!cid) return;
+  try {
+    localStorage.setItem(GETUI_CID_STORAGE_KEY, cid);
+  } catch (err) {
+    console.warn('[push] getui cid cache failed (non-fatal):', err);
+  }
+  await db.getuiDevices.upsertMyClientId(cid, 'android').catch((err) => {
+    console.error('[push] getui cid upsert failed:', err);
+  });
+  appendPushDebug('getuiCid', { cidPrefix: `${cid.slice(0, 10)}...` });
+}
+
+async function initGetuiPush() {
+  if (!getuiListener) {
+    getuiListener = await UltreiaGetui.addListener('getuiClientId', (event) => {
+      void upsertGetuiClientId(event?.cid || "");
+    });
+  }
+  try {
+    const result = await UltreiaGetui.initialize();
+    await upsertGetuiClientId(result?.cid || "");
+    appendPushDebug('getuiInitialized', { hasCid: Boolean(result?.cid) });
+  } catch (err) {
+    getuiListener?.remove?.();
+    getuiListener = null;
+    console.warn('[push] getui init failed:', err);
+    appendPushDebug('getuiInitFailed', { message: err?.message || String(err) });
   }
 }
 
@@ -104,6 +140,7 @@ export async function initPushNotifications(userId) {
       return;
     }
     appendPushDebug('permissionGranted', { receive: perm.receive });
+    await initGetuiPush();
     // Android 8+ requires a notification channel or the tray notification is
     // silently dropped. Safe to call repeatedly — Android upserts by id.
     try {
@@ -139,10 +176,28 @@ export async function initPushNotifications(userId) {
 export async function clearPushRegistrationForCurrentUser() {
   if (Capacitor.getPlatform() !== 'android') return;
   await deleteCachedPushToken();
+  let cid = "";
+  try {
+    cid = localStorage.getItem(GETUI_CID_STORAGE_KEY) || "";
+  } catch (err) {
+    console.warn('[push] getui cid cache read failed (non-fatal):', err);
+  }
+  if (cid) {
+    await db.getuiDevices.deleteMyClientId(cid).catch((err) => {
+      console.warn('[push] getui cid delete failed:', err);
+    });
+  }
+  try {
+    localStorage.removeItem(GETUI_CID_STORAGE_KEY);
+  } catch (err) {
+    console.warn('[push] getui cid cache clear failed (non-fatal):', err);
+  }
   initializedForUserId = "";
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');
     await PushNotifications.removeAllListeners();
+    getuiListener?.remove?.();
+    getuiListener = null;
   } catch (err) {
     console.warn('[push] remove listeners failed (non-fatal):', err);
   }

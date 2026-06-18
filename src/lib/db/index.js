@@ -5,6 +5,7 @@ export * as coachMessages from './coachMessages';
 export * as userSettings from './userSettings';
 export * as dailyNotes from './dailyNotes';
 export * as pushSubscriptions from './pushSubscriptions';
+export * as getuiDevices from './getuiDevices';
 export * as pushInbox from './pushInbox';
 export * as invites from './invites';
 export * as usage from './usage';

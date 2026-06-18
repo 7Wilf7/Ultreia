@@ -2,13 +2,14 @@
 //
 // The user pays via the owner's personal QR code, then submits the paid amount
 // here. This function does NOT credit the wallet automatically; it creates an
-// admin-facing reminder in push_inbox and best-effort sends an FCM notification.
+// admin-facing reminder in push_inbox and best-effort sends a tray notification.
 //
 // Auth: caller must be logged in (verify JWT stays ON). Deploy:
 //   npx supabase functions deploy payment-notify-admin
 //
 // Secrets:
-//   FCM_SERVICE_ACCOUNT  – optional for tray push; inbox record still works
+//   GETUI_APPID / GETUI_APPKEY / GETUI_MASTERSECRET – optional for China tray push
+//   FCM_SERVICE_ACCOUNT  – optional fallback for tray push; inbox record still works
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -17,6 +18,9 @@ const ADMIN_EMAIL = "wilf7wufan@gmail.com";
 const MAX_AMOUNT_CENTS = 1_000_000; // ¥10,000 guardrail.
 const PAYMENT_REQUEST_TITLE = "wallet_payment_request";
 const PAYMENT_REQUEST_TITLE_PREFIX = `${PAYMENT_REQUEST_TITLE}:`;
+const GETUI_TOKEN_REFRESH_WINDOW_MS = 5 * 60 * 1000;
+
+let getuiTokenCache: { token: string; expireAt: number } | null = null;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -101,6 +105,84 @@ async function sendPush(projectId: string, accessToken: string, token: string, t
   return { ok: resp.ok, status: resp.status, body: respBody };
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function getGetuiConfig() {
+  const appId = Deno.env.get("GETUI_APPID") || "";
+  const appKey = Deno.env.get("GETUI_APPKEY") || "";
+  const masterSecret = Deno.env.get("GETUI_MASTERSECRET") || "";
+  if (!appId || !appKey || !masterSecret) return null;
+  return {
+    appId,
+    appKey,
+    masterSecret,
+    baseUrl: `https://restapi.getui.com/v2/${appId}`,
+  };
+}
+
+async function getGetuiToken(config: NonNullable<ReturnType<typeof getGetuiConfig>>): Promise<string> {
+  const now = Date.now();
+  if (getuiTokenCache && getuiTokenCache.expireAt - GETUI_TOKEN_REFRESH_WINDOW_MS > now) {
+    return getuiTokenCache.token;
+  }
+  const timestamp = String(now);
+  const sign = await sha256Hex(`${config.appKey}${timestamp}${config.masterSecret}`);
+  const resp = await fetch(`${config.baseUrl}/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json;charset=utf-8" },
+    body: JSON.stringify({ sign, timestamp, appkey: config.appKey }),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data?.code !== 0 || !data?.data?.token) {
+    throw new Error(`getui auth failed: ${JSON.stringify(data)}`);
+  }
+  getuiTokenCache = {
+    token: data.data.token,
+    expireAt: Number(data.data.expire_time) || (now + 24 * 60 * 60 * 1000),
+  };
+  return getuiTokenCache.token;
+}
+
+function makeGetuiRequestId(): string {
+  return crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+}
+
+async function sendGetuiPush(
+  config: NonNullable<ReturnType<typeof getGetuiConfig>>,
+  token: string,
+  cid: string,
+  title: string,
+  body: string,
+) {
+  const resp = await fetch(`${config.baseUrl}/push/single/cid`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json;charset=utf-8",
+      token,
+    },
+    body: JSON.stringify({
+      request_id: makeGetuiRequestId(),
+      settings: { ttl: 7200000 },
+      audience: { cid: [cid] },
+      push_message: {
+        notification: {
+          title,
+          body,
+          click_type: "startapp",
+          channel_id: "wallet_alerts_v1",
+          channel_name: "Wallet alerts",
+          channel_level: 4,
+        },
+      },
+    }),
+  });
+  const respBody = await resp.json().catch(() => ({}));
+  return { ok: resp.ok && respBody?.code === 0, status: resp.status, body: respBody };
+}
+
 function tokenPreview(token: string): string {
   return `${token.slice(0, 12)}...`;
 }
@@ -175,10 +257,76 @@ Deno.serve(async (req) => {
   });
 
   let sent = 0;
+  let getuiSent = 0;
+  let getuiDeviceCount = 0;
   let subscriptionCount = 0;
+  const getuiErrors: unknown[] = [];
   const fcmErrors: unknown[] = [];
+
+  const getuiConfig = getGetuiConfig();
+  if (getuiConfig) {
+    try {
+      const { data: devices, error: devicesErr } = await admin
+        .from("push_getui_devices")
+        .select("cid")
+        .eq("user_id", adminUser.id);
+      if (devicesErr) throw devicesErr;
+      getuiDeviceCount = devices?.length || 0;
+      console.info("payment reminder getui devices", {
+        inbox_id: inbox?.id,
+        admin_user_id: adminUser.id,
+        device_count: getuiDeviceCount,
+      });
+      if (devices && devices.length > 0) {
+        const getuiToken = await getGetuiToken(getuiConfig);
+        const results = await Promise.allSettled(devices.map(async (device) => {
+          const r = await sendGetuiPush(getuiConfig, getuiToken, device.cid, "Ultreia 充值提醒", notifyBody);
+          return { device, r };
+        }));
+        for (const result of results) {
+          if (result.status === "rejected") {
+            console.error("payment reminder getui request failed", {
+              inbox_id: inbox?.id,
+              error: String(result.reason),
+            });
+            getuiErrors.push(String(result.reason));
+            continue;
+          }
+          const { device, r } = result.value;
+          if (r.ok) {
+            getuiSent += 1;
+            sent += 1;
+            console.info("payment reminder getui sent", {
+              inbox_id: inbox?.id,
+              cid: tokenPreview(device.cid),
+            });
+          } else {
+            console.error("payment reminder getui failed", {
+              inbox_id: inbox?.id,
+              cid: tokenPreview(device.cid),
+              status: r.status,
+              body: r.body,
+            });
+            getuiErrors.push({ status: r.status, body: r.body });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("payment reminder getui exception", {
+        inbox_id: inbox?.id,
+        error: String(e),
+      });
+      getuiErrors.push(String(e));
+    }
+  } else {
+    console.warn("payment reminder getui skipped: secrets missing", {
+      inbox_id: inbox?.id,
+      admin_user_id: adminUser.id,
+    });
+  }
+
   const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
-  if (saRaw) {
+  if (getuiSent === 0 && saRaw) {
     try {
       const sa = JSON.parse(saRaw);
       const { data: subs, error: subsErr } = await admin
@@ -248,6 +396,11 @@ Deno.serve(async (req) => {
       });
       fcmErrors.push(String(e));
     }
+  } else if (getuiSent > 0) {
+    console.info("payment reminder fcm skipped: getui already sent", {
+      inbox_id: inbox?.id,
+      getui_sent: getuiSent,
+    });
   } else {
     console.warn("payment reminder push skipped: FCM_SERVICE_ACCOUNT missing", {
       inbox_id: inbox?.id,
@@ -259,7 +412,10 @@ Deno.serve(async (req) => {
     ok: true,
     inbox_id: inbox?.id,
     sent,
+    getui_sent: getuiSent,
+    getui_device_count: getuiDeviceCount,
     subscription_count: subscriptionCount,
+    getui_errors: getuiErrors,
     fcm_errors: fcmErrors,
   });
 });

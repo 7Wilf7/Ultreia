@@ -978,6 +978,8 @@ export function AICoachTab({
                 const isUser = m.role === "user";
                 const parsedMessage = parseCoachMessageMeta(m.content);
                 const displayContent = parsedMessage.text;
+                const hasDisplayContent = String(displayContent || "").trim().length > 0;
+                if (!isUser && m.isStreaming && !hasDisplayContent) return null;
                 const costMeta = parsedMessage.meta;
                 const usage = costMeta?.usage;
                 const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton !== false;
@@ -1085,7 +1087,7 @@ export function AICoachTab({
                 );
               });
             })()}
-            {chatLoading && !chatMessages.some(m => m.isStreaming) && (
+            {chatLoading && !chatMessages.some(m => m.isStreaming && String(messageContentForCoach(m.content) || "").trim()) && (
               <div style={{
                 alignSelf: "flex-start", color: "var(--ink-3)", fontSize: 13,
                 display: "inline-flex", alignItems: "center", gap: 8,

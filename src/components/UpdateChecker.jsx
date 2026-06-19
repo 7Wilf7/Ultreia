@@ -88,6 +88,16 @@ const NOTE_TRANSLATIONS = {
   "fix login layout and account actions": "修复登录页布局和账号操作入口",
   "add remembered login accounts": "新增登录账号记忆",
   "add email verification flow": "新增邮箱验证流程",
+  "fix wallet top-up android notifications": "修复充值提醒的 Android 系统推送",
+  "optimize wallet top-up push delivery": "优化充值提醒推送送达稳定性",
+  "log wallet top-up push delivery": "补充充值提醒推送链路日志，便于排查送达问题",
+  "clarify wallet top-up push delivery": "明确充值提醒推送链路和排查说明",
+  "remove training studio legacy names": "清理 Training Studio 旧名称",
+  "restore ai coach streaming": "恢复 AI Coach 流式输出",
+  "use deepseek only for wallet ai billing": "AI Coach 统一改用 DeepSeek",
+  "add configurable weather auto updates": "新增天气每日自动更新与频率设置",
+  "add getui push for payment reminders": "接入个推，提升国内充值提醒系统推送",
+  "hide public account and wallet surfaces": "隐藏面向公开用户的钱包、注册和管理入口",
 };
 
 function localizeNoteLine(line) {
@@ -101,6 +111,7 @@ function localizeNoteLine(line) {
     .replace(/`/g, "")
     .trim();
   if (/^(bump|reset)\s+version\s+to\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
+  if (/^bump\s+android\s+release\s+to\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
   if (/^version\s+bump\s+v?\d+\.\d+\.\d+$/i.test(text)) return "";
   text = text
     .replace(/[;,]?\s*(bump|reset)\s+(version\s+)?(to\s+)?v?\d+\.\d+\.\d+/gi, "")
@@ -110,9 +121,6 @@ function localizeNoteLine(line) {
     .trim();
   if (!text) return "";
   const translated = NOTE_TRANSLATIONS[text.toLowerCase()] || text;
-  // Unknown GitHub release lines are usually raw English commit subjects.
-  // Drop them instead of leaking internal/dev wording into the in-app updater.
-  if (!/[\u4e00-\u9fff]/.test(translated) && /[a-z]/i.test(translated)) return "";
   return `${prefix}${translated}`;
 }
 

@@ -316,12 +316,14 @@ async function dispatchCoachMessage(opts: {
   metadataSource: string;
 }): Promise<{
   accessToken: string | null;
-  sent: number;
-  devices: number;
-  fcmErrors: any[];
-  chargeCents: number;
-  actualCostCents: number;
-  inbox: boolean;
+  summary: {
+    sent: number;
+    devices: number;
+    fcmErrors: any[];
+    chargeCents: number;
+    actualCostCents: number;
+    inbox: boolean;
+  };
 }> {
   const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(opts.usage);
   const { error: debitErr } = await opts.supabase.rpc("wallet_debit", {
@@ -365,12 +367,14 @@ async function dispatchCoachMessage(opts: {
 
   return {
     accessToken,
-    sent,
-    devices: subs?.length || 0,
-    fcmErrors,
-    chargeCents,
-    actualCostCents,
-    inbox: !inboxErr,
+    summary: {
+      sent,
+      devices: subs?.length || 0,
+      fcmErrors,
+      chargeCents,
+      actualCostCents,
+      inbox: !inboxErr,
+    },
   };
 }
 
@@ -510,7 +514,7 @@ Deno.serve(async (req) => {
             metadataSource: "weekly_recap_dispatch",
           });
           fcmAccessToken = result.accessToken;
-          summary.push({ user: u.user_id, mode, week: `${start}..${end}`, ...result, message });
+          summary.push({ user: u.user_id, mode, week: `${start}..${end}`, ...result.summary, message });
         } catch (e) {
           summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
         }
@@ -614,7 +618,7 @@ Deno.serve(async (req) => {
           metadataSource: "daily_coach_dispatch",
         });
         fcmAccessToken = result.accessToken;
-        summary.push({ user: u.user_id, mode, ...result, message });
+        summary.push({ user: u.user_id, mode, ...result.summary, message });
       } catch (e) {
         summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
       }

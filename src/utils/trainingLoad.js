@@ -28,6 +28,11 @@ function startOfLocalDay(dateLike) {
   return d;
 }
 
+function localDateKey(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 // `logs` is the full activity list; `now` a Date. Returns null when there's
 // not enough completed training to say anything (no sessions in 28 days).
 export function computeTrainingLoad(logs, now = new Date()) {
@@ -97,7 +102,7 @@ export function computeLoadTrend(logs, now = new Date(), days = 56) {
   for (const l of completed) {
     const d = startOfLocalDay(l.date);
     if (!d || d > today) continue;
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateKey(d);
     loadByDate.set(key, (loadByDate.get(key) || 0) + sessionLoad(l));
     if (!earliest || d < earliest) earliest = d;
   }
@@ -111,7 +116,7 @@ export function computeLoadTrend(logs, now = new Date(), days = 56) {
   let atl = 0;
 
   for (let d = new Date(start); d <= today; d.setDate(d.getDate() + 1)) {
-    const key = d.toISOString().slice(0, 10);
+    const key = localDateKey(d);
     const load = loadByDate.get(key) || 0;
     atl += (load - atl) / 7;
     ctl += (load - ctl) / 42;

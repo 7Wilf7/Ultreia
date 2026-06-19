@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
     "assets:android": "node scripts/make-adaptive-foreground.mjs && node scripts/make-splash.mjs"
   },
@@ -39,6 +40,7 @@
     "globals": "^17.6.0",
     "subset-font": "^2.5.0",
     "vite": "^8.0.12",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "vitest": "^4.1.9"
   }
 }

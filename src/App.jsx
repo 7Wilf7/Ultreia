@@ -14,7 +14,7 @@ import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
 import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
-import { parseBilingualMemory } from "./utils/memory";
+import { buildMemoryUpdatePrompt, parseBilingualMemory } from "./utils/memory";
 import { reportError } from "./lib/errorOverlay";
 import { pickGreeting, timeGreeting } from "./data/greetings";
 import { CalendarTab } from "./components/CalendarTab";
@@ -1156,27 +1156,7 @@ function AppShell({
   async function proposeMemoryUpdate() {
     if (!chatMessages.length) { window.alert(t("coach.memory_need_chat")); return; }
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
-    const memoryPrompt = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
-
-Current memory (English):
-${coachMemory || "(empty)"}
-
-Recent conversation:
-${chatTranscript}
-
-Guidelines:
-- One short fact per line. No markdown headings.
-- Keep durable facts (preferences, goals, injuries, training style, recurring concerns).
-- DROP session-specific things (today's specific question, one-off advice).
-- Don't repeat what's already in the user's profile (age, location, basic stats).
-- Maximum ~500 words. Trim older entries if needed.
-- If nothing meaningful to add or update, return the existing memory unchanged.
-
-Output the updated memory in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
-===EN===
-<english memory, one fact per line>
-===ZH===
-<中文记忆，每行一条，与英文逐行一一对应>`;
+    const memoryPrompt = buildMemoryUpdatePrompt({ coachMemory, chatTranscript });
     setMemoryUpdating(true);
     try {
       const data = await db.usage.coachProxy({

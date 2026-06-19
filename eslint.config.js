@@ -33,4 +33,10 @@ export default defineConfig([
       globals: { ...globals.node },
     },
   },
+  {
+    files: ['src/**/*.test.js'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.vitest },
+    },
+  },
 ])

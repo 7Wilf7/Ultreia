@@ -28,7 +28,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | 阶段 | 状态 | 目标 | 当前判断 |
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
-| Phase 1 | 进行中 | Action Card 雏形 | 第一版先落在 AI Coach 计划导入 |
+| Phase 1 | 收尾观察 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 待开始 | AI 周复盘 inbox | Action Card 跑通后做 |
 | Phase 3 | 待开始 | Agent Action Log | 有真实动作后再建表 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
@@ -204,14 +204,14 @@ Phase 1 正在推进。
 5. 明确的“无计划休息 / 不跑 / 休息日”会作为 `planned_rest` 日历状态执行：覆盖同日旧计划训练，但不创建 workout row、不污染统计。
 6. 风险等级从固定中风险改为按影响范围判断：少量新增为低风险，批量改动或覆盖旧计划为中风险。
 7. Action Card 已有本地生命周期状态：`proposed` / `executed` / `rejected`。接受后按钮显示已执行，忽略后显示已忽略；关闭弹窗不改变状态。
-8. 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
+8. Memory 自动更新已包装成 `memory_update` Action Card：AI 只提出建议，用户审核条目后接受才写入长期记忆，放弃则不改动。
+9. 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
 
 下一步：
 
-1. 观察 `create_plans` Action Card 在真机上是否顺手，尤其是状态按钮、忽略语义和手机弹窗高度。
-2. 如体验稳定，再扩展到“修改未来计划”。
-3. 再接 Memory 更新动作，让 Memory 审核也使用统一 Action Card 模型。
-4. 后续如果出现跨页面 / 后台动作，再把本地状态迁移成 Supabase `agent_actions` 表。
+1. 观察 `create_plans` 和 `memory_update` Action Card 在真机上是否顺手，尤其是状态按钮、忽略语义和手机弹窗高度。
+2. 如体验稳定，再评估是否需要把“修改未来计划”从当前覆盖式创建，升级成更明确的 `update_plans` 动作。
+3. 后续如果出现跨页面 / 后台动作，再把本地状态迁移成 Supabase `agent_actions` 表。
 
 ## 变更记录
 
@@ -220,3 +220,4 @@ Phase 1 正在推进。
 - 2026-06-19：`create_plans` Action Card 增加执行预览和覆盖提醒，明确展示将创建哪些计划、哪些日期的旧计划会被替换。
 - 2026-06-19：`create_plans` 支持已提炼按钮状态、低 / 中风险解释，以及 `planned_rest` 计划休息状态；休息日覆盖旧计划但不写入训练统计。
 - 2026-06-19：补齐 Action Card 本地状态流：`proposed` / `executed` / `rejected`。当前仍不建表，但为后续 Agent Action Log 保留同样的状态语义。
+- 2026-06-19：`memory_update` 接入同一套 Action Card 语义：AI 自动更新 Memory 只生成建议，接受才保存，放弃不改动。

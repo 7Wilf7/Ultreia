@@ -10,6 +10,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
+import { AGENT_ACTION_STATUS, markAgentActionStatus } from "../utils/agentActions";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
@@ -237,7 +238,7 @@ export function AICoachTab({
   // Memory update lifted to AppShell so it survives leaving this tab (the
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
-  memoryUpdating, memoryProposal, setMemoryProposal, proposeMemoryUpdate,
+  memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, proposeMemoryUpdate,
 }) {
   const t = useT();
   const { lang } = useLanguage();
@@ -435,9 +436,15 @@ export function AICoachTab({
     const e = (en || "").trim(), z = (zh || "").trim();
     setCoachMemoryBoth(e, z);
     setMemoryDraft(memoryLang === "zh" ? z : e);
+    if (memoryProposal?.action) {
+      setLastMemoryAction(markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED));
+    }
     setMemoryProposal(null);
   }
   function rejectMemoryProposal() {
+    if (memoryProposal?.action) {
+      setLastMemoryAction(markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED));
+    }
     setMemoryProposal(null);
   }
 
@@ -693,6 +700,9 @@ export function AICoachTab({
                   </button>
                   <MemoryLangToggle memoryLang={memoryLang} setMemoryLang={setMemoryLang} />
                 </div>
+              )}
+              {lastMemoryAction && !memoryProposal && (
+                <MemoryActionStatus action={lastMemoryAction} t={t} />
               )}
 
               {memoryProposal ? (
@@ -1533,6 +1543,9 @@ export function AICoachTab({
                           <MemoryLangToggle memoryLang={memoryLang} setMemoryLang={setMemoryLang} />
                         </div>
                       )}
+                      {lastMemoryAction && !memoryProposal && (
+                        <MemoryActionStatus action={lastMemoryAction} t={t} />
+                      )}
                       {memoryProposal ? (
                         <MemoryProposalReview
                           proposal={memoryProposal}
@@ -1621,10 +1634,26 @@ export function AICoachTab({
 // old memory are tagged NEW. On accept, keeps the chosen points in BOTH
 // languages (index-aligned when the two line counts match; otherwise the shown
 // language is filtered and the other language is kept whole so nothing is lost).
+function MemoryActionStatus({ action, t }) {
+  const isExecuted = action?.status === AGENT_ACTION_STATUS.EXECUTED;
+  const isRejected = action?.status === AGENT_ACTION_STATUS.REJECTED;
+  if (!isExecuted && !isRejected) return null;
+  return (
+    <div style={{
+      border: "1px solid var(--rule)", borderRadius: 4, padding: "8px 10px",
+      marginBottom: 12, fontSize: 12, lineHeight: 1.45, color: "var(--ink-2)",
+      background: "var(--paper-2)",
+    }}>
+      {isExecuted ? t("coach.memory_action_executed") : t("coach.memory_action_rejected")}
+    </div>
+  );
+}
+
 function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, onReject, t }) {
   const splitLines = (str) => (str || "").split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim());
   const enLines = splitLines(proposal.en);
   const zhLines = splitLines(proposal.zh);
+  const action = proposal.action || null;
   const aligned = enLines.length === zhLines.length && enLines.length > 0;
   const displayLines = displayLang === "zh" ? (zhLines.length ? zhLines : enLines) : (enLines.length ? enLines : zhLines);
   const oldLower = ((displayLang === "zh" ? oldZh : oldEn) || "").toLowerCase();
@@ -1647,6 +1676,34 @@ function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, o
   }
   return (
     <>
+      <div style={{
+        border: "1px solid var(--ink-1)", borderRadius: 4, padding: 12,
+        marginBottom: 12, background: "var(--paper)",
+      }}>
+        <div style={{
+          fontSize: 10, textTransform: "uppercase", letterSpacing: 0,
+          color: "var(--ink-3)", marginBottom: 6,
+        }}>
+          {t("coach.action_modal_eyebrow")}
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 650, color: "var(--ink-1)" }}>
+            {t("coach.memory_action_title")}
+          </div>
+          <span style={{
+            flexShrink: 0, border: "1px solid var(--rule)", padding: "3px 6px",
+            borderRadius: 2, fontSize: 11, color: "var(--ink-2)", background: "var(--paper-2)",
+          }}>
+            {action?.risk === "medium" ? t("coach.action_risk_medium") : t("coach.action_risk_low")}
+          </span>
+        </div>
+        <div style={{ ...s.muted, fontSize: 12, lineHeight: 1.5, marginTop: 8 }}>
+          {t("coach.memory_action_reason")}
+        </div>
+        <div style={{ borderTop: "1px solid var(--rule)", marginTop: 10, paddingTop: 10, fontSize: 12, color: "var(--ink-2)", lineHeight: 1.45 }}>
+          {t("coach.action_requires_confirmation")}
+        </div>
+      </div>
       <div style={{ ...s.label, marginBottom: 4, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
       <div style={{ ...s.muted, fontSize: 11, marginBottom: 8, lineHeight: 1.5 }}>{t("coach.memory_proposal_hint")}</div>
       <div style={{

@@ -63,7 +63,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
-import { AGENT_ACTION_STATUS, buildCreatePlansAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
+import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -1153,6 +1153,7 @@ function AppShell({
   //    is lifted too so the banner can open the modal.
   const [memoryUpdating, setMemoryUpdating] = useState(false);
   const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } once ready
+  const [lastMemoryAction, setLastMemoryAction] = useState(null);
   const [showMemory, setShowMemory] = useState(false);
 
   const refreshWallet = useCallback(async () => {
@@ -1186,7 +1187,12 @@ function AppShell({
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       if (!text.trim()) { window.alert(t("coach.memory_empty_response")); return; }
-      setMemoryProposal(parseBilingualMemory(text));
+      const parsedMemory = parseBilingualMemory(text);
+      setMemoryProposal({
+        ...parsedMemory,
+        action: buildMemoryUpdateAction(parsedMemory, { sourceMessageCount: chatMessages.length }),
+      });
+      setLastMemoryAction(null);
     } catch (err) {
       console.error("[AI Coach] Memory update error:", err);
       if (err?.code === "insufficient_balance") {
@@ -1786,6 +1792,8 @@ Rules:
           memoryUpdating={memoryUpdating}
           memoryProposal={memoryProposal}
           setMemoryProposal={setMemoryProposal}
+          lastMemoryAction={lastMemoryAction}
+          setLastMemoryAction={setLastMemoryAction}
           proposeMemoryUpdate={proposeMemoryUpdate}
         />
     );

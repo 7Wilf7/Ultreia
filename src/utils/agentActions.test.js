@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   AGENT_ACTION_STATUS,
   buildCreatePlansAction,
+  buildMemoryUpdateAction,
   describeCreatePlansImpact,
   getCreatePlans,
+  getMemoryUpdate,
   isCreatePlansAction,
+  isMemoryUpdateAction,
   isRestPlanItem,
   markAgentActionStatus,
 } from "./agentActions";
@@ -39,6 +42,29 @@ describe("agent action helpers", () => {
 
     expect(getCreatePlans(action)).toEqual([]);
     expect(getCreatePlans({ type: "unknown" })).toEqual([]);
+  });
+
+  it("builds a confirmable memory_update action", () => {
+    const memory = { en: "- Prefers morning runs", zh: "- 偏好晨跑" };
+    const action = buildMemoryUpdateAction(memory, {
+      id: "mem1",
+      sourceMessageCount: 4,
+      createdAt: "2026-06-19T00:00:00.000Z",
+    });
+
+    expect(action).toMatchObject({
+      id: "mem1",
+      type: "memory_update",
+      risk: "low",
+      requiresConfirmation: true,
+      source: "ai_coach_memory",
+      status: "proposed",
+      createdAt: "2026-06-19T00:00:00.000Z",
+      decidedAt: null,
+    });
+    expect(action.payload.sourceMessageCount).toBe(4);
+    expect(getMemoryUpdate(action)).toEqual(memory);
+    expect(isMemoryUpdateAction(action)).toBe(true);
   });
 
   it("describes affected dates and existing plan overwrites", () => {

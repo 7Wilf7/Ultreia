@@ -1,5 +1,6 @@
 export const AGENT_ACTION_TYPES = {
   CREATE_PLANS: "create_plans",
+  MEMORY_UPDATE: "memory_update",
 };
 
 export const AGENT_ACTION_STATUS = {
@@ -44,6 +45,26 @@ export function buildCreatePlansAction(plans, opts = {}) {
   };
 }
 
+export function buildMemoryUpdateAction(memory, opts = {}) {
+  return {
+    id: opts.id || `memory-update-${Date.now()}`,
+    type: AGENT_ACTION_TYPES.MEMORY_UPDATE,
+    title: "Update long-term memory",
+    reason: "The coach found durable facts in this chat that can be reviewed and saved to Memory.",
+    payload: {
+      memory: memory && typeof memory === "object" ? memory : { en: "", zh: "" },
+      sourceMessageCount: Number(opts.sourceMessageCount || 0),
+    },
+    risk: opts.risk || "low",
+    requiresConfirmation: true,
+    source: opts.source || "ai_coach_memory",
+    sourceMessageId: opts.sourceMessageId || null,
+    status: opts.status || AGENT_ACTION_STATUS.PROPOSED,
+    createdAt: opts.createdAt || new Date().toISOString(),
+    decidedAt: opts.decidedAt || null,
+  };
+}
+
 export function markAgentActionStatus(action, status, now = new Date()) {
   if (!action || !status) return action;
   return {
@@ -59,9 +80,20 @@ export function isCreatePlansAction(action) {
   return action?.type === AGENT_ACTION_TYPES.CREATE_PLANS;
 }
 
+export function isMemoryUpdateAction(action) {
+  return action?.type === AGENT_ACTION_TYPES.MEMORY_UPDATE;
+}
+
 export function getCreatePlans(action) {
   if (!isCreatePlansAction(action)) return [];
   return Array.isArray(action.payload?.plans) ? action.payload.plans : [];
+}
+
+export function getMemoryUpdate(action) {
+  if (!isMemoryUpdateAction(action)) return { en: "", zh: "" };
+  return action.payload?.memory && typeof action.payload.memory === "object"
+    ? action.payload.memory
+    : { en: "", zh: "" };
 }
 
 export function describeCreatePlansImpact(action, existingPlans = []) {

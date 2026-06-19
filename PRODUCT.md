@@ -12,6 +12,10 @@ Ultreia is used by Chinese runners who track completed training, review progress
 
 The product turns training records, races, charts, and coaching context into a compact personal training hub. Success means users can quickly understand their recent workload, keep their log organized, and export credible visual summaries without manual design work.
 
+Ultreia is also one product inside Wilf's broader personal product ecosystem, tentatively called Wilf OS. Wilf OS is planned as a mobile-first PWA entry point and shared event center for separate products including Ultreia, Ledger, Daily Log, AI Atlas, and Obsidian-based archives. Ultreia should stay focused on training, racing, recovery, and AI Coach decisions while Wilf OS handles the global launcher, cross-product memory review, and product-to-product context boundaries.
+
+Future cross-product context should flow through reviewed events rather than direct database sharing. For example, Ledger may record sport gear purchases, race registrations, health expenses, or training-related subscriptions; Daily Log may record sleep, fatigue, soreness, stress, and recovery signals. Those events should only influence Ultreia after Wilf reviews and approves them. Once approved, Ultreia can use them as explainable context for coaching, risk reminders, and training suggestions without becoming a finance app, journal app, or general operating system itself.
+
 ## Brand Personality
 
 Focused, athletic, mature. The product should feel like a serious training tool with enough visual character for personal sharing.

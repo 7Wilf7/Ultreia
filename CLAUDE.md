@@ -28,6 +28,22 @@
 
 但底层能力先保留，不要删除：钱包余额与流水、AI / 天气成本记录、邀请码表、管理员充值、注册相关 Edge Function 都可能在未来公开时恢复入口。现在做新功能时，默认按个人模式设计 UI，不要新增“给其他用户使用才需要”的入口；如果确实需要为未来公开做准备，用 `PRODUCT_PUBLIC_FEATURES` 挂起来。
 
+## Wilf OS 长期方向
+
+Wilf 的最终方向不是把 Ultreia 做成一个孤立的跑步 App，而是围绕自己搭一组个人产品生态，暂称 **Wilf OS**。Wilf OS 第一版是手机优先的 PWA 总入口和共享事件中心：它负责 Today、Quick Add、Products、Memory Inbox、账号 / 设置等全局入口；各产品保持独立，不做一个大杂烩超级 App。
+
+这套生态里的核心产品分工：
+
+- **Ultreia**：严肃的运动训练与 AI Coach 产品，继续保持克制、专业、数据导向。
+- **Ledger**：第二个正式产品，认真记录每一笔消费，尤其是运动装备、比赛报名、健康恢复、订阅等结构化事件。
+- **Daily Log**：后续记录睡眠、疲劳、压力、疼痛、恢复感等日常状态，作为训练判断的辅助信号。
+- **AI Atlas**：后续从星图毛坯重做成 AI 学习路线、复习卡、进度和更新记录。
+- **Obsidian**：只做长期文档、项目复盘和知识归档，不承担实时产品交互。
+
+产品之间的连接边界是统一事件中心 `wilf_events`，而不是互相直接读私有数据库。Ledger、Daily Log、AI Atlas、Ultreia 都可以产生事件；其他产品只读取被授权、相关且已确认的事件。普通消费默认只留在 Ledger；运动装备、健康、比赛、疲劳、训练计划相关事件进入 Memory Inbox，经过 Wilf 确认后，才允许进入 Ultreia AI Coach 的上下文。
+
+对 Ultreia 的要求：不要把它扩成超级 App。Ultreia 只负责运动训练、训练数据、赛事准备、恢复风险和 AI Coach 判断；Wilf OS 负责全局入口、跨产品记忆和审核。未来当 Ultreia 读取 Wilf OS 事件时，它应该把这些事件当作可解释的个人上下文，例如新买越野鞋、报名比赛、理疗恢复、疲劳状态、训练计划变化，并在建议中保持边界清晰，不夸大承诺。
+
 ## Agent 化推进
 
 Ultreia 的中期方向是从 **AI Coach Copilot** 逐步推进到 **可确认动作的 AI Coach Agent**。当前 source of truth 是 `docs-internal/agentization-roadmap.md`，背景分析见 `docs-internal/agentization-analysis.md`。

@@ -506,6 +506,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, markSrc }) {
   const ySub = H * (compactSingle ? 0.127 : 0.143);
   const yHeadRule = H * (compactSingle ? 0.160 : 0.178);
   const yKick = H * (compactSingle ? 0.238 : 0.262);
+  const heroKickerY = stats.mode === "single" ? yKick - H * 0.018 : yKick;
   const yHero = H * (compactSingle ? 0.420 : 0.452);
   const spineTop = H * (compactSingle ? 0.492 : 0.527);
   const spineBot = H * (compactSingle ? 0.710 : 0.745);
@@ -620,7 +621,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc, markSrc }) {
       <line x1={M} x2={headerRuleEnd} y1={yHeadRule} y2={yHeadRule} stroke={pal.hair} strokeWidth="2" />
 
       {/* Hero */}
-      <text x={M} y={yKick} fontFamily={FF} fontWeight="600" fontSize={kickerSize} letterSpacing="4" fill={pal.sub}>{stats.kicker}</text>
+      <text x={M} y={heroKickerY} fontFamily={FF} fontWeight="600" fontSize={kickerSize} letterSpacing="4" fill={pal.sub}>{stats.kicker}</text>
       <text x={M} y={yHero} fontFamily={FF} fontWeight="800" fill={pal.ink} style={{ fontVariantNumeric: "tabular-nums" }}>
         <tspan fontSize={heroSize}>{stats.heroValue}</tspan>
         {stats.heroUnit ? <tspan dx={20} fontSize={unitSize} fontWeight="800" fill={pal.accent}>{stats.heroUnit}</tspan> : null}

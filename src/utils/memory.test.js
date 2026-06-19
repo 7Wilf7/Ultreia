@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildMemoryUpdatePrompt, MEMORY_SECTIONS, parseBilingualMemory } from "./memory";
+import {
+  buildMemoryUpdatePrompt,
+  fillEmptyMemorySections,
+  isMemorySectionHeading,
+  MEMORY_SECTIONS,
+  parseBilingualMemory,
+} from "./memory";
 
 describe("parseBilingualMemory", () => {
   it("splits aligned English and Chinese memory blocks", () => {
@@ -30,5 +36,22 @@ describe("buildMemoryUpdatePrompt", () => {
     }
     expect(prompt).toContain("Under each heading, write one short fact per line as \"- ...\".");
     expect(prompt).toContain("My knee still feels sensitive on descents.");
+  });
+});
+
+describe("memory section helpers", () => {
+  it("recognizes English and Chinese memory section headings", () => {
+    expect(isMemorySectionHeading("[Goals / Races]")).toBe(true);
+    expect(isMemorySectionHeading("[目标 / 比赛]")).toBe(true);
+    expect(isMemorySectionHeading("- Target race: CCC")).toBe(false);
+  });
+
+  it("fills empty memory sections with an explicit none line", () => {
+    expect(fillEmptyMemorySections("[Goals / Races]\n[Training Preferences]\n- Easy days easy", "en")).toBe(
+      "[Goals / Races]\n- None\n[Training Preferences]\n- Easy days easy",
+    );
+    expect(fillEmptyMemorySections("[目标 / 比赛]\n[训练偏好]\n- 轻松日必须轻松", "zh")).toBe(
+      "[目标 / 比赛]\n- 无\n[训练偏好]\n- 轻松日必须轻松",
+    );
   });
 });

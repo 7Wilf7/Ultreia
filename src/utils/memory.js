@@ -22,6 +22,34 @@ export const MEMORY_SECTIONS = [
   { en: "[Recurring Patterns]", zh: "[长期模式]" },
 ];
 
+export function isMemorySectionHeading(line = "") {
+  const normalized = String(line || "").trim();
+  return MEMORY_SECTIONS.some(s => s.en === normalized || s.zh === normalized);
+}
+
+export function fillEmptyMemorySections(text = "", lang = "en") {
+  const sections = MEMORY_SECTIONS.map(s => lang === "zh" ? s.zh : s.en);
+  const emptyFact = lang === "zh" ? "- 无" : "- None";
+  const lines = String(text || "").split("\n").map(l => l.replace(/\s+$/, ""));
+  const out = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    out.push(line);
+    if (!sections.includes(line.trim())) continue;
+
+    let hasFact = false;
+    for (let j = i + 1; j < lines.length; j += 1) {
+      const next = lines[j].trim();
+      if (sections.includes(next)) break;
+      if (next) hasFact = true;
+    }
+    if (!hasFact) out.push(emptyFact);
+  }
+
+  return out.join("\n").trim();
+}
+
 export function buildMemoryUpdatePrompt({ coachMemory = "", chatTranscript = "" } = {}) {
   const enSections = MEMORY_SECTIONS.map(s => s.en).join("\n");
   const zhSections = MEMORY_SECTIONS.map(s => s.zh).join("\n");

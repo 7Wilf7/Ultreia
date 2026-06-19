@@ -9,6 +9,7 @@ import {
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
+import { fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
@@ -1596,13 +1597,16 @@ function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, o
     return probe.length > 0 && !oldLower.includes(probe.slice(0, Math.min(probe.length, 30)));
   };
   function toggle(i) {
+    if (isMemorySectionHeading(displayLines[i])) return;
     setKept(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   }
   function accept() {
-    const keep = (lines) => lines.filter((_, i) => kept.has(i)).join("\n");
-    if (aligned) { onAccept(keep(enLines), keep(zhLines)); return; }
-    if (displayLang === "zh") onAccept(proposal.en, keep(zhLines));
-    else onAccept(keep(enLines), proposal.zh);
+    const keep = (lines) => lines.filter((line, i) => isMemorySectionHeading(line) || kept.has(i)).join("\n");
+    const normalizeEn = (text) => fillEmptyMemorySections(text, "en");
+    const normalizeZh = (text) => fillEmptyMemorySections(text, "zh");
+    if (aligned) { onAccept(normalizeEn(keep(enLines)), normalizeZh(keep(zhLines))); return; }
+    if (displayLang === "zh") onAccept(normalizeEn(proposal.en), normalizeZh(keep(zhLines)));
+    else onAccept(normalizeEn(keep(enLines)), normalizeZh(proposal.zh));
   }
   return (
     <>
@@ -1612,24 +1616,32 @@ function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, o
         display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto",
         border: "1px solid var(--moss)", background: "var(--moss-bg)", borderRadius: 4, padding: "8px 10px",
       }}>
-        {displayLines.map((line, i) => (
-          <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: "pointer", padding: "4px 0" }}>
-            <input type="checkbox" checked={kept.has(i)} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
-            <span style={{
-              flex: 1, fontSize: 13, lineHeight: 1.5,
-              color: kept.has(i) ? "var(--ink-1)" : "var(--ink-3)",
-              textDecoration: kept.has(i) ? "none" : "line-through",
-            }}>
-              {line}
-              {isNew(line) && (
-                <span style={{
-                  marginLeft: 6, fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--moss)",
-                  border: "1px solid var(--moss)", borderRadius: 3, padding: "0 4px", verticalAlign: "middle",
-                }}>{t("coach.memory_new")}</span>
+        {displayLines.map((line, i) => {
+          const isHeading = isMemorySectionHeading(line);
+          return (
+            <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: isHeading ? "default" : "pointer", padding: "4px 0" }}>
+              {isHeading ? (
+                <span style={{ width: 13, marginTop: 4, flexShrink: 0 }} />
+              ) : (
+                <input type="checkbox" checked={kept.has(i)} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
               )}
-            </span>
-          </label>
-        ))}
+              <span style={{
+                flex: 1, fontSize: 13, lineHeight: 1.5,
+                color: isHeading || kept.has(i) ? "var(--ink-1)" : "var(--ink-3)",
+                textDecoration: isHeading || kept.has(i) ? "none" : "line-through",
+                fontWeight: isHeading ? 600 : 400,
+              }}>
+                {line}
+                {!isHeading && isNew(line) && (
+                  <span style={{
+                    marginLeft: 6, fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--moss)",
+                    border: "1px solid var(--moss)", borderRadius: 3, padding: "0 4px", verticalAlign: "middle",
+                  }}>{t("coach.memory_new")}</span>
+                )}
+              </span>
+            </label>
+          );
+        })}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={accept}

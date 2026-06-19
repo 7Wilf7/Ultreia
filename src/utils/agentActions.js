@@ -2,6 +2,12 @@ export const AGENT_ACTION_TYPES = {
   CREATE_PLANS: "create_plans",
 };
 
+export const AGENT_ACTION_STATUS = {
+  PROPOSED: "proposed",
+  EXECUTED: "executed",
+  REJECTED: "rejected",
+};
+
 export function isRestPlanItem(plan) {
   const kind = String(plan?.kind || "").toLowerCase();
   const type = String(plan?.type || "").toLowerCase();
@@ -32,8 +38,20 @@ export function buildCreatePlansAction(plans, opts = {}) {
     requiresConfirmation: true,
     source: opts.source || "ai_coach_reply",
     sourceMessageId: opts.sourceMessageId || null,
-    status: "proposed",
+    status: opts.status || AGENT_ACTION_STATUS.PROPOSED,
     createdAt: opts.createdAt || new Date().toISOString(),
+    decidedAt: opts.decidedAt || null,
+  };
+}
+
+export function markAgentActionStatus(action, status, now = new Date()) {
+  if (!action || !status) return action;
+  return {
+    ...action,
+    status,
+    decidedAt: status === AGENT_ACTION_STATUS.PROPOSED
+      ? null
+      : (now instanceof Date ? now.toISOString() : String(now)),
   };
 }
 

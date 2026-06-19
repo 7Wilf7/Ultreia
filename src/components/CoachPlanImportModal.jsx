@@ -71,7 +71,7 @@ function planSummary(it, t) {
   return bits.filter(Boolean).join(" · ");
 }
 
-export function CoachPlanImportModal({ plans = [], action = null, existingPlans = [], onConfirm, onCancel, onReExtract }) {
+export function CoachPlanImportModal({ plans = [], action = null, existingPlans = [], onConfirm, onCancel, onReject, onReExtract }) {
   const t = useT();
   const isMobile = useIsMobile();
   const agentAction = action || buildCreatePlansAction(plans);
@@ -95,6 +95,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
     replacesExistingPlans: agentAction.payload?.replacesExistingPlans,
   });
   const impact = describeCreatePlansImpact(previewAction, existingPlans);
+  const actionStatus = agentAction.status || "proposed";
   const displayRisk = impact.overwrittenDates.length > 0 || selectedItems.length > 1 ? "medium" : "low";
   const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it)).length;
   const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
@@ -229,6 +230,19 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
           <div style={{ ...s.muted, fontSize: 12, marginTop: 5 }}>
             {t(`coach.action_risk_help_${displayRisk}`)}
           </div>
+          {actionStatus !== "proposed" && (
+            <div style={{
+              marginTop: 8,
+              padding: "7px 9px",
+              border: "1px solid var(--rule)",
+              background: actionStatus === "executed" ? "var(--moss-bg)" : "var(--bg)",
+              color: actionStatus === "executed" ? "var(--moss-deep)" : "var(--ink-3)",
+              fontSize: 12,
+              lineHeight: 1.45,
+            }}>
+              {t(`coach.action_status_${actionStatus}`)}
+            </div>
+          )}
           <div style={{
             marginTop: 12,
             paddingTop: 10,
@@ -508,7 +522,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
               ? t("coach.importing")
               : t("coach.import_confirm", { n: selectedCount })}
           </button>
-          <button onClick={onCancel} disabled={importing}
+          <button onClick={onReject || onCancel} disabled={importing}
             style={{ ...s.btnGhost, opacity: importing ? 0.5 : 1 }}>
             {t("coach.action_reject")}
           </button>

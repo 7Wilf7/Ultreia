@@ -1021,6 +1021,8 @@ const dict = {
   // ===== AI Coach → Calendar import =====
   "coach.import_button":      { en: "Review action",          zh: "审核建议动作" },
   "coach.import_button_cached": { en: "Open reviewed action", zh: "查看已提炼动作" },
+  "coach.import_button_executed": { en: "Action executed",     zh: "动作已执行" },
+  "coach.import_button_rejected": { en: "Action ignored",      zh: "动作已忽略" },
   "coach.extracting":         { en: "Extracting…",            zh: "提取中……" },
   "coach.resend":             { en: "Resend",                 zh: "重新发送" },
   "coach.calendar_btn_label": { en: "Action Review Button",   zh: "建议动作按钮" },
@@ -1037,6 +1039,8 @@ const dict = {
   "coach.action_risk_medium":   { en: "Medium risk",           zh: "中风险" },
   "coach.action_risk_help_low": { en: "Low risk means this only adds a small number of new calendar items and does not replace existing plans.", zh: "低风险表示只新增少量日历安排，不会替换已有计划。" },
   "coach.action_risk_help_medium": { en: "Medium risk means this changes multiple calendar items or replaces existing planned workouts, so it must be reviewed before execution.", zh: "中风险表示会批量改动日历，或替换已有计划训练，所以必须先审核再执行。" },
+  "coach.action_status_executed": { en: "This action was already executed. Re-extract if you want to generate a fresh action from the reply.", zh: "这个动作已经执行过。如需重新生成，请点击「重新提炼这条回复」。" },
+  "coach.action_status_rejected": { en: "This action was ignored. You can still review it, or re-extract a fresh action from the reply.", zh: "这个动作已被忽略。你仍可查看内容，或重新提炼这条回复。" },
   "coach.action_requires_confirmation": { en: "Nothing is changed until you confirm. You can edit or remove each item below.", zh: "确认前不会改动任何数据。你可以先逐条修改或移除。" },
   "coach.action_create_plans_title": { en: "Apply {n} calendar item(s)", zh: "应用 {n} 条日历安排" },
   "coach.action_create_plans_hint": { en: "The coach proposed dated workouts or rest days. Review the action, adjust the details, then confirm only the items you want to apply.", zh: "教练提出了带日期的训练或休息安排。先审核这个动作，调整细节后，只确认你想应用到日历的条目。" },

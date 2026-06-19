@@ -63,7 +63,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
-import { buildCreatePlansAction, getCreatePlans } from "./utils/agentActions";
+import { AGENT_ACTION_STATUS, buildCreatePlansAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -1128,6 +1128,21 @@ function AppShell({
   useEffect(() => {
     try { localStorage.setItem("ultreia.coachPlanImportCache.v1", JSON.stringify(planImportCache)); } catch { /* ignore cache write failure */ }
   }, [planImportCache]);
+  function updatePlanImportActionStatus(msgId, status) {
+    if (!msgId || !status) return;
+    setPlanImportCache(prev => {
+      const cached = prev[msgId];
+      if (!cached) return prev;
+      const action = cached.action || buildCreatePlansAction(cached.plans || [], { sourceMessageId: msgId });
+      return {
+        ...prev,
+        [msgId]: {
+          ...cached,
+          action: markAgentActionStatus(action, status),
+        },
+      };
+    });
+  }
   // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
   // so it survives a tab switch — the nudge re-opens when the user returns.
   const [coachHintsPending, setCoachHintsPending] = useState(null);
@@ -1510,6 +1525,12 @@ Rules:
       replacePlannedDates: true,
       replacePlannedDatesOn: appliedRestDates,
     });
+    updatePlanImportActionStatus(planProposal?.msgId, AGENT_ACTION_STATUS.EXECUTED);
+    setPlanProposal(null);
+  }
+
+  function rejectPlanProposal() {
+    updatePlanImportActionStatus(planProposal?.msgId, AGENT_ACTION_STATUS.REJECTED);
     setPlanProposal(null);
   }
 
@@ -1750,6 +1771,7 @@ Rules:
           sendChat={sendChat}
           importToCalendar={importToCalendar}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}
+          getPlanImportActionStatus={(msgId) => msgId ? (planImportCache[msgId]?.action?.status || null) : null}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           /* "need location" weather pill now routes to the profile editor,
@@ -1953,6 +1975,7 @@ Rules:
           existingPlans={logs.filter(l => l?.isPlanned)}
           onConfirm={confirmImportPlans}
           onCancel={() => setPlanProposal(null)}
+          onReject={rejectPlanProposal}
           onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}
         />
       )}

@@ -225,7 +225,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, extractingForMsgId, sendChat, importToCalendar, hasPlanImportCache,
+  chatLoading, extractingForMsgId, sendChat, importToCalendar, hasPlanImportCache, getPlanImportActionStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -987,6 +987,42 @@ export function AICoachTab({
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
                 const hasCachedAction = canImport && !!hasPlanImportCache?.(m.id);
+                const actionStatus = canImport ? getPlanImportActionStatus?.(m.id) : null;
+                const actionCompleted = actionStatus === "executed";
+                const actionRejected = actionStatus === "rejected";
+                const actionButtonLabel = extracting
+                  ? t("coach.extracting")
+                  : actionCompleted
+                    ? t("coach.import_button_executed")
+                    : actionRejected
+                      ? t("coach.import_button_rejected")
+                      : hasCachedAction
+                        ? t("coach.import_button_cached")
+                        : t("coach.import_button");
+                const actionButtonIcon = extracting
+                  ? <Spinner size={12} thickness={1.5} color="var(--moss)" />
+                  : actionCompleted
+                    ? "✓"
+                    : actionRejected
+                      ? "×"
+                      : hasCachedAction
+                        ? "✓"
+                        : "📅";
+                const actionButtonBg = actionCompleted
+                  ? "var(--moss-bg)"
+                  : actionRejected
+                    ? "var(--bg-elevated)"
+                    : hasCachedAction
+                      ? "var(--moss-bg)"
+                      : "var(--bg-elevated)";
+                const actionButtonBorder = actionCompleted || hasCachedAction
+                  ? "var(--moss)"
+                  : "var(--rule)";
+                const actionButtonColor = actionCompleted || hasCachedAction
+                  ? "var(--moss-deep)"
+                  : actionRejected
+                    ? "var(--ink-3)"
+                    : "var(--ink-2)";
                 return (
                   <div key={i} className="ultreia-msg-in" style={{
                     alignSelf: isUser ? "flex-end" : "flex-start",
@@ -1049,18 +1085,18 @@ export function AICoachTab({
                         onClick={() => importToCalendar(displayContent, m.id)}
                         disabled={extracting}
                         style={{
-                          background: hasCachedAction ? "var(--moss-bg)" : "var(--bg-elevated)",
-                          border: `1px solid ${hasCachedAction ? "var(--moss)" : "var(--rule)"}`,
+                          background: actionButtonBg,
+                          border: `1px solid ${actionButtonBorder}`,
                           borderRadius: 4,
                           padding: "5px 10px",
                           fontSize: 12, lineHeight: 1.2,
-                          color: hasCachedAction ? "var(--moss-deep)" : "var(--ink-2)",
+                          color: actionButtonColor,
                           fontFamily: "var(--font-sans)",
                           cursor: extracting ? "default" : "pointer",
                           display: "inline-flex", alignItems: "center", gap: 6,
                         }}>
-                        {extracting ? <Spinner size={12} thickness={1.5} color="var(--moss)" /> : (hasCachedAction ? "✓" : "📅")}
-                        {extracting ? t("coach.extracting") : (hasCachedAction ? t("coach.import_button_cached") : t("coach.import_button"))}
+                        {actionButtonIcon}
+                        {actionButtonLabel}
                       </button>
                     )}
 

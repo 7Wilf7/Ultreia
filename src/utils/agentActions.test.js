@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_ACTION_STATUS,
   buildCreatePlansAction,
   describeCreatePlansImpact,
   getCreatePlans,
   isCreatePlansAction,
   isRestPlanItem,
+  markAgentActionStatus,
 } from "./agentActions";
 
 describe("agent action helpers", () => {
@@ -24,6 +26,7 @@ describe("agent action helpers", () => {
       sourceMessageId: "m1",
       status: "proposed",
       createdAt: "2026-06-19T00:00:00.000Z",
+      decidedAt: null,
     });
     expect(action.payload.affectedDates).toEqual(["2026-06-20"]);
     expect(action.payload.replacesExistingPlans).toBe(true);
@@ -83,6 +86,19 @@ describe("agent action helpers", () => {
         { date: "2026-06-20", count: 1 },
         { date: "2026-06-21", count: 1 },
       ],
+    });
+  });
+
+  it("marks action decisions with a decided timestamp", () => {
+    const action = buildCreatePlansAction([{ date: "2026-06-20", type: "Road Run" }], {
+      id: "a1",
+      createdAt: "2026-06-19T00:00:00.000Z",
+    });
+
+    expect(markAgentActionStatus(action, AGENT_ACTION_STATUS.EXECUTED, "2026-06-19T08:00:00.000Z")).toMatchObject({
+      id: "a1",
+      status: "executed",
+      decidedAt: "2026-06-19T08:00:00.000Z",
     });
   });
 });

@@ -66,15 +66,50 @@ import {
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
-
-// One random sport line per launch, stable across the auth→data loading remounts.
-const BOOT_GREETING = pickGreeting();
+import { computeTrainingLoad } from "./utils/trainingLoad";
 
 function localDateKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function daysBetweenLocal(dateKey, now = new Date()) {
+  if (!dateKey) return null;
+  const d = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setHours(0, 0, 0, 0);
+  return Math.round((today - d) / 86400000);
+}
+
+function buildGreetingState({ logs = [], dailyNotes = [], now = new Date() }) {
+  const today = localDateKey(now);
+  const completed = logs
+    .filter(l => l && !l.isPlanned && l.date)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  const plannedToday = logs.some(l => l?.isPlanned && l.date === today);
+  const recentRace = completed.find(l =>
+    l.type === "Road Run" && (l.subTypes || []).some(st => /Race/i.test(st))
+  );
+  const load = computeTrainingLoad(logs, now);
+  const todayReadiness = dailyNotes.find(n => n.date === today)?.readiness || null;
+  const readinessVals = todayReadiness
+    ? [todayReadiness.sleep, todayReadiness.legs, todayReadiness.energy].map(Number).filter(Number.isFinite)
+    : [];
+  return {
+    cachedAt: now.toISOString(),
+    lastWorkoutDate: completed[0]?.date || null,
+    lastWorkoutDaysAgo: completed[0] ? daysBetweenLocal(completed[0].date, now) : null,
+    recentRaceDate: recentRace?.date || null,
+    racedWithinDays: recentRace ? daysBetweenLocal(recentRace.date, now) : null,
+    hasPlanToday: plannedToday,
+    loadRamp: load && !load.building ? load.ramp : null,
+    readinessAvg: readinessVals.length
+      ? readinessVals.reduce((sum, v) => sum + v, 0) / readinessVals.length
+      : null,
+  };
 }
 
 function readinessComplete(readiness) {
@@ -150,7 +185,12 @@ function LoadingScreen({ userId = null, boot = false }) {
     name = userId ? (localStorage.getItem(`ultreia.displayName:${userId}`) || "") : "";
   } catch { /* private mode */ }
   const hello = timeGreeting(lang) + (name ? `，${name}` : "");
-  const line = BOOT_GREETING[lang === "zh" ? "zh" : "en"];
+  let greetingState = null;
+  try {
+    greetingState = userId ? JSON.parse(localStorage.getItem(`ultreia.greetingState:${userId}`) || "null") : null;
+  } catch { /* private mode */ }
+  const greeting = pickGreeting(new Date(), greetingState);
+  const line = greeting[lang === "zh" ? "zh" : "en"];
 
   return (
     <div style={{
@@ -421,6 +461,17 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     if (!user?.id) return;
     void initPushNotifications(user.id);
   }, [user.id]);
+
+  useEffect(() => {
+    if (!user?.id || dataLoading) return;
+    try {
+      localStorage.setItem(`ultreia.greetingState:${user.id}`, JSON.stringify(buildGreetingState({
+        logs,
+        dailyNotes,
+        now: new Date(),
+      })));
+    } catch { /* private mode */ }
+  }, [user?.id, dataLoading, logs, dailyNotes]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────
   async function updateProfile(patch) {

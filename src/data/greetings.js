@@ -1,8 +1,8 @@
-// Splash greeting — a time-of-day line ("Good morning, Wilf") plus a random
-// sport one-liner underneath, shown on the boot/loading screen. Bilingual; the
-// caller reads the saved language. Pure data + helpers, no React.
+// Splash greeting — a time-of-day line ("Good morning, Wilf") plus a sport
+// one-liner underneath, shown on the boot/loading screen. Bilingual; the caller
+// reads the saved language. Pure data + helpers, no React.
 
-export const GREETINGS = [
+const BASE_GREETINGS = [
   { en: "Every kilometer counts.", zh: "每一公里都算数。" },
   { en: "Today's easy run is tomorrow's PR.", zh: "今天的轻松跑，明天的 PR。" },
   { en: "Lace up. The road's waiting.", zh: "系好鞋带，路在等你。" },
@@ -73,9 +73,161 @@ export const GREETINGS = [
   { en: "Earn your endorphins.", zh: "挣来你的内啡肽。" },
 ];
 
-// One random line. Called once per launch so it stays stable across the boot.
-export function pickGreeting() {
-  return GREETINGS[Math.floor(Math.random() * GREETINGS.length)];
+const GREETING_ACTIONS = [
+  { en: "Keep the easy effort", zh: "守住轻松强度" },
+  { en: "Respect the warm-up", zh: "认真热身" },
+  { en: "Start softer than you want", zh: "开头比想象中再轻一点" },
+  { en: "Let cadence settle", zh: "让步频自己稳下来" },
+  { en: "Check your shoulders", zh: "放松肩膀" },
+  { en: "Leave one gear unused", zh: "留一档余力" },
+  { en: "Build the aerobic engine", zh: "继续打磨有氧发动机" },
+  { en: "Bank another honest session", zh: "存下一次扎实训练" },
+  { en: "Protect the recovery", zh: "保护好恢复" },
+  { en: "Drink before thirst", zh: "口渴前先补水" },
+  { en: "Fuel before the fade", zh: "掉速前先补给" },
+  { en: "Let the first kilometer pass", zh: "先让第一公里过去" },
+  { en: "Keep the breathing quiet", zh: "把呼吸放轻" },
+  { en: "Run tall", zh: "把身体跑高一点" },
+  { en: "Save the sprint for later", zh: "把冲刺留到后面" },
+  { en: "Make the easy day useful", zh: "把轻松日练得有用" },
+  { en: "Make the hard day honest", zh: "把强度日练得诚实" },
+  { en: "Listen to the legs", zh: "听听腿怎么说" },
+  { en: "Check the ego at the door", zh: "把逞强留在门口" },
+  { en: "Stack another calm rep", zh: "再叠一组稳定输出" },
+  { en: "Smooth the downhill", zh: "把下坡跑顺" },
+  { en: "Own the climb", zh: "把坡拿下来" },
+  { en: "Hold the line", zh: "守住路线" },
+  { en: "Keep the watch in context", zh: "别被手表带偏" },
+  { en: "Let pace follow effort", zh: "让配速跟着体感走" },
+  { en: "Make room for sleep", zh: "给睡眠留位置" },
+  { en: "Train the quiet parts", zh: "把不起眼的部分练好" },
+  { en: "Finish with form", zh: "带着动作质量收尾" },
+  { en: "Keep one promise to yourself", zh: "兑现一个给自己的承诺" },
+  { en: "Win the boring minutes", zh: "赢下那些无聊的分钟" },
+  { en: "Respect the plan", zh: "尊重计划" },
+  { en: "Adjust without drama", zh: "该调整就调整" },
+  { en: "Use patience as pace", zh: "把耐心当配速" },
+  { en: "Keep the stride light", zh: "让步子轻一点" },
+  { en: "Make the route smaller", zh: "先把路跑近一点" },
+  { en: "Let consistency do the work", zh: "让稳定发挥作用" },
+  { en: "Sharpen the engine gently", zh: "温和地把状态磨亮" },
+  { en: "Keep the long view", zh: "把眼光放长" },
+  { en: "Do the next right thing", zh: "做好下一件对的事" },
+  { en: "Close the loop", zh: "把今天这环扣上" },
+];
+
+const GREETING_CONTEXTS = [
+  { en: "today", zh: "今天" },
+  { en: "this morning", zh: "这个早晨" },
+  { en: "before the day gets loud", zh: "在一天变吵之前" },
+  { en: "one step at a time", zh: "一步一步来" },
+  { en: "with calm legs", zh: "带着安静的腿" },
+  { en: "without chasing numbers", zh: "先别追数字" },
+  { en: "for tomorrow's body", zh: "为了明天的身体" },
+  { en: "on purpose", zh: "有意识地做" },
+];
+
+const GENERATED_GREETINGS = GREETING_ACTIONS.flatMap(action =>
+  GREETING_CONTEXTS.map(context => ({
+    en: `${action.en} ${context.en}.`,
+    zh: `${context.zh}，${action.zh}。`,
+  }))
+);
+
+export const GREETINGS = [...BASE_GREETINGS, ...GENERATED_GREETINGS];
+
+const STATE_GREETINGS = {
+  plannedToday: [
+    { en: "There's a plan on the calendar today.", zh: "今天日历上有训练安排。" },
+    { en: "Today's plan is waiting. Keep it honest.", zh: "今天的计划在等你，稳稳完成。" },
+    { en: "One planned session, one clear target.", zh: "一堂计划课，一个清楚目标。" },
+    { en: "Check the plan, then trust the legs.", zh: "先看计划，再相信双腿。" },
+  ],
+  racedRecently: [
+    { en: "Race effort lingers. Let recovery count.", zh: "比赛强度还在，恢复也要算数。" },
+    { en: "The medal is done. The rebuild starts quietly.", zh: "奖牌已经拿下，重建从安静开始。" },
+    { en: "Post-race legs deserve patience.", zh: "赛后的腿，值得一点耐心。" },
+  ],
+  trainedYesterday: [
+    { en: "Yesterday is in the bank. Spend wisely today.", zh: "昨天已经存进账户，今天聪明使用。" },
+    { en: "Let yesterday's work settle before adding more.", zh: "先让昨天的训练沉淀，再考虑加量。" },
+    { en: "Back-to-back days work best with restraint.", zh: "连续训练日，克制最有用。" },
+  ],
+  restedLong: [
+    { en: "A few quiet days are not a reset. Start small.", zh: "安静了几天不是归零，先从小一点开始。" },
+    { en: "The first session back only needs to restart the rhythm.", zh: "回来的第一练，只需要把节奏接上。" },
+    { en: "No need to pay back missed miles today.", zh: "今天不用一次还清漏掉的跑量。" },
+  ],
+  loadDanger: [
+    { en: "Load is high. Fitness grows when recovery keeps up.", zh: "负荷偏高，恢复跟得上才会变强。" },
+    { en: "The smart move today may be backing off.", zh: "今天聪明的选择，可能是收一收。" },
+    { en: "Spike weeks ask for calm decisions.", zh: "负荷骤增的周，需要冷静决策。" },
+  ],
+  loadHigh: [
+    { en: "Load is climbing. Keep the next step controlled.", zh: "负荷在上升，下一步要可控。" },
+    { en: "You're building. Don't rush the adaptation.", zh: "你在积累，别催身体适应。" },
+    { en: "Progress is here. Keep it measured.", zh: "进步已经在路上，继续量力推进。" },
+  ],
+  loadLow: [
+    { en: "The load is light. A steady session can restart momentum.", zh: "最近负荷偏轻，一堂稳定训练就能接上势头。" },
+    { en: "Low load is a chance to rebuild cleanly.", zh: "低负荷期，是干净重建的机会。" },
+    { en: "Room to build, no need to force it.", zh: "还有加量空间，但不用硬顶。" },
+  ],
+  readinessLow: [
+    { en: "Low readiness is data, not weakness.", zh: "状态偏低是数据，不是软弱。" },
+    { en: "If the check-in says tired, make the plan listen.", zh: "如果今日状态说累，就让计划听见。" },
+    { en: "Today may be about keeping the floor, not raising the ceiling.", zh: "今天也许是守住下限，不是抬高上限。" },
+  ],
+  readinessHigh: [
+    { en: "Good readiness. Use it, don't waste it.", zh: "状态不错，好好使用，别浪费。" },
+    { en: "The body says yes. Keep the execution clean.", zh: "身体说可以，执行就要干净。" },
+    { en: "Green lights still need good pacing.", zh: "状态开绿灯，也要配速稳。" },
+  ],
+};
+
+function dayOfYear(date) {
+  const localDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const yearStart = Date.UTC(date.getFullYear(), 0, 1);
+  return Math.floor((localDay - yearStart) / 86400000);
+}
+
+function pickFrom(lines, date, salt = 0) {
+  return lines[(dayOfYear(date) + salt) % lines.length];
+}
+
+function daysSinceDateKey(dateKey, date = new Date()) {
+  if (!dateKey) return null;
+  const d = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  const today = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const then = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+  return Math.round((today - then) / 86400000);
+}
+
+// Date-based instead of random: with 366+ lines this avoids repeats within a
+// year, and the year offset keeps the same calendar day from always seeing the
+// same line next year.
+export function pickGreeting(date = new Date(), state = null) {
+  if (state) {
+    const r = state.readinessAvg;
+    const racedWithinDays = state.recentRaceDate
+      ? daysSinceDateKey(state.recentRaceDate, date)
+      : state.racedWithinDays;
+    const lastWorkoutDaysAgo = state.lastWorkoutDate
+      ? daysSinceDateKey(state.lastWorkoutDate, date)
+      : state.lastWorkoutDaysAgo;
+    if (Number.isFinite(r) && r <= 1.4) return pickFrom(STATE_GREETINGS.readinessLow, date, 11);
+    if (state.loadRamp === "danger") return pickFrom(STATE_GREETINGS.loadDanger, date, 17);
+    if (state.loadRamp === "high") return pickFrom(STATE_GREETINGS.loadHigh, date, 23);
+    if (racedWithinDays != null && racedWithinDays <= 3) return pickFrom(STATE_GREETINGS.racedRecently, date, 29);
+    if (state.hasPlanToday) return pickFrom(STATE_GREETINGS.plannedToday, date, 31);
+    if (lastWorkoutDaysAgo === 1) return pickFrom(STATE_GREETINGS.trainedYesterday, date, 37);
+    if (lastWorkoutDaysAgo != null && lastWorkoutDaysAgo >= 4) return pickFrom(STATE_GREETINGS.restedLong, date, 41);
+    if (state.loadRamp === "low") return pickFrom(STATE_GREETINGS.loadLow, date, 43);
+    if (Number.isFinite(r) && r >= 2.6) return pickFrom(STATE_GREETINGS.readinessHigh, date, 47);
+  }
+  const yearOffset = date.getFullYear() * 37;
+  return GREETINGS[(dayOfYear(date) + yearOffset) % GREETINGS.length];
 }
 
 // Time-of-day greeting from LOCAL device time. Buckets:

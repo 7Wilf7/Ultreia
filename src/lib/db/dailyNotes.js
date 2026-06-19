@@ -1,7 +1,7 @@
 import { supabase } from '../supabase';
 import { getCurrentUserId } from './_auth';
 
-const SUPPORTED_DAILY_TAGS = new Set(['massage', 'stretching', 'sick']);
+const SUPPORTED_DAILY_TAGS = new Set(['planned_rest', 'massage', 'stretching', 'sick']);
 
 // daily_notes: one row per (user_id, date). Holds day-level metadata that
 // doesn't fit on a single workout — tags[] plus morning readiness. Calendar

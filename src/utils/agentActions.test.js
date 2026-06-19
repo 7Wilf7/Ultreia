@@ -4,6 +4,7 @@ import {
   describeCreatePlansImpact,
   getCreatePlans,
   isCreatePlansAction,
+  isRestPlanItem,
 } from "./agentActions";
 
 describe("agent action helpers", () => {
@@ -17,7 +18,7 @@ describe("agent action helpers", () => {
     expect(action).toMatchObject({
       id: "a1",
       type: "create_plans",
-      risk: "medium",
+      risk: "low",
       requiresConfirmation: true,
       source: "ai_coach_reply",
       sourceMessageId: "m1",
@@ -49,13 +50,39 @@ describe("agent action helpers", () => {
       { date: "2026-06-21", isPlanned: true },
       { date: "2026-06-21", isPlanned: true },
     ])).toEqual({
+      itemCount: 2,
       createCount: 2,
+      restCount: 0,
       affectedDates: ["2026-06-20", "2026-06-21"],
+      restDates: [],
       overwrittenDates: [
         { date: "2026-06-20", count: 1 },
         { date: "2026-06-21", count: 2 },
       ],
       replacesExistingPlans: true,
+    });
+  });
+
+  it("keeps explicit rest days as plan items without counting them as workouts", () => {
+    const action = buildCreatePlansAction([
+      { kind: "rest", date: "2026-06-20", notes: "No planned workout" },
+      { date: "2026-06-21", type: "Trail Run" },
+    ]);
+
+    expect(action.risk).toBe("medium");
+    expect(isRestPlanItem(action.payload.plans[0])).toBe(true);
+    expect(describeCreatePlansImpact(action, [
+      { date: "2026-06-20", isPlanned: true },
+      { date: "2026-06-21", isPlanned: true },
+    ])).toMatchObject({
+      itemCount: 2,
+      createCount: 1,
+      restCount: 1,
+      restDates: ["2026-06-20"],
+      overwrittenDates: [
+        { date: "2026-06-20", count: 1 },
+        { date: "2026-06-21", count: 1 },
+      ],
     });
   });
 });

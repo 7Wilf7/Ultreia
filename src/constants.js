@@ -96,11 +96,12 @@ export const WEATHER_RELEVANT_TYPES = ["Road Run", "Trail Run", "Hiking", "Cycli
 // and toggled via the day modal. Stored as text[], so adding values here needs
 // no schema change. `poor_sleep` and `travel` are retired legacy values; new
 // writes filter them out, and Calendar/Coach only use the supported set below.
-export const DAILY_TAGS = ["massage", "stretching", "sick"];
+export const DAILY_TAGS = ["planned_rest", "massage", "stretching", "sick"];
 
 // Emoji glyph per day tag. Mobile calendar cells show just these icons (no
 // room for text); desktop chips + the day modal show icon + label.
 export const DAILY_TAG_ICONS = {
+  planned_rest: "休",
   massage:    "💆",
   stretching: "🤸",
   sick:       "🤒",

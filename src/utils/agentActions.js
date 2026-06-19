@@ -2,6 +2,19 @@ export const AGENT_ACTION_TYPES = {
   CREATE_PLANS: "create_plans",
 };
 
+export function isRestPlanItem(plan) {
+  const kind = String(plan?.kind || "").toLowerCase();
+  const type = String(plan?.type || "").toLowerCase();
+  return kind === "rest" || type === "rest" || type === "planned rest";
+}
+
+function inferCreatePlansRisk(plans, opts = {}) {
+  if (opts.risk) return opts.risk;
+  if (Number(opts.replacesExistingPlanCount || 0) > 0) return "medium";
+  if (plans.length > 1) return "medium";
+  return "low";
+}
+
 export function buildCreatePlansAction(plans, opts = {}) {
   const safePlans = Array.isArray(plans) ? plans.filter(Boolean) : [];
   const affectedDates = [...new Set(safePlans.map(p => p?.date).filter(Boolean))].sort();
@@ -15,7 +28,7 @@ export function buildCreatePlansAction(plans, opts = {}) {
       affectedDates,
       replacesExistingPlans: opts.replacesExistingPlans !== false,
     },
-    risk: "medium",
+    risk: inferCreatePlansRisk(safePlans, opts),
     requiresConfirmation: true,
     source: opts.source || "ai_coach_reply",
     sourceMessageId: opts.sourceMessageId || null,
@@ -36,6 +49,8 @@ export function getCreatePlans(action) {
 export function describeCreatePlansImpact(action, existingPlans = []) {
   const plans = getCreatePlans(action);
   const affectedDates = [...new Set(plans.map(p => p?.date).filter(Boolean))].sort();
+  const restDates = [...new Set(plans.filter(isRestPlanItem).map(p => p?.date).filter(Boolean))].sort();
+  const workoutPlans = plans.filter(p => !isRestPlanItem(p));
   const existingByDate = new Map();
   for (const p of existingPlans || []) {
     if (!p?.date || !p.isPlanned) continue;
@@ -46,8 +61,11 @@ export function describeCreatePlansImpact(action, existingPlans = []) {
     .filter(x => x.count > 0);
 
   return {
-    createCount: plans.length,
+    itemCount: plans.length,
+    createCount: workoutPlans.length,
+    restCount: restDates.length,
     affectedDates,
+    restDates,
     overwrittenDates,
     replacesExistingPlans: action?.payload?.replacesExistingPlans !== false,
   };

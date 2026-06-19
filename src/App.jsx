@@ -651,7 +651,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return Promise.resolve();
   }
 
-  function bulkAddLogs(workouts, { source = "garmin_csv", fetchWeather = false, replacePlannedDates = false } = {}) {
+  function bulkAddLogs(workouts, { source = "garmin_csv", fetchWeather = false, replacePlannedDates = false, replacePlannedDatesOn = [] } = {}) {
     const optimistics = workouts.map(w => ({
       id: makeTempId("bulk"),
       ...w,
@@ -664,7 +664,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     // When replacing (coach plan import), the imported plan supersedes any
     // existing PLANNED rows on those same dates — drop them optimistically so
     // the calendar doesn't briefly show two plans (old 5km + new 8km).
-    const planDates = replacePlannedDates ? [...new Set(workouts.map(w => w.date).filter(Boolean))] : [];
+    const planDates = replacePlannedDates ? [...new Set([
+      ...workouts.map(w => w.date).filter(Boolean),
+      ...(Array.isArray(replacePlannedDatesOn) ? replacePlannedDatesOn.filter(Boolean) : []),
+    ])] : [];
     setLogs(prev => [
       ...optimistics,
       ...(replacePlannedDates ? prev.filter(l => !(l.isPlanned && planDates.includes(l.date))) : prev),
@@ -1417,8 +1420,9 @@ ${assistantContent}
 
 Output a JSON array. Each item:
 {
+  "kind": "workout" | "rest" (optional; use "rest" only for an explicit no-workout / planned rest day),
   "date": "YYYY-MM-DD",
-  "type": ${typeUnion},
+  "type": ${typeUnion} (required for workout items; omit for rest items),
   "distance": number (kilometres, optional),
   "ascent": number (metres of climb, optional),
   "speed": number (km/h, cycling target, optional),
@@ -1440,7 +1444,9 @@ Rules:
   - HIIT: emit ONLY "timeOfDay" (and notes); no distance/duration.
 - A heart-rate zone may go in notes as "Z1".."Z5" when the coach names one.
 - Skip vague advice ("rest more", "stay hydrated"), past references, and analysis-only text.
-- REST DAYS ARE NORMAL: do NOT invent a workout for every day. Only output entries for days the coach actually assigns training. A day the coach leaves blank — or explicitly calls a rest day with no activity — gets NO entry at all (just omit it). Only emit a "Recovery" entry if the coach explicitly prescribes an active-recovery session (e.g. an easy shakeout, mobility).
+- REST DAYS ARE NORMAL: do NOT invent a workout for every day. A day the coach leaves blank gets NO entry. If the coach explicitly assigns a dated no-workout / planned rest day (for example "Friday rest", "明天休息", "周日不跑"), output:
+  { "kind": "rest", "date": "YYYY-MM-DD", "notes": "planned rest / no workout" }
+  Do NOT set "type" for rest items. Only emit a workout item if the coach prescribes active recovery (e.g. an easy shakeout, mobility).
 - If you cannot find any concrete plan, output [].
 - Output the JSON array ONLY. No prose, no markdown fences, no comments.`;
 
@@ -1474,11 +1480,36 @@ Rules:
     }
   }
 
-  function confirmImportPlans(workouts) {
+  function applyPlanRestTags(restDates = [], workoutDates = []) {
+    const workoutDateSet = new Set(workoutDates.filter(Boolean));
+    const addRestDates = [...new Set(restDates.filter(Boolean))].filter(date => !workoutDateSet.has(date));
+    const clearRestDates = [...workoutDateSet];
+    for (const date of addRestDates) {
+      const current = dailyNotes.find(n => n.date === date)?.tags || [];
+      if (!current.includes("planned_rest")) {
+        setDailyTags(date, ["planned_rest", ...current]).catch(() => {});
+      }
+    }
+    for (const date of clearRestDates) {
+      const current = dailyNotes.find(n => n.date === date)?.tags || [];
+      if (current.includes("planned_rest")) {
+        setDailyTags(date, current.filter(tag => tag !== "planned_rest")).catch(() => {});
+      }
+    }
+    return addRestDates;
+  }
+
+  function confirmImportPlans(workouts, { restDates = [] } = {}) {
     // bulkAddLogs is optimistic — the rows appear on Calendar before this
     // returns. Close the review modal immediately and skip the "success"
     // alert (which used to compete with a possible later failure alert).
-    bulkAddLogs(workouts, { source: "ai_coach_plan", replacePlannedDates: true });
+    const workoutDates = workouts.map(w => w.date).filter(Boolean);
+    const appliedRestDates = applyPlanRestTags(restDates, workoutDates);
+    bulkAddLogs(workouts, {
+      source: "ai_coach_plan",
+      replacePlannedDates: true,
+      replacePlannedDatesOn: appliedRestDates,
+    });
     setPlanProposal(null);
   }
 
@@ -1718,6 +1749,7 @@ Rules:
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}
+          hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           /* "need location" weather pill now routes to the profile editor,

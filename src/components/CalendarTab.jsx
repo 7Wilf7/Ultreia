@@ -638,6 +638,7 @@ function WeatherCard({ date, forecast, isToday, flash = false, lang, t, isMobile
 // ─────────────────────────────────────────────────────────────────────────
 function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, t, isMobile }) {
   const dayTags = visibleDailyTags(note);
+  const hasPlannedRest = dayTags.includes("planned_rest");
   const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
   // Fold plans into a "+N plan" hint once they're history: any past day, OR
   // today once a real workout is logged (a reconciled plan shouldn't clutter
@@ -822,8 +823,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
         <div style={{
           fontFamily: "var(--font-mono)", fontSize: 12,
           color: "var(--ink-3)", marginTop: 4, letterSpacing: "0.04em",
-          opacity: 0.55,
-        }}>{t("calendar.add_plan_hint")}</div>
+          opacity: hasPlannedRest ? 0.8 : 0.55,
+        }}>{hasPlannedRest ? t("calendar.planned_rest_short") : t("calendar.add_plan_hint")}</div>
       )}
 
       {hiddenPlanCount > 0 && inMonth && (

@@ -225,7 +225,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, extractingForMsgId, sendChat, importToCalendar,
+  chatLoading, extractingForMsgId, sendChat, importToCalendar, hasPlanImportCache,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -986,6 +986,7 @@ export function AICoachTab({
                 const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton !== false;
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
+                const hasCachedAction = canImport && !!hasPlanImportCache?.(m.id);
                 return (
                   <div key={i} className="ultreia-msg-in" style={{
                     alignSelf: isUser ? "flex-end" : "flex-start",
@@ -1048,18 +1049,18 @@ export function AICoachTab({
                         onClick={() => importToCalendar(displayContent, m.id)}
                         disabled={extracting}
                         style={{
-                          background: "var(--bg-elevated)",
-                          border: "1px solid var(--rule)",
+                          background: hasCachedAction ? "var(--moss-bg)" : "var(--bg-elevated)",
+                          border: `1px solid ${hasCachedAction ? "var(--moss)" : "var(--rule)"}`,
                           borderRadius: 4,
                           padding: "5px 10px",
                           fontSize: 12, lineHeight: 1.2,
-                          color: "var(--ink-2)",
+                          color: hasCachedAction ? "var(--moss-deep)" : "var(--ink-2)",
                           fontFamily: "var(--font-sans)",
                           cursor: extracting ? "default" : "pointer",
                           display: "inline-flex", alignItems: "center", gap: 6,
                         }}>
-                        {extracting ? <Spinner size={12} thickness={1.5} color="var(--moss)" /> : "📅"}
-                        {extracting ? t("coach.extracting") : t("coach.import_button")}
+                        {extracting ? <Spinner size={12} thickness={1.5} color="var(--moss)" /> : (hasCachedAction ? "✓" : "📅")}
+                        {extracting ? t("coach.extracting") : (hasCachedAction ? t("coach.import_button_cached") : t("coach.import_button"))}
                       </button>
                     )}
 

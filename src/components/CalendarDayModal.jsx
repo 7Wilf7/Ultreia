@@ -173,6 +173,7 @@ export function CalendarDayModal({
   // each click calls setDailyTags() which upserts immediately. UI reflects the
   // latest state via the `note` prop the parent reloads after every mutation.
   const currentTags = note ? (note.tags || []) : [];
+  const hasPlannedRest = currentTags.includes("planned_rest");
   function toggleDayTag(tag) {
     const next = currentTags.includes(tag)
       ? currentTags.filter(x => x !== tag)
@@ -448,7 +449,7 @@ export function CalendarDayModal({
             gap: 10, flexWrap: "wrap", padding: "16px 0 18px",
           }}>
             <span style={{ color: "var(--ink-3)", fontSize: 13, fontFamily: "var(--font-mono)" }}>
-              {isFuture ? t("calendar.empty_future") : t("calendar.empty_past")}
+              {hasPlannedRest ? t("calendar.empty_planned_rest") : (isFuture ? t("calendar.empty_future") : t("calendar.empty_past"))}
             </span>
             <button onClick={() => setPanel("plan")}
               style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
@@ -464,7 +465,7 @@ export function CalendarDayModal({
             <div style={{ ...s.label, marginBottom: 8 }}>
               {t("calendar.day_tags_title")}
             </div>
-            {/* 3-column grid: massage / stretching / sick. Retired tags such
+            {/* 3-column grid: planned rest / massage / stretching / sick. Retired tags such
                 as poor_sleep/travel are no longer rendered as toggles. */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
               {DAILY_TAGS.map(tag => (

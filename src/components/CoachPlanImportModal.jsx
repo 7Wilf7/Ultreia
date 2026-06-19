@@ -4,7 +4,7 @@ import { ACTIVITY_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../co
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
-import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans } from "../utils/agentActions";
+import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, isRestPlanItem } from "../utils/agentActions";
 import { planFields } from "./CalendarDayModal";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -14,6 +14,16 @@ import { Dropdown } from "./Dropdown";
 // checkbox. Both strip off when we hand off to bulkAddLogs. Fields shown per
 // type mirror planFields (the Calendar add-plan form).
 function buildDraft(p, idx) {
+  if (isRestPlanItem(p)) {
+    return {
+      _id: `proposal-${idx}`,
+      _selected: true,
+      kind: "rest",
+      date: p.date || "",
+      type: "Rest",
+      notes: p.notes || "",
+    };
+  }
   const type = ACTIVITY_TYPES.includes(p.type) ? p.type : "Road Run";
   const f = planFields(type);
   const subs = Array.isArray(p.subTypes) ? p.subTypes : [];
@@ -45,6 +55,11 @@ function parseAscentMeters(notes) {
 }
 
 function planSummary(it, t) {
+  if (isRestPlanItem(it)) {
+    const bits = [compactDateLabel(it.date), t("calendar.planned_rest_label")];
+    if (it.notes) bits.push(it.notes);
+    return bits.filter(Boolean).join(" · ");
+  }
   const bits = [compactDateLabel(it.date), t(`enum.activity.${it.type}`)];
   if (it.runType) bits.push(t(`enum.subtype.${it.runType}`));
   if ((it.subTypes || []).length) bits.push(it.subTypes.map(st => t(`enum.subtype.${st}`)).join(" / "));
@@ -80,6 +95,9 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
     replacesExistingPlans: agentAction.payload?.replacesExistingPlans,
   });
   const impact = describeCreatePlansImpact(previewAction, existingPlans);
+  const displayRisk = impact.overwrittenDates.length > 0 || selectedItems.length > 1 ? "medium" : "low";
+  const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it)).length;
+  const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
 
   async function doImport() {
     // Validate: every selected row needs a date + type.
@@ -90,9 +108,10 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
         return;
       }
     }
-    // Shape into workout records — type-specific, mirroring the Calendar
+    // Shape non-rest items into workout records — type-specific, mirroring the Calendar
     // add-plan form (planFields). Fields not shown for a type stay zeroed.
-    const workouts = selected.map(it => {
+    const restDates = selected.filter(isRestPlanItem).map(it => it.date);
+    const workouts = selected.filter(it => !isRestPlanItem(it)).map(it => {
       const f = planFields(it.type);
       const distance = f.distance ? (parseFloat(it.distance) || 0) : 0;
       const ascent = f.ascent
@@ -123,7 +142,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
     });
     setImporting(true);
     try {
-      await onConfirm(workouts, agentAction);
+      await onConfirm(workouts, { restDates });
     } finally {
       setImporting(false);
     }
@@ -198,14 +217,17 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
               padding: "3px 7px",
               whiteSpace: "nowrap",
             }}>
-              {t("coach.action_risk_medium")}
+              {t(`coach.action_risk_${displayRisk}`)}
             </div>
           </div>
           <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
-            {t("coach.action_create_plans_reason", { n: selectedCount })}
+            {t("coach.action_create_plans_reason", { n: selectedCount, workouts: selectedWorkoutCount, rests: selectedRestCount })}
           </div>
           <div style={{ ...s.muted, fontSize: 12, marginTop: 8 }}>
             {t("coach.action_requires_confirmation")}
+          </div>
+          <div style={{ ...s.muted, fontSize: 12, marginTop: 5 }}>
+            {t(`coach.action_risk_help_${displayRisk}`)}
           </div>
           <div style={{
             marginTop: 12,
@@ -264,8 +286,9 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {items.map(it => {
-              const color = TYPE_COLOR[it.type] || "var(--ink-2)";
-              const f = planFields(it.type);
+              const isRest = isRestPlanItem(it);
+              const color = isRest ? "var(--ink-3)" : (TYPE_COLOR[it.type] || "var(--ink-2)");
+              const f = isRest ? {} : planFields(it.type);
               return (
                 <div key={it._id} style={{
                   border: "1px solid var(--rule)",
@@ -279,9 +302,23 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
                     <input type="checkbox" checked={it._selected}
                       onChange={() => patch(it._id, { _selected: !it._selected })}
                       style={{ width: 16, height: 16, accentColor: "var(--ink-1)" }} />
-                    <div style={{ ...s.tag(it.type), fontSize: 11 }}>
-                      {t(`enum.activity.${it.type}`)}
-                    </div>
+                    {isRest ? (
+                      <div style={{
+                        fontSize: 11,
+                        fontFamily: "var(--font-mono)",
+                        padding: "3px 8px",
+                        border: "1px solid var(--rule)",
+                        background: "var(--bg-elevated)",
+                        color: "var(--ink-2)",
+                        textTransform: "uppercase",
+                      }}>
+                        {t("calendar.planned_rest_label")}
+                      </div>
+                    ) : (
+                      <div style={{ ...s.tag(it.type), fontSize: 11 }}>
+                        {t(`enum.activity.${it.type}`)}
+                      </div>
+                    )}
                     <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)",
                       textTransform: "uppercase", letterSpacing: "0.06em", display: isMobile ? "none" : "block" }}>
                       {t("calendar.planned_badge")}
@@ -318,7 +355,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
                       metric inputs switch per type (planFields). */}
                   <div style={{
                     display: "grid",
-                    gridTemplateColumns: "86px minmax(126px, 1fr) 72px",
+                    gridTemplateColumns: isRest ? "86px minmax(126px, 1fr)" : "86px minmax(126px, 1fr) 72px",
                     gap: 8,
                     alignItems: "end",
                   }}>
@@ -335,32 +372,50 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
                         }}>{compactDateLabel(it.date)}</span>
                       </label>
                     </div>
-                    <div>
-                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
-                      <Dropdown
-                        ariaLabel={t("form.type")}
-                        options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
-                        value={it.type}
-                        onChange={(v) => patch(it._id, { type: v })}
-                        fontSize={12}
-                        triggerStyle={{ padding: "5px 8px", height: 30, minHeight: 0, fontSize: 12 }}
-                      />
-                    </div>
-                    <div>
-                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("calendar.plan_time_of_day")}</div>
-                      <Dropdown
-                        ariaLabel={t("calendar.plan_time_of_day")}
-                        options={[
-                          { value: "", label: t("calendar.plan_tod_any") },
-                          { value: "am", label: t("calendar.plan_tod_am") },
-                          { value: "pm", label: t("calendar.plan_tod_pm") },
-                        ]}
-                        value={it.timeOfDay}
-                        onChange={(v) => patch(it._id, { timeOfDay: v })}
-                        fontSize={12}
-                        triggerStyle={{ padding: "5px 7px", height: 30, minHeight: 0, fontSize: 12 }}
-                      />
-                    </div>
+                    {isRest ? (
+                      <div>
+                        <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
+                        <div style={{
+                          ...s.input,
+                          height: 30,
+                          padding: "5px 8px",
+                          fontSize: 12,
+                          color: "var(--ink-2)",
+                          background: "var(--bg-elevated)",
+                        }}>
+                          {t("calendar.planned_rest_hint")}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
+                          <Dropdown
+                            ariaLabel={t("form.type")}
+                            options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
+                            value={it.type}
+                            onChange={(v) => patch(it._id, { type: v })}
+                            fontSize={12}
+                            triggerStyle={{ padding: "5px 8px", height: 30, minHeight: 0, fontSize: 12 }}
+                          />
+                        </div>
+                        <div>
+                          <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("calendar.plan_time_of_day")}</div>
+                          <Dropdown
+                            ariaLabel={t("calendar.plan_time_of_day")}
+                            options={[
+                              { value: "", label: t("calendar.plan_tod_any") },
+                              { value: "am", label: t("calendar.plan_tod_am") },
+                              { value: "pm", label: t("calendar.plan_tod_pm") },
+                            ]}
+                            value={it.timeOfDay}
+                            onChange={(v) => patch(it._id, { timeOfDay: v })}
+                            fontSize={12}
+                            triggerStyle={{ padding: "5px 7px", height: 30, minHeight: 0, fontSize: 12 }}
+                          />
+                        </div>
+                      </>
+                    )}
                     {f.distance && (
                       <div>
                         <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.distance")} (km)</div>

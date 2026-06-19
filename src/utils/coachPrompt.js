@@ -487,18 +487,19 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
     const swim = (l.type === "Swimming" && l.distance > 0 && l.duration > 0) ? " " + formatSwimPace(l.distance, l.duration) + "/100m" : "";
     return `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${speed}${swim}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`;
   }).join("\n");
-  // Day-level recovery/context flags from the Calendar, last 21 days only,
-  // oldest→newest. Retired legacy tags are ignored so old rows do not leak into
-  // the coach prompt after the UI stops showing them.
+  // Day-level recovery/context flags from the Calendar, last 21 days plus the
+  // upcoming plan window. Retired legacy tags are ignored so old rows do not
+  // leak into the coach prompt after the UI stops showing them.
   const dayNotesBlock = (() => {
     if (!Array.isArray(dailyNotes) || !dailyNotes.length) return "";
     const todayMs = now.getTime();
-    const windowMs = 21 * 24 * 60 * 60 * 1000;
+    const pastWindowMs = 21 * 24 * 60 * 60 * 1000;
+    const futureWindowMs = 21 * 24 * 60 * 60 * 1000;
     return dailyNotes
       .filter(n => n && n.date && Array.isArray(n.tags) && n.tags.some(tg => DAILY_TAGS.includes(tg)))
       .filter(n => {
         const ms = new Date(`${n.date}T00:00:00`).getTime();
-        return ms >= todayMs - windowMs && ms <= todayMs + 12 * 60 * 60 * 1000;
+        return ms >= todayMs - pastWindowMs && ms <= todayMs + futureWindowMs;
       })
       .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
       .map(n => {

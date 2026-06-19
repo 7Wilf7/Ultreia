@@ -114,6 +114,7 @@ function buildWorkoutReviewDraft(workouts, meta = {}) {
   const countLine = meta.count && meta.count > workouts.length
     ? `这是批量导入 ${meta.count} 条活动中的最近 ${workouts.length} 条。`
     : "这是刚新增的活动。";
+  const noteLine = meta.note ? `\n\n我的主观感受：${meta.note}` : "";
   return `请点评下面的训练。${countLine}
 
 请按这个结构回答：
@@ -122,6 +123,7 @@ function buildWorkoutReviewDraft(workouts, meta = {}) {
 3. 下一次训练建议
 
 不要重写完整训练计划，重点点评这次活动。
+${noteLine}
 
 [New Activities]
 ${rows}`;

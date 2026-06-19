@@ -9,8 +9,8 @@ import {
 } from "../utils/format";
 import { computeHRZones, calculateAge } from "../utils/profile";
 import { parseFitFile } from "../lib/fit";
-import { weatherWindowEligible } from "../lib/weather";
 import { ActivityForm } from "./ActivityForm";
+import { ActivityImportReviewModal } from "./ActivityImportReviewModal";
 import { Dropdown } from "./Dropdown";
 import { ItemActionModal } from "./ItemActionModal";
 import { ModalRoot } from "./ModalRoot";
@@ -70,7 +70,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [unknownTypeRows, setUnknownTypeRows] = useState(null); // staged rows until user maps unknown types
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
   const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
-  const [importWeather, setImportWeather] = useState(true); // fetch weather for import rows inside Caiyun's 24h window
+  const [importReview, setImportReview] = useState(null); // staged import rows after the preview, before final insert
   // Cap how many rows render at once. With hundreds of activities, rendering
   // them all builds a huge DOM (each card has several SVG icons) → slow tab
   // switch + janky pull-to-refresh. Show a page at a time via "load more".
@@ -432,13 +432,28 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       }
       return out;
     });
+    if (toAdd.length === 0) return;
+    setImportReview({ workouts: toAdd, page: 0 });
+  }
+
+  function closeImportReview() {
+    setImportReview(null);
+  }
+
+  async function confirmImportReview({ workouts, fetchWeather, coachNotes, askCoach }) {
     try {
-      const created = await bulkAddLogs(toAdd, { fetchWeather: importWeather });
+      const created = await bulkAddLogs(workouts, { fetchWeather });
       setParsedRows(null);
-      setUploadMsg(t("activities.import_done", { n: toAdd.length }));
+      setImportReview(null);
+      setUploadMsg(t("activities.import_done", { n: workouts.length }));
       setTimeout(() => setUploadMsg(""), 4000);
-      if (onCoachReviewRequest && created?.length) {
-        onCoachReviewRequest(created.slice(0, 3), { count: created.length, source: "import" });
+      if (askCoach && onCoachReviewRequest && created?.length) {
+        const coachLimit = workouts.length <= 5 ? workouts.length : 3;
+        onCoachReviewRequest(created.slice(0, coachLimit), {
+          count: created.length,
+          source: "import",
+          note: coachNotes,
+        });
       }
     } catch {
       // alert shown by wrapper; leave the review panel open so user can retry / cancel
@@ -640,20 +655,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             <span>{t("activities.review", { sel: parsedRows.filter(r => r._selected).length, total: parsedRows.length })}</span>
             <div style={{ display: "flex", gap: 6 }}>
               <button onClick={cancelParsedImport} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("common.cancel")}</button>
-              <button onClick={importParsed} style={{ ...s.btn, fontSize: 12, padding: "5px 12px" }}>{t("activities.import")}</button>
+              <button
+                onClick={importParsed}
+                disabled={parsedRows.filter(r => r._selected).length === 0}
+                style={{ ...s.btn, fontSize: 12, padding: "5px 12px", opacity: parsedRows.filter(r => r._selected).length === 0 ? 0.5 : 1 }}>
+                {t("activities.import")}
+              </button>
             </div>
           </div>
-          {/* Weather toggle — only when at least one selected row falls inside
-              Caiyun's 24h window (older rows can't get weather). Uses the FIT's
-              own GPS for location; default on. */}
-          {parsedRows.some(r => r._selected && weatherWindowEligible({ startedAt: r.startedAt, date: r.date, durationSec: r.duration })) && (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0", cursor: "pointer" }}>
-              <input type="checkbox" checked={importWeather}
-                onChange={e => setImportWeather(e.target.checked)}
-                style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
-              <span style={{ fontSize: 12, color: "#666" }}>{t("activities.import_weather")}</span>
-            </label>
-          )}
           {/* No inner scroll — it clipped the run-type Dropdown's menu (it had
               to be scrolled to). The page scrolls instead. */}
           <div>
@@ -676,22 +685,14 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     </div>
                   )}
                 </div>
-                {/* Line 2 — metrics + a small RPE box at the end */}
+                {/* Line 2 — metrics only. RPE/weather/coach are handled after
+                    the user confirms import so the preview stays a clean audit
+                    surface instead of a mini form for every row. */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ fontSize: 12, flex: 1, color: "#555", fontFamily: "var(--font-mono)", minWidth: 0 }}>
                     {r.distance > 0 && <span>{r.distance}km · </span>}
                     {formatDuration(r.duration)}{r.hr > 0 && ` · HR ${r.hr}`}{r.ascent > 0 && ` · +${r.ascent}m`}
                   </div>
-                  <label style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                    <span style={{ fontSize: 11, color: "#888" }}>RPE</span>
-                    <input type="number" inputMode="numeric" min="1" max="10" value={r.rpe || ""} placeholder="–"
-                      onChange={e => {
-                        const raw = e.target.value;
-                        const v = raw === "" ? 0 : Math.max(1, Math.min(10, parseInt(raw, 10) || 0));
-                        setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, rpe: v } : x));
-                      }}
-                      style={{ width: 44, fontSize: 12, padding: "4px 6px", textAlign: "center", minHeight: 0, border: "1px solid var(--rule)", borderRadius: 4, background: "#fff", color: "var(--ink-1)" }} />
-                  </label>
                 </div>
               </div>
             ))}
@@ -706,6 +707,15 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           onSave={handleAddSubmit}
           onCancel={() => setShowAdd(false)}
           hrZones={hrZones}
+        />
+      )}
+
+      {importReview && (
+        <ActivityImportReviewModal
+          workouts={importReview.workouts}
+          initialPage={importReview.page}
+          onClose={closeImportReview}
+          onConfirm={confirmImportReview}
         />
       )}
 

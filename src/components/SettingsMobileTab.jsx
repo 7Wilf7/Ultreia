@@ -8,14 +8,14 @@ import { productLogoUrl } from "../assets/logo";
 const GROUP_ORDER = { wallet: 0, admin: 1, other: 2 };
 
 /**
- * Mobile-only settings page. The old single "tap the email → one long list"
- * was too tall, so it's now an accordion of independent groups (one open at a
- * time):
+ * Mobile-only settings page. Public mode uses independent groups (one open at
+ * a time):
  *   • Account  — tap the identity header → profile / change password / sign
  *                out / delete account.
  *   • Wallet   — balance + ledger entry point for AI and weather usage.
  *   • Admin    — (admin only) invite codes + prompt catalog.
- *   • Other    — daily push / language / guide / app version.
+ * Personal mode hides public wallet/admin surfaces, so the remaining settings
+ * render directly without an "Other" group chip.
  */
 export function SettingsMobileTab({
   user,
@@ -114,6 +114,39 @@ export function SettingsMobileTab({
   const pushSlots = (Array.isArray(pushTimes) && pushTimes.length)
     ? [...pushTimes].sort()
     : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
+  const otherSettings = (
+    <>
+      <SubCell
+        primary={t("settings.daily_push")}
+        flash={pushFlash}
+        secondary={(pushEnabled && pushSlots.length > 0)
+          ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
+          : t("settings.daily_push_off")}
+        onClick={onOpenPushSettings} />
+      <SubCell
+        primary={t("settings.weather_updates")}
+        secondary={weatherAutoUpdate !== false
+          ? t("settings.weather_updates_on", {
+              interval: Number(weatherIntervalHours) === 24
+                ? t("settings.weather_updates_daily")
+                : t("settings.weather_updates_hours", { n: String(Number(weatherIntervalHours) || 3) }),
+            })
+          : t("settings.weather_updates_off")}
+        onClick={onOpenWeatherSettings} />
+      <SubCell
+        primary={t("settings.language")}
+        rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
+        onClick={onToggleLang} />
+      <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
+      {!isNative && (
+        <SubCell
+          primary={t("settings.clear_cache")}
+          secondary={clearing ? t("settings.clear_cache_working") : t("settings.clear_cache_desc")}
+          onClick={clearCacheAndReload} />
+      )}
+      <UpdateChecker />
+    </>
+  );
 
   async function handleSignOut() {
     if (signingOut) return;
@@ -184,22 +217,21 @@ export function SettingsMobileTab({
         <SubCell primary={t("settings.delete_account")} danger onClick={onDeleteAccount} />
       </AccountPanel>
 
-      {/* Section chips. */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        {publicFeatures && (
+      {publicFeatures && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           <SectionChip active={group === "wallet"} onClick={() => selectGroup("wallet")}>
             {t("settings.section_wallet")}
           </SectionChip>
-        )}
-        {showAdminGroup && (
-          <SectionChip active={group === "admin"} onClick={() => selectGroup("admin")}>
-            {t("settings.section_admin")}
+          {showAdminGroup && (
+            <SectionChip active={group === "admin"} onClick={() => selectGroup("admin")}>
+              {t("settings.section_admin")}
+            </SectionChip>
+          )}
+          <SectionChip active={group === "other"} onClick={() => selectGroup("other")}>
+            {t("settings.section_other")}
           </SectionChip>
-        )}
-        <SectionChip active={group === "other"} onClick={() => selectGroup("other")}>
-          {t("settings.section_other")}
-        </SectionChip>
-      </div>
+        </div>
+      )}
 
       <GroupPanel motion={groupMotion}>
         {publicFeatures && group === "wallet" && (
@@ -216,39 +248,7 @@ export function SettingsMobileTab({
           </>
         )}
 
-        {group === "other" && (
-          <>
-            <SubCell
-              primary={t("settings.daily_push")}
-              flash={pushFlash}
-              secondary={(pushEnabled && pushSlots.length > 0)
-                ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
-                : t("settings.daily_push_off")}
-              onClick={onOpenPushSettings} />
-            <SubCell
-              primary={t("settings.weather_updates")}
-              secondary={weatherAutoUpdate !== false
-                ? t("settings.weather_updates_on", {
-                    interval: Number(weatherIntervalHours) === 24
-                      ? t("settings.weather_updates_daily")
-                      : t("settings.weather_updates_hours", { n: String(Number(weatherIntervalHours) || 3) }),
-                  })
-                : t("settings.weather_updates_off")}
-              onClick={onOpenWeatherSettings} />
-            <SubCell
-              primary={t("settings.language")}
-              rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
-              onClick={onToggleLang} />
-            <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
-            {!isNative && (
-              <SubCell
-                primary={t("settings.clear_cache")}
-                secondary={clearing ? t("settings.clear_cache_working") : t("settings.clear_cache_desc")}
-                onClick={clearCacheAndReload} />
-            )}
-            <UpdateChecker />
-          </>
-        )}
+        {group === "other" && otherSettings}
       </GroupPanel>
     </div>
   );

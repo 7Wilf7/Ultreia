@@ -2,7 +2,6 @@ import { useCallback, useRef, useState, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
 import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
-import { WalletIcon } from "./Icons";
 import { WalletPanel } from "./WalletModal";
 import { productLogoUrl } from "../assets/logo";
 
@@ -39,6 +38,7 @@ export function SettingsMobileTab({
   onChangePassword,
   onDeleteAccount,
   isAdmin,
+  publicFeatures = false,
   onGenerateInvite,
   onOpenAdminWalletGrant,
   onOpenPromptCatalog,
@@ -52,6 +52,7 @@ export function SettingsMobileTab({
   const [signingOut, setSigningOut] = useState(false);
   const [clearing, setClearing] = useState(false);
   const handledFocusTickRef = useRef(null);
+  const showAdminGroup = publicFeatures && isAdmin;
   // Native (APK) updates go through the UpdateChecker + the SW is unregistered
   // there; the cache-clear cell is a web/PWA convenience for forcing a fresh
   // version after a deploy.
@@ -96,13 +97,17 @@ export function SettingsMobileTab({
   useEffect(() => { if (pushFlash) selectGroup("other"); }, [pushFlash, selectGroup]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (profileFlash) setAccountOpen(true); }, [profileFlash]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (!isAdmin && group === "admin") setGroup("other"); }, [isAdmin, group]);
   useEffect(() => {
+    if ((publicFeatures || group !== "wallet") && (showAdminGroup || group !== "admin")) return;
+    const id = setTimeout(() => setGroup("other"), 0);
+    return () => clearTimeout(id);
+  }, [publicFeatures, showAdminGroup, group]);
+  useEffect(() => {
+    if (!publicFeatures && focusGroup?.group === "wallet") return;
     if (!focusGroup?.group || handledFocusTickRef.current === focusGroup.tick) return;
     handledFocusTickRef.current = focusGroup.tick;
     selectGroup(focusGroup.group);
-  }, [focusGroup, selectGroup]);
+  }, [focusGroup, publicFeatures, selectGroup]);
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
@@ -181,11 +186,12 @@ export function SettingsMobileTab({
 
       {/* Section chips. */}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-        <SectionChip active={group === "wallet"} onClick={() => selectGroup("wallet")}>
-          <WalletIcon size={12} />
-          <span>{t("settings.section_wallet")}</span>
-        </SectionChip>
-        {isAdmin && (
+        {publicFeatures && (
+          <SectionChip active={group === "wallet"} onClick={() => selectGroup("wallet")}>
+            {t("settings.section_wallet")}
+          </SectionChip>
+        )}
+        {showAdminGroup && (
           <SectionChip active={group === "admin"} onClick={() => selectGroup("admin")}>
             {t("settings.section_admin")}
           </SectionChip>
@@ -196,13 +202,13 @@ export function SettingsMobileTab({
       </div>
 
       <GroupPanel motion={groupMotion}>
-        {group === "wallet" && (
+        {publicFeatures && group === "wallet" && (
           <div style={{ padding: 14 }}>
             <WalletPanel wallet={wallet} onRefresh={onRefreshWallet} userEmail={user?.email || ""} />
           </div>
         )}
 
-        {group === "admin" && isAdmin && (
+        {showAdminGroup && group === "admin" && (
           <>
             <SubCell primary={t("settings.generate_invite")} onClick={onGenerateInvite} />
             <SubCell primary={t("settings.admin_wallet_grant")} onClick={onOpenAdminWalletGrant} />

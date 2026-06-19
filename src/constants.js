@@ -54,6 +54,10 @@ export const DEFAULT_API_ENDPOINT = API_PROVIDERS.deepseek.endpoints[0].url;
 export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
 
+// Personal mode for now: keep public-facing onboarding / wallet / admin
+// surfaces hidden while preserving the underlying implementation for later.
+export const PRODUCT_PUBLIC_FEATURES = false;
+
 // The one account allowed to mint invite codes. Checked client-side to show
 // the "Generate invite code" affordance; enforced server-side by the
 // invite_codes RLS policy (auth.jwt()->>'email' = this) so it's not just UI.

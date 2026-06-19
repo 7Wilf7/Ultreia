@@ -68,18 +68,18 @@ const STEPS = [
       { zh: "一键把它给的训练建议**导入到日历**", en: "One tap imports its suggested plan straight into your calendar." },
       { zh: "长期记忆：它会记住你的持久偏好，越聊越懂你", en: "Long-term memory: it remembers your durable preferences and gets to know you over time." },
       { zh: "信息填得越全（资料 / 训练 / 目标赛），回复越定制", en: "The more you fill in (profile / training / goal races), the more tailored the replies." },
-      { zh: "AI Coach 直接使用钱包余额，无需自己申请第三方密钥", en: "AI Coach uses Wallet balance directly. No third-party key setup is needed." },
+      { zh: "AI Coach 直接使用内置 DeepSeek，不用自己申请第三方密钥", en: "AI Coach uses the built-in DeepSeek setup. No third-party key setup is needed." },
     ],
   },
   {
     tab: 4,
     mobileOnly: true,
     title: { zh: "设置 Settings", en: "Settings" },
-    lead: { zh: "账号、钱包和各种开关都在这里。", en: "Account, Wallet and all the switches live here." },
+    lead: { zh: "账号和各种开关都在这里。", en: "Account settings and all the switches live here." },
     bullets: [
-      { zh: "查看钱包余额和流水，充值后可提醒管理员处理", en: "Check Wallet balance and ledger; send an admin reminder after paying." },
-      { zh: "开关每日推送、修改个人资料、切换中 / 英", en: "Toggle the daily push, edit your profile, switch 中 / EN." },
-      { zh: "邀请注册、删除账号、查看使用手册也在这里", en: "Invites, account deletion and the user guide are here too." },
+      { zh: "开关每日推送和天气自动更新", en: "Toggle daily push and automatic weather updates." },
+      { zh: "修改个人资料、切换中 / 英", en: "Edit your profile and switch 中 / EN." },
+      { zh: "删除账号、查看使用手册也在这里", en: "Account deletion and the user guide are here too." },
     ],
   },
 ];

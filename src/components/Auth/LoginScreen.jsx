@@ -4,6 +4,7 @@ import { useIsMobile } from "../../hooks/useMediaQuery";
 import { ModalRoot } from "../ModalRoot";
 import { translate } from "../../i18n/translations";
 import { productLogoUrl } from "../../assets/logo";
+import { PRODUCT_PUBLIC_FEATURES } from "../../constants";
 
 const LANG_KEY = "ultreia.lang";
 const SAVED_LOGINS_KEY = "ultreia.savedLogins";
@@ -546,9 +547,11 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
           fontFamily: "var(--font-sans)",
           fontSize: 12.5,
         }}>
-          <button type="button" onClick={() => openDialog("create")} disabled={submitting} style={textButtonStyle()}>
-            {tt("login.create")}
-          </button>
+          {PRODUCT_PUBLIC_FEATURES && (
+            <button type="button" onClick={() => openDialog("create")} disabled={submitting} style={textButtonStyle()}>
+              {tt("login.create")}
+            </button>
+          )}
           <button type="button" onClick={() => openDialog("forgot")} disabled={submitting} style={textButtonStyle({ align: "right", tone: "ink" })}>
             {tt("login.forgot_password")}
           </button>
@@ -623,7 +626,7 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
         </div>
       </form>
     </div>
-    {activeDialog === "create" && (
+    {PRODUCT_PUBLIC_FEATURES && activeDialog === "create" && (
       <CreateAccountModal
         initialEmail={email}
         register={register}

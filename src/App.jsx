@@ -4,7 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL,
+  DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -1036,6 +1036,7 @@ function AppShell({
   }
 
   function openWalletSurface() {
+    if (!PRODUCT_PUBLIC_FEATURES) return;
     if (isMobile) {
       setTab(4);
       setMobileSettingsFocus({ group: "wallet", tick: Date.now() });
@@ -1720,6 +1721,7 @@ Rules:
           onChangePassword={() => setShowChangePassword(true)}
           onDeleteAccount={() => setShowDeleteAccount(true)}
           isAdmin={isAdmin}
+          publicFeatures={PRODUCT_PUBLIC_FEATURES}
           onGenerateInvite={() => setShowInviteCodes(true)}
           onOpenAdminWalletGrant={() => setShowAdminWalletGrant(true)}
           onOpenPromptCatalog={() => setShowPromptCatalog(true)}
@@ -1779,7 +1781,7 @@ Rules:
         />
       )}
 
-      {showWallet && (
+      {PRODUCT_PUBLIC_FEATURES && showWallet && (
         <WalletModal
           wallet={wallet}
           onRefresh={refreshWallet}
@@ -1803,11 +1805,11 @@ Rules:
         />
       )}
 
-      {showInviteCodes && (
+      {PRODUCT_PUBLIC_FEATURES && showInviteCodes && (
         <InviteCodeModal onClose={() => setShowInviteCodes(false)} />
       )}
 
-      {isAdmin && showAdminWalletGrant && (
+      {PRODUCT_PUBLIC_FEATURES && isAdmin && showAdminWalletGrant && (
         <AdminWalletGrantModal
           onClose={() => setShowAdminWalletGrant(false)}
           onGranted={() => refreshWallet().catch(() => {})}
@@ -1816,7 +1818,7 @@ Rules:
 
       {/* Admin-only prompt catalog viewer (gated on isAdmin so the entry never
           shows for normal users; render is also guarded here). */}
-      {isAdmin && showPromptCatalog && (
+      {PRODUCT_PUBLIC_FEATURES && isAdmin && showPromptCatalog && (
         <PromptCatalogModal onClose={() => setShowPromptCatalog(false)} />
       )}
 
@@ -2053,16 +2055,18 @@ Rules:
               <GlobeIcon size={13} />
               {lang === "en" ? "中" : "EN"}
             </button>
-            <button onClick={openWalletSurface} title={t("wallet.title")}
-              style={headerCell}>
-              <WalletIcon size={13} />
-              {formatWalletAmount(wallet.balanceCents, wallet.currency)}
-            </button>
+            {PRODUCT_PUBLIC_FEATURES && (
+              <button onClick={openWalletSurface} title={t("wallet.title")}
+                style={headerCell}>
+                <WalletIcon size={13} />
+                {formatWalletAmount(wallet.balanceCents, wallet.currency)}
+              </button>
+            )}
             <button onClick={() => setProfileEditorMode("preview")} title={t("header.profile")}
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <SettingsIcon size={14} />
             </button>
-            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} onDeleteAccount={() => setShowDeleteAccount(true)} isAdmin={isAdmin} onGenerateInvite={() => setShowInviteCodes(true)} />
+            <UserBadge user={user} signOut={signOut} onChangePassword={() => setShowChangePassword(true)} onDeleteAccount={() => setShowDeleteAccount(true)} isAdmin={isAdmin} publicFeatures={PRODUCT_PUBLIC_FEATURES} onGenerateInvite={() => setShowInviteCodes(true)} />
           </div>
         </div>
       </div>

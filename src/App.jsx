@@ -1918,6 +1918,7 @@ Rules:
         <CoachPlanImportModal
           action={planProposal.action}
           plans={getCreatePlans(planProposal.action)}
+          existingPlans={logs.filter(l => l?.isPlanned)}
           onConfirm={confirmImportPlans}
           onCancel={() => setPlanProposal(null)}
           onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}

@@ -198,8 +198,9 @@ Phase 1 正在推进。
 已落地：
 
 1. `Import to Calendar` 的计划提炼结果已经包装成 `create_plans` 类型的前端 `agentAction`。
-2. 弹窗从单纯导入审核改为 Action Card 审核：先显示建议动作、风险等级和确认说明，再逐条编辑计划。
-3. 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
+2. 弹窗从单纯导入审核改为 Action Card 审核：先显示建议动作、风险等级、确认说明和「将执行」清单，再逐条编辑计划。
+3. `create_plans` 会提前提示哪些日期已有计划将被替换；已完成训练不受影响。
+4. 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
 
 下一步：
 
@@ -211,3 +212,4 @@ Phase 1 正在推进。
 
 - 2026-06-19：创建 roadmap。当前决策：先做 Action Card，不做全自动改计划；Action Log 和 Memory Facts 后置。
 - 2026-06-19：Phase 1 开始实施。第一版 `create_plans` Action Card 复用 AI Coach 计划导入链路，只做用户确认后的日历写入，不建 action log 表。
+- 2026-06-19：`create_plans` Action Card 增加执行预览和覆盖提醒，明确展示将创建哪些计划、哪些日期的旧计划会被替换。

@@ -4,7 +4,7 @@ import { ACTIVITY_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../co
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
-import { buildCreatePlansAction, getCreatePlans } from "../utils/agentActions";
+import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans } from "../utils/agentActions";
 import { planFields } from "./CalendarDayModal";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -44,7 +44,19 @@ function parseAscentMeters(notes) {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-export function CoachPlanImportModal({ plans = [], action = null, onConfirm, onCancel, onReExtract }) {
+function planSummary(it, t) {
+  const bits = [compactDateLabel(it.date), t(`enum.activity.${it.type}`)];
+  if (it.runType) bits.push(t(`enum.subtype.${it.runType}`));
+  if ((it.subTypes || []).length) bits.push(it.subTypes.map(st => t(`enum.subtype.${st}`)).join(" / "));
+  if (it.distance) bits.push(`${it.distance} km`);
+  if (it.ascent) bits.push(`+${it.ascent} m`);
+  if (it.speed) bits.push(`${it.speed} km/h`);
+  if (it.durationMin) bits.push(`${it.durationMin} ${t("form.minutes")}`);
+  if (it.timeOfDay) bits.push(t(`calendar.plan_tod_${it.timeOfDay}`));
+  return bits.filter(Boolean).join(" · ");
+}
+
+export function CoachPlanImportModal({ plans = [], action = null, existingPlans = [], onConfirm, onCancel, onReExtract }) {
   const t = useT();
   const isMobile = useIsMobile();
   const agentAction = action || buildCreatePlansAction(plans);
@@ -60,6 +72,14 @@ export function CoachPlanImportModal({ plans = [], action = null, onConfirm, onC
   }
 
   const selectedCount = items.filter(it => it._selected).length;
+  const selectedItems = items.filter(it => it._selected);
+  const previewAction = buildCreatePlansAction(selectedItems, {
+    id: agentAction.id,
+    sourceMessageId: agentAction.sourceMessageId,
+    createdAt: agentAction.createdAt,
+    replacesExistingPlans: agentAction.payload?.replacesExistingPlans,
+  });
+  const impact = describeCreatePlansImpact(previewAction, existingPlans);
 
   async function doImport() {
     // Validate: every selected row needs a date + type.
@@ -182,10 +202,53 @@ export function CoachPlanImportModal({ plans = [], action = null, onConfirm, onC
             </div>
           </div>
           <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
-            {t("coach.action_create_plans_reason", { n: actionPlans.length })}
+            {t("coach.action_create_plans_reason", { n: selectedCount })}
           </div>
           <div style={{ ...s.muted, fontSize: 12, marginTop: 8 }}>
             {t("coach.action_requires_confirmation")}
+          </div>
+          <div style={{
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: "1px solid var(--rule)",
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--ink-3)",
+              marginBottom: 7,
+            }}>
+              {t("coach.action_will_execute")}
+            </div>
+            {selectedItems.length === 0 ? (
+              <div style={{ ...s.muted, fontSize: 12 }}>
+                {t("coach.action_no_selected")}
+              </div>
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.55 }}>
+                {selectedItems.slice(0, 4).map(it => (
+                  <li key={it._id}>{planSummary(it, t)}</li>
+                ))}
+                {selectedItems.length > 4 && (
+                  <li>{t("coach.action_more_items", { n: selectedItems.length - 4 })}</li>
+                )}
+              </ul>
+            )}
+            {impact.overwrittenDates.length > 0 && (
+              <div style={{
+                marginTop: 9,
+                padding: "8px 10px",
+                border: "1px solid var(--rule)",
+                background: "var(--bg)",
+                fontSize: 12,
+                lineHeight: 1.45,
+                color: "var(--ink-2)",
+              }}>
+                {t("coach.action_replace_warning", {
+                  dates: impact.overwrittenDates.map(x => compactDateLabel(x.date)).join(", "),
+                })}
+              </div>
+            )}
           </div>
         </div>
 

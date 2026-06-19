@@ -28,8 +28,8 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | 阶段 | 状态 | 目标 | 当前判断 |
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
-| Phase 1 | 收尾观察 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
-| Phase 2 | 待开始 | AI 周复盘 inbox | Action Card 跑通后做 |
+| Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
+| Phase 2 | 进行中 | AI 周复盘 inbox | 第一版复用每日推送 Edge Function 和收件箱 |
 | Phase 3 | 待开始 | Agent Action Log | 有真实动作后再建表 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
@@ -95,11 +95,11 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 - 能提出下周计划调整建议。
 - 计划调整仍需用户确认。
 
-待确认问题：
+第一版决策：
 
-- 推送频率：周日晚、周一早，还是用户可配置。
-- 是否与每日推送合并入口。
-- 是否需要单独收费展示，还是沿用 AI 内部成本记录。
+- 先与每日推送共用收件箱，不新增入口。
+- 先沿用 AI 内部成本记录，不新增单独收费展示。
+- 先提供 `weekly_recap` 手动 / cron 模式，不立即默认打开每周定时；看内容质量后再决定周日晚或周一早。
 
 ## Phase 3：Agent Action Log
 
@@ -193,7 +193,7 @@ archived_at
 
 ## 当前下一步
 
-Phase 1 正在推进。
+Phase 2 正在推进。
 
 已落地：
 
@@ -205,13 +205,15 @@ Phase 1 正在推进。
 6. 风险等级从固定中风险改为按影响范围判断：少量新增为低风险，批量改动或覆盖旧计划为中风险。
 7. Action Card 已有本地生命周期状态：`proposed` / `executed` / `rejected`。接受后按钮显示已执行，忽略后显示已忽略；关闭弹窗不改变状态。
 8. Memory 自动更新已包装成 `memory_update` Action Card：AI 只提出建议，用户审核条目后接受才写入长期记忆，放弃则不改动。
-9. 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
+9. Phase 1 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
+10. Phase 2 第一版开始：`daily-coach-dispatch` 增加 `weekly_recap` 模式，读取本周训练、当周 / 下周计划、每日状态和目标赛，生成一条 AI 周复盘写入收件箱并推送手机。
 
 下一步：
 
-1. 观察 `create_plans` 和 `memory_update` Action Card 在真机上是否顺手，尤其是状态按钮、忽略语义和手机弹窗高度。
-2. 如体验稳定，再评估是否需要把“修改未来计划”从当前覆盖式创建，升级成更明确的 `update_plans` 动作。
-3. 后续如果出现跨页面 / 后台动作，再把本地状态迁移成 Supabase `agent_actions` 表。
+1. 部署 `daily-coach-dispatch` 后手动触发一次 `weekly_recap`，先看周复盘内容质量。
+2. 如果内容稳定，再决定定时频率：周日晚复盘本周，或周一早给下周重点。
+3. 如体验稳定，再评估是否给周复盘附带 Action Card。
+4. 后续如果出现跨页面 / 后台动作，再把本地状态迁移成 Supabase `agent_actions` 表。
 
 ## 变更记录
 
@@ -221,3 +223,4 @@ Phase 1 正在推进。
 - 2026-06-19：`create_plans` 支持已提炼按钮状态、低 / 中风险解释，以及 `planned_rest` 计划休息状态；休息日覆盖旧计划但不写入训练统计。
 - 2026-06-19：补齐 Action Card 本地状态流：`proposed` / `executed` / `rejected`。当前仍不建表，但为后续 Agent Action Log 保留同样的状态语义。
 - 2026-06-19：`memory_update` 接入同一套 Action Card 语义：AI 自动更新 Memory 只生成建议，接受才保存，放弃不改动。
+- 2026-06-19：Phase 1 标记完成，Phase 2 开始。`daily-coach-dispatch` 增加 `weekly_recap` 模式，先写入现有收件箱，不自动改计划。

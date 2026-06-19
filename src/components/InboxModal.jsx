@@ -150,6 +150,14 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
                       background: item.read ? "transparent" : "var(--moss)",
                     }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
+                      {item.title && (
+                        <div style={{
+                          fontSize: 12, lineHeight: 1.3, marginBottom: 4,
+                          color: "var(--ink-2)", fontWeight: 600,
+                        }}>
+                          {item.title}
+                        </div>
+                      )}
                       <div style={{
                         fontSize: 14, lineHeight: 1.5,
                         color: "var(--ink-1)",

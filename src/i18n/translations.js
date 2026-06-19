@@ -170,7 +170,7 @@ const dict = {
 
   // ===== Inbox (received coach pushes) =====
   "inbox.title":                { en: "Inbox",                zh: "收件箱" },
-  "inbox.empty":                { en: "No messages yet. Daily coach check-ins will show up here.", zh: "还没有消息。每天的教练打卡会出现在这里。" },
+  "inbox.empty":                { en: "No messages yet. Coach check-ins and recaps will show up here.", zh: "还没有消息。教练打卡和复盘会出现在这里。" },
   "inbox.mark_all_read":        { en: "Mark all read",        zh: "全部已读" },
   "inbox.clear_all":            { en: "Clear all",            zh: "清空" },
   "inbox.clear_confirm":        { en: "Delete all messages? This can't be undone.", zh: "删除所有消息？此操作无法撤销。" },

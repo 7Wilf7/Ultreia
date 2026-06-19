@@ -5,7 +5,13 @@
 // been pushed today), it: pulls their recent training + target race, asks their
 // wallet-backed shared DeepSeek key for ONE short check-in line, debits the
 // wallet after a successful reply, and pushes it to their devices via FCM.
-// Dedup is enforced by push_log (unique on user_id + local date).
+//
+// Optional request body:
+//   { "mode": "weekly_recap", "force": true, "user_id": "..." }
+// runs the first agentization Phase 2 loop: a weekly recap written to inbox
+// and pushed to the phone. No calendar or Memory data is changed.
+// Daily dedup is enforced by push_log (unique on user_id + local date).
+// Weekly recap dedup is currently best-effort via same-week push_inbox title.
 //
 // Auth: this function runs with Verify JWT = OFF (it's called by cron, not a
 // logged-in user). It instead checks a shared header x-cron-secret == CRON_SECRET.
@@ -133,6 +139,25 @@ function localParts(tz: string): { hour: number; minute: number; date: string } 
   };
 }
 
+function dateAdd(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function weekWindow(dateStr: string): { start: string; end: string; nextStart: string; nextEnd: string } {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const day = d.getUTCDay(); // Sun=0
+  const mondayOffset = (day + 6) % 7;
+  const start = dateAdd(dateStr, -mondayOffset);
+  const end = dateAdd(start, 6);
+  return { start, end, nextStart: dateAdd(start, 7), nextEnd: dateAdd(start, 13) };
+}
+
+function fmtKm(n: number): string {
+  return Number(n || 0) > 0 ? `${Number(n).toFixed(1)}km` : "";
+}
+
 // ── Compact daily-checkin prompt ──
 function weeksUntil(dateStr: string): number | null {
   if (!dateStr) return null;
@@ -194,6 +219,57 @@ function buildPrompt(opts: {
   return { system, user };
 }
 
+function buildWeeklyRecapPrompt(opts: {
+  lang: string; today: string; weekStart: string; weekEnd: string; nextStart: string; nextEnd: string;
+  completed: any[]; plannedThisWeek: any[]; plannedNextWeek: any[]; notes: any[];
+  targetRace: any | null; memory: string;
+}): { system: string; user: string } {
+  const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
+  const workoutLine = (w: any) => {
+    const bits = [w.date, w.type];
+    if (Number(w.distance || 0) > 0) bits.push(fmtKm(w.distance));
+    if (Number(w.ascent || 0) > 0) bits.push(`D+${Math.round(Number(w.ascent))}m`);
+    if (Number(w.duration || 0) > 0) bits.push(fmtDuration(Number(w.duration)));
+    if (Number(w.hr || 0) > 0) bits.push(`HR${Math.round(Number(w.hr))}`);
+    if (w.rpe) bits.push(`RPE${w.rpe}`);
+    if (w.plan_status) bits.push(`status:${w.plan_status}`);
+    if (w.note) bits.push(`note:${String(w.note).replace(/\s+/g, " ").slice(0, 80)}`);
+    return bits.filter(Boolean).join(" ");
+  };
+  const noteLine = (n: any) => {
+    const tags = Array.isArray(n.tags) && n.tags.length ? `tags:${n.tags.join(",")}` : "";
+    const readiness = [n.readiness_sleep, n.readiness_legs, n.readiness_energy].some(v => v != null)
+      ? `readiness sleep/legs/energy=${n.readiness_sleep ?? "-"}-${n.readiness_legs ?? "-"}-${n.readiness_energy ?? "-"}`
+      : "";
+    return [n.date, tags, readiness].filter(Boolean).join(" ");
+  };
+  const completedKm = opts.completed.reduce((sum, w) => sum + Number(w.distance || 0), 0);
+  const completedAscent = opts.completed.reduce((sum, w) => sum + Number(w.ascent || 0), 0);
+  const system =
+    `You are this runner's coach. Write a weekly training recap for the in-app inbox. ` +
+    `LANGUAGE (most important): write the ENTIRE recap in ${langName}, and ONLY ${langName}. ` +
+    `Use the data; do not invent missing details. Be concrete, coach-like, and concise. ` +
+    `Structure with short plain-text sections, no markdown tables, no emoji: ` +
+    `1) this week's signal, 2) risk or recovery note, 3) next week's focus, 4) one suggested action if useful. ` +
+    `Do not claim you changed the calendar. Do not prescribe aggressive increases. Output only the recap text.`;
+  let race = "none";
+  if (opts.targetRace) {
+    const w = weeksUntil(opts.targetRace.date);
+    race = `${opts.targetRace.name}${opts.targetRace.date ? ` on ${opts.targetRace.date}` : ""}${w != null ? ` (~${w} weeks out)` : ""}`;
+  }
+  const user =
+    `[Today] ${opts.today}\n` +
+    `[Week] ${opts.weekStart} to ${opts.weekEnd}\n` +
+    `[Summary] completed_sessions=${opts.completed.length}; completed_distance=${completedKm.toFixed(1)}km; completed_ascent=${Math.round(completedAscent)}m\n` +
+    `[This week completed]\n${opts.completed.length ? opts.completed.map(workoutLine).join("\n") : "none"}\n` +
+    `[This week planned rows]\n${opts.plannedThisWeek.length ? opts.plannedThisWeek.map(workoutLine).join("\n") : "none"}\n` +
+    `[Next week planned rows]\n${opts.plannedNextWeek.length ? opts.plannedNextWeek.map(workoutLine).join("\n") : "none"}\n` +
+    `[Daily notes]\n${opts.notes.length ? opts.notes.map(noteLine).join("\n") : "none"}\n` +
+    `[Target race] ${race}\n` +
+    (opts.memory ? `[Notes about this runner] ${opts.memory.slice(0, 800)}\n` : "");
+  return { system, user };
+}
+
 async function callLLM(key: string, system: string, user: string): Promise<{ text: string; usage: unknown; id: string }> {
   const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",
@@ -226,12 +302,91 @@ function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj, null, 2), { status, headers: { "Content-Type": "application/json" } });
 }
 
+async function dispatchCoachMessage(opts: {
+  supabase: any;
+  serviceAccount: { project_id: string; client_email: string; private_key: string; token_uri: string };
+  accessToken: string | null;
+  userId: string;
+  title?: string;
+  pushTitle?: string;
+  message: string;
+  usage: unknown;
+  upstreamId: string;
+  requestPrefix: string;
+  metadataSource: string;
+}): Promise<{
+  accessToken: string | null;
+  sent: number;
+  devices: number;
+  fcmErrors: any[];
+  chargeCents: number;
+  actualCostCents: number;
+  inbox: boolean;
+}> {
+  const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(opts.usage);
+  const { error: debitErr } = await opts.supabase.rpc("wallet_debit", {
+    p_user_id: opts.userId,
+    p_amount_cents: chargeCents,
+    p_kind: "ai_charge",
+    p_provider: "deepseek",
+    p_request_id: opts.upstreamId ? `${opts.requestPrefix}:${opts.upstreamId}` : `${opts.requestPrefix}:${opts.userId}:${Date.now()}`,
+    p_metadata: {
+      source: opts.metadataSource,
+      model: DEEPSEEK_MODEL,
+      usage: opts.usage,
+      billable_usage: billableUsage,
+      actual_cost_cents: actualCostCents,
+      charge_policy: AI_CHARGE_POLICY,
+    },
+  });
+  if (debitErr) {
+    const insufficient = String(debitErr.message || "").includes("insufficient_balance");
+    throw new Error(insufficient ? "insufficient_balance" : "wallet_debit_failed");
+  }
+
+  const { data: subs } = await opts.supabase
+    .from("push_subscriptions").select("fcm_token").eq("user_id", opts.userId);
+
+  let accessToken = opts.accessToken;
+  let sent = 0;
+  const fcmErrors: any[] = [];
+  if (subs && subs.length > 0) {
+    if (!accessToken) accessToken = await getAccessToken(opts.serviceAccount);
+    for (const sub of subs) {
+      const r = await sendPush(opts.serviceAccount.project_id, accessToken, sub.fcm_token, opts.pushTitle || opts.title || "Ultreia", opts.message);
+      if (r.ok) sent++;
+      else fcmErrors.push({ status: r.status, error: (r.body as any)?.error?.status || (r.body as any)?.error?.message || r.body });
+    }
+  }
+
+  const { error: inboxErr } = await opts.supabase
+    .from("push_inbox")
+    .insert({ user_id: opts.userId, title: opts.title || null, body: opts.message });
+
+  return {
+    accessToken,
+    sent,
+    devices: subs?.length || 0,
+    fcmErrors,
+    chargeCents,
+    actualCostCents,
+    inbox: !inboxErr,
+  };
+}
+
 Deno.serve(async (req) => {
   // Cron-only: reject anything without the shared secret.
   if (req.headers.get("x-cron-secret") !== Deno.env.get("CRON_SECRET")) {
     return json({ error: "unauthorized" }, 401);
   }
   try {
+    const body = await req.json().catch(() => ({})) as {
+      mode?: string;
+      force?: boolean;
+      user_id?: string;
+      date?: string;
+    };
+    const mode = body.mode === "weekly_recap" ? "weekly_recap" : "daily_checkin";
     const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
     if (!saRaw) return json({ error: "FCM_SERVICE_ACCOUNT not set" }, 500);
     const sa = JSON.parse(saRaw);
@@ -241,10 +396,12 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Everyone with push enabled; we filter by local half-hour slot in JS.
-    const { data: settings, error: sErr } = await supabase
+    let settingsQuery = supabase
       .from("user_settings")
       .select("user_id, push_hours, push_times, push_timezone, coach_memory, lang")
       .eq("push_enabled", true);
+    if (body.user_id) settingsQuery = settingsQuery.eq("user_id", body.user_id);
+    const { data: settings, error: sErr } = await settingsQuery;
     if (sErr) return json({ error: sErr.message }, 500);
 
     let fcmAccessToken: string | null = null;
@@ -252,7 +409,115 @@ Deno.serve(async (req) => {
 
     for (const u of settings || []) {
       const tz = u.push_timezone || "UTC";
-      const { hour, minute, date } = localParts(tz);
+      const parts = localParts(tz);
+      const date = body.date || parts.date;
+      if (mode === "weekly_recap") {
+        const { start, end, nextStart, nextEnd } = weekWindow(date);
+        if (!body.force) {
+          const { data: logged } = await supabase
+            .from("push_inbox")
+            .select("id")
+            .eq("user_id", u.user_id)
+            .eq("title", u.lang === "zh" ? "AI 周复盘" : "AI weekly recap")
+            .gte("created_at", `${start}T00:00:00Z`)
+            .lt("created_at", `${nextStart}T00:00:00Z`)
+            .limit(1)
+            .maybeSingle();
+          if (logged) continue;
+        }
+
+        const { error: ensureErr } = await supabase.rpc("wallet_ensure", {
+          p_user_id: u.user_id,
+          p_initial_cents: 500,
+        });
+        if (ensureErr) { summary.push({ user: u.user_id, error: "wallet_ensure_failed" }); continue; }
+        const { data: wallet } = await supabase
+          .from("wallets")
+          .select("balance_cents")
+          .eq("user_id", u.user_id)
+          .single();
+        if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) {
+          summary.push({ user: u.user_id, skipped: "insufficient_balance" });
+          continue;
+        }
+
+        const { data: completed } = await supabase
+          .from("workouts")
+          .select("date, type, distance, duration, ascent, hr, rpe, note")
+          .eq("user_id", u.user_id).eq("is_planned", false)
+          .gte("date", start).lte("date", end)
+          .order("date", { ascending: true });
+        const { data: plannedThisWeek } = await supabase
+          .from("workouts")
+          .select("date, type, distance, duration, ascent, plan_status, note")
+          .eq("user_id", u.user_id).eq("is_planned", true)
+          .gte("date", start).lte("date", end)
+          .order("date", { ascending: true });
+        const { data: plannedNextWeek } = await supabase
+          .from("workouts")
+          .select("date, type, distance, duration, ascent, plan_status, note")
+          .eq("user_id", u.user_id).eq("is_planned", true)
+          .gte("date", nextStart).lte("date", nextEnd)
+          .order("date", { ascending: true });
+        const { data: notes } = await supabase
+          .from("daily_notes")
+          .select("date, tags, readiness_sleep, readiness_legs, readiness_energy")
+          .eq("user_id", u.user_id)
+          .gte("date", start).lte("date", end)
+          .order("date", { ascending: true });
+        const { data: races } = await supabase
+          .from("races").select("name, date")
+          .eq("user_id", u.user_id).eq("is_target", true)
+          .order("date", { ascending: true });
+        const targetRace = (races || []).find((r) => r.date && r.date >= date) || (races || [])[0] || null;
+
+        const { system, user } = buildWeeklyRecapPrompt({
+          lang: u.lang || "en", today: date,
+          weekStart: start, weekEnd: end, nextStart, nextEnd,
+          completed: completed || [],
+          plannedThisWeek: plannedThisWeek || [],
+          plannedNextWeek: plannedNextWeek || [],
+          notes: notes || [],
+          targetRace,
+          memory: u.coach_memory || "",
+        });
+
+        let message = "";
+        let usage: unknown = null;
+        let upstreamId = "";
+        try {
+          const llm = await callLLM(deepseekKey, system, user);
+          message = llm.text;
+          usage = llm.usage;
+          upstreamId = llm.id;
+        } catch (e) {
+          summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
+          continue;
+        }
+        if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+
+        try {
+          const result = await dispatchCoachMessage({
+            supabase,
+            serviceAccount: sa,
+            accessToken: fcmAccessToken,
+            userId: u.user_id,
+            title: u.lang === "zh" ? "AI 周复盘" : "AI weekly recap",
+            message,
+            usage,
+            upstreamId,
+            requestPrefix: "weekly-recap",
+            metadataSource: "weekly_recap_dispatch",
+          });
+          fcmAccessToken = result.accessToken;
+          summary.push({ user: u.user_id, mode, week: `${start}..${end}`, ...result, message });
+        } catch (e) {
+          summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
+        }
+        continue;
+      }
+
+      const { hour, minute } = parts;
       // Floor the wall clock to the half-hour slot this cron tick belongs to.
       const slotMin = minute < 30 ? 0 : 30;
       const slotStr = `${String(hour).padStart(2, "0")}:${slotMin === 0 ? "00" : "30"}`;
@@ -335,55 +600,27 @@ Deno.serve(async (req) => {
       }
       if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
 
-      const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(usage);
-      const { error: debitErr } = await supabase.rpc("wallet_debit", {
-        p_user_id: u.user_id,
-        p_amount_cents: chargeCents,
-        p_kind: "ai_charge",
-        p_provider: "deepseek",
-        p_request_id: upstreamId ? `daily-coach:${upstreamId}` : `daily-coach:${u.user_id}:${date}:${slotIdx}`,
-        p_metadata: {
-          source: "daily_coach_dispatch",
-          model: DEEPSEEK_MODEL,
+      try {
+        const result = await dispatchCoachMessage({
+          supabase,
+          serviceAccount: sa,
+          accessToken: fcmAccessToken,
+          userId: u.user_id,
+          pushTitle: "Ultreia",
+          message,
           usage,
-          billable_usage: billableUsage,
-          actual_cost_cents: actualCostCents,
-          charge_policy: AI_CHARGE_POLICY,
-        },
-      });
-      if (debitErr) {
-        const insufficient = String(debitErr.message || "").includes("insufficient_balance");
-        summary.push({ user: u.user_id, error: insufficient ? "insufficient_balance" : "wallet_debit_failed" });
-        continue;
+          upstreamId,
+          requestPrefix: "daily-coach",
+          metadataSource: "daily_coach_dispatch",
+        });
+        fcmAccessToken = result.accessToken;
+        summary.push({ user: u.user_id, mode, ...result, message });
+      } catch (e) {
+        summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
       }
-
-      const { data: subs } = await supabase
-        .from("push_subscriptions").select("fcm_token").eq("user_id", u.user_id);
-      if (!subs || subs.length === 0) { summary.push({ user: u.user_id, error: "no devices" }); continue; }
-
-      if (!fcmAccessToken) fcmAccessToken = await getAccessToken(sa);
-      let sent = 0;
-      const fcmErrors: any[] = [];
-      for (const s of subs) {
-        const r = await sendPush(sa.project_id, fcmAccessToken, s.fcm_token, "Ultreia", message);
-        if (r.ok) sent++;
-        // Surface FCM rejections (invalid/stale token, sender mismatch, etc.)
-        // so a manual invoke shows WHY a push didn't land instead of silently
-        // counting 0 sent.
-        else fcmErrors.push({ status: r.status, error: (r.body as any)?.error?.status || (r.body as any)?.error?.message || r.body });
-      }
-
-      // Persist the message to the in-app inbox so the user can re-read it
-      // after the system notification is dismissed. Best-effort: a failed
-      // insert shouldn't fail the dispatch (the push already went out).
-      const { error: inboxErr } = await supabase
-        .from("push_inbox").insert({ user_id: u.user_id, body: message });
-      if (inboxErr) summary.push({ user: u.user_id, warn: `inbox insert: ${inboxErr.message}` });
-
-      summary.push({ user: u.user_id, sent, devices: subs.length, fcmErrors, chargeCents, actualCostCents, message });
     }
 
-    return json({ processed: summary.length, summary });
+    return json({ mode, processed: summary.length, summary });
   } catch (e) {
     return json({ error: String(e) }, 500);
   }

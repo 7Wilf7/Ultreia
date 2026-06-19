@@ -28,6 +28,17 @@
 
 但底层能力先保留，不要删除：钱包余额与流水、AI / 天气成本记录、邀请码表、管理员充值、注册相关 Edge Function 都可能在未来公开时恢复入口。现在做新功能时，默认按个人模式设计 UI，不要新增“给其他用户使用才需要”的入口；如果确实需要为未来公开做准备，用 `PRODUCT_PUBLIC_FEATURES` 挂起来。
 
+## Agent 化推进
+
+Ultreia 的中期方向是从 **AI Coach Copilot** 逐步推进到 **可确认动作的 AI Coach Agent**。当前 source of truth 是 `docs-internal/agentization-roadmap.md`，背景分析见 `docs-internal/agentization-analysis.md`。
+
+推进原则：
+
+- 先做 **Action Card（建议动作卡片）**，再考虑更自动化的执行；训练计划、健康风险、天气调整这类动作默认需要用户确认。
+- 不做黑箱自动改计划。标准流程是：AI 发现问题 → 说明原因 → 提出动作 → 用户确认 / 修改 / 拒绝 → 执行 → 记录结果。
+- 每推进一个 agent 化能力，都要同步更新 `docs-internal/agentization-roadmap.md` 的状态、范围和下一步；如果实施中发现某项不必要、不准确或风险过高，直接修改或删除 roadmap 中对应内容，不保留过期设想。
+- 面向最终用户的可见行为变化，同步更新 `docs/` 使用手册和 `docs/changelog.md`；仅内部规划变化只更新 `docs-internal/`。
+
 ### Android 发版流程
 
 ```
@@ -163,13 +174,25 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - `npm.cmd run lint` —— ESLint 检查
 
 ## 工作流约定
-- **验证 = `npm.cmd run lint` + `npm.cmd run build` 通过即可交付**。不用再起 dev server / preview 去"看一眼"——app 是邀请制登录，本地起来只有登录页，看不到真实界面（用户也明确说没必要每次起预览检查）。功能对不对由用户在真机/线上验。
+- **验证 = `npm run test` + `npm run lint` + `npm run build` 通过即可交付**（Windows PowerShell 下用 `npm.cmd run test` / `npm.cmd run lint` / `npm.cmd run build`）。不用再起 dev server / preview 去"看一眼"——app 是邀请制登录，本地起来只有登录页，看不到真实界面（用户也明确说没必要每次起预览检查）。功能对不对由用户在真机/线上验。
 - **移动端优先**：用户的需求绝大多数针对手机端；PC 端网页按"跟随移动端"的原则自行优化、保持合理即可，不用每个改动都纠结桌面。用户会不时上 PC 网页看，有问题会反馈。
 - **普通改动自动提交推送**：完成代码/文档改动并通过验证后，直接 `git commit` + `git push` 到当前分支，不再单独询问。**Android APK / tag 发版例外**：只有用户明确说“推 APK / 发 APK / bump / tag”时才 bump 版本并推 tag。
 - **规则文件同步**：修改本项目协作规则、工作流约定、发版流程或项目记忆时，`AGENTS.md` 和 `CLAUDE.md` 必须同步更新；不要只改其中一个。
 - 大改动前先在小样本上验证，参考全局 CLAUDE.md 中的工作纪律
 - 不引入额外构建工具或框架除非明确需要 (例如 Next.js、Remix)
 - 新依赖安装前先告知用途和体积影响
+
+### 每次改动收尾清单
+
+- **代码逻辑变化**：跑 `npm run test`、`npm run lint`、`npm run build`。
+- **用户可见功能 / 行为变化**：同步更新对应 `docs/*.md` 使用手册，并在 `docs/changelog.md` 当天日期下追加 bullet。
+- **AI Coach prompt、Memory、数据块、agent 行为变化**：同步更新 `docs/ai-coach.md`；如果属于 agent 化推进，也更新 `docs-internal/agentization-roadmap.md`。
+- **天气行为变化**：同步更新 `docs/weather.md`。
+- **导入 / FIT / CSV / ZIP 行为变化**：同步更新 `docs/data-import.md`。
+- **训练类型、跑步分类、赛事类别、PR / 图表逻辑变化**：同步更新对应 `docs/training-log.md`、`docs/running.md`、`docs/races.md`、`docs/charts.md`。
+- **新增 / 删除 / 重命名顶层文件夹，或目录结构有重大调整**：同步更新根目录 `项目结构导览.html`。
+- **协作规则、发版流程、项目 source of truth 变化**：同步更新 `AGENTS.md` 和 `CLAUDE.md`。
+- **Supabase schema 变化**：先停下来给用户完整 SQL；用户跑完后再改前端 / DAL，并说明 `src/lib/db/*.js` 哪些字段映射变了。
 
 ## Supabase 数据层约定
 

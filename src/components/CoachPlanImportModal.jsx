@@ -4,6 +4,7 @@ import { ACTIVITY_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../co
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
+import { buildCreatePlansAction, getCreatePlans } from "../utils/agentActions";
 import { planFields } from "./CalendarDayModal";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -43,10 +44,12 @@ function parseAscentMeters(notes) {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-export function CoachPlanImportModal({ plans, onConfirm, onCancel, onReExtract }) {
+export function CoachPlanImportModal({ plans = [], action = null, onConfirm, onCancel, onReExtract }) {
   const t = useT();
   const isMobile = useIsMobile();
-  const [items, setItems] = useState(() => plans.map(buildDraft));
+  const agentAction = action || buildCreatePlansAction(plans);
+  const actionPlans = getCreatePlans(agentAction);
+  const [items, setItems] = useState(() => actionPlans.map(buildDraft));
   const [importing, setImporting] = useState(false);
 
   function patch(id, p) {
@@ -100,7 +103,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel, onReExtract }
     });
     setImporting(true);
     try {
-      await onConfirm(workouts);
+      await onConfirm(workouts, agentAction);
     } finally {
       setImporting(false);
     }
@@ -129,17 +132,17 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel, onReExtract }
               color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em",
               marginBottom: 2,
             }}>
-              {t("coach.import_modal_eyebrow")}
+              {t("coach.action_modal_eyebrow")}
             </div>
             <div style={{ fontSize: 17, fontWeight: 500, color: "var(--ink-1)" }}>
-              {t("coach.import_modal_title", { n: plans.length })}
+              {t("coach.action_create_plans_title", { n: actionPlans.length })}
             </div>
           </div>
           <button onClick={onCancel} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
         <div style={{ ...s.muted, marginTop: 10, lineHeight: 1.5, fontSize: 13 }}>
-          {t("coach.import_modal_hint")}
+          {t("coach.action_create_plans_hint")}
         </div>
         {onReExtract && (
           <button onClick={onReExtract} disabled={importing}
@@ -149,6 +152,42 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel, onReExtract }
         )}
 
         <div style={{ height: 1, background: "var(--rule)", margin: "16px 0" }} />
+
+        <div style={{
+          border: "1px solid var(--ink-1)",
+          borderRadius: 4,
+          background: "var(--bg-elevated)",
+          padding: "12px 13px",
+          marginBottom: 14,
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            marginBottom: 8,
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 650, color: "var(--ink-1)" }}>
+              {t("coach.action_card_title")}
+            </div>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              color: "var(--ink-2)",
+              border: "1px solid var(--rule)",
+              padding: "3px 7px",
+              whiteSpace: "nowrap",
+            }}>
+              {t("coach.action_risk_medium")}
+            </div>
+          </div>
+          <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
+            {t("coach.action_create_plans_reason", { n: actionPlans.length })}
+          </div>
+          <div style={{ ...s.muted, fontSize: 12, marginTop: 8 }}>
+            {t("coach.action_requires_confirmation")}
+          </div>
+        </div>
 
         {/* Plan rows */}
         {items.length === 0 ? (
@@ -353,7 +392,7 @@ export function CoachPlanImportModal({ plans, onConfirm, onCancel, onReExtract }
           </button>
           <button onClick={onCancel} disabled={importing}
             style={{ ...s.btnGhost, opacity: importing ? 0.5 : 1 }}>
-            {t("common.cancel")}
+            {t("coach.action_reject")}
           </button>
         </div>
       </div>

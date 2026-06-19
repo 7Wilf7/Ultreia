@@ -63,6 +63,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
+import { buildCreatePlansAction, getCreatePlans } from "./utils/agentActions";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -1396,7 +1397,9 @@ function AppShell({
   //    show per-message extraction state.
   async function importToCalendar(assistantContent, msgId, { force = false } = {}) {
     if (!force && msgId && planImportCache[msgId]?.plans?.length) {
-      setPlanProposal({ msgId, assistantContent, plans: planImportCache[msgId].plans });
+      const cached = planImportCache[msgId];
+      const action = cached.action || buildCreatePlansAction(cached.plans, { sourceMessageId: msgId });
+      setPlanProposal({ msgId, assistantContent, action });
       return;
     }
     setExtractingForMsgId(msgId);
@@ -1454,8 +1457,9 @@ Rules:
         alert(t("coach.import_no_plans"));
         return;
       }
-      if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans } }));
-      setPlanProposal({ msgId, assistantContent, plans });
+      const action = buildCreatePlansAction(plans, { sourceMessageId: msgId });
+      if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans, action } }));
+      setPlanProposal({ msgId, assistantContent, action });
     } catch (err) {
       console.error("[AI Coach] Plan-extract error:", err);
       if (err?.code === "insufficient_balance") {
@@ -1912,7 +1916,8 @@ Rules:
           from the AI Coach tab while the extraction was running. */}
       {planProposal && (
         <CoachPlanImportModal
-          plans={planProposal.plans}
+          action={planProposal.action}
+          plans={getCreatePlans(planProposal.action)}
           onConfirm={confirmImportPlans}
           onCancel={() => setPlanProposal(null)}
           onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}

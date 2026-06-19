@@ -28,7 +28,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | 阶段 | 状态 | 目标 | 当前判断 |
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
-| Phase 1 | 待开始 | Action Card 雏形 | 最高优先级 |
+| Phase 1 | 进行中 | Action Card 雏形 | 第一版先落在 AI Coach 计划导入 |
 | Phase 2 | 待开始 | AI 周复盘 inbox | Action Card 跑通后做 |
 | Phase 3 | 待开始 | Agent Action Log | 有真实动作后再建表 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
@@ -193,17 +193,21 @@ archived_at
 
 ## 当前下一步
 
-下一步建议从 **Phase 1：Action Card 雏形** 开始。
+Phase 1 正在推进。
 
-最小实现顺序：
+已落地：
 
-1. 梳理现有 `Import to Calendar` 数据结构，确认能否直接作为第一种 action。
-2. 定义 `agentAction` 前端结构和渲染组件。
-3. 让计划导入结果以 Action Card 形式展示。
-4. 再扩展到“修改未来计划”。
-5. 最后再接 Memory 更新动作。
+1. `Import to Calendar` 的计划提炼结果已经包装成 `create_plans` 类型的前端 `agentAction`。
+2. 弹窗从单纯导入审核改为 Action Card 审核：先显示建议动作、风险等级和确认说明，再逐条编辑计划。
+3. 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
+
+下一步：
+
+1. 观察 `create_plans` Action Card 在真机上是否顺手，尤其是手机弹窗高度、按钮文案和计划数量较多时的操作成本。
+2. 如体验稳定，再扩展到“修改未来计划”。
+3. 最后再接 Memory 更新动作，让 Memory 审核也使用统一 Action Card 模型。
 
 ## 变更记录
 
 - 2026-06-19：创建 roadmap。当前决策：先做 Action Card，不做全自动改计划；Action Log 和 Memory Facts 后置。
-
+- 2026-06-19：Phase 1 开始实施。第一版 `create_plans` Action Card 复用 AI Coach 计划导入链路，只做用户确认后的日历写入，不建 action log 表。

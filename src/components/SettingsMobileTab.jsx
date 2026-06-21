@@ -26,6 +26,7 @@ export function SettingsMobileTab({
   onRefreshWallet,
   onOpenPushSettings,
   onOpenWeatherSettings,
+  onOpenWeeklyReport,
   weatherAutoUpdate,
   weatherIntervalHours,
   pushEnabled,
@@ -123,6 +124,10 @@ export function SettingsMobileTab({
           ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
           : t("settings.daily_push_off")}
         onClick={onOpenPushSettings} />
+      <SubCell
+        primary={t("settings.weekly_report")}
+        secondary={t("settings.weekly_report_desc")}
+        onClick={onOpenWeeklyReport} />
       <SubCell
         primary={t("settings.weather_updates")}
         secondary={weatherAutoUpdate !== false

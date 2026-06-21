@@ -246,12 +246,15 @@ function buildWeeklyRecapPrompt(opts: {
   const completedKm = opts.completed.reduce((sum, w) => sum + Number(w.distance || 0), 0);
   const completedAscent = opts.completed.reduce((sum, w) => sum + Number(w.ascent || 0), 0);
   const system =
-    `You are this runner's coach. Write a weekly training recap for the in-app inbox. ` +
+    `You are this runner's coach. Write a detailed weekly training report for a full in-app report page. ` +
     `LANGUAGE (most important): write the ENTIRE recap in ${langName}, and ONLY ${langName}. ` +
-    `Use the data; do not invent missing details. Be concrete, coach-like, and concise. ` +
-    `Structure with short plain-text sections, no markdown tables, no emoji: ` +
-    `1) this week's signal, 2) risk or recovery note, 3) next week's focus, 4) one suggested action if useful. ` +
-    `Do not claim you changed the calendar. Do not prescribe aggressive increases. Output only the recap text.`;
+    `Use the data; do not invent missing details. Be concrete, professional, and opinionated. Long output is OK. ` +
+    `Structure with plain-text sections, no markdown tables, no emoji: ` +
+    `1) executive summary, 2) session-by-session review of EACH completed workout, ` +
+    `3) plan compliance and missed sessions, 4) fatigue/recovery/risk interpretation, ` +
+    `5) detailed next 7-day plan with exact dates, type, distance/ascent/duration/intensity/purpose, ` +
+    `6) watch list for next week. ` +
+    `Do not claim you changed the calendar. Do not prescribe aggressive increases. Output only the report text.`;
   let race = "none";
   if (opts.targetRace) {
     const w = weeksUntil(opts.targetRace.date);

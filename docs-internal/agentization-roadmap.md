@@ -77,29 +77,30 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 - 后台定时触发 Action Card。
 - 新 Supabase 表。
 
-## Phase 2：AI 周复盘 Inbox
+## Phase 2：AI 周复盘 Page
 
 目标：建立第一个稳定 agent loop。
 
 建议形态：
 
-- 每周自动读取本周训练、计划依从、训练负荷、下周计划。
-- 生成一份周复盘，写入 inbox。
-- 如果有明确建议，附带最多 3 个 Action Card。
-- 用户打开后确认是否应用。
+- 每周或手动读取本周 / 上周训练、计划依从、训练负荷、下周计划。
+- 生成一份完整周报页面，而不是短消息。
+- 周报逐条点评每次训练，并给出接下来 7 天计划。
+- 用户可从周报下方把计划提炼成 Action Card，审核后导入日历。
 
 完成标准：
 
-- 不需要用户主动提问也能生成复盘。
+- 用户不需要在聊天里主动提问，也能从 Settings 进入并生成复盘。
 - 能指出本周最重要的问题，而不是泛泛总结。
-- 能提出下周计划调整建议。
+- 能详细点评每次训练，并提出下周计划调整建议。
 - 计划调整仍需用户确认。
 
 第一版决策：
 
-- 先与每日推送共用收件箱，不新增入口。
-- 先沿用 AI 内部成本记录，不新增单独收费展示。
-- 先提供 `weekly_recap` 手动 / cron 模式，不立即默认打开每周定时；看内容质量后再决定周日晚或周一早。
+- 先做 Settings 里的 AI 周复盘入口，支持本周 / 上周手动生成。
+- 周报历史先保存在当前设备 localStorage，按用户 id 隔离；暂不新增 Supabase 表，避免今晚卡 schema 变更。
+- 周报下方先复用现有计划提炼 Action Card；多段文本注解、周报多设备同步、自动定时推送后置。
+- `daily-coach-dispatch` 的 `weekly_recap` 模式保留，但 prompt 改成详细周报风格；后续如果接自动定时，需要改成写入周报表 / 周报页面，而不是只进 inbox。
 
 ## Phase 3：Agent Action Log
 
@@ -206,13 +207,14 @@ Phase 2 正在推进。
 7. Action Card 已有本地生命周期状态：`proposed` / `executed` / `rejected`。接受后按钮显示已执行，忽略后显示已忽略；关闭弹窗不改变状态。
 8. Memory 自动更新已包装成 `memory_update` Action Card：AI 只提出建议，用户审核条目后接受才写入长期记忆，放弃则不改动。
 9. Phase 1 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
-10. Phase 2 第一版开始：`daily-coach-dispatch` 增加 `weekly_recap` 模式，读取本周训练、当周 / 下周计划、每日状态和目标赛，生成一条 AI 周复盘写入收件箱并推送手机。
+10. Phase 2 第一版开始：`daily-coach-dispatch` 增加 `weekly_recap` 模式，读取本周训练、当周 / 下周计划、每日状态和目标赛，生成 AI 周复盘。
+11. Phase 2.1 调整方向：周复盘不再当作收件箱短消息，而是 Settings 里的完整报告页面；先支持本周 / 上周手动生成、查看本机最近周报，并可从报告提炼接下来计划。
 
 下一步：
 
-1. 部署 `daily-coach-dispatch` 后手动触发一次 `weekly_recap`，先看周复盘内容质量。
-2. 如果内容稳定，再决定定时频率：周日晚复盘本周，或周一早给下周重点。
-3. 如体验稳定，再评估是否给周复盘附带 Action Card。
+1. 真机验证周报页面内容是否够详细，尤其是逐条训练点评和下周计划质量。
+2. 决定是否新增 `coach_reports` 表，让周报历史跨设备同步，并给自动定时周报一个正式落点。
+3. 设计文本注解能力：周报和 AI Coach 回复都可选中文本、保存多条注解、一次性发给教练讨论。
 4. 后续如果出现跨页面 / 后台动作，再把本地状态迁移成 Supabase `agent_actions` 表。
 
 ## 变更记录
@@ -224,3 +226,4 @@ Phase 2 正在推进。
 - 2026-06-19：补齐 Action Card 本地状态流：`proposed` / `executed` / `rejected`。当前仍不建表，但为后续 Agent Action Log 保留同样的状态语义。
 - 2026-06-19：`memory_update` 接入同一套 Action Card 语义：AI 自动更新 Memory 只生成建议，接受才保存，放弃不改动。
 - 2026-06-19：Phase 1 标记完成，Phase 2 开始。`daily-coach-dispatch` 增加 `weekly_recap` 模式，先写入现有收件箱，不自动改计划。
+- 2026-06-19：Phase 2.1 根据真机反馈调整：周复盘改为 Settings 入口的完整报告页面，支持本周 / 上周手动生成、查看本机最近报告，并从报告提炼计划导入 Calendar；文本注解和周报云同步后置。

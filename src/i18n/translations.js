@@ -76,6 +76,8 @@ const dict = {
   "settings.daily_push":        { en: "Daily coach push",     zh: "每日教练推送" },
   "settings.daily_push_on":     { en: "On · {time}",          zh: "开 · 每天 {time}" },
   "settings.daily_push_off":    { en: "Off",                  zh: "关闭" },
+  "settings.weekly_report":     { en: "AI weekly report",     zh: "AI 周复盘" },
+  "settings.weekly_report_desc": { en: "Generate and review this week or last week", zh: "生成并查看本周 / 上周训练报告" },
   "settings.weather_updates":   { en: "Weather updates",      zh: "天气更新" },
   "settings.weather_updates_on": { en: "On · every {interval}", zh: "开 · 每 {interval}" },
   "settings.weather_updates_off": { en: "Off",                zh: "关闭" },
@@ -177,6 +179,19 @@ const dict = {
   "inbox.delete":               { en: "Delete",               zh: "删除" },
   "inbox.load_failed":          { en: "Failed to load inbox.", zh: "加载收件箱失败。" },
   "inbox.go_push_settings":     { en: "⚙ Set up daily coach push", zh: "⚙ 去设置每日教练推送" },
+
+  // ===== Weekly report =====
+  "weekly_report.kicker":        { en: "Agent report",          zh: "AGENT 周报" },
+  "weekly_report.title":         { en: "AI weekly report",      zh: "AI 周复盘" },
+  "weekly_report.this_week":     { en: "This week",             zh: "本周" },
+  "weekly_report.last_week":     { en: "Last week",             zh: "上周" },
+  "weekly_report.generate":      { en: "Analyze",               zh: "分析数据" },
+  "weekly_report.generating":    { en: "Analyzing…",            zh: "分析中…" },
+  "weekly_report.thinking":      { en: "Coach is reviewing your week…", zh: "教练正在复盘这一周…" },
+  "weekly_report.empty":         { en: "No weekly report yet. Pick this week or last week, then analyze your data.", zh: "还没有周报。选择本周或上周后，点击分析数据生成。" },
+  "weekly_report.import_plan":   { en: "Import next plan",      zh: "导入接下来计划" },
+  "weekly_report.local_note":    { en: "Reports are saved on this device for now. Cross-device report history will come after the report table is added.", zh: "当前周报先保存在本设备。等后续增加周报表后，再同步到其他设备。" },
+  "weekly_report.generate_failed": { en: "Could not generate report: {msg}", zh: "生成周报失败：{msg}" },
 
   // ===== Weather API settings =====
   "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },

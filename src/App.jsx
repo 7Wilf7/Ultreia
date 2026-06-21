@@ -22,6 +22,7 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
+import { WeeklyReportModal } from "./components/WeeklyReportModal";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { DeleteAccountModal } from "./components/DeleteAccountModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
@@ -1000,6 +1001,7 @@ function AppShell({
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showWeatherSettings, setShowWeatherSettings] = useState(false);
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -1808,6 +1810,7 @@ Rules:
           onRefreshWallet={refreshWallet}
           onOpenPushSettings={() => setShowPushSettings(true)}
           onOpenWeatherSettings={() => setShowWeatherSettings(true)}
+          onOpenWeeklyReport={() => setShowWeeklyReport(true)}
           weatherAutoUpdate={weatherSettings.autoUpdate}
           weatherIntervalHours={weatherSettings.intervalHours}
           pushEnabled={pushEnabled}
@@ -1946,6 +1949,27 @@ Rules:
           weatherIntervalHours={weatherSettings.intervalHours}
           setWeatherSettings={setWeatherSettings}
           onClose={() => setShowWeatherSettings(false)}
+        />
+      )}
+
+      {showWeeklyReport && (
+        <WeeklyReportModal
+          logs={logs}
+          races={races}
+          dailyNotes={dailyNotes}
+          profile={profile}
+          coachConfig={coachConfig}
+          coachMemory={lang === "zh" ? (coachMemoryZh || coachMemory) : coachMemory}
+          lang={lang}
+          now={now}
+          onClose={() => setShowWeeklyReport(false)}
+          onWalletBalance={applyWalletBalance}
+          storageScope={user?.id}
+          onImportPlan={(text, id) => {
+            setShowWeeklyReport(false);
+            setTab(3);
+            importToCalendar(text, `weekly-report:${id}`, { force: true });
+          }}
         />
       )}
 

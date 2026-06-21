@@ -90,14 +90,9 @@ export function WeeklyReportPage({
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
-              <h2 style={{ fontSize: 24, fontWeight: 750, margin: 0, lineHeight: 1.12, flexShrink: 0 }}>
-                {t("weekly_report.title")}
-              </h2>
-              <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {range.start} to {range.end}
-              </div>
-            </div>
+            <h2 style={{ fontSize: 24, fontWeight: 750, margin: 0, lineHeight: 1.12 }}>
+              {t("weekly_report.title")}
+            </h2>
           </div>
           <button onClick={onClose} style={{ ...s.modalCloseBtn, position: "static", flexShrink: 0 }} aria-label="Close">×</button>
         </div>
@@ -135,6 +130,17 @@ export function WeeklyReportPage({
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 18px 18px" }}>
+        <div style={{
+          ...s.muted,
+          fontSize: 12,
+          lineHeight: 1.45,
+          paddingBottom: 10,
+          marginBottom: 12,
+          borderBottom: "1px solid var(--rule-soft)",
+        }}>
+          {range.start} to {range.end}
+        </div>
+
         {error && (
           <div style={{
             border: "1px solid var(--danger)",

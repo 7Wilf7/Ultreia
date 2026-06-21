@@ -21,7 +21,9 @@ public class UltreiaKeepAlivePlugin extends Plugin {
     @PluginMethod
     public void start(PluginCall call) {
         try {
-            UltreiaKeepAliveService.start(getContext());
+            String title = call.getString("title", "This week");
+            String body = call.getString("body", "Sessions 0 · Time 0m · Distance 0.0km · Ascent 0m");
+            UltreiaKeepAliveService.start(getContext(), title, body);
             JSObject ret = new JSObject();
             ret.put("running", true);
             call.resolve(ret);

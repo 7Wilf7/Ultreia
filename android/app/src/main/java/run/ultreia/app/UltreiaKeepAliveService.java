@@ -18,10 +18,16 @@ import androidx.core.content.ContextCompat;
 public class UltreiaKeepAliveService extends Service {
     private static final String CHANNEL_ID = "ultreia_keep_alive";
     private static final int NOTIFICATION_ID = 7701;
+    private static final String EXTRA_TITLE = "title";
+    private static final String EXTRA_BODY = "body";
     private static volatile boolean running = false;
+    private static String notificationTitle = "This week";
+    private static String notificationBody = "Sessions 0 · Time 0m · Distance 0.0km · Ascent 0m";
 
-    public static void start(Context context) {
+    public static void start(Context context, String title, String body) {
         Intent intent = new Intent(context, UltreiaKeepAliveService.class);
+        intent.putExtra(EXTRA_TITLE, title);
+        intent.putExtra(EXTRA_BODY, body);
         ContextCompat.startForegroundService(context, intent);
     }
 
@@ -43,6 +49,12 @@ public class UltreiaKeepAliveService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         try {
+            if (intent != null) {
+                String title = intent.getStringExtra(EXTRA_TITLE);
+                String body = intent.getStringExtra(EXTRA_BODY);
+                if (title != null && title.length() > 0) notificationTitle = title;
+                if (body != null && body.length() > 0) notificationBody = body;
+            }
             Notification notification = buildNotification();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 ServiceCompat.startForeground(
@@ -98,8 +110,9 @@ public class UltreiaKeepAliveService extends Service {
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Ultreia")
-            .setContentText("Daily coach push is kept active")
+            .setContentTitle(notificationTitle)
+            .setContentText(notificationBody)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(notificationBody))
             .setContentIntent(pending)
             .setOngoing(true)
             .setShowWhen(false)

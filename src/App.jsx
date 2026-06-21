@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
@@ -8,7 +8,7 @@ import {
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
-import { formatDuration, formatPaceFromSec } from "./utils/format";
+import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
@@ -74,22 +74,12 @@ import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, g
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
-import { computeTrainingLoad } from "./utils/trainingLoad";
 
 function localDateKey(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function daysBetweenLocal(dateKey, now = new Date()) {
-  if (!dateKey) return null;
-  const d = new Date(`${dateKey}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  d.setHours(0, 0, 0, 0);
-  return Math.round((today - d) / 86400000);
 }
 
 function withTimeout(promise, label, ms = 15000) {
@@ -100,31 +90,29 @@ function withTimeout(promise, label, ms = 15000) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
-function buildGreetingState({ logs = [], dailyNotes = [], now = new Date() }) {
-  const today = localDateKey(now);
-  const completed = logs
-    .filter(l => l && !l.isPlanned && l.date)
-    .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-  const plannedToday = logs.some(l => l?.isPlanned && l.date === today);
-  const recentRace = completed.find(l =>
-    l.type === "Road Run" && (l.subTypes || []).some(st => /Race/i.test(st))
-  );
-  const load = computeTrainingLoad(logs, now);
-  const todayReadiness = dailyNotes.find(n => n.date === today)?.readiness || null;
-  const readinessVals = todayReadiness
-    ? [todayReadiness.sleep, todayReadiness.legs, todayReadiness.energy].map(Number).filter(Number.isFinite)
-    : [];
+function weekStartKey(now = new Date()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return localDateKey(d);
+}
+
+function buildWeeklyTraySummary(logs = [], now = new Date(), lang = "zh") {
+  const start = weekStartKey(now);
+  const end = localDateKey(now);
+  const weekLogs = logs.filter(l => l && !l.isPlanned && l.date >= start && l.date <= end);
+  const sessions = weekLogs.length;
+  const seconds = weekLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
+  const distance = weekLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+  const ascent = weekLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
+  const isZh = lang === "zh";
+  const distanceText = distance >= 10 ? distance.toFixed(0) : distance.toFixed(1);
+  const timeText = seconds > 0 ? formatDurationShort(seconds) : "0m";
   return {
-    cachedAt: now.toISOString(),
-    lastWorkoutDate: completed[0]?.date || null,
-    lastWorkoutDaysAgo: completed[0] ? daysBetweenLocal(completed[0].date, now) : null,
-    recentRaceDate: recentRace?.date || null,
-    racedWithinDays: recentRace ? daysBetweenLocal(recentRace.date, now) : null,
-    hasPlanToday: plannedToday,
-    loadRamp: load && !load.building ? load.ramp : null,
-    readinessAvg: readinessVals.length
-      ? readinessVals.reduce((sum, v) => sum + v, 0) / readinessVals.length
-      : null,
+    title: isZh ? "本周训练" : "This week",
+    body: isZh
+      ? `Sessions ${sessions} · Time ${timeText} · Distance ${distanceText}km · Ascent ${Math.round(ascent)}m`
+      : `Sessions ${sessions} · Time ${timeText} · Distance ${distanceText}km · Ascent ${Math.round(ascent)}m`,
   };
 }
 
@@ -201,11 +189,7 @@ function LoadingScreen({ userId = null, boot = false }) {
     name = userId ? (localStorage.getItem(`ultreia.displayName:${userId}`) || "") : "";
   } catch { /* private mode */ }
   const hello = timeGreeting(lang) + (name ? `，${name}` : "");
-  let greetingState = null;
-  try {
-    greetingState = userId ? JSON.parse(localStorage.getItem(`ultreia.greetingState:${userId}`) || "null") : null;
-  } catch { /* private mode */ }
-  const greeting = pickGreeting(new Date(), greetingState);
+  const greeting = useMemo(() => pickGreeting(new Date(), userId), [userId]);
   const line = greeting[lang === "zh" ? "zh" : "en"];
 
   return (
@@ -503,19 +487,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
   useEffect(() => {
     if (!user?.id) return;
-    void setPushKeepAliveEnabled(pushEnabled === true);
-  }, [user?.id, pushEnabled]);
-
-  useEffect(() => {
-    if (!user?.id || dataLoading) return;
-    try {
-      localStorage.setItem(`ultreia.greetingState:${user.id}`, JSON.stringify(buildGreetingState({
-        logs,
-        dailyNotes,
-        now: new Date(),
-      })));
-    } catch { /* private mode */ }
-  }, [user?.id, dataLoading, logs, dailyNotes]);
+    void setPushKeepAliveEnabled(pushEnabled === true, buildWeeklyTraySummary(logs, new Date(), lang));
+  }, [user?.id, pushEnabled, logs, lang]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────
   async function updateProfile(patch) {

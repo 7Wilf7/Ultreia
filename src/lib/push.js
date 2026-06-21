@@ -86,12 +86,15 @@ async function initGetuiPush() {
   }
 }
 
-export async function setPushKeepAliveEnabled(enabled) {
+export async function setPushKeepAliveEnabled(enabled, summary = {}) {
   if (Capacitor.getPlatform() !== 'android') return;
   try {
     if (enabled) {
-      await UltreiaKeepAlive.start();
-      appendPushDebug('keepAliveStarted');
+      await UltreiaKeepAlive.start({
+        title: summary.title || "This week",
+        body: summary.body || "Sessions 0 · Time 0m · Distance 0.0km · Ascent 0m",
+      });
+      appendPushDebug('keepAliveStarted', summary);
     } else {
       await UltreiaKeepAlive.stop();
       appendPushDebug('keepAliveStopped');

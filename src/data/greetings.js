@@ -136,54 +136,7 @@ const GENERATED_GREETINGS = GREETING_ACTIONS.flatMap(action =>
 
 export const GREETINGS = [...BASE_GREETINGS, ...GENERATED_GREETINGS];
 
-const STATE_GREETINGS = {
-  plannedToday: [
-    { en: "There's a plan on the calendar today.", zh: "今天日历上有训练安排。" },
-    { en: "Today's plan is waiting. Keep it honest.", zh: "今天的计划在等你，稳稳完成。" },
-    { en: "One planned session, one clear target.", zh: "一堂计划课，一个清楚目标。" },
-    { en: "Check the plan, then trust the legs.", zh: "先看计划，再相信双腿。" },
-  ],
-  racedRecently: [
-    { en: "Race effort lingers. Let recovery count.", zh: "比赛强度还在，恢复也要算数。" },
-    { en: "The medal is done. The rebuild starts quietly.", zh: "奖牌已经拿下，重建从安静开始。" },
-    { en: "Post-race legs deserve patience.", zh: "赛后的腿，值得一点耐心。" },
-  ],
-  trainedYesterday: [
-    { en: "Yesterday is in the bank. Spend wisely today.", zh: "昨天已经存进账户，今天聪明使用。" },
-    { en: "Let yesterday's work settle before adding more.", zh: "先让昨天的训练沉淀，再考虑加量。" },
-    { en: "Back-to-back days work best with restraint.", zh: "连续训练日，克制最有用。" },
-  ],
-  restedLong: [
-    { en: "A few quiet days are not a reset. Start small.", zh: "安静了几天不是归零，先从小一点开始。" },
-    { en: "The first session back only needs to restart the rhythm.", zh: "回来的第一练，只需要把节奏接上。" },
-    { en: "No need to pay back missed miles today.", zh: "今天不用一次还清漏掉的跑量。" },
-  ],
-  loadDanger: [
-    { en: "Load is high. Fitness grows when recovery keeps up.", zh: "负荷偏高，恢复跟得上才会变强。" },
-    { en: "The smart move today may be backing off.", zh: "今天聪明的选择，可能是收一收。" },
-    { en: "Spike weeks ask for calm decisions.", zh: "负荷骤增的周，需要冷静决策。" },
-  ],
-  loadHigh: [
-    { en: "Load is climbing. Keep the next step controlled.", zh: "负荷在上升，下一步要可控。" },
-    { en: "You're building. Don't rush the adaptation.", zh: "你在积累，别催身体适应。" },
-    { en: "Progress is here. Keep it measured.", zh: "进步已经在路上，继续量力推进。" },
-  ],
-  loadLow: [
-    { en: "The load is light. A steady session can restart momentum.", zh: "最近负荷偏轻，一堂稳定训练就能接上势头。" },
-    { en: "Low load is a chance to rebuild cleanly.", zh: "低负荷期，是干净重建的机会。" },
-    { en: "Room to build, no need to force it.", zh: "还有加量空间，但不用硬顶。" },
-  ],
-  readinessLow: [
-    { en: "Low readiness is data, not weakness.", zh: "状态偏低是数据，不是软弱。" },
-    { en: "If the check-in says tired, make the plan listen.", zh: "如果今日状态说累，就让计划听见。" },
-    { en: "Today may be about keeping the floor, not raising the ceiling.", zh: "今天也许是守住下限，不是抬高上限。" },
-  ],
-  readinessHigh: [
-    { en: "Good readiness. Use it, don't waste it.", zh: "状态不错，好好使用，别浪费。" },
-    { en: "The body says yes. Keep the execution clean.", zh: "身体说可以，执行就要干净。" },
-    { en: "Green lights still need good pacing.", zh: "状态开绿灯，也要配速稳。" },
-  ],
-};
+const RECENT_GREETING_LIMIT = 40;
 
 function dayOfYear(date) {
   const localDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
@@ -191,45 +144,35 @@ function dayOfYear(date) {
   return Math.floor((localDay - yearStart) / 86400000);
 }
 
-function pickFrom(lines, date, salt = 0) {
-  return lines[(dayOfYear(date) + salt) % lines.length];
-}
-
-function daysSinceDateKey(dateKey, date = new Date()) {
-  if (!dateKey) return null;
-  const d = new Date(`${dateKey}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  const today = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
-  const then = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  return Math.round((today - then) / 86400000);
-}
-
-// Date-based instead of random: with 366+ lines this avoids repeats within a
-// year, and the year offset keeps the same calendar day from always seeing the
-// same line next year.
-export function pickGreeting(date = new Date(), state = null) {
-  if (state) {
-    const pool = [];
-    const r = state.readinessAvg;
-    const racedWithinDays = state.recentRaceDate
-      ? daysSinceDateKey(state.recentRaceDate, date)
-      : state.racedWithinDays;
-    const lastWorkoutDaysAgo = state.lastWorkoutDate
-      ? daysSinceDateKey(state.lastWorkoutDate, date)
-      : state.lastWorkoutDaysAgo;
-    if (Number.isFinite(r) && r <= 1.4) pool.push(...STATE_GREETINGS.readinessLow);
-    if (state.loadRamp === "danger") pool.push(...STATE_GREETINGS.loadDanger);
-    if (state.loadRamp === "high") pool.push(...STATE_GREETINGS.loadHigh);
-    if (racedWithinDays != null && racedWithinDays <= 3) pool.push(...STATE_GREETINGS.racedRecently);
-    if (state.hasPlanToday) pool.push(...STATE_GREETINGS.plannedToday);
-    if (lastWorkoutDaysAgo === 1) pool.push(...STATE_GREETINGS.trainedYesterday);
-    if (lastWorkoutDaysAgo != null && lastWorkoutDaysAgo >= 4) pool.push(...STATE_GREETINGS.restedLong);
-    if (state.loadRamp === "low") pool.push(...STATE_GREETINGS.loadLow);
-    if (Number.isFinite(r) && r >= 2.6) pool.push(...STATE_GREETINGS.readinessHigh);
-    if (pool.length) return pickFrom(pool, date, 31 + Math.floor(date.getHours() / 6));
+function randomIndex(max) {
+  if (max <= 1) return 0;
+  try {
+    const buf = new Uint32Array(1);
+    crypto.getRandomValues(buf);
+    return buf[0] % max;
+  } catch {
+    return Math.floor(Math.random() * max);
   }
-  const yearOffset = date.getFullYear() * 37;
-  return GREETINGS[(dayOfYear(date) + yearOffset) % GREETINGS.length];
+}
+
+export function pickGreeting(date = new Date(), scope = "default") {
+  const storageKey = `ultreia.recentGreetings.${scope || "default"}`;
+  try {
+    const recent = JSON.parse(localStorage.getItem(storageKey) || "[]")
+      .filter(Number.isInteger);
+    const blocked = new Set(recent);
+    let candidates = GREETINGS
+      .map((_, idx) => idx)
+      .filter(idx => !blocked.has(idx));
+    if (!candidates.length) candidates = GREETINGS.map((_, idx) => idx);
+    const idx = candidates[randomIndex(candidates.length)];
+    const nextRecent = [idx, ...recent.filter(v => v !== idx)].slice(0, RECENT_GREETING_LIMIT);
+    localStorage.setItem(storageKey, JSON.stringify(nextRecent));
+    return GREETINGS[idx];
+  } catch {
+    const yearOffset = date.getFullYear() * 37;
+    return GREETINGS[(dayOfYear(date) + yearOffset + date.getHours()) % GREETINGS.length];
+  }
 }
 
 // Time-of-day greeting from LOCAL device time. Buckets:

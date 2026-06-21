@@ -219,6 +219,8 @@ Phase 2 正在推进。
 3. 设计文本注解能力：周报和 AI Coach 回复都可选中文本、保存多条注解、一次性发给教练讨论。
 4. 自动周报和文本注解稳定后，进入 Phase 3：把本地 action 状态迁移成 Supabase `agent_actions` 表。
 
+相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
+
 ## 变更记录
 
 - 2026-06-19：创建 roadmap。当前决策：先做 Action Card，不做全自动改计划；Action Log 和 Memory Facts 后置。
@@ -230,3 +232,4 @@ Phase 2 正在推进。
 - 2026-06-19：Phase 1 标记完成，Phase 2 开始。`daily-coach-dispatch` 增加 `weekly_recap` 模式，先写入现有收件箱，不自动改计划。
 - 2026-06-19：Phase 2.1 根据真机反馈调整：周复盘改为 Settings 入口的完整报告页面，支持本周 / 上周手动生成、查看本机最近报告，并从报告提炼计划导入 Calendar；文本注解和周报云同步后置。
 - 2026-06-21：周复盘页面全屏化，生成任务提升到 App 层，完成后发本地系统通知。当前仍手动生成；下一步优先做 `coach_reports` 云端落点，再接每周自动生成设置。
+- 2026-06-21：补充 `schema-backlog.md`，把 `coach_reports`、`agent_actions`、`coach_memory_facts`、周报注解等待建表项和本地缓存边界单独列出。

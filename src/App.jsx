@@ -1054,7 +1054,6 @@ function AppShell({
   const [showWeatherSettings, setShowWeatherSettings] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [weeklyReports, setWeeklyReports] = useState(() => loadStoredReports(user?.id));
-  const [weeklyReportSelectedId, setWeeklyReportSelectedId] = useState(() => loadStoredReports(user?.id)[0]?.id || "");
   const [weeklyReportRangeMode, setWeeklyReportRangeMode] = useState("this");
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState("");
@@ -1301,10 +1300,10 @@ function AppShell({
     setWeeklyReportError("");
     try {
       const prompt = buildWeeklyReportPrompt({
-        lang,
+        lang: "zh",
         profile,
         coachConfig,
-        coachMemory: lang === "zh" ? (coachMemoryZh || coachMemory) : coachMemory,
+        coachMemory: coachMemoryZh || coachMemory,
         logs,
         races,
         dailyNotes,
@@ -1329,11 +1328,10 @@ function AppShell({
         text,
       };
       setWeeklyReports(prev => {
-        const next = [report, ...prev.filter(r => r.id !== report.id)].slice(0, KEEP_REPORTS);
+        const next = [report, ...prev.filter(r => r.rangeMode !== rangeMode)].slice(0, KEEP_REPORTS);
         saveStoredReports(user?.id, next);
         return next;
       });
-      setWeeklyReportSelectedId(report.id);
       notifyTaskDone({
         title: t("weekly_report.notification_title"),
         body: t("weekly_report.notification_body"),
@@ -1922,8 +1920,6 @@ Rules:
           now={now}
           onClose={() => setShowWeeklyReport(false)}
           reports={weeklyReports}
-          selectedId={weeklyReportSelectedId}
-          setSelectedId={setWeeklyReportSelectedId}
           rangeMode={weeklyReportRangeMode}
           setRangeMode={setWeeklyReportRangeMode}
           loading={weeklyReportLoading}
@@ -1933,6 +1929,19 @@ Rules:
             setShowWeeklyReport(false);
             setTab(3);
             importToCalendar(text, `weekly-report:${id}`, { force: true });
+          }}
+          onDiscussReport={(report, answer) => {
+            setShowWeeklyReport(false);
+            setTab(3);
+            sendChat([
+              "下面是我刚生成的 AI 周复盘，以及我对周报里问题的补充。请基于这份周报和当前日历计划继续分析，不要重新问我已经回答的信息。",
+              "",
+              "【我的补充】",
+              answer,
+              "",
+              "【AI 周复盘】",
+              report?.text || "",
+            ].join("\n"));
           }}
         />
       ) : (

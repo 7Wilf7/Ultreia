@@ -465,9 +465,9 @@ export function CalendarDayModal({
             <div style={{ ...s.label, marginBottom: 8 }}>
               {t("calendar.day_tags_title")}
             </div>
-            {/* 3-column grid: planned rest / massage / stretching / sick. Retired tags such
+            {/* 2-column grid: planned rest / massage / stretching / sick. Retired tags such
                 as poor_sleep/travel are no longer rendered as toggles. */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
               {DAILY_TAGS.map(tag => (
                 <button key={tag}
                   onClick={() => toggleDayTag(tag)}

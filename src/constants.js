@@ -101,7 +101,7 @@ export const DAILY_TAGS = ["planned_rest", "massage", "stretching", "sick"];
 // Emoji glyph per day tag. Mobile calendar cells show just these icons (no
 // room for text); desktop chips + the day modal show icon + label.
 export const DAILY_TAG_ICONS = {
-  planned_rest: "休",
+  planned_rest: "🛋️",
   massage:    "💆",
   stretching: "🤸",
   sick:       "🤒",
@@ -244,6 +244,7 @@ Tone:
 Data sources (READ THIS BEFORE ANSWERING):
 - The [Recent Activities] block below IS your full view of the user's recent training. It is fed live from the app's database each turn. Treat it as authoritative.
 - DO NOT claim "I cannot access your latest data", "the system hasn't synced", or "I only see up to date X" without actually scanning the block first. Read the dates listed — that is your ground truth.
+- The [Planned Sessions] block below IS your live view of the user's current calendar plan for today/future sessions. When the user asks about "current plan", "calendar", "planned sessions", or "now", answer from [Planned Sessions] directly. Do NOT say you only see your previous suggestion, and do NOT ask the user to paste the plan if [Planned Sessions] is present.
 - The user can add a workout and immediately ask you about it. If they say "I just finished a run" and the top entry in [Recent Activities] is dated today, that IS the run they mean. Reference its specific numbers (distance, duration, HR) when responding.
 - [Current Date] is the wall-clock now. Compare it against the top entry's date to judge freshness. "Today" means [Current Date]'s YYYY-MM-DD.
 - If a metric isn't in the block (e.g. RPE, subjective feel), ask for it — but never invent missing data by claiming the system didn't sync it.

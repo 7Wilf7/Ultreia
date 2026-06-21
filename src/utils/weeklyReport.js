@@ -109,7 +109,9 @@ export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemor
   const system =
     `You are an expert endurance running coach for trail running and hybrid fitness. ` +
     `Write a detailed weekly training report in ${languageName}. Be professional, concrete, and opinionated. ` +
-    `Do not write a short push notification. This is a full report page.`;
+    `Do not write a short push notification. This is a full report page. ` +
+    `This report is not a chat reply: do not stop midway to ask the runner questions. ` +
+    `If information is missing, state assumptions and mark what to confirm, then still provide a provisional recommendation.`;
 
   const profileBlock = buildDataBlock({ logs, races, now, lang: "en", dailyNotes });
   const user =
@@ -131,8 +133,9 @@ export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemor
     `5. Interpret fatigue/readiness/RPE/HR in context. Avoid generic motivational text.\n` +
     `6. Give a detailed next 7-day training plan for ${range.nextStart} to ${range.nextEnd}. Include exact dates, workout type, distance/ascent/duration where applicable, intensity target, and purpose. Include rest days explicitly when needed.\n` +
     `7. If a plan should replace existing next-week plans, say why.\n` +
-    `8. End with a short checklist of what the runner should watch next week.\n` +
-    `9. Do not mention tokens, APIs, wallet, database, prompt, or internal implementation.`;
+    `8. Do not ask open-ended questions in the middle of the report. Put any missing-context items under a short "待确认 / To confirm" section near the end.\n` +
+    `9. End with a short checklist of what the runner should watch next week.\n` +
+    `10. Use Markdown headings/lists/tables where helpful, and do not mention tokens, APIs, wallet, database, prompt, or internal implementation.`;
 
   return { system, user };
 }

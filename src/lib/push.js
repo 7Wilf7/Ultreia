@@ -102,6 +102,17 @@ export async function setPushKeepAliveEnabled(enabled) {
   }
 }
 
+export async function notifyTaskDone({ title = "Ultreia", body = "Ready." } = {}) {
+  if (Capacitor.getPlatform() !== 'android') return;
+  try {
+    await UltreiaKeepAlive.notifyDone({ title, body });
+    appendPushDebug('taskDoneNotification', { title, body });
+  } catch (err) {
+    console.warn('[push] task-done notification failed:', err);
+    appendPushDebug('taskDoneNotificationFailed', { message: err?.message || String(err) });
+  }
+}
+
 export async function initPushNotifications(userId) {
   if (!userId) return;
   if (initializedForUserId === userId) return;

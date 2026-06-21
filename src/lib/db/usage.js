@@ -1,22 +1,34 @@
 import { supabase } from '../supabase';
-import { postJsonStream } from '../apiFetch';
+import { postJson, postJsonStream } from '../apiFetch';
 import { supabaseFunctionUrl, supabasePublicAnonKey } from '../supabase';
 
 // Wallet-backed AI chat via the coach-proxy Edge Function. The shared DeepSeek
 // key stays server-side; successful replies debit the caller's wallet.
 // Throws an Error with `.code` (e.g. 'insufficient_balance') so the caller can branch.
 export async function coachProxy({ system, messages, max_tokens }) {
-  const { data, error } = await supabase.functions.invoke('coach-proxy', {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) {
+    const e = new Error('unauthorized');
+    e.code = 'unauthorized';
+    throw e;
+  }
+
+  const resp = await postJson({
+    url: supabaseFunctionUrl('coach-proxy'),
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: supabasePublicAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
     body: { system, messages, max_tokens },
   });
-  if (error) {
-    let code = '';
-    try {
-      const ctx = error.context;
-      if (ctx && typeof ctx.json === 'function') { const b = await ctx.json(); code = b?.error || ''; }
-    } catch { /* ignore */ }
-    const e = new Error(code || error.message || 'coach_proxy_failed');
-    e.code = code;
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    const code = data?.error || data?.message || `HTTP ${resp.status}`;
+    const e = new Error(code);
+    e.code = data?.error || code;
     throw e;
   }
   if (data && data.error) { const e = new Error(data.error); e.code = data.error; throw e; }

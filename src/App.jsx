@@ -22,7 +22,13 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
-import { WeeklyReportModal } from "./components/WeeklyReportModal";
+import { WeeklyReportPage } from "./components/WeeklyReportModal";
+import {
+  buildWeeklyReportPrompt,
+  KEEP_REPORTS,
+  loadStoredReports,
+  saveStoredReports,
+} from "./utils/weeklyReport";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { DeleteAccountModal } from "./components/DeleteAccountModal";
 import { InviteCodeModal } from "./components/InviteCodeModal";
@@ -56,7 +62,7 @@ import {
   getStoredWeatherSettings,
   setStoredWeatherSettings,
 } from "./lib/weather";
-import { initPushNotifications, setPushKeepAliveEnabled } from "./lib/push";
+import { initPushNotifications, notifyTaskDone, setPushKeepAliveEnabled } from "./lib/push";
 import { productLogoUrl } from "./assets/logo";
 import {
   appendCoachMessageMeta,
@@ -1047,6 +1053,11 @@ function AppShell({
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showWeatherSettings, setShowWeatherSettings] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
+  const [weeklyReports, setWeeklyReports] = useState(() => loadStoredReports(user?.id));
+  const [weeklyReportSelectedId, setWeeklyReportSelectedId] = useState(() => loadStoredReports(user?.id)[0]?.id || "");
+  const [weeklyReportRangeMode, setWeeklyReportRangeMode] = useState("this");
+  const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
+  const [weeklyReportError, setWeeklyReportError] = useState("");
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -1279,6 +1290,62 @@ function AppShell({
     setStoredWeatherSettings(next);
   }
 
+  function notifyWhenBackground(payload) {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") return;
+    notifyTaskDone(payload).catch(() => {});
+  }
+
+  async function generateWeeklyReport(range, rangeMode) {
+    if (weeklyReportLoading) return;
+    setWeeklyReportLoading(true);
+    setWeeklyReportError("");
+    try {
+      const prompt = buildWeeklyReportPrompt({
+        lang,
+        profile,
+        coachConfig,
+        coachMemory: lang === "zh" ? (coachMemoryZh || coachMemory) : coachMemory,
+        logs,
+        races,
+        dailyNotes,
+        now: now || new Date(),
+        range,
+      });
+      const data = await db.usage.coachProxy({
+        system: prompt.system,
+        messages: [{ role: "user", content: prompt.user }],
+        max_tokens: 8000,
+      });
+      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      const report = {
+        id: `${range.start}:${Date.now()}`,
+        rangeMode,
+        start: range.start,
+        end: range.end,
+        nextStart: range.nextStart,
+        nextEnd: range.nextEnd,
+        generatedAt: new Date().toISOString(),
+        text,
+      };
+      setWeeklyReports(prev => {
+        const next = [report, ...prev.filter(r => r.id !== report.id)].slice(0, KEEP_REPORTS);
+        saveStoredReports(user?.id, next);
+        return next;
+      });
+      setWeeklyReportSelectedId(report.id);
+      notifyTaskDone({
+        title: t("weekly_report.notification_title"),
+        body: t("weekly_report.notification_body"),
+      }).catch(() => {});
+    } catch (err) {
+      if (err?.code === "insufficient_balance") setWeeklyReportError(t("wallet.insufficient_ai"));
+      else setWeeklyReportError(t("weekly_report.generate_failed", { msg: err?.message || String(err) }));
+    } finally {
+      setWeeklyReportLoading(false);
+    }
+  }
+
   // ── Lifted sendChat — talks to the wallet-backed coach proxy.
   //    Takes the user's typed message; reads everything else from props/
   //    state in this scope. Streams the assistant turn locally, then persists
@@ -1445,6 +1512,10 @@ function AppShell({
         )));
         window.alert("Failed to save message: " + err.message);
       }
+      notifyWhenBackground({
+        title: t("coach.notification_title"),
+        body: t("coach.notification_body"),
+      });
     } catch (err) {
       setChatMessages(prev => prev.filter(m => m.id !== streamingId));
       if (err?.code === "insufficient_balance") {
@@ -1846,6 +1917,25 @@ Rules:
     );
     // Index 4 — mobile-only Settings page (desktop puts these in the top-right).
     if (which === 4) return (
+      showWeeklyReport ? (
+        <WeeklyReportPage
+          now={now}
+          onClose={() => setShowWeeklyReport(false)}
+          reports={weeklyReports}
+          selectedId={weeklyReportSelectedId}
+          setSelectedId={setWeeklyReportSelectedId}
+          rangeMode={weeklyReportRangeMode}
+          setRangeMode={setWeeklyReportRangeMode}
+          loading={weeklyReportLoading}
+          error={weeklyReportError}
+          onGenerate={generateWeeklyReport}
+          onImportPlan={(text, id) => {
+            setShowWeeklyReport(false);
+            setTab(3);
+            importToCalendar(text, `weekly-report:${id}`, { force: true });
+          }}
+        />
+      ) : (
         <SettingsMobileTab
           user={user}
           profile={profile}
@@ -1875,6 +1965,7 @@ Rules:
           signOut={signOut}
           focusGroup={mobileSettingsFocus}
         />
+      )
     );
     return null;
   };
@@ -1994,27 +2085,6 @@ Rules:
           weatherIntervalHours={weatherSettings.intervalHours}
           setWeatherSettings={setWeatherSettings}
           onClose={() => setShowWeatherSettings(false)}
-        />
-      )}
-
-      {showWeeklyReport && (
-        <WeeklyReportModal
-          logs={logs}
-          races={races}
-          dailyNotes={dailyNotes}
-          profile={profile}
-          coachConfig={coachConfig}
-          coachMemory={lang === "zh" ? (coachMemoryZh || coachMemory) : coachMemory}
-          lang={lang}
-          now={now}
-          onClose={() => setShowWeeklyReport(false)}
-          onWalletBalance={applyWalletBalance}
-          storageScope={user?.id}
-          onImportPlan={(text, id) => {
-            setShowWeeklyReport(false);
-            setTab(3);
-            importToCalendar(text, `weekly-report:${id}`, { force: true });
-          }}
         />
       )}
 

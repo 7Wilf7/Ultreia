@@ -192,7 +192,10 @@ const dict = {
   "weekly_report.empty":         { en: "No weekly report yet. Pick this week or last week, then analyze your data.", zh: "还没有周报。选择本周或上周后，点击分析数据生成。" },
   "weekly_report.import_plan":   { en: "Import next plan",      zh: "导入接下来计划" },
   "weekly_report.local_note":    { en: "Reports are saved on this device for now. Cross-device report history will come after the report table is added.", zh: "当前周报先保存在本设备。等后续增加周报表后，再同步到其他设备。" },
+  "weekly_report.background_note": { en: "You can leave this page while the report runs. A phone notification appears when it is ready.", zh: "周报生成时可以离开这个页面；完成后会弹系统通知。" },
   "weekly_report.generate_failed": { en: "Could not generate report: {msg}", zh: "生成周报失败：{msg}" },
+  "weekly_report.notification_title": { en: "Weekly report ready", zh: "AI 周复盘已完成" },
+  "weekly_report.notification_body": { en: "Open Ultreia to review it and import the next plan.", zh: "打开 Ultreia 查看周报，并可导入接下来的计划。" },
 
   // ===== Weather API settings =====
   "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },
@@ -1012,6 +1015,8 @@ const dict = {
   "coach.empty":              { en: "Daily check-in with your AI coach.\nYour profile, coach config, target races, and recent activities are sent automatically with each message.", zh: "和你的 AI 教练做每日打卡。\n你的个人资料、教练配置、目标比赛和近期活动会随每条消息自动发送。" },
   "coach.choose_model_hint":   { en: "DeepSeek is used automatically", zh: "自动使用 DeepSeek" },
   "coach.thinking":           { en: "Coach is thinking...", zh: "教练思考中……" },
+  "coach.notification_title":  { en: "AI Coach reply ready", zh: "AI 教练回复好了" },
+  "coach.notification_body":   { en: "Open Ultreia to continue the conversation.", zh: "打开 Ultreia 继续查看对话。" },
   "coach.no_key":             { en: "⚠ Wallet balance is not enough. Top up to keep chatting.", zh: "⚠ 钱包余额不足，请充值后继续。" },
   "coach.free_used":          { en: "⚠ Wallet balance is not enough. Top up to keep chatting.", zh: "⚠ 钱包余额不足，请充值后继续。" },
   "coach.hints_title":        { en: "Before you send",       zh: "发送前提示" },

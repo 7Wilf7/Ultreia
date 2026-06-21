@@ -19,6 +19,7 @@ should never import `supabase` directly — they go through these modules.
 | `workouts.js` | `workouts` | Training log entries |
 | `races.js` | `races` | Race calendar / results |
 | `coachMessages.js` | `coach_messages` | AI Coach conversation history |
+| `coachReports.js` | `coach_reports` | AI weekly report history |
 | `userSettings.js` | `user_settings` | Per-user preferences (language, API model choice, coach config, coach memory…) |
 | `index.js` | — | Re-exports each module as a namespace |
 
@@ -71,6 +72,7 @@ by any business code. `src/utils/migrate.js` has been deleted.
 | `workouts.js` | ✅ 3.3c | See below |
 | `races.js` | ✅ 3.3d | See below |
 | `coachMessages.js` | ✅ 3.3e | Append-only chat history; see below |
+| `coachReports.js` | ✅ 2026-06-21 | Weekly report history; one generated report per row |
 
 ### `workouts.js` notes
 

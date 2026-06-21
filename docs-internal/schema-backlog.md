@@ -2,17 +2,18 @@
 
 用于记录“现在还放在设备本地 / 前端状态里，但后续应该进 Supabase”的项目。这里只做排查和排序；真正建表时仍按项目规则先给 SQL，等 Dashboard 执行完成后再改 DAL 和前端。
 
-## 应该尽快建表
+## 已建表并接入
 
 ### 1. `coach_reports`
 
-现状：
+状态：
 
-- AI 周复盘只保存在设备 localStorage。
-- 本周 / 上周各保留最新一份，换设备不可见。
-- 自动每周生成不适合继续做，因为生成结果没有稳定云端落点。
+- 2026-06-21 已建表。
+- AI 周复盘从账号读取，并在生成后写入 `coach_reports`。
+- 本周 / 上周 tab 各自显示最新一份账号内报告。
+- 旧设备 localStorage 周报会按用户 id 迁移一次到 `coach_reports`。
 
-建议字段：
+字段：
 
 - `id uuid primary key`
 - `user_id uuid not null`
@@ -34,11 +35,11 @@
 
 后续动作：
 
-- 新增 `src/lib/db/coachReports.js`。
-- 周报页从 Supabase 读取并 upsert 最新报告。
 - `daily-coach-dispatch` 自动周报写入 `coach_reports`，再发系统通知 / 收件箱提醒。
 
-### 2. `agent_actions`
+## 应该尽快建表
+
+### 1. `agent_actions`
 
 现状：
 
@@ -55,7 +56,7 @@
 
 ## 中期应建表
 
-### 3. `coach_memory_facts`
+### 2. `coach_memory_facts`
 
 现状：
 
@@ -67,13 +68,13 @@
 - 一条事实一行，字段包括 category、body_en、body_zh、source、confidence、created_at、archived_at。
 - prompt 按场景选择相关事实，而不是整段塞入。
 
-### 4. `coach_report_notes` 或 `coach_annotations`
+### 3. `coach_report_notes` 或 `coach_annotations`
 
 现状：
 
 - 周报下方可以把回答和周报一起转发到 AI Coach，但没有保存“这段周报上的用户注解”。
 
-适合等 `coach_reports` 建好后再做：
+基于 `coach_reports` 继续做：
 
 - `report_id`
 - `selected_text`
@@ -87,4 +88,3 @@
 - 图表时间范围、首次引导、提示是否看过、更新检查缓存、推送 debug log。
 - 登录页记住账号密码：明确是当前设备便利功能，不应同步。
 - 开屏问候最近使用队列：只是避免同设备重复文案，不需要跨设备。
-

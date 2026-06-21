@@ -25,9 +25,7 @@ import { InboxModal } from "./components/InboxModal";
 import { WeeklyReportPage } from "./components/WeeklyReportModal";
 import {
   buildWeeklyReportPrompt,
-  KEEP_REPORTS,
   loadStoredReports,
-  saveStoredReports,
 } from "./utils/weeklyReport";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { DeleteAccountModal } from "./components/DeleteAccountModal";
@@ -89,6 +87,8 @@ function withTimeout(promise, label, ms = 15000) {
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
+
+const WEEKLY_REPORT_LIST_LIMIT = 50;
 
 function weekStartKey(now = new Date()) {
   const d = new Date(now);
@@ -1063,6 +1063,36 @@ function AppShell({
   const inboxUnread = inboxItems.filter(i => !i.read).length;
 
   useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    async function loadWeeklyReports() {
+      const storedReports = loadStoredReports(user.id);
+      try {
+        let reports = await db.coachReports.listMyReports({ limit: WEEKLY_REPORT_LIST_LIMIT });
+        const migrationKey = `ultreia.weeklyReportsMigrated.v1.${user.id}`;
+        const migrationDone = (() => {
+          try { return localStorage.getItem(migrationKey) === "1"; } catch { return true; }
+        })();
+        if (storedReports.length && !migrationDone) {
+          const existing = new Set(reports.map(r => `${r.rangeMode}:${r.start}:${r.end}:${r.generatedAt || ""}`));
+          const toMigrate = storedReports.filter(r => !existing.has(`${r.rangeMode}:${r.start}:${r.end}:${r.generatedAt || ""}`));
+          if (toMigrate.length) {
+            await db.coachReports.importStoredReports(toMigrate);
+            reports = await db.coachReports.listMyReports({ limit: WEEKLY_REPORT_LIST_LIMIT });
+          }
+          try { localStorage.setItem(migrationKey, "1"); } catch { /* private mode */ }
+        }
+        if (!cancelled) setWeeklyReports(reports.length ? reports : storedReports);
+      } catch (err) {
+        console.warn("[weekly report] cloud load failed:", err);
+        if (!cancelled) setWeeklyReports(storedReports);
+      }
+    }
+    loadWeeklyReports();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  useEffect(() => {
     const today = localDateKey(now);
     const note = dailyNotes.find(n => n.date === today);
     if (now.getHours() < 5 || readinessComplete(note?.readiness)) return;
@@ -1300,11 +1330,8 @@ function AppShell({
         generatedAt: new Date().toISOString(),
         text,
       };
-      setWeeklyReports(prev => {
-        const next = [report, ...prev.filter(r => r.rangeMode !== rangeMode)].slice(0, KEEP_REPORTS);
-        saveStoredReports(user?.id, next);
-        return next;
-      });
+      const savedReport = await db.coachReports.createReport(report);
+      setWeeklyReports(prev => [savedReport, ...prev].slice(0, WEEKLY_REPORT_LIST_LIMIT));
       notifyTaskDone({
         title: t("weekly_report.notification_title"),
         body: t("weekly_report.notification_body"),

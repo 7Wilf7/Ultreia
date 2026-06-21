@@ -191,7 +191,7 @@ const dict = {
   "weekly_report.empty":         { en: "No report saved for this tab yet. Analyze this week or last week to save the latest report here.", zh: "这个标签下还没有保存周报。点击分析数据后，会在本周或上周各自保留最新一份。" },
   "weekly_report.import_plan":   { en: "Import next plan",      zh: "导入接下来计划" },
   "weekly_report.generated_at":  { en: "Generated {time}",      zh: "生成于 {time}" },
-  "weekly_report.local_note":    { en: "Each tab keeps its latest report on this device for now. Cross-device history will come after the report table is added.", zh: "当前本周 / 上周各自在本设备保留最新一份。等后续增加周报表后，再同步到其他设备。" },
+  "weekly_report.local_note":    { en: "Reports are saved to your account. This week and last week each show the latest report for that tab.", zh: "周报会保存到你的账号下。本周 / 上周两个标签各自显示最新一份。" },
   "weekly_report.background_note": { en: "You can leave this page while the report runs. A phone notification appears when it is ready.", zh: "周报生成时可以离开这个页面；完成后会弹系统通知。" },
   "weekly_report.generate_failed": { en: "Could not generate report: {msg}", zh: "生成周报失败：{msg}" },
   "weekly_report.notification_title": { en: "Weekly report ready", zh: "AI 周复盘已完成" },

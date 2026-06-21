@@ -209,6 +209,7 @@ function daysSinceDateKey(dateKey, date = new Date()) {
 // same line next year.
 export function pickGreeting(date = new Date(), state = null) {
   if (state) {
+    const pool = [];
     const r = state.readinessAvg;
     const racedWithinDays = state.recentRaceDate
       ? daysSinceDateKey(state.recentRaceDate, date)
@@ -216,15 +217,16 @@ export function pickGreeting(date = new Date(), state = null) {
     const lastWorkoutDaysAgo = state.lastWorkoutDate
       ? daysSinceDateKey(state.lastWorkoutDate, date)
       : state.lastWorkoutDaysAgo;
-    if (Number.isFinite(r) && r <= 1.4) return pickFrom(STATE_GREETINGS.readinessLow, date, 11);
-    if (state.loadRamp === "danger") return pickFrom(STATE_GREETINGS.loadDanger, date, 17);
-    if (state.loadRamp === "high") return pickFrom(STATE_GREETINGS.loadHigh, date, 23);
-    if (racedWithinDays != null && racedWithinDays <= 3) return pickFrom(STATE_GREETINGS.racedRecently, date, 29);
-    if (state.hasPlanToday) return pickFrom(STATE_GREETINGS.plannedToday, date, 31);
-    if (lastWorkoutDaysAgo === 1) return pickFrom(STATE_GREETINGS.trainedYesterday, date, 37);
-    if (lastWorkoutDaysAgo != null && lastWorkoutDaysAgo >= 4) return pickFrom(STATE_GREETINGS.restedLong, date, 41);
-    if (state.loadRamp === "low") return pickFrom(STATE_GREETINGS.loadLow, date, 43);
-    if (Number.isFinite(r) && r >= 2.6) return pickFrom(STATE_GREETINGS.readinessHigh, date, 47);
+    if (Number.isFinite(r) && r <= 1.4) pool.push(...STATE_GREETINGS.readinessLow);
+    if (state.loadRamp === "danger") pool.push(...STATE_GREETINGS.loadDanger);
+    if (state.loadRamp === "high") pool.push(...STATE_GREETINGS.loadHigh);
+    if (racedWithinDays != null && racedWithinDays <= 3) pool.push(...STATE_GREETINGS.racedRecently);
+    if (state.hasPlanToday) pool.push(...STATE_GREETINGS.plannedToday);
+    if (lastWorkoutDaysAgo === 1) pool.push(...STATE_GREETINGS.trainedYesterday);
+    if (lastWorkoutDaysAgo != null && lastWorkoutDaysAgo >= 4) pool.push(...STATE_GREETINGS.restedLong);
+    if (state.loadRamp === "low") pool.push(...STATE_GREETINGS.loadLow);
+    if (Number.isFinite(r) && r >= 2.6) pool.push(...STATE_GREETINGS.readinessHigh);
+    if (pool.length) return pickFrom(pool, date, 31 + Math.floor(date.getHours() / 6));
   }
   const yearOffset = date.getFullYear() * 37;
   return GREETINGS[(dayOfYear(date) + yearOffset) % GREETINGS.length];

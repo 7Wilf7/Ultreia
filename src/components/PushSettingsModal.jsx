@@ -155,6 +155,9 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
           <div style={{ ...s.muted, fontSize: 11, marginBottom: 14, lineHeight: 1.5 }}>
             {t("push.apk_note")}
           </div>
+          <div style={{ ...s.muted, fontSize: 11, marginBottom: 14, lineHeight: 1.5 }}>
+            {t("push.keepalive_note")}
+          </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>

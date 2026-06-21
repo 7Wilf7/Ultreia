@@ -12,14 +12,26 @@ export function useAuth() {
 
   useEffect(() => {
     let active = true;
+    const timeout = setTimeout(() => {
+      if (!active) return;
+      console.warn("[auth] getSession timed out; leaving splash so the app can recover.");
+      setLoading(false);
+    }, 12000);
 
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
+      clearTimeout(timeout);
       setUser(data.session?.user ?? null);
+      setLoading(false);
+    }).catch((err) => {
+      if (!active) return;
+      clearTimeout(timeout);
+      console.warn("[auth] getSession failed:", err);
       setLoading(false);
     });
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      clearTimeout(timeout);
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       setUser(session?.user ?? null);
       setLoading(false);
@@ -27,6 +39,7 @@ export function useAuth() {
 
     return () => {
       active = false;
+      clearTimeout(timeout);
       sub.subscription.unsubscribe();
     };
   }, []);

@@ -56,7 +56,7 @@ import {
   getStoredWeatherSettings,
   setStoredWeatherSettings,
 } from "./lib/weather";
-import { initPushNotifications } from "./lib/push";
+import { initPushNotifications, setPushKeepAliveEnabled } from "./lib/push";
 import { productLogoUrl } from "./assets/logo";
 import {
   appendCoachMessageMeta,
@@ -84,6 +84,14 @@ function daysBetweenLocal(dateKey, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   d.setHours(0, 0, 0, 0);
   return Math.round((today - d) / 86400000);
+}
+
+function withTimeout(promise, label, ms = 15000) {
+  let timer = null;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
 function buildGreetingState({ logs = [], dailyNotes = [], now = new Date() }) {
@@ -352,30 +360,40 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Fetch + apply all user data. Reused by the boot effect AND pull-to-refresh.
   // Throws on error so each caller can handle it (boot alerts; refresh is quiet).
   const loadData = useCallback(async () => {
-        const [profileData, settingsData, workoutsData, racesData, messagesData, notesData, walletData] = await Promise.all([
-          db.profiles.getMyProfile(),
-          db.userSettings.getMySettings(),
-          db.workouts.listMyWorkouts(),
-          db.races.listMyRaces(),
-          db.coachMessages.listMyMessages(),
-          db.dailyNotes.listMyDailyNotes(),
-          db.wallet.getMyWallet(),
+        const pieces = await Promise.all([
+          withTimeout(db.profiles.getMyProfile(), "profile").then(value => ({ key: "profile", value }), error => ({ key: "profile", error })),
+          withTimeout(db.userSettings.getMySettings(), "settings").then(value => ({ key: "settings", value }), error => ({ key: "settings", error })),
+          withTimeout(db.workouts.listMyWorkouts(), "workouts").then(value => ({ key: "workouts", value }), error => ({ key: "workouts", error })),
+          withTimeout(db.races.listMyRaces(), "races").then(value => ({ key: "races", value }), error => ({ key: "races", error })),
+          withTimeout(db.coachMessages.listMyMessages(), "messages").then(value => ({ key: "messages", value }), error => ({ key: "messages", error })),
+          withTimeout(db.dailyNotes.listMyDailyNotes(), "notes").then(value => ({ key: "notes", value }), error => ({ key: "notes", error })),
+          withTimeout(db.wallet.getMyWallet(), "wallet").then(value => ({ key: "wallet", value }), error => ({ key: "wallet", error })),
         ]);
+        const result = Object.fromEntries(pieces.map(p => [p.key, p]));
+        const failures = pieces.filter(p => p.error);
+        if (failures.length) {
+          console.warn("[boot] partial data load:", failures.map(p => `${p.key}: ${p.error?.message || p.error}`).join("; "));
+        }
 
         // Profile — null means no row yet (handle_new_user trigger should
         // prevent this, but defend against it). DEFAULT_PROFILE keeps shape
         // consistent so AppShell can read profile.displayName safely; the
         // setup wizard still fires because isProfileComplete() checks values.
-        const mergedProfile = { ...DEFAULT_PROFILE, ...(profileData || {}) };
-        setProfileState(mergedProfile);
-        setItraPIState(mergedProfile.itraPI ?? "");
-        // Cache the name so the next launch's splash greeting can show it before
-        // the profile finishes loading.
-        try {
-          localStorage.setItem(`ultreia.displayName:${user.id}`, mergedProfile.displayName || "");
-        } catch { /* private mode */ }
+        if (!result.profile.error) {
+          const mergedProfile = { ...DEFAULT_PROFILE, ...(result.profile.value || {}) };
+          setProfileState(mergedProfile);
+          setItraPIState(mergedProfile.itraPI ?? "");
+          // Cache the name so the next launch's splash greeting can show it before
+          // the profile finishes loading.
+          try {
+            localStorage.setItem(`ultreia.displayName:${user.id}`, mergedProfile.displayName || "");
+          } catch { /* private mode */ }
+        } else {
+          setProfileState(prev => prev || DEFAULT_PROFILE);
+        }
 
         // Settings — same defensive merge.
+        const settingsData = result.settings.error ? null : result.settings.value;
         if (settingsData) {
           setCoachConfigState({
             ...DEFAULT_COACH_CONFIG,
@@ -410,20 +428,26 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         }
 
         // Workouts — list already sorted date desc, created_at desc by the DAL.
-        setLogs(workoutsData);
+        if (!result.workouts.error) setLogs(result.workouts.value);
 
         // Races — DAL returns created_at desc; RacesTab re-sorts internally
         // (target by date asc, history by date desc).
-        setRaces(racesData);
+        if (!result.races.error) setRaces(result.races.value);
 
         // Coach messages — DAL returns created_at asc (oldest first).
-        setChatMessages(messagesData);
+        if (!result.messages.error) setChatMessages(result.messages.value);
 
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
-        setDailyNotes(notesData);
+        if (!result.notes.error) setDailyNotes(result.notes.value);
 
-        setWallet(walletData || { balanceCents: 0, currency: "CNY", ledger: [] });
+        if (!result.wallet.error) setWallet(result.wallet.value || { balanceCents: 0, currency: "CNY", ledger: [] });
+
+        if (failures.length) {
+          const err = new Error(`Partial data load: ${failures.map(p => p.key).join(", ")}`);
+          err.partial = true;
+          throw err;
+        }
   }, [user.id]);
 
   // Initial load on mount / user change. Owns the full-screen LoadingScreen +
@@ -431,16 +455,20 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   useEffect(() => {
     let cancelled = false;
     const watchdog = setTimeout(() => {
-      if (!cancelled) reportError("Boot watchdog: data load still pending after 25s (stuck on splash). Likely one of profiles/settings/workouts/races/messages/notes/wallet never resolved.");
+      if (!cancelled) console.warn("[boot] data load still pending after 25s");
     }, 25000);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDataLoading(true);
     loadData()
       .catch((err) => {
         if (cancelled) return;
-        console.error("Failed to load user data:", err);
-        reportError(`Data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
-        window.alert("Failed to load your data, please refresh.");
+        if (err?.partial) {
+          console.warn("[boot] entered app with partial data:", err.message);
+        } else {
+          console.error("Failed to load user data:", err);
+          reportError(`Data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
+          window.alert("Failed to load your data, please refresh.");
+        }
       })
       .finally(() => { clearTimeout(watchdog); if (!cancelled) setDataLoading(false); });
     return () => { cancelled = true; clearTimeout(watchdog); };
@@ -452,7 +480,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const refresh = useCallback(async () => {
     setRefreshing(true);
     try { await Promise.all([loadData(), new Promise(r => setTimeout(r, 600))]); }
-    catch (err) { reportError(`Refresh failed: ${err?.message || String(err)}`); }
+    catch (err) {
+      if (err?.partial) console.warn("[refresh] partial data load:", err.message);
+      else reportError(`Refresh failed: ${err?.message || String(err)}`);
+    }
     finally { setRefreshing(false); }
   }, [loadData]);
 
@@ -463,6 +494,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     if (!user?.id) return;
     void initPushNotifications(user.id);
   }, [user.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void setPushKeepAliveEnabled(pushEnabled === true);
+  }, [user?.id, pushEnabled]);
 
   useEffect(() => {
     if (!user?.id || dataLoading) return;
@@ -652,7 +688,14 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return Promise.resolve();
   }
 
-  function bulkAddLogs(workouts, { source = "garmin_csv", fetchWeather = false, replacePlannedDates = false, replacePlannedDatesOn = [] } = {}) {
+  function bulkAddLogs(workouts, {
+    source = "garmin_csv",
+    fetchWeather = false,
+    replacePlannedDates = false,
+    replacePlannedDatesOn = [],
+    onPersisted = null,
+    onFailed = null,
+  } = {}) {
     const optimistics = workouts.map(w => ({
       id: makeTempId("bulk"),
       ...w,
@@ -704,6 +747,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const tempIds = new Set(optimistics.map(o => o.id));
         // Replace all temp rows with the persisted ones in one pass.
         setLogs(prev => [...created, ...prev.filter(l => !tempIds.has(l.id))]);
+        onPersisted?.(created);
       } catch (err) {
         console.error("[bulkAddLogs] background save failed:", err);
         const tempIds = new Set(optimistics.map(o => o.id));
@@ -711,6 +755,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // A replace import may have already deleted the old plan rows before
         // failing — resync from server truth so the calendar isn't left wrong.
         if (replacePlannedDates) refreshLogs().catch(() => {});
+        onFailed?.(err);
         window.alert(err.message);
       }
     })();

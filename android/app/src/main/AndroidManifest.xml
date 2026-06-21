@@ -36,6 +36,14 @@
         </provider>
 
         <service android:name=".UltreiaGetuiIntentService" />
+        <service
+            android:name=".UltreiaKeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the user-enabled daily coach push connection more reliable." />
+        </service>
     </application>
 
     <!-- Permissions -->
@@ -61,6 +69,8 @@
          @capacitor/push-notifications plugin requests it at runtime, but the
          permission must be declared here for that request to take effect. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- In-app self-update: download the release APK and launch the system
          package installer on it (see ApkInstallerPlugin). The OS still gates

@@ -24,6 +24,7 @@ const DAILY_COACH_CHANNEL_ID = "daily_coach";
 const WALLET_ALERTS_CHANNEL_ID = "wallet_alerts_v1";
 
 const UltreiaGetui = registerPlugin('UltreiaGetui');
+const UltreiaKeepAlive = registerPlugin('UltreiaKeepAlive');
 
 function appendPushDebug(event, detail = {}) {
   try {
@@ -82,6 +83,22 @@ async function initGetuiPush() {
     getuiListener = null;
     console.warn('[push] getui init failed:', err);
     appendPushDebug('getuiInitFailed', { message: err?.message || String(err) });
+  }
+}
+
+export async function setPushKeepAliveEnabled(enabled) {
+  if (Capacitor.getPlatform() !== 'android') return;
+  try {
+    if (enabled) {
+      await UltreiaKeepAlive.start();
+      appendPushDebug('keepAliveStarted');
+    } else {
+      await UltreiaKeepAlive.stop();
+      appendPushDebug('keepAliveStopped');
+    }
+  } catch (err) {
+    console.warn('[push] keep-alive service update failed:', err);
+    appendPushDebug('keepAliveFailed', { enabled, message: err?.message || String(err) });
   }
 }
 
@@ -175,6 +192,7 @@ export async function initPushNotifications(userId) {
 
 export async function clearPushRegistrationForCurrentUser() {
   if (Capacitor.getPlatform() !== 'android') return;
+  await setPushKeepAliveEnabled(false);
   await deleteCachedPushToken();
   let cid = "";
   try {

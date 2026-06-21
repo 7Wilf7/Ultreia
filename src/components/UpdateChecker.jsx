@@ -21,6 +21,8 @@ const SUPABASE_URL = (import.meta.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, 
 const MIRROR_APK_URL = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/releases/ultreia-latest.apk`
   : null;
+const AUTO_CHECK_CACHE_MS = 30 * 60 * 1000;
+let releaseCheckCache = null; // { at, status, release }
 
 // Strip leading "v" so "v0.2.1" → "0.2.1"
 function stripV(tag) {
@@ -177,12 +179,17 @@ export function UpdateChecker() {
   // "View recent updates" (up-to-date case) expands the latest release notes.
   const [showNotes, setShowNotes] = useState(false);
 
-  // Auto-check once on mount so the button can show "new version + red dot" vs
-  // "view recent updates" without the user having to tap first. Settings is the
-  // only place this mounts, so it's at most one GitHub call per Settings open.
-  useEffect(() => { check(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-check on mount, but reuse an in-memory result for a while. On mobile
+  // the Settings tab unmounts when the user leaves it; without this cache,
+  // every visit would hit GitHub again.
+  useEffect(() => { check({ automatic: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function check() {
+  async function check({ automatic = false } = {}) {
+    if (automatic && releaseCheckCache && Date.now() - releaseCheckCache.at < AUTO_CHECK_CACHE_MS) {
+      setStatus(releaseCheckCache.status);
+      setRelease(releaseCheckCache.release);
+      return;
+    }
     setStatus("checking");
     try {
       const res = await fetch(GITHUB_RELEASES_API, {
@@ -192,13 +199,16 @@ export function UpdateChecker() {
       const data = await res.json();
       const remote = stripV(data.tag_name || "");
       const cmp = compareVersions(remote, currentVersion);
-      setRelease({
+      const nextRelease = {
         version: remote,
         url: data.html_url,
         apkUrl: pickApkAsset(data.assets)?.browser_download_url || null,
         notes: data.body || "",
-      });
-      setStatus(cmp > 0 ? "newer" : "latest");
+      };
+      const nextStatus = cmp > 0 ? "newer" : "latest";
+      setRelease(nextRelease);
+      setStatus(nextStatus);
+      releaseCheckCache = { at: Date.now(), status: nextStatus, release: nextRelease };
     } catch {
       setStatus("error");
       setRelease(null);
@@ -268,14 +278,14 @@ export function UpdateChecker() {
           <div style={primaryStyle}>{t("settings.version")}</div>
           <div style={secondaryStyle}>v{currentVersion}</div>
         </div>
-        {status === "latest" ? (
-          // Up to date → button reveals the latest version's changelog.
-          <button onClick={() => setShowNotes(o => !o)} style={btnStyle}>
-            {t("settings.view_recent")}
-          </button>
-        ) : (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          {status === "latest" && release && (
+            <button onClick={() => setShowNotes(o => !o)} style={btnStyle}>
+              {t("settings.view_recent")}
+            </button>
+          )}
           <button
-            onClick={check}
+            onClick={() => check({ automatic: false })}
             disabled={status === "checking"}
             style={{ ...btnStyle, position: "relative" }}
           >
@@ -288,7 +298,7 @@ export function UpdateChecker() {
               }} />
             )}
           </button>
-        )}
+        </div>
       </div>
 
       {status === "error" && (

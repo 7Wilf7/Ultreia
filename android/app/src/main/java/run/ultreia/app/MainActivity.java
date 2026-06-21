@@ -14,6 +14,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ApkDownloaderPlugin.class);
         registerPlugin(PosterSaverPlugin.class);
         registerPlugin(UltreiaGetuiPlugin.class);
+        registerPlugin(UltreiaKeepAlivePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

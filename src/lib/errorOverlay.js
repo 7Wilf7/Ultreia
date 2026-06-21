@@ -17,15 +17,16 @@ function ensureBox() {
     maxHeight: "70vh", overflow: "auto",
     background: "#7a1414", color: "#fff",
     font: "12px/1.5 ui-monospace, Menlo, Consolas, monospace",
-    padding: "12px 14px",
+    padding: "calc(env(safe-area-inset-top, 0px) + 12px) 14px 12px",
     boxShadow: "0 4px 16px rgba(0,0,0,0.45)",
+    boxSizing: "border-box",
   });
 
   const bar = document.createElement("div");
-  Object.assign(bar.style, { display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" });
+  Object.assign(bar.style, { display: "flex", gap: "8px", alignItems: "flex-start", marginBottom: "8px" });
   const title = document.createElement("strong");
   title.textContent = "⚠ App error — screenshot this";
-  title.style.flex = "1";
+  Object.assign(title.style, { flex: "1", minWidth: "0", lineHeight: "1.35" });
   const copyBtn = document.createElement("button");
   copyBtn.textContent = "Copy";
   const closeBtn = document.createElement("button");
@@ -33,7 +34,8 @@ function ensureBox() {
   for (const b of [copyBtn, closeBtn]) {
     Object.assign(b.style, {
       background: "#fff", color: "#7a1414", border: "none", borderRadius: "3px",
-      padding: "4px 12px", fontSize: "12px", cursor: "pointer", minHeight: "0",
+      padding: "8px 14px", fontSize: "12px", cursor: "pointer", minHeight: "0",
+      touchAction: "manipulation", flexShrink: "0",
     });
   }
   copyBtn.onclick = () => { try { navigator.clipboard.writeText(entries.join("\n\n———\n\n")); } catch { /* clipboard blocked */ } };

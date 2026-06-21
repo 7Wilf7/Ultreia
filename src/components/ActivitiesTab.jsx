@@ -39,6 +39,16 @@ function mapGarminActivityType(at) {
   return { type: "Road Run", unknown: true };
 }
 
+function importFingerprint(row) {
+  const date = row?.date || "";
+  const startedAt = row?.startedAt || "";
+  const type = row?.type || "";
+  const duration = Math.round(Number(row?.duration) || 0);
+  const distance = Math.round((Number(row?.distance) || 0) * 1000);
+  const ascent = Math.round(Number(row?.ascent) || 0);
+  return [date, startedAt, type, duration, distance, ascent].join("|");
+}
+
 export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null, onCoachReviewRequest }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
@@ -71,6 +81,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const [unknownChoices, setUnknownChoices] = useState({}); // originalType → target type | "__skip__"
   const [parseProgress, setParseProgress] = useState(null); // { done, total } during a batch FIT/ZIP parse
   const [importReview, setImportReview] = useState(null); // staged import rows after the preview, before final insert
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const pendingImportKeysRef = useRef(new Set());
   // Cap how many rows render at once. With hundreds of activities, rendering
   // them all builds a huge DOM (each card has several SVG icons) → slow tab
   // switch + janky pull-to-refresh. Show a page at a time via "load more".
@@ -375,7 +387,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
 
   function finalizeParsedRows(rows) {
-    const dups = rows.filter(r => logs.some(l => isDuplicate(l, r)));
+    const dups = rows.filter(r => logs.some(l => isDuplicate(l, r)) || pendingImportKeysRef.current.has(importFingerprint(r)));
     if (dups.length > 0) {
       setDuplicateWarning({ existing: null, incoming: rows, dupIds: dups.map(d => d.id), source: "csv" });
     } else {
@@ -437,26 +449,48 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
 
   function closeImportReview() {
+    if (importSubmitting) return;
     setImportReview(null);
   }
 
   async function confirmImportReview({ workouts, fetchWeather, coachNotes, askCoach }) {
-    try {
-      const created = await bulkAddLogs(workouts, { fetchWeather });
-      setParsedRows(null);
+    if (importSubmitting) return;
+    const importKeys = workouts.map(importFingerprint);
+    if (importKeys.some(k => pendingImportKeysRef.current.has(k))) {
       setImportReview(null);
-      setUploadMsg(t("activities.import_done", { n: workouts.length }));
-      setTimeout(() => setUploadMsg(""), 4000);
-      if (askCoach && onCoachReviewRequest && created?.length) {
-        const coachLimit = workouts.length <= 5 ? workouts.length : 3;
-        onCoachReviewRequest(created.slice(0, coachLimit), {
-          count: created.length,
-          source: "import",
-          note: coachNotes,
-        });
-      }
+      setUploadMsg(t("activities.duplicate_pending"));
+      return;
+    }
+    importKeys.forEach(k => pendingImportKeysRef.current.add(k));
+    setImportSubmitting(true);
+    setUploadMsg(t("activities.import_saving"));
+    setImportReview(null);
+    try {
+      await bulkAddLogs(workouts, {
+        fetchWeather,
+        onPersisted: (created) => {
+          importKeys.forEach(k => pendingImportKeysRef.current.delete(k));
+          setImportSubmitting(false);
+          setParsedRows(null);
+          setUploadMsg(t("activities.import_done", { n: workouts.length }));
+          setTimeout(() => setUploadMsg(""), 4000);
+          if (askCoach && onCoachReviewRequest && created?.length) {
+            const coachLimit = workouts.length <= 5 ? workouts.length : 3;
+            onCoachReviewRequest(created.slice(0, coachLimit), {
+              count: created.length,
+              source: "import",
+              note: coachNotes,
+            });
+          }
+        },
+        onFailed: () => {
+          importKeys.forEach(k => pendingImportKeysRef.current.delete(k));
+          setImportSubmitting(false);
+        },
+      });
     } catch {
-      // alert shown by wrapper; leave the review panel open so user can retry / cancel
+      importKeys.forEach(k => pendingImportKeysRef.current.delete(k));
+      setImportSubmitting(false);
     }
   }
 

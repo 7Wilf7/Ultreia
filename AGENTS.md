@@ -67,6 +67,8 @@ git tag v0.2.0 && git push origin v0.2.0
 
 **用户 shorthand**：Wilf 说「推 apk」= 按本节标准流程发 Android APK；Wilf 说「推 0111」这类数字 = 版本号，按去掉点解析（例如 `0111` → `0.11.1`、`0110` → `0.11.0`），然后 bump 到该版本、提交、打对应 `v*` tag 并推送触发 GitHub Actions。若数字无法唯一切分版本号，再停下来确认。
 
+**推完即交付**：APK 发版只需要确认版本号 commit、`v*` tag 和 tag push 成功；GitHub Actions / Release 构建不用在当前对话里等到完成，Wilf 会自行更新检查。
+
 **版本号规则（pre-1.0，`0.MINOR.PATCH`，只增不跳号）**：每个 tag = 一次发版，判据只有一条——这次 tag 里**有没有用户能感知的新功能**。
 
 - **PATCH +1**（`0.7.0 → 0.7.1`）：bug 修复、样式 / 文案微调、性能优化、随代码改的文档——**不含**新的用户可感知功能。

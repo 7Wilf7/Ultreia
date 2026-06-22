@@ -198,6 +198,18 @@ const dict = {
   "weekly_report.notification_body": { en: "Open Ultreia to review it and import the next plan.", zh: "打开 Ultreia 查看周报，并可导入接下来的计划。" },
   "weekly_report.discuss_placeholder": { en: "Answer the coach's question or add context, then continue in AI Coach…", zh: "回答教练在周报里问的问题，或补充你的情况，然后去 AI 教练继续聊……" },
   "weekly_report.discuss_send":  { en: "Send to coach",         zh: "发给教练" },
+  "weekly_report.discuss_intro": { en: "Below is my AI weekly report and my annotations. Continue the analysis from these notes and the current calendar plan.", zh: "下面是我的 AI 周复盘和我标注的内容。请基于这些注解和当前日历计划继续分析，不要重新问我已经回答的信息。" },
+  "weekly_report.annotations_title": { en: "Annotate report",   zh: "标注周报" },
+  "weekly_report.annotations_hint": { en: "Select text in the report, add it as an annotation, then send all notes to the coach together.", zh: "先在周报正文里选中文字，再加入注解；可以收集多条后一次性发给教练。" },
+
+  // ===== Text annotations =====
+  "annotations.title":          { en: "Annotations",           zh: "注解" },
+  "annotations.add_selection":  { en: "Add selected text",     zh: "加入选中文本" },
+  "annotations.no_selection":   { en: "Select a piece of text first.", zh: "请先选中一段文字。" },
+  "annotations.default_source": { en: "Selected text",         zh: "选中文本" },
+  "annotations.note_placeholder": { en: "Why this matters, what you disagree with, or what you want the coach to explain…", zh: "这里为什么重要、哪里不同意，或者想让教练解释什么……" },
+  "annotations.extra_placeholder": { en: "Add extra context for the coach…", zh: "补充给教练的背景……" },
+  "annotations.send":           { en: "Send annotations",      zh: "发送注解" },
 
   // ===== Weather API settings =====
   "weather_api.title":          { en: "Caiyun Weather API",   zh: "彩云天气 API" },
@@ -1019,6 +1031,14 @@ const dict = {
   "coach.thinking":           { en: "Coach is thinking...", zh: "教练思考中……" },
   "coach.notification_title":  { en: "AI Coach reply ready", zh: "AI 教练回复好了" },
   "coach.notification_body":   { en: "Open Ultreia to continue the conversation.", zh: "打开 Ultreia 继续查看对话。" },
+  "coach.annotate_reply":      { en: "Annotate",             zh: "标注讨论" },
+  "coach.annotations_title":   { en: "Annotate coach reply", zh: "标注教练回复" },
+  "coach.annotations_panel_title": { en: "Reply annotations", zh: "回复注解" },
+  "coach.annotations_hint":    { en: "Select text from the reply above, collect several notes, then send them back to the coach together.", zh: "先在上方回复里选中文字，可以收集多条注解后一次性发回给教练。" },
+  "coach.annotations_extra_placeholder": { en: "Add your answer, disagreement, or extra context…", zh: "补充你的回答、不同意见或背景……" },
+  "coach.annotations_send":    { en: "Send to coach",        zh: "发给教练" },
+  "coach.annotations_intro":   { en: "Below is a coach reply I annotated. Continue from these notes; answer the questions and revise the advice if needed.", zh: "下面是我对一条教练回复做的标注。请基于这些注解继续讨论，回答我的问题，必要时修正建议。" },
+  "coach.annotations_source_title": { en: "Coach reply",     zh: "教练回复" },
   "coach.no_key":             { en: "⚠ Wallet balance is not enough. Top up to keep chatting.", zh: "⚠ 钱包余额不足，请充值后继续。" },
   "coach.free_used":          { en: "⚠ Wallet balance is not enough. Top up to keep chatting.", zh: "⚠ 钱包余额不足，请充值后继续。" },
   "coach.hints_title":        { en: "Before you send",       zh: "发送前提示" },

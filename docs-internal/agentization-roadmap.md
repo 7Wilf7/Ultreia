@@ -29,7 +29,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
-| Phase 2 | 进行中 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；下一步做自动生成设置 |
+| Phase 2 | 进行中 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解第一版已落地；下一步做自动生成设置 |
 | Phase 3 | 待开始 | Agent Action Log | 周报自动化 / 跨页面动作稳定后再建表 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
@@ -100,7 +100,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 - 先做 Settings 里的 AI 周复盘入口，支持本周 / 上周手动生成。
 - 周报页使用完整页面，不再用弹窗；生成状态提升到 App 层，用户离开页面或切 App 后仍继续跑，完成后发本地系统通知。
 - 周报写入 `coach_reports`，本周 / 上周两个 tab 各自显示账号内最新报告；旧设备 localStorage 周报会迁移一次。
-- 周报下方先复用现有计划提炼 Action Card；多段文本注解、自动定时推送后置。
+- 周报下方先复用现有计划提炼 Action Card；多段文本注解第一版先作为本地确认动作，用户选中文本并写注解后一次性发给 Coach，不入库、不自动改数据。
 - `daily-coach-dispatch` 的 `weekly_recap` 模式保留，但后续接自动定时时要写入 `coach_reports` / 周报页面，而不是只进 inbox。
 - 自动每周生成现在已有正式云端周报落点，下一步补用户级开关、触发时间和通知链路。
 
@@ -216,7 +216,7 @@ Phase 2 正在推进。
 下一步：
 
 1. 在 `user_settings` 增加每周自动周报开关、触发日和触发时间；`daily-coach-dispatch` 生成后写 `coach_reports`，再发系统通知 / 收件箱提醒。
-2. 设计文本注解能力：周报和 AI Coach 回复都可选中文本、保存多条注解、一次性发给教练讨论。
+2. 文本注解能力第一版已完成：周报和 AI Coach 回复都可选中文本、收集多条注解、一次性发给教练讨论；后续如需要跨设备保留注解，再接 `coach_report_notes` / `coach_annotations`。
 3. 自动周报和文本注解稳定后，进入 Phase 3：把本地 action 状态迁移成 Supabase `agent_actions` 表。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
@@ -234,3 +234,4 @@ Phase 2 正在推进。
 - 2026-06-21：周复盘页面全屏化，生成任务提升到 App 层，完成后发本地系统通知。
 - 2026-06-21：补充 `schema-backlog.md`，把 `coach_reports`、`agent_actions`、`coach_memory_facts`、周报注解等待建表项和本地缓存边界单独列出。
 - 2026-06-21：`coach_reports` 建表并接入前端，周复盘从本机缓存迁到账号保存；自动周报的 blocker 转为用户级设置和调度链路。
+- 2026-06-22：文本注解第一版落地：AI 周复盘和 AI Coach 回复都支持选中多段文本、分别写注解、一次性发回 Coach 讨论。当前只生成确认后的对话消息，不保存到云端注解表。

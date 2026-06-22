@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { weekWindow } from "../utils/weeklyReport";
+import { buildAnnotatedDiscussionMessage } from "../utils/annotations";
+import { TextAnnotationPanel } from "./TextAnnotationPanel";
 
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
@@ -57,17 +59,25 @@ export function WeeklyReportPage({
 }) {
   const t = useT();
   const [discussionText, setDiscussionText] = useState("");
+  const [annotations, setAnnotations] = useState([]);
   const range = useMemo(() => weekWindow(now || new Date(), rangeMode === "last" ? -1 : 0), [now, rangeMode]);
   const selected = useMemo(() => {
     const modeReports = (reports || []).filter(r => r.rangeMode === rangeMode);
     return modeReports.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
   }, [reports, rangeMode]);
-  const canDiscuss = selected && discussionText.trim();
+  const canDiscuss = selected && (discussionText.trim() || annotations.length > 0);
 
   function sendDiscussion() {
     if (!canDiscuss) return;
-    onDiscussReport?.(selected, discussionText.trim());
+    onDiscussReport?.(selected, buildAnnotatedDiscussionMessage({
+      intro: t("weekly_report.discuss_intro"),
+      sourceTitle: t("weekly_report.title"),
+      sourceText: selected?.text || "",
+      extraText: discussionText,
+      annotations,
+    }));
     setDiscussionText("");
+    setAnnotations([]);
   }
 
   return (
@@ -178,18 +188,18 @@ export function WeeklyReportPage({
               </ReactMarkdown>
             </article>
 
-            <div style={{ borderTop: "1px solid var(--rule)", marginTop: 18, paddingTop: 12 }}>
-              <textarea
-                value={discussionText}
-                onChange={e => setDiscussionText(e.target.value)}
-                rows={3}
-                placeholder={t("weekly_report.discuss_placeholder")}
-                style={{ ...s.input, width: "100%", resize: "vertical", minHeight: 78, lineHeight: 1.5, marginBottom: 8 }}
-              />
-              <button onClick={sendDiscussion} disabled={!canDiscuss} style={{ ...s.btn, width: "100%", opacity: canDiscuss ? 1 : 0.45 }}>
-                {t("weekly_report.discuss_send")}
-              </button>
-            </div>
+            <TextAnnotationPanel
+              title={t("weekly_report.annotations_title")}
+              hint={t("weekly_report.annotations_hint")}
+              sourceLabel={t("weekly_report.title")}
+              annotations={annotations}
+              setAnnotations={setAnnotations}
+              extraText={discussionText}
+              setExtraText={setDiscussionText}
+              extraPlaceholder={t("weekly_report.discuss_placeholder")}
+              sendLabel={t("weekly_report.discuss_send")}
+              onSend={sendDiscussion}
+            />
           </>
         )}
 

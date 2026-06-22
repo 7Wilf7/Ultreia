@@ -26,6 +26,12 @@ const FIELD_MAP = {
   pushHours:     'push_hours',     // int[] — LEGACY whole-hour list, kept for back-compat
   pushTimes:     'push_times',     // text[] — "HH:MM" half-hour slots, e.g. ["08:00","13:30"]
   pushTimezone:  'push_timezone',
+  // AI weekly report automation. Client-side trigger checks while the app is
+  // open / returning foreground; server cron can reuse these fields later.
+  weeklyReportEnabled: 'weekly_report_enabled',
+  weeklyReportWeekday: 'weekly_report_weekday', // 0 Sunday ... 6 Saturday
+  weeklyReportTime: 'weekly_report_time',       // "HH:MM"
+  weeklyReportAfterSundayImport: 'weekly_report_after_sunday_import',
 };
 
 function fromRow(row) {
@@ -45,9 +51,18 @@ function fromRow(row) {
     } else if (camel === 'pushTimes') {
       // text[] of "HH:MM" → always an array of strings.
       out[camel] = Array.isArray(v) ? v.map(String).filter(Boolean) : [];
-    } else if (camel === 'pushEnabled') {
+    } else if (camel === 'pushEnabled' || camel === 'weeklyReportEnabled') {
       // boolean → null defends as false.
       out[camel] = v === true;
+    } else if (camel === 'weeklyReportAfterSundayImport') {
+      // Existing rows may be null until the new column is backfilled; keep the
+      // Sunday prompt on by default because it is user-confirmed and low risk.
+      out[camel] = v !== false;
+    } else if (camel === 'weeklyReportWeekday') {
+      const n = Number(v);
+      out[camel] = Number.isInteger(n) && n >= 0 && n <= 6 ? n : 0;
+    } else if (camel === 'weeklyReportTime') {
+      out[camel] = typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : '20:00';
     } else {
       out[camel] = v ?? '';
     }

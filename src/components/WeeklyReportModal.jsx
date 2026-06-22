@@ -102,13 +102,13 @@ export function WeeklyReportPage({
         flexShrink: 0,
         zIndex: 3,
       }}>
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 64px 28px", alignItems: "center", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 78px 28px", alignItems: "center", gap: 8 }}>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: 22, fontWeight: 750, margin: 0, lineHeight: 1.12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {t("weekly_report.title")}
             </h2>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, width: 64 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, width: 78 }}>
             <button
               onClick={() => loading ? onStopGenerate?.() : onGenerate?.(range, rangeMode)}
               style={{ ...(loading ? s.btnGhost : s.btn), minHeight: 0, width: "100%", padding: "5px 0", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>

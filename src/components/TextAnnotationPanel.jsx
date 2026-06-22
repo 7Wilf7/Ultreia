@@ -106,7 +106,7 @@ export function TextAnnotationPanel({
     <div style={{
       borderTop: "1px solid var(--rule)",
       marginTop: compact ? 0 : 18,
-      padding: compact ? "10px 12px calc(10px + env(safe-area-inset-bottom))" : "12px 0 0",
+      padding: compact ? "10px 4px 0" : "12px 0 0",
       background: compact ? "var(--bg)" : "transparent",
       flexShrink: 0,
     }}>
@@ -128,7 +128,7 @@ export function TextAnnotationPanel({
         </button>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: compact ? 6 : 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: compact ? 6 : 8, padding: compact ? "0 8px" : 0 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: compact ? 12 : 13, fontWeight: 650, color: "var(--ink-1)" }}>
             {title || t("annotations.title")}
@@ -141,10 +141,10 @@ export function TextAnnotationPanel({
         </button>
       </div>
 
-      {error && <div style={{ color: "var(--warn)", fontSize: 11, lineHeight: 1.45, marginBottom: 8 }}>{error}</div>}
+      {error && <div style={{ color: "var(--warn)", fontSize: 11, lineHeight: 1.45, marginBottom: 8, padding: compact ? "0 8px" : 0 }}>{error}</div>}
 
       {list.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10, maxHeight: compact ? 150 : "none", overflowY: compact ? "auto" : "visible" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10, maxHeight: compact ? 150 : "none", overflowY: compact ? "auto" : "visible", padding: compact ? "0 8px" : 0 }}>
           {list.map((a, idx) => (
             <div key={a.id} style={{ border: "1px solid var(--rule)", background: "var(--bg-elevated)", padding: 10, borderRadius: 4 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>

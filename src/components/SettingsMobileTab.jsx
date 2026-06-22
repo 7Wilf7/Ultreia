@@ -27,7 +27,12 @@ export function SettingsMobileTab({
   onOpenPushSettings,
   onOpenWeatherSettings,
   onOpenWeeklyReport,
+  onOpenWeeklyReportSettings,
   weeklyReportStatus,
+  weeklyReportEnabled,
+  weeklyReportWeekday,
+  weeklyReportTime,
+  weeklyReportAfterSundayImport,
   weatherAutoUpdate,
   weatherIntervalHours,
   pushEnabled,
@@ -116,6 +121,8 @@ export function SettingsMobileTab({
   const pushSlots = (Array.isArray(pushTimes) && pushTimes.length)
     ? [...pushTimes].sort()
     : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
+  const weeklyDay = Number.isInteger(Number(weeklyReportWeekday)) ? Number(weeklyReportWeekday) : 0;
+  const weeklyTime = typeof weeklyReportTime === "string" && weeklyReportTime ? weeklyReportTime : "20:00";
   const otherSettings = (
     <>
       <SubCell
@@ -134,6 +141,12 @@ export function SettingsMobileTab({
             : t("settings.weekly_report_desc")}
         busy={!!weeklyReportStatus}
         onClick={onOpenWeeklyReport} />
+      <SubCell
+        primary={t("settings.weekly_report_auto")}
+        secondary={weeklyReportEnabled
+          ? t("settings.weekly_report_auto_on", { day: t(`weekly_settings.day_${weeklyDay}`), time: weeklyTime })
+          : t("settings.weekly_report_auto_off", { sunday: weeklyReportAfterSundayImport !== false ? t("settings.weekly_report_sunday_on") : t("settings.weekly_report_sunday_off") })}
+        onClick={onOpenWeeklyReportSettings} />
       <SubCell
         primary={t("settings.weather_updates")}
         secondary={weatherAutoUpdate !== false

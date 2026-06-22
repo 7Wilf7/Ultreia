@@ -41,6 +41,7 @@ import { Spinner } from "./components/Spinner";
 import { ModalRoot } from "./components/ModalRoot";
 import { WalletModal } from "./components/WalletModal";
 import { WeatherSettingsModal } from "./components/WeatherSettingsModal";
+import { WeeklyReportSettingsModal } from "./components/WeeklyReportSettingsModal";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
@@ -87,6 +88,24 @@ function withTimeout(promise, label, ms = 15000) {
     timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function cleanWeeklyReportTime(value) {
+  return typeof value === "string" && /^\d{2}:\d{2}$/.test(value) ? value : "20:00";
+}
+
+function cleanWeeklyReportWeekday(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 0 && n <= 6 ? n : 0;
+}
+
+function timeMinutes(value) {
+  const [h, m] = cleanWeeklyReportTime(value).split(":").map(Number);
+  return h * 60 + m;
+}
+
+function weeklyReportAutoKey(userId, rangeStart) {
+  return `ultreia.weeklyReportAuto.v1.${userId || "anon"}.${rangeStart}`;
 }
 
 const WEEKLY_REPORT_LIST_LIMIT = 50;
@@ -341,6 +360,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [pushHours, setPushHoursState] = useState([]);
   const [pushTimes, setPushTimesState] = useState([]);
   const [pushTimezone, setPushTimezoneState] = useState("");
+  const [weeklyReportEnabled, setWeeklyReportEnabledState] = useState(false);
+  const [weeklyReportWeekday, setWeeklyReportWeekdayState] = useState(0);
+  const [weeklyReportTime, setWeeklyReportTimeState] = useState("20:00");
+  const [weeklyReportAfterSundayImport, setWeeklyReportAfterSundayImportState] = useState(true);
   const [wallet, setWallet] = useState({ balanceCents: 0, currency: "CNY", ledger: [] });
   const [dataLoading, setDataLoading] = useState(true);
 
@@ -401,6 +424,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           setPushHoursState(Array.isArray(settingsData.pushHours) ? settingsData.pushHours : []);
           setPushTimesState(Array.isArray(settingsData.pushTimes) ? settingsData.pushTimes : []);
           setPushTimezoneState(settingsData.pushTimezone || "");
+          setWeeklyReportEnabledState(settingsData.weeklyReportEnabled === true);
+          setWeeklyReportWeekdayState(cleanWeeklyReportWeekday(settingsData.weeklyReportWeekday));
+          setWeeklyReportTimeState(cleanWeeklyReportTime(settingsData.weeklyReportTime));
+          setWeeklyReportAfterSundayImportState(settingsData.weeklyReportAfterSundayImport !== false);
         }
 
         // Language: a saved setting wins; otherwise fall back to the choice the
@@ -512,6 +539,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     if ("pushHours" in patch) setPushHoursState(Array.isArray(patch.pushHours) ? patch.pushHours : []);
     if ("pushTimes" in patch) setPushTimesState(Array.isArray(patch.pushTimes) ? patch.pushTimes : []);
     if ("pushTimezone" in patch) setPushTimezoneState(patch.pushTimezone || "");
+    if ("weeklyReportEnabled" in patch) setWeeklyReportEnabledState(patch.weeklyReportEnabled === true);
+    if ("weeklyReportWeekday" in patch) setWeeklyReportWeekdayState(cleanWeeklyReportWeekday(patch.weeklyReportWeekday));
+    if ("weeklyReportTime" in patch) setWeeklyReportTimeState(cleanWeeklyReportTime(patch.weeklyReportTime));
+    if ("weeklyReportAfterSundayImport" in patch) setWeeklyReportAfterSundayImportState(patch.weeklyReportAfterSundayImport !== false);
     try {
       await db.userSettings.updateMySettings(patch);
     } catch (err) {
@@ -531,6 +562,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const setCoachMemoryBoth = (en, zh) => updateSettings({ coachMemory: en, coachMemoryZh: zh });
   const setLang = (v) => updateSettings({ lang: v });
   const setPushSettings = (patch) => updateSettings(patch);
+  const setWeeklyReportSettings = (patch) => updateSettings(patch);
   // Patch the local state immediately AND persist to Supabase. updateSettings()
   // doesn't refresh local state, so we do it eagerly here so the Settings page
   // and any new addLog calls see the latest values without waiting for a
@@ -983,6 +1015,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
         wallet={wallet} setWallet={setWallet}
         pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
+        weeklyReportEnabled={weeklyReportEnabled}
+        weeklyReportWeekday={weeklyReportWeekday}
+        weeklyReportTime={weeklyReportTime}
+        weeklyReportAfterSundayImport={weeklyReportAfterSundayImport}
+        setWeeklyReportSettings={setWeeklyReportSettings}
       />
     </LanguageProvider>
   );
@@ -1001,6 +1038,8 @@ function AppShell({
   defaultLocation, setDefaultLocation,
   wallet, setWallet,
   pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings,
+  weeklyReportEnabled, weeklyReportWeekday, weeklyReportTime,
+  weeklyReportAfterSundayImport, setWeeklyReportSettings,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -1026,6 +1065,7 @@ function AppShell({
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showWeatherSettings, setShowWeatherSettings] = useState(false);
+  const [showWeeklyReportSettings, setShowWeeklyReportSettings] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [weeklyReports, setWeeklyReports] = useState(() => loadStoredReports(user?.id));
   const [weeklyReportRangeMode, setWeeklyReportRangeMode] = useState("this");
@@ -1329,7 +1369,7 @@ function AppShell({
     notifyTaskDone(payload).catch(() => {});
   }
 
-  async function generateWeeklyReport(range, rangeMode) {
+  const generateWeeklyReport = useCallback(async (range, rangeMode) => {
     if (weeklyReportLoading) return;
     const controller = new AbortController();
     const runId = weeklyReportRunRef.current + 1;
@@ -1384,7 +1424,38 @@ function AppShell({
         setWeeklyReportLoading(false);
       }
     }
-  }
+  }, [
+    applyWalletBalance,
+    coachConfig,
+    coachMemory,
+    coachMemoryZh,
+    dailyNotes,
+    logs,
+    now,
+    profile,
+    races,
+    t,
+    weeklyReportLoading,
+  ]);
+
+  useEffect(() => {
+    if (!weeklyReportEnabled || weeklyReportLoading || !user?.id) return;
+    const current = now || new Date();
+    const scheduledDay = cleanWeeklyReportWeekday(weeklyReportWeekday);
+    if (current.getDay() !== scheduledDay) return;
+    const currentMinutes = current.getHours() * 60 + current.getMinutes();
+    if (currentMinutes < timeMinutes(weeklyReportTime)) return;
+    const range = weekWindow(current, 0);
+    const key = weeklyReportAutoKey(user.id, range.start);
+    try {
+      if (localStorage.getItem(key) === "1") return;
+      localStorage.setItem(key, "1");
+    } catch {
+      return;
+    }
+    const timer = setTimeout(() => generateWeeklyReport(range, "this"), 0);
+    return () => clearTimeout(timer);
+  }, [generateWeeklyReport, weeklyReportEnabled, weeklyReportLoading, weeklyReportWeekday, weeklyReportTime, now, user?.id]);
 
   // ── Lifted sendChat — talks to the wallet-backed coach proxy.
   //    Takes the user's typed message; reads everything else from props/
@@ -1422,6 +1493,10 @@ function AppShell({
           pushHours,
           pushTimes,
           pushTimezone,
+          weeklyReportEnabled,
+          weeklyReportWeekday,
+          weeklyReportTime,
+          weeklyReportAfterSundayImport,
           walletBalanceCents: wallet.balanceCents,
         },
         data: {
@@ -1740,6 +1815,7 @@ Rules:
   }
 
   function requestWeeklyReportAfterImport(created, meta = {}) {
+    if (weeklyReportAfterSundayImport === false) return;
     if (meta.source !== "import") return;
     if (!Array.isArray(created) || created.length === 0) return;
     if (new Date().getDay() !== 0) return;
@@ -2034,7 +2110,12 @@ Rules:
           onOpenPushSettings={() => setShowPushSettings(true)}
           onOpenWeatherSettings={() => setShowWeatherSettings(true)}
           onOpenWeeklyReport={() => setShowWeeklyReport(true)}
+          onOpenWeeklyReportSettings={() => setShowWeeklyReportSettings(true)}
           weeklyReportStatus={weeklyReportStatus}
+          weeklyReportEnabled={weeklyReportEnabled}
+          weeklyReportWeekday={weeklyReportWeekday}
+          weeklyReportTime={weeklyReportTime}
+          weeklyReportAfterSundayImport={weeklyReportAfterSundayImport}
           weatherAutoUpdate={weatherSettings.autoUpdate}
           weatherIntervalHours={weatherSettings.intervalHours}
           pushEnabled={pushEnabled}
@@ -2174,6 +2255,19 @@ Rules:
           weatherIntervalHours={weatherSettings.intervalHours}
           setWeatherSettings={setWeatherSettings}
           onClose={() => setShowWeatherSettings(false)}
+        />
+      )}
+
+      {showWeeklyReportSettings && (
+        <WeeklyReportSettingsModal
+          weeklyReportSettings={{
+            enabled: weeklyReportEnabled,
+            weekday: weeklyReportWeekday,
+            time: weeklyReportTime,
+            afterSundayImport: weeklyReportAfterSundayImport,
+          }}
+          setWeeklyReportSettings={setWeeklyReportSettings}
+          onClose={() => setShowWeeklyReportSettings(false)}
         />
       )}
 

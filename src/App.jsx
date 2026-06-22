@@ -26,6 +26,7 @@ import { WeeklyReportPage } from "./components/WeeklyReportModal";
 import {
   buildWeeklyReportPrompt,
   loadStoredReports,
+  weekWindow,
 } from "./utils/weeklyReport";
 import { ChangePasswordModal } from "./components/ChangePasswordModal";
 import { DeleteAccountModal } from "./components/DeleteAccountModal";
@@ -1030,6 +1031,7 @@ function AppShell({
   const [weeklyReportRangeMode, setWeeklyReportRangeMode] = useState("this");
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState("");
+  const [weeklyImportPrompt, setWeeklyImportPrompt] = useState(null);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -1176,6 +1178,14 @@ function AppShell({
   const [chatLoading, setChatLoading] = useState(false);
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
+  const chatAbortRef = useRef(null);
+  const chatRunRef = useRef(0);
+  const extractAbortRef = useRef(null);
+  const extractRunRef = useRef(0);
+  const weeklyReportAbortRef = useRef(null);
+  const weeklyReportRunRef = useRef(0);
+  const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
+  const weeklyReportStatus = weeklyReportLoading ? "analyzing" : weeklyReportExtracting ? "extracting" : null;
   const [planImportCache, setPlanImportCache] = useState(() => {
     try {
       const raw = localStorage.getItem("ultreia.coachPlanImportCache.v1");
@@ -1202,6 +1212,28 @@ function AppShell({
         },
       };
     });
+  }
+
+  function stopCoachChat() {
+    chatAbortRef.current?.abort();
+    chatAbortRef.current = null;
+    chatRunRef.current += 1;
+    setChatLoading(false);
+    setChatMessages(prev => prev.filter(m => !m.isStreaming));
+  }
+
+  function stopPlanExtraction() {
+    extractAbortRef.current?.abort();
+    extractAbortRef.current = null;
+    extractRunRef.current += 1;
+    setExtractingForMsgId(null);
+  }
+
+  function stopWeeklyReport() {
+    weeklyReportAbortRef.current?.abort();
+    weeklyReportAbortRef.current = null;
+    weeklyReportRunRef.current += 1;
+    setWeeklyReportLoading(false);
   }
   // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
   // so it survives a tab switch — the nudge re-opens when the user returns.
@@ -1299,6 +1331,10 @@ function AppShell({
 
   async function generateWeeklyReport(range, rangeMode) {
     if (weeklyReportLoading) return;
+    const controller = new AbortController();
+    const runId = weeklyReportRunRef.current + 1;
+    weeklyReportRunRef.current = runId;
+    weeklyReportAbortRef.current = controller;
     setWeeklyReportLoading(true);
     setWeeklyReportError("");
     try {
@@ -1317,7 +1353,9 @@ function AppShell({
         system: prompt.system,
         messages: [{ role: "user", content: prompt.user }],
         max_tokens: 8000,
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || runId !== weeklyReportRunRef.current) return;
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const report = {
@@ -1337,10 +1375,14 @@ function AppShell({
         body: t("weekly_report.notification_body"),
       }).catch(() => {});
     } catch (err) {
+      if (err?.code === "aborted" || err?.name === "AbortError") return;
       if (err?.code === "insufficient_balance") setWeeklyReportError(t("wallet.insufficient_ai"));
       else setWeeklyReportError(t("weekly_report.generate_failed", { msg: err?.message || String(err) }));
     } finally {
-      setWeeklyReportLoading(false);
+      if (runId === weeklyReportRunRef.current) {
+        weeklyReportAbortRef.current = null;
+        setWeeklyReportLoading(false);
+      }
     }
   }
 
@@ -1407,6 +1449,10 @@ function AppShell({
   async function sendChat(userMsg, opts = {}) {
     if (!userMsg || chatLoading) return false;
 
+    const controller = new AbortController();
+    const runId = chatRunRef.current + 1;
+    chatRunRef.current = runId;
+    chatAbortRef.current = controller;
     const optimisticId = `pending-${Date.now()}`;
     const messagesToSend = [
       ...chatMessages.map(m => ({ role: m.role, content: messageContentForCoach(m.content) })),
@@ -1486,12 +1532,15 @@ function AppShell({
         system: systemPrompt,
         messages: messagesToSend,
         max_tokens: 8000,
+        signal: controller.signal,
         onToken: (text) => {
+          if (controller.signal.aborted || runId !== chatRunRef.current) return;
           setChatMessages(prev => prev.map(m => (
             m.id === streamingId ? { ...m, content: text } : m
           )));
         },
       });
+      if (controller.signal.aborted || runId !== chatRunRef.current) return false;
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
       const meta = buildCoachReplyMeta({
@@ -1516,6 +1565,9 @@ function AppShell({
       });
     } catch (err) {
       setChatMessages(prev => prev.filter(m => m.id !== streamingId));
+      if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== chatRunRef.current) {
+        return false;
+      }
       if (err?.code === "insufficient_balance") {
         appendLocalChatMessage("assistant", t("wallet.insufficient_ai"));
         openWalletSurface();
@@ -1525,7 +1577,10 @@ function AppShell({
         appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
       }
     } finally {
-      setChatLoading(false);
+      if (runId === chatRunRef.current) {
+        chatAbortRef.current = null;
+        setChatLoading(false);
+      }
     }
     return true;
   }
@@ -1542,6 +1597,10 @@ function AppShell({
       setPlanProposal({ msgId, assistantContent, action });
       return;
     }
+    const controller = new AbortController();
+    const runId = extractRunRef.current + 1;
+    extractRunRef.current = runId;
+    extractAbortRef.current = controller;
     setExtractingForMsgId(msgId);
     const todayStr = localDateKey(now);
     const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
@@ -1592,7 +1651,9 @@ Rules:
         system: "",
         messages: [{ role: "user", content: extractPrompt }],
         max_tokens: 8000,
+        signal: controller.signal,
       });
+      if (controller.signal.aborted || runId !== extractRunRef.current) return;
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
@@ -1604,6 +1665,7 @@ Rules:
       if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans, action } }));
       setPlanProposal({ msgId, assistantContent, action });
     } catch (err) {
+      if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== extractRunRef.current) return;
       console.error("[AI Coach] Plan-extract error:", err);
       if (err?.code === "insufficient_balance") {
         alert(t("wallet.insufficient_ai"));
@@ -1613,7 +1675,10 @@ Rules:
         alert(t("coach.api_error", { msg: err?.message || String(err) }));
       }
     } finally {
-      setExtractingForMsgId(null);
+      if (runId === extractRunRef.current) {
+        extractAbortRef.current = null;
+        setExtractingForMsgId(null);
+      }
     }
   }
 
@@ -1672,6 +1737,22 @@ Rules:
     // Guarantee the just-reviewed sessions are in the prompt's training-load
     // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
     sendChat(text, { ensureLogs: reviewed });
+  }
+
+  function requestWeeklyReportAfterImport(created, meta = {}) {
+    if (meta.source !== "import") return;
+    if (!Array.isArray(created) || created.length === 0) return;
+    if (new Date().getDay() !== 0) return;
+    setWeeklyImportPrompt({ count: created.length });
+  }
+
+  function analyzeWeeklyReportFromPrompt() {
+    setWeeklyImportPrompt(null);
+    const range = weekWindow(now || new Date(), 0);
+    setWeeklyReportRangeMode("this");
+    setShowWeeklyReport(true);
+    setTab(4);
+    generateWeeklyReport(range, "this");
   }
 
   // True when ANY long-running AI Coach operation is in flight. Used to
@@ -1827,6 +1908,7 @@ Rules:
           profile={profile}
           races={races}
           onCoachReviewRequest={requestCoachReview}
+          onWeeklyReportPromptRequest={requestWeeklyReportAfterImport}
         />
     );
     if (which === 1) return (
@@ -1892,6 +1974,8 @@ Rules:
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}
+          onStopChat={stopCoachChat}
+          onStopExtraction={stopPlanExtraction}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}
           getPlanImportActionStatus={(msgId) => msgId ? (planImportCache[msgId]?.action?.status || null) : null}
           /* Shared weather context — preview + status pill consume this. */
@@ -1923,8 +2007,11 @@ Rules:
           rangeMode={weeklyReportRangeMode}
           setRangeMode={setWeeklyReportRangeMode}
           loading={weeklyReportLoading}
+          extracting={weeklyReportExtracting}
           error={weeklyReportError}
           onGenerate={generateWeeklyReport}
+          onStopGenerate={stopWeeklyReport}
+          onStopImport={stopPlanExtraction}
           onImportPlan={(text, id) => {
             setShowWeeklyReport(false);
             setTab(3);
@@ -1947,6 +2034,7 @@ Rules:
           onOpenPushSettings={() => setShowPushSettings(true)}
           onOpenWeatherSettings={() => setShowWeatherSettings(true)}
           onOpenWeeklyReport={() => setShowWeeklyReport(true)}
+          weeklyReportStatus={weeklyReportStatus}
           weatherAutoUpdate={weatherSettings.autoUpdate}
           weatherIntervalHours={weatherSettings.intervalHours}
           pushEnabled={pushEnabled}
@@ -2126,6 +2214,34 @@ Rules:
           onReject={rejectPlanProposal}
           onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}
         />
+      )}
+
+      {weeklyImportPrompt && (
+        <ModalRoot onClose={() => setWeeklyImportPrompt(null)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setWeeklyImportPrompt(null)}>
+            <div style={s.modalCard(isMobile, { maxWidth: 420, float: true })} onClick={(e) => e.stopPropagation()}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 650, margin: "0 0 6px" }}>
+                    {t("weekly_report.import_prompt_title")}
+                  </h2>
+                  <p style={{ ...s.muted, margin: 0, lineHeight: 1.55 }}>
+                    {t("weekly_report.import_prompt_body", { n: String(weeklyImportPrompt.count || 0) })}
+                  </p>
+                </div>
+                <button onClick={() => setWeeklyImportPrompt(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={analyzeWeeklyReportFromPrompt} style={{ ...s.btn, flex: 1 }}>
+                  {t("weekly_report.import_prompt_analyze")}
+                </button>
+                <button onClick={() => setWeeklyImportPrompt(null)} style={{ ...s.btnGhost, flex: 1 }}>
+                  {t("weekly_report.import_prompt_later")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
       )}
 
       {coachReviewPrompt && (

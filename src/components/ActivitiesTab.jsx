@@ -49,7 +49,7 @@ function importFingerprint(row) {
   return [date, startedAt, type, duration, distance, ascent].join("|");
 }
 
-export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null, onCoachReviewRequest }) {
+export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null, onCoachReviewRequest, onWeeklyReportPromptRequest }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
   // ActivityForm for the chip "recommended" badge, and used inline below for
@@ -481,6 +481,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               source: "import",
               note: coachNotes,
             });
+          }
+          if (onWeeklyReportPromptRequest && created?.length) {
+            onWeeklyReportPromptRequest(created, { source: "import" });
           }
         },
         onFailed: () => {

@@ -2,6 +2,9 @@
 // Lookup via t(key, lang, vars?). Interpolation uses {name} style placeholders.
 
 const dict = {
+  // ===== Common =====
+  "common.stop":          { en: "Stop",                     zh: "停止" },
+
   // ===== Header =====
   "header.title":         { en: "Ultreia",                  zh: "Ultreia" },
   "header.title_empty":   { en: "Ultreia",                  zh: "Ultreia" },
@@ -78,6 +81,8 @@ const dict = {
   "settings.daily_push_off":    { en: "Off",                  zh: "关闭" },
   "settings.weekly_report":     { en: "AI weekly report",     zh: "AI 周复盘" },
   "settings.weekly_report_desc": { en: "Generate and review this week or last week", zh: "生成并查看本周 / 上周训练报告" },
+  "settings.weekly_report_analyzing": { en: "Analyzing",       zh: "正在分析" },
+  "settings.weekly_report_extracting": { en: "Extracting",     zh: "正在提炼" },
   "settings.weather_updates":   { en: "Weather updates",      zh: "天气更新" },
   "settings.weather_updates_on": { en: "On · every {interval}", zh: "开 · 每 {interval}" },
   "settings.weather_updates_off": { en: "Off",                zh: "关闭" },
@@ -186,10 +191,12 @@ const dict = {
   "weekly_report.this_week":     { en: "This week",             zh: "本周" },
   "weekly_report.last_week":     { en: "Last week",             zh: "上周" },
   "weekly_report.generate":      { en: "Analyze",               zh: "分析数据" },
+  "weekly_report.generate_short": { en: "Analyze",              zh: "分析" },
   "weekly_report.generating":    { en: "Analyzing…",            zh: "分析中…" },
   "weekly_report.thinking":      { en: "Coach is reviewing your week…", zh: "教练正在复盘这一周…" },
   "weekly_report.empty":         { en: "No report saved for this tab yet. Analyze this week or last week to save the latest report here.", zh: "这个标签下还没有保存周报。点击分析数据后，会在本周或上周各自保留最新一份。" },
   "weekly_report.import_plan":   { en: "Import next plan",      zh: "导入接下来计划" },
+  "weekly_report.import_plan_short": { en: "Plan",              zh: "计划" },
   "weekly_report.generated_at":  { en: "Generated {time}",      zh: "生成于 {time}" },
   "weekly_report.local_note":    { en: "Reports are saved to your account. This week and last week each show the latest report for that tab.", zh: "周报会保存到你的账号下。本周 / 上周两个标签各自显示最新一份。" },
   "weekly_report.background_note": { en: "You can leave this page while the report runs. A phone notification appears when it is ready.", zh: "周报生成时可以离开这个页面；完成后会弹系统通知。" },
@@ -201,10 +208,16 @@ const dict = {
   "weekly_report.discuss_intro": { en: "Below is my AI weekly report and my annotations. Continue the analysis from these notes and the current calendar plan.", zh: "下面是我的 AI 周复盘和我标注的内容。请基于这些注解和当前日历计划继续分析，不要重新问我已经回答的信息。" },
   "weekly_report.annotations_title": { en: "Annotate report",   zh: "标注周报" },
   "weekly_report.annotations_hint": { en: "Select text in the report, add it as an annotation, then send all notes to the coach together.", zh: "先在周报正文里选中文字，再加入注解；可以收集多条后一次性发给教练。" },
+  "weekly_report.import_prompt_title": { en: "Analyze weekly report now?", zh: "现在分析 AI 周复盘？" },
+  "weekly_report.import_prompt_body": { en: "You imported {n} activity/activities on Sunday. You can review the week now and import the next plan after checking it.", zh: "今天是周日，你刚导入了 {n} 条活动。可以现在复盘这一周，审核后再导入接下来的训练计划。" },
+  "weekly_report.import_prompt_analyze": { en: "Analyze now",   zh: "现在分析" },
+  "weekly_report.import_prompt_later": { en: "Later",           zh: "稍后" },
 
   // ===== Text annotations =====
   "annotations.title":          { en: "Annotations",           zh: "注解" },
   "annotations.add_selection":  { en: "Add selected text",     zh: "加入选中文本" },
+  "annotations.add_selection_short": { en: "Annotate",          zh: "加注解" },
+  "annotations.count":          { en: "{n} note(s)",           zh: "{n} 条" },
   "annotations.no_selection":   { en: "Select a piece of text first.", zh: "请先选中一段文字。" },
   "annotations.default_source": { en: "Selected text",         zh: "选中文本" },
   "annotations.note_placeholder": { en: "Why this matters, what you disagree with, or what you want the coach to explain…", zh: "这里为什么重要、哪里不同意，或者想让教练解释什么……" },
@@ -1061,6 +1074,7 @@ const dict = {
   "coach.endpoint_error":     { en: "The API endpoint returned a page instead of an API response (HTTP {status}). The endpoint URL is probably wrong, or the provider's service is down.\n\nURL: {url}\nResponse start: {snippet}", zh: "API 端点返回了一个网页而不是 API 响应（HTTP {status}）。最可能的原因：endpoint URL 不对，或者 provider 服务出问题了。\n\nURL：{url}\n返回内容开头：{snippet}" },
   "coach.input_placeholder":  { en: "Type anything you want the coach to see here", zh: "Type anything you want the coach to see here" },
   "coach.send":               { en: "Send",                 zh: "发送" },
+  "coach.stop_generating":    { en: "Stop generating",      zh: "停止生成" },
   "coach.tip":                { en: "",                     zh: "" },
   "coach.long_chat_hint":     { en: "Chat is getting long ({n} messages). Older turns start competing with the system prompt for the model's attention — consider distilling the takeaways into Memory, then clearing the chat for a clean slate.", zh: "对话已有 {n} 条，开始变长。旧消息会与系统提示词争夺模型注意力 —— 建议把要点固化到 Memory，再清空对话从新开始。" },
   "coach.long_chat_action":   { en: "Open Memory",          zh: "打开 Memory" },

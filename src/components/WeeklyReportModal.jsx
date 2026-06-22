@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -54,10 +54,14 @@ export function WeeklyReportPage({
   rangeMode,
   setRangeMode,
   loading,
+  extracting,
   error,
   onGenerate,
+  onStopGenerate,
+  onStopImport,
 }) {
   const t = useT();
+  const articleRef = useRef(null);
   const [discussionText, setDiscussionText] = useState("");
   const [annotations, setAnnotations] = useState([]);
   const range = useMemo(() => weekWindow(now || new Date(), rangeMode === "last" ? -1 : 0), [now, rangeMode]);
@@ -104,6 +108,24 @@ export function WeeklyReportPage({
               {t("weekly_report.title")}
             </h2>
           </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <button
+              onClick={() => loading ? onStopGenerate?.() : onGenerate?.(range, rangeMode)}
+              style={{ ...(loading ? s.btnGhost : s.btn), minHeight: 0, padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              {loading && <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />}
+              {loading ? t("common.stop") : t("weekly_report.generate_short")}
+            </button>
+            <button
+              onClick={() => {
+                if (extracting) onStopImport?.();
+                else if (selected) onImportPlan?.(selected.text, selected.id);
+              }}
+              disabled={!selected && !extracting}
+              style={{ ...s.btnGhost, opacity: (selected || extracting) ? 1 : 0.45, minHeight: 0, padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              {extracting && <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />}
+              {extracting ? t("common.stop") : t("weekly_report.import_plan_short")}
+            </button>
+          </div>
           <button onClick={onClose} style={{ ...s.modalCloseBtn, position: "static", flexShrink: 0 }} aria-label="Close">×</button>
         </div>
       </div>
@@ -115,26 +137,12 @@ export function WeeklyReportPage({
         flexShrink: 0,
         zIndex: 2,
       }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           <button onClick={() => setRangeMode("this")} style={{ ...(rangeMode === "this" ? s.btn : s.btnGhost), minHeight: 0, padding: "9px 6px", whiteSpace: "nowrap" }}>
             {t("weekly_report.this_week")}
           </button>
           <button onClick={() => setRangeMode("last")} style={{ ...(rangeMode === "last" ? s.btn : s.btnGhost), minHeight: 0, padding: "9px 6px", whiteSpace: "nowrap" }}>
             {t("weekly_report.last_week")}
-          </button>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          <button
-            onClick={() => onGenerate?.(range, rangeMode)}
-            disabled={loading}
-            style={{ ...s.btn, opacity: loading ? 0.7 : 1, minHeight: 0, padding: "9px 6px", whiteSpace: "nowrap" }}>
-            {loading ? t("weekly_report.generating") : t("weekly_report.generate")}
-          </button>
-          <button
-            onClick={() => selected && onImportPlan?.(selected.text, selected.id)}
-            disabled={!selected}
-            style={{ ...s.btnGhost, opacity: selected ? 1 : 0.45, minHeight: 0, padding: "9px 6px", whiteSpace: "nowrap" }}>
-            {t("weekly_report.import_plan")}
           </button>
         </div>
       </div>
@@ -182,24 +190,11 @@ export function WeeklyReportPage({
             <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.5, marginBottom: 12 }}>
               {t("weekly_report.generated_at", { time: fmtGeneratedAt(selected.generatedAt) })}
             </div>
-            <article className="selectable" style={{ maxWidth: 720, color: "var(--ink-1)", fontSize: 14, lineHeight: 1.75 }}>
+            <article ref={articleRef} className="selectable" style={{ maxWidth: 720, color: "var(--ink-1)", fontSize: 14, lineHeight: 1.75 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {selected.text || ""}
               </ReactMarkdown>
             </article>
-
-            <TextAnnotationPanel
-              title={t("weekly_report.annotations_title")}
-              hint={t("weekly_report.annotations_hint")}
-              sourceLabel={t("weekly_report.title")}
-              annotations={annotations}
-              setAnnotations={setAnnotations}
-              extraText={discussionText}
-              setExtraText={setDiscussionText}
-              extraPlaceholder={t("weekly_report.discuss_placeholder")}
-              sendLabel={t("weekly_report.discuss_send")}
-              onSend={sendDiscussion}
-            />
           </>
         )}
 
@@ -207,6 +202,23 @@ export function WeeklyReportPage({
           {loading ? t("weekly_report.background_note") : t("weekly_report.local_note")}
         </div>
       </div>
+      {selected && (
+        <TextAnnotationPanel
+          title={t("weekly_report.annotations_title")}
+          hint={t("weekly_report.annotations_hint")}
+          sourceLabel={t("weekly_report.title")}
+          annotations={annotations}
+          setAnnotations={setAnnotations}
+          extraText={discussionText}
+          setExtraText={setDiscussionText}
+          extraPlaceholder={t("weekly_report.discuss_placeholder")}
+          sendLabel={t("weekly_report.discuss_send")}
+          onSend={sendDiscussion}
+          selectionRootRef={articleRef}
+          floating
+          compact
+        />
+      )}
     </div>
   );
 }

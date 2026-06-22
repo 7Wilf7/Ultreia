@@ -27,6 +27,31 @@ import { Capacitor, CapacitorHttp } from "@capacitor/core";
 
 const isNative = () => Capacitor.isNativePlatform?.() === true;
 
+function makeAbortError() {
+  try {
+    return new DOMException("Request aborted", "AbortError");
+  } catch {
+    const err = new Error("Request aborted");
+    err.name = "AbortError";
+    return err;
+  }
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) throw makeAbortError();
+}
+
+function abortRace(signal) {
+  if (!signal) return null;
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(makeAbortError());
+      return;
+    }
+    signal.addEventListener("abort", () => reject(makeAbortError()), { once: true });
+  });
+}
+
 // Run `work()` (a Promise-returning fn) while holding an OS background task if
 // the app gets backgrounded mid-flight, so Android/iOS grant grace time to
 // finish it. Best-effort: any plugin failure falls back to just running work().
@@ -63,15 +88,18 @@ async function withBackgroundGrace(work) {
   }
 }
 
-export async function postJson({ url, headers = {}, body }) {
+export async function postJson({ url, headers = {}, body, signal }) {
+  throwIfAborted(signal);
   if (isNative()) {
     return withBackgroundGrace(async () => {
-      const resp = await CapacitorHttp.request({
+      const request = CapacitorHttp.request({
         method: "POST",
         url,
         headers,
         data: typeof body === "string" ? JSON.parse(body) : body,
       });
+      const resp = signal ? await Promise.race([request, abortRace(signal)]) : await request;
+      throwIfAborted(signal);
       const respHeaders = resp.headers || {};
       const headerGet = (k) => {
         if (respHeaders[k] != null) return respHeaders[k];
@@ -110,6 +138,7 @@ export async function postJson({ url, headers = {}, body }) {
     method: "POST",
     headers,
     body: typeof body === "string" ? body : JSON.stringify(body),
+    signal,
   });
 }
 
@@ -120,7 +149,8 @@ export async function postJson({ url, headers = {}, body }) {
 // with the running accumulated text as deltas arrive. Robust fallback: if the
 // provider ignores `stream:true` and returns a single JSON body, we read it and
 // emit the whole text once. Returns { ok, status, text, usage, errorText }.
-export async function postJsonStream({ url, headers = {}, body, onToken }) {
+export async function postJsonStream({ url, headers = {}, body, onToken, signal }) {
+  throwIfAborted(signal);
   return withBackgroundGrace(async () => {
     let resp;
     try {
@@ -128,8 +158,10 @@ export async function postJsonStream({ url, headers = {}, body, onToken }) {
         method: "POST",
         headers,
         body: typeof body === "string" ? body : JSON.stringify(body),
+        signal,
       });
     } catch (err) {
+      if (err?.name === "AbortError") return { ok: false, status: 0, text: "", errorText: "aborted", aborted: true };
       return { ok: false, status: 0, text: "", errorText: err.message || "network error" };
     }
     const ct = resp.headers.get("content-type") || "";
@@ -153,8 +185,19 @@ export async function postJsonStream({ url, headers = {}, body, onToken }) {
       usage = { ...(usage || {}), ...next };
     };
     for (;;) {
-      const { done, value } = await reader.read();
+      let chunk;
+      try {
+        chunk = await reader.read();
+      } catch (err) {
+        if (err?.name === "AbortError" || signal?.aborted) return { ok: false, status: 0, text: full, errorText: "aborted", aborted: true };
+        throw err;
+      }
+      const { done, value } = chunk;
       if (done) break;
+      if (signal?.aborted) {
+        try { await reader.cancel(); } catch { /* ignore */ }
+        return { ok: false, status: 0, text: full, errorText: "aborted", aborted: true };
+      }
       buffer += decoder.decode(value, { stream: true });
       let nl;
       while ((nl = buffer.indexOf("\n")) >= 0) {

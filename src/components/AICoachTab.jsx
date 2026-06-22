@@ -228,7 +228,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, extractingForMsgId, sendChat, importToCalendar, hasPlanImportCache, getPlanImportActionStatus,
+  chatLoading, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -290,6 +290,7 @@ export function AICoachTab({
   const [annotationTarget, setAnnotationTarget] = useState(null);
   const [replyAnnotations, setReplyAnnotations] = useState([]);
   const [replyAnnotationExtra, setReplyAnnotationExtra] = useState("");
+  const annotationPreviewRef = useRef(null);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -772,13 +773,14 @@ export function AICoachTab({
       {annotationTarget && (
         <ModalRoot onClose={() => setAnnotationTarget(null)}>
           <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setAnnotationTarget(null)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 620, float: true })} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...s.modalCard(isMobile, { maxWidth: 620, float: true }), display: "flex", flexDirection: "column", maxHeight: "min(780px, calc(100dvh - 28px))", paddingBottom: 0 }} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.annotations_title")}</h2>
                 <button onClick={() => setAnnotationTarget(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
-              <div className="selectable" style={{
-                maxHeight: 220,
+              <div ref={annotationPreviewRef} className="selectable" style={{
+                flex: 1,
+                minHeight: 0,
                 overflowY: "auto",
                 border: "1px solid var(--rule)",
                 background: "var(--bg-sunken)",
@@ -805,6 +807,9 @@ export function AICoachTab({
                 extraPlaceholder={t("coach.annotations_extra_placeholder")}
                 sendLabel={t("coach.annotations_send")}
                 onSend={sendReplyAnnotations}
+                selectionRootRef={annotationPreviewRef}
+                floating
+                compact
               />
             </div>
           </div>
@@ -1164,8 +1169,7 @@ export function AICoachTab({
                         Shows on persistent assistant replies only. */}
                     {canImport && (
                       <button
-                        onClick={() => importToCalendar(displayContent, m.id)}
-                        disabled={extracting}
+                        onClick={() => extracting ? onStopExtraction?.(m.id) : importToCalendar(displayContent, m.id)}
                         style={{
                           background: actionButtonBg,
                           border: `1px solid ${actionButtonBorder}`,
@@ -1174,7 +1178,7 @@ export function AICoachTab({
                           fontSize: 12, lineHeight: 1.2,
                           color: actionButtonColor,
                           fontFamily: "var(--font-sans)",
-                          cursor: extracting ? "default" : "pointer",
+                          cursor: "pointer",
                           display: "inline-flex", alignItems: "center", gap: 6,
                         }}>
                         {actionButtonIcon}
@@ -1284,8 +1288,8 @@ export function AICoachTab({
             "--mobile-input-fs": isMobile ? "13px" : undefined,
           }} />
         {isMobile ? (
-          <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
-            aria-label={t("coach.send")}
+          <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !chatInput.trim()}
+            aria-label={chatLoading ? t("coach.stop_generating") : t("coach.send")}
             style={{
               ...s.btn,
               width: 40,
@@ -1295,10 +1299,10 @@ export function AICoachTab({
               lineHeight: 1,
               minHeight: 32,
               flexShrink: 0,
-              opacity: chatLoading || !chatInput.trim() ? 0.4 : 1,
+              opacity: (!chatLoading && !chatInput.trim()) ? 0.4 : 1,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
             }}>
-            ⏎
+            {chatLoading ? "×" : "⏎"}
           </button>
         ) : (
           // Desktop: ⚙ stacked above Send in a slim column, mirroring mobile.
@@ -1308,13 +1312,13 @@ export function AICoachTab({
               style={{ ...s.btnGhost, padding: "8px 10px", fontSize: 13, lineHeight: 1.2 }}>
               ⚙{coachMemory ? " ●" : ""}
             </button>
-            <button onClick={handleSend} disabled={chatLoading || !chatInput.trim()}
+            <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !chatInput.trim()}
               style={{
                 ...s.btn, padding: "10px 20px",
-                opacity: chatLoading || !chatInput.trim() ? 0.5 : 1,
+                opacity: (!chatLoading && !chatInput.trim()) ? 0.5 : 1,
                 flex: 1,
               }}>
-              {t("coach.send")}
+              {chatLoading ? t("common.stop") : t("coach.send")}
             </button>
           </div>
         )}

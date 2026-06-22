@@ -27,6 +27,7 @@ export function SettingsMobileTab({
   onOpenPushSettings,
   onOpenWeatherSettings,
   onOpenWeeklyReport,
+  weeklyReportStatus,
   weatherAutoUpdate,
   weatherIntervalHours,
   pushEnabled,
@@ -126,7 +127,12 @@ export function SettingsMobileTab({
         onClick={onOpenPushSettings} />
       <SubCell
         primary={t("settings.weekly_report")}
-        secondary={t("settings.weekly_report_desc")}
+        secondary={weeklyReportStatus === "analyzing"
+          ? t("settings.weekly_report_analyzing")
+          : weeklyReportStatus === "extracting"
+            ? t("settings.weekly_report_extracting")
+            : t("settings.weekly_report_desc")}
+        busy={!!weeklyReportStatus}
         onClick={onOpenWeeklyReport} />
       <SubCell
         primary={t("settings.weather_updates")}
@@ -356,7 +362,7 @@ function LangSwitch({ lang, onToggle }) {
 // Rows inside an accordion group. Supports a secondary line, a right-hand
 // control (rightValue, e.g. the language switch — replaces the chevron), a
 // flash highlight (jump-to-setting), and a danger tone.
-function SubCell({ primary, secondary, warn, danger, rightValue, flash, onClick }) {
+function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, onClick }) {
   return (
     <button onClick={onClick}
       className={flash ? "ultreia-flash" : undefined}
@@ -378,7 +384,9 @@ function SubCell({ primary, secondary, warn, danger, rightValue, flash, onClick 
         <span>{primary}</span>
         {secondary && (
           <span style={{
-            display: "block",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
             marginTop: 3,
             fontSize: 12,
             color: warn ? "var(--warn)" : "var(--ink-3)",
@@ -386,6 +394,7 @@ function SubCell({ primary, secondary, warn, danger, rightValue, flash, onClick 
             lineHeight: 1.35,
             overflowWrap: "anywhere",
           }}>
+            {busy && <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5, flexShrink: 0 }} />}
             {secondary}
           </span>
         )}

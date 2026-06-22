@@ -5,7 +5,7 @@ import { supabaseFunctionUrl, supabasePublicAnonKey } from '../supabase';
 // Wallet-backed AI chat via the coach-proxy Edge Function. The shared DeepSeek
 // key stays server-side; successful replies debit the caller's wallet.
 // Throws an Error with `.code` (e.g. 'insufficient_balance') so the caller can branch.
-export async function coachProxy({ system, messages, max_tokens }) {
+export async function coachProxy({ system, messages, max_tokens, signal }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
@@ -22,6 +22,7 @@ export async function coachProxy({ system, messages, max_tokens }) {
       Authorization: `Bearer ${accessToken}`,
     },
     body: { system, messages, max_tokens },
+    signal,
   });
 
   const data = await resp.json().catch(() => null);
@@ -35,7 +36,7 @@ export async function coachProxy({ system, messages, max_tokens }) {
   return data;
 }
 
-export async function coachProxyStream({ system, messages, max_tokens, onToken }) {
+export async function coachProxyStream({ system, messages, max_tokens, onToken, signal }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
@@ -53,9 +54,15 @@ export async function coachProxyStream({ system, messages, max_tokens, onToken }
     },
     body: { system, messages, max_tokens, stream: true },
     onToken,
+    signal,
   });
 
   if (!result.ok) {
+    if (result.aborted) {
+      const e = new Error('aborted');
+      e.code = 'aborted';
+      throw e;
+    }
     const code = result.errorText || 'coach_proxy_failed';
     const e = new Error(code);
     e.code = code;

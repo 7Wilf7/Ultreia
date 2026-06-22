@@ -162,7 +162,7 @@ export function TrainingTab({
   period, setPeriod, periodDropdown, setPeriodDropdown,
   view, setView,            // "activities" | "charts" — lifted to AppShell so
                             // it survives top-tab switches within a session
-  setConfirmDelete, profile, races, onCoachReviewRequest,
+  setConfirmDelete, profile, races, onCoachReviewRequest, onWeeklyReportPromptRequest,
 }) {
   const t = useT();
   const isMobile = useIsMobile();
@@ -488,6 +488,7 @@ export function TrainingTab({
             stickyHeader={activitiesStickyHeader}
             loadChip={loadChipEl}
             onCoachReviewRequest={onCoachReviewRequest}
+            onWeeklyReportPromptRequest={onWeeklyReportPromptRequest}
           />
         </>
       )}

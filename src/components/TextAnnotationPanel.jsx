@@ -171,7 +171,15 @@ export function TextAnnotationPanel({
                 onChange={e => updateNote(a.id, e.target.value)}
                 rows={2}
                 placeholder={t("annotations.note_placeholder")}
-                style={{ ...s.input, width: "100%", resize: "vertical", minHeight: 54, lineHeight: 1.45, fontSize: 12 }}
+                style={{
+                  ...s.input,
+                  width: "100%",
+                  resize: "vertical",
+                  minHeight: compact ? 46 : 54,
+                  lineHeight: compact ? 1.35 : 1.45,
+                  fontSize: compact ? 11 : 12,
+                  "--mobile-input-fs": compact ? "11px" : undefined,
+                }}
               />
             </div>
           ))}
@@ -190,25 +198,34 @@ export function TextAnnotationPanel({
               flex: 1,
               width: "100%",
               resize: compact ? "none" : "vertical",
-              minHeight: compact ? 40 : 78,
-              height: compact ? 40 : undefined,
-              lineHeight: compact ? "20px" : 1.5,
-              padding: compact ? "9px 10px" : undefined,
+              fontFamily: "var(--font-sans)",
+              minHeight: compact ? 32 : 78,
+              height: compact ? 32 : undefined,
+              lineHeight: compact ? 1.35 : 1.5,
+              padding: compact ? "6px 9px" : undefined,
               marginBottom: 0,
+              overflowY: compact ? "auto" : undefined,
+              "--mobile-input-fs": compact ? "13px" : undefined,
             }}
           />
         )}
 
         <button type="button" onClick={onSend} disabled={!canSend} style={{
           ...s.btn,
-          width: compact ? 42 : "100%",
-          minWidth: compact ? 42 : undefined,
-          minHeight: compact ? 40 : undefined,
+          width: compact ? 40 : "100%",
+          minWidth: compact ? 40 : undefined,
+          height: compact ? 32 : undefined,
+          minHeight: compact ? 32 : undefined,
           padding: compact ? 0 : undefined,
+          fontSize: compact ? 20 : undefined,
+          lineHeight: compact ? 1 : undefined,
           opacity: canSend ? 1 : 0.45,
           flexShrink: 0,
+          display: compact ? "inline-flex" : undefined,
+          alignItems: compact ? "center" : undefined,
+          justifyContent: compact ? "center" : undefined,
         }}>
-          {compact ? "↵" : (sendLabel || t("annotations.send"))}
+          {compact ? "⏎" : (sendLabel || t("annotations.send"))}
         </button>
       </div>
     </div>

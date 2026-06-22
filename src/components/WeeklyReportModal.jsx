@@ -102,16 +102,16 @@ export function WeeklyReportPage({
         flexShrink: 0,
         zIndex: 3,
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h2 style={{ fontSize: 24, fontWeight: 750, margin: 0, lineHeight: 1.12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 64px 28px", alignItems: "center", gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: 22, fontWeight: 750, margin: 0, lineHeight: 1.12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {t("weekly_report.title")}
             </h2>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, width: 64 }}>
             <button
               onClick={() => loading ? onStopGenerate?.() : onGenerate?.(range, rangeMode)}
-              style={{ ...(loading ? s.btnGhost : s.btn), minHeight: 0, padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              style={{ ...(loading ? s.btnGhost : s.btn), minHeight: 0, width: "100%", padding: "5px 0", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
               {loading && <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />}
               {loading ? t("common.stop") : t("weekly_report.generate_short")}
             </button>
@@ -121,7 +121,7 @@ export function WeeklyReportPage({
                 else if (selected) onImportPlan?.(selected.text, selected.id);
               }}
               disabled={!selected && !extracting}
-              style={{ ...s.btnGhost, opacity: (selected || extracting) ? 1 : 0.45, minHeight: 0, padding: "6px 8px", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: 5 }}>
+              style={{ ...s.btnGhost, opacity: (selected || extracting) ? 1 : 0.45, minHeight: 0, width: "100%", padding: "5px 0", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
               {extracting && <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />}
               {extracting ? t("common.stop") : t("weekly_report.import_plan_short")}
             </button>

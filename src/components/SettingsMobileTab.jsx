@@ -54,6 +54,7 @@ export function SettingsMobileTab({
 }) {
   const t = useT();
   const [accountOpen, setAccountOpen] = useState(false);
+  const [weeklyOpen, setWeeklyOpen] = useState(false);
   const [group, setGroup] = useState("other");
   const [groupMotion, setGroupMotion] = useState({ dir: 0, seq: 0 });
   const [signingOut, setSigningOut] = useState(false);
@@ -123,6 +124,14 @@ export function SettingsMobileTab({
     : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
   const weeklyDay = Number.isInteger(Number(weeklyReportWeekday)) ? Number(weeklyReportWeekday) : 0;
   const weeklyTime = typeof weeklyReportTime === "string" && weeklyReportTime ? weeklyReportTime : "20:00";
+  const weeklyReportSummary = weeklyReportStatus === "analyzing"
+    ? t("settings.weekly_report_analyzing")
+    : weeklyReportStatus === "extracting"
+      ? t("settings.weekly_report_extracting")
+      : t("settings.weekly_report_desc");
+  const weeklyAutoSummary = weeklyReportEnabled
+    ? t("settings.weekly_report_auto_on", { day: t(`weekly_settings.day_${weeklyDay}`), time: weeklyTime })
+    : t("settings.weekly_report_auto_off", { sunday: weeklyReportAfterSundayImport !== false ? t("settings.weekly_report_sunday_on") : t("settings.weekly_report_sunday_off") });
   const otherSettings = (
     <>
       <SubCell
@@ -134,19 +143,22 @@ export function SettingsMobileTab({
         onClick={onOpenPushSettings} />
       <SubCell
         primary={t("settings.weekly_report")}
-        secondary={weeklyReportStatus === "analyzing"
-          ? t("settings.weekly_report_analyzing")
-          : weeklyReportStatus === "extracting"
-            ? t("settings.weekly_report_extracting")
-            : t("settings.weekly_report_desc")}
+        secondary={weeklyReportSummary}
         busy={!!weeklyReportStatus}
-        onClick={onOpenWeeklyReport} />
-      <SubCell
-        primary={t("settings.weekly_report_auto")}
-        secondary={weeklyReportEnabled
-          ? t("settings.weekly_report_auto_on", { day: t(`weekly_settings.day_${weeklyDay}`), time: weeklyTime })
-          : t("settings.weekly_report_auto_off", { sunday: weeklyReportAfterSundayImport !== false ? t("settings.weekly_report_sunday_on") : t("settings.weekly_report_sunday_off") })}
-        onClick={onOpenWeeklyReportSettings} />
+        expanded={weeklyOpen}
+        onClick={() => setWeeklyOpen(open => !open)} />
+      <SettingsSubGroup open={weeklyOpen}>
+        <SubCell
+          primary={t("settings.weekly_report_details")}
+          secondary={t("settings.weekly_report_desc")}
+          indent={12}
+          onClick={onOpenWeeklyReport} />
+        <SubCell
+          primary={t("settings.weekly_report_settings")}
+          secondary={weeklyAutoSummary}
+          indent={12}
+          onClick={onOpenWeeklyReportSettings} />
+      </SettingsSubGroup>
       <SubCell
         primary={t("settings.weather_updates")}
         secondary={weatherAutoUpdate !== false
@@ -315,6 +327,21 @@ function GroupPanel({ motion, children }) {
   );
 }
 
+function SettingsSubGroup({ open, children }) {
+  return (
+    <div aria-hidden={!open} style={{
+      maxHeight: open ? 180 : 0,
+      opacity: open ? 1 : 0,
+      overflow: "hidden",
+      pointerEvents: open ? "auto" : "none",
+      background: "var(--bg-elevated)",
+      transition: "max-height 260ms cubic-bezier(0.18,0.86,0.24,1), opacity 180ms ease",
+    }}>
+      {children}
+    </div>
+  );
+}
+
 // Pill that toggles a settings group.
 function SectionChip({ active, onClick, children }) {
   return (
@@ -375,7 +402,7 @@ function LangSwitch({ lang, onToggle }) {
 // Rows inside an accordion group. Supports a secondary line, a right-hand
 // control (rightValue, e.g. the language switch — replaces the chevron), a
 // flash highlight (jump-to-setting), and a danger tone.
-function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, onClick }) {
+function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, expanded, indent = 0, onClick }) {
   return (
     <button onClick={onClick}
       className={flash ? "ultreia-flash" : undefined}
@@ -385,7 +412,7 @@ function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, on
         background: "transparent",
         border: "none",
         borderBottom: "1px solid var(--rule-soft)",
-        padding: "12px 14px",
+        padding: `12px 14px 12px ${14 + indent}px`,
         minHeight: 48,
         fontFamily: "var(--font-sans)", fontSize: 14,
         color: danger ? "var(--danger)" : "var(--ink-1)",
@@ -414,7 +441,7 @@ function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, on
       </span>
       {rightValue
         ? <span style={{ marginLeft: 12, flexShrink: 0 }}>{rightValue}</span>
-        : <span style={{ color: "var(--ink-3)", fontSize: 14 }}>›</span>}
+        : <span style={{ color: "var(--ink-3)", fontSize: 14 }}>{expanded ? "⌄" : "›"}</span>}
     </button>
   );
 }

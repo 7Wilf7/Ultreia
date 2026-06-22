@@ -10,12 +10,10 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
-import { buildAnnotatedDiscussionMessage } from "../utils/annotations";
 import { AGENT_ACTION_STATUS, markAgentActionStatus } from "../utils/agentActions";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
-import { TextAnnotationPanel } from "./TextAnnotationPanel";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -287,10 +285,6 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
-  const [annotationTarget, setAnnotationTarget] = useState(null);
-  const [replyAnnotations, setReplyAnnotations] = useState([]);
-  const [replyAnnotationExtra, setReplyAnnotationExtra] = useState("");
-  const annotationPreviewRef = useRef(null);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -526,31 +520,6 @@ export function AICoachTab({
     await sendChat(userMsg);
   }
 
-  function openReplyAnnotations(message) {
-    setAnnotationTarget({
-      id: message.id,
-      text: parseCoachMessageMeta(message.content).text || "",
-    });
-    setReplyAnnotations([]);
-    setReplyAnnotationExtra("");
-  }
-
-  function sendReplyAnnotations() {
-    if (!annotationTarget) return;
-    const message = buildAnnotatedDiscussionMessage({
-      intro: t("coach.annotations_intro"),
-      sourceTitle: t("coach.annotations_source_title"),
-      sourceText: annotationTarget.text,
-      extraText: replyAnnotationExtra,
-      annotations: replyAnnotations,
-    });
-    if (!message.trim()) return;
-    setAnnotationTarget(null);
-    setReplyAnnotations([]);
-    setReplyAnnotationExtra("");
-    sendChat(message);
-  }
-
   // Mobile has two views inside this tab — chat (default) and a settings
   // sub-page (opened via the ⚙ button in the input row). Desktop shows
   // everything inline.
@@ -765,52 +734,6 @@ export function AICoachTab({
                   minHeight: 80,
                 }}>{shownMemory || t("coach.memory_empty")}</pre>
               )}
-            </div>
-          </div>
-        </ModalRoot>
-      )}
-
-      {annotationTarget && (
-        <ModalRoot onClose={() => setAnnotationTarget(null)}>
-          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setAnnotationTarget(null)}>
-            <div style={{ ...s.modalCard(isMobile, { maxWidth: 620, float: true }), display: "flex", flexDirection: "column", maxHeight: "min(780px, calc(100dvh - 28px))", paddingBottom: 0 }} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.annotations_title")}</h2>
-                <button onClick={() => setAnnotationTarget(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
-              </div>
-              <div ref={annotationPreviewRef} className="selectable" style={{
-                flex: 1,
-                minHeight: 0,
-                overflowY: "auto",
-                border: "1px solid var(--rule)",
-                background: "var(--bg-sunken)",
-                padding: 12,
-                borderRadius: 6,
-                fontSize: 13,
-                lineHeight: 1.65,
-                color: "var(--ink-1)",
-                marginBottom: 10,
-                whiteSpace: "pre-wrap",
-              }}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
-                  {annotationTarget.text}
-                </ReactMarkdown>
-              </div>
-              <TextAnnotationPanel
-                title={t("coach.annotations_panel_title")}
-                hint={t("coach.annotations_hint")}
-                sourceLabel={t("coach.annotations_source_title")}
-                annotations={replyAnnotations}
-                setAnnotations={setReplyAnnotations}
-                extraText={replyAnnotationExtra}
-                setExtraText={setReplyAnnotationExtra}
-                extraPlaceholder={t("coach.annotations_extra_placeholder")}
-                sendLabel={t("coach.annotations_send")}
-                onSend={sendReplyAnnotations}
-                selectionRootRef={annotationPreviewRef}
-                floating
-                compact
-              />
             </div>
           </div>
         </ModalRoot>
@@ -1183,24 +1106,6 @@ export function AICoachTab({
                         }}>
                         {actionButtonIcon}
                         {actionButtonLabel}
-                      </button>
-                    )}
-
-                    {!isUser && !m.isLocal && !m.isStreaming && sendChat && (
-                      <button
-                        onClick={() => openReplyAnnotations(m)}
-                        style={{
-                          background: "var(--bg-elevated)",
-                          border: "1px solid var(--rule)",
-                          borderRadius: 4,
-                          padding: "5px 10px",
-                          fontSize: 12, lineHeight: 1.2,
-                          color: "var(--ink-2)",
-                          fontFamily: "var(--font-sans)",
-                          cursor: "pointer",
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                        }}>
-                        ✎ {t("coach.annotate_reply")}
                       </button>
                     )}
 

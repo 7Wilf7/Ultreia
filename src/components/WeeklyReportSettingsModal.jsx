@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { TimeWheelModal } from "./WheelPicker";
 
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -24,6 +25,7 @@ export function WeeklyReportSettingsModal({
   const [weekday, setWeekday] = useState(cleanWeekday(initial.weekday));
   const [time, setTime] = useState(cleanTime(initial.time));
   const [afterSundayImport, setAfterSundayImport] = useState(initial.afterSundayImport !== false);
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
 
   function save() {
     setWeeklyReportSettings({
@@ -69,12 +71,10 @@ export function WeeklyReportSettingsModal({
                   <option key={day} value={day}>{t(`weekly_settings.day_${day}`)}</option>
                 ))}
               </select>
-              <input
-                type="time"
-                value={time}
-                onChange={e => setTime(cleanTime(e.target.value))}
-                style={s.timeInput}
-              />
+              <button type="button" onClick={() => setTimePickerOpen(true)} style={s.timeButton}>
+                <span style={s.timeValue}>{time}</span>
+                <span style={s.timeChevron}>⌄</span>
+              </button>
             </div>
           </div>
 
@@ -99,6 +99,17 @@ export function WeeklyReportSettingsModal({
           </div>
         </div>
       </div>
+      {timePickerOpen && (
+        <TimeWheelModal
+          value={time}
+          title={t("weekly_settings.pick_time")}
+          onConfirm={(next) => {
+            setTime(cleanTime(next));
+            setTimePickerOpen(false);
+          }}
+          onClose={() => setTimePickerOpen(false)}
+        />
+      )}
     </ModalRoot>
   );
 }
@@ -130,7 +141,7 @@ const s = {
   primary: { display: "block", fontSize: 14, fontWeight: 600 },
   secondary: { display: "block", marginTop: 4, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.45 },
   label: { fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 },
-  scheduleGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 116px", gap: 8 },
+  scheduleGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 104px", gap: 8 },
   select: {
     border: "1px solid var(--rule)",
     background: "var(--bg-elevated)",
@@ -140,16 +151,24 @@ const s = {
     fontSize: 13,
     minHeight: 38,
   },
-  timeInput: {
+  timeButton: {
     border: "1px solid var(--rule)",
     background: "var(--bg-elevated)",
     color: "var(--ink-1)",
     borderRadius: 6,
-    padding: "8px 10px",
+    padding: "8px 9px",
     fontSize: 13,
     minHeight: 38,
     fontFamily: "var(--font-mono)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+    cursor: "pointer",
+    minWidth: 0,
   },
+  timeValue: { fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
+  timeChevron: { color: "var(--ink-3)", fontFamily: "var(--font-sans)", fontSize: 13, flexShrink: 0 },
   note: {
     marginTop: 16,
     padding: 12,

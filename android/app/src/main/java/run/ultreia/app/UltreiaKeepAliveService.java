@@ -21,8 +21,8 @@ public class UltreiaKeepAliveService extends Service {
     private static final String EXTRA_TITLE = "title";
     private static final String EXTRA_BODY = "body";
     private static volatile boolean running = false;
-    private static String notificationTitle = "This week";
-    private static String notificationBody = "Sessions 0 · Time 0m · Distance 0.0km · Ascent 0m";
+    private static String notificationTitle = "This month";
+    private static String notificationBody = "Sessions 0 · Time 0m\nDistance 0.0km · Ascent 0m";
 
     public static void start(Context context, String title, String body) {
         Intent intent = new Intent(context, UltreiaKeepAliveService.class);

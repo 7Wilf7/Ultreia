@@ -91,8 +91,8 @@ export async function setPushKeepAliveEnabled(enabled, summary = {}) {
   try {
     if (enabled) {
       await UltreiaKeepAlive.start({
-        title: summary.title || "This week",
-        body: summary.body || "Sessions 0 · Time 0m · Distance 0.0km · Ascent 0m",
+        title: summary.title || "This month",
+        body: summary.body || "Sessions 0 · Time 0m\nDistance 0.0km · Ascent 0m",
       });
       appendPushDebug('keepAliveStarted', summary);
     } else {

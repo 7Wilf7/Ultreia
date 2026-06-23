@@ -29,8 +29,8 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
-| Phase 2 | 进行中 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
-| Phase 3 | 待开始 | Agent Action Log | 周报自动化 / 跨页面动作稳定后再建表 |
+| Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
+| Phase 3 | 下一步 | Agent Action Log | 需要 Supabase schema 变更；先把 AI 提议、用户决策、执行结果和失败原因变成可追溯记录 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
@@ -198,7 +198,7 @@ archived_at
 
 ## 当前下一步
 
-Phase 2 正在推进。
+Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 
 已落地：
 
@@ -217,11 +217,11 @@ Phase 2 正在推进。
 
 下一步：
 
-1. 如需要真正后台定时，把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
-2. 文本注解能力第一版保留在 AI 周复盘正文：周报可选中文本、收集多条注解、一次性发给教练讨论；普通 AI Coach 回复注解已移除。后续如需要跨设备保留周报注解，再接 `coach_report_notes` / `coach_annotations`。
-3. 周报分析 / 计划提炼 / AI Coach 聊天已具备停止入口；下一步如要追踪“已停止但服务端是否完成扣费”，需要引入任务/action log。
-4. 日历计划状态已收敛为 `done` / `partial` / `missed` / `pending`，不再暴露单独 `skipped` 状态；这能减少 Action Card 执行后的解释歧义。
-5. 自动周报和文本注解稳定后，进入 Phase 3：把本地 action 状态迁移成 Supabase `agent_actions` 表。
+1. Phase 3 第一件事是建 `agent_actions`：记录 AI 提议了什么、用户接受 / 忽略 / 修改了什么、系统执行结果如何、失败原因是什么。
+2. 这一步需要 Supabase schema 变更，必须先给用户完整 SQL；用户在 Dashboard 跑完后，再改 `src/lib/db/*` 字段映射和前端 action 状态读写。
+3. 第一版不要追求复杂自动化，只迁移现有本地 action 状态：`create_plans`、`memory_update`、周报提炼计划。目标是跨设备可追溯，而不是让 AI 自动执行。
+4. 有了 action log 后，再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
+5. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -243,3 +243,4 @@ Phase 2 正在推进。
 - 2026-06-22：`user_settings` 周报自动生成字段接入前端；Settings 增加周复盘自动生成设置，支持开关、星期、时间和周日导入后询问开关。当前触发边界是 App 打开 / 回到前台检查，不做系统后台静默执行。
 - 2026-06-22：Settings 里的 AI 周复盘收拢成二级入口（详情 / 设置）；自动生成时间选择改用应用内滚轮。普通 AI Coach 回复注解入口移除，保留直接聊天。
 - 2026-06-23：周复盘自动设置的星期也改为滚轮；日历计划状态去掉单独 `skipped` 展示，`planned_rest` 明确为“显式计划休息 / 覆盖旧计划”的语义，不自动套用到所有空白日。
+- 2026-06-23：Phase 2 进入收尾观察；下一步确认进入 Phase 3 `agent_actions`，先做可追溯 action log，不做新的自动执行。

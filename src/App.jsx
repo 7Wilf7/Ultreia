@@ -110,29 +110,28 @@ function weeklyReportAutoKey(userId, rangeStart) {
 
 const WEEKLY_REPORT_LIST_LIMIT = 50;
 
-function weekStartKey(now = new Date()) {
+function monthStartKey(now = new Date()) {
   const d = new Date(now);
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setDate(1);
   return localDateKey(d);
 }
 
-function buildWeeklyTraySummary(logs = [], now = new Date(), lang = "zh") {
-  const start = weekStartKey(now);
+function buildMonthlyTraySummary(logs = [], now = new Date(), lang = "zh") {
+  const start = monthStartKey(now);
   const end = localDateKey(now);
-  const weekLogs = logs.filter(l => l && !l.isPlanned && l.date >= start && l.date <= end);
-  const sessions = weekLogs.length;
-  const seconds = weekLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
-  const distance = weekLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
-  const ascent = weekLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
+  const monthLogs = logs.filter(l => l && !l.isPlanned && l.date >= start && l.date <= end);
+  const sessions = monthLogs.length;
+  const seconds = monthLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
+  const distance = monthLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+  const ascent = monthLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
   const isZh = lang === "zh";
   const distanceText = distance >= 10 ? distance.toFixed(0) : distance.toFixed(1);
   const timeText = seconds > 0 ? formatDurationShort(seconds) : "0m";
+  const body = `Sessions ${sessions} · Time ${timeText}\nDistance ${distanceText}km · Ascent ${Math.round(ascent)}m`;
   return {
-    title: isZh ? "本周训练" : "This week",
-    body: isZh
-      ? `Sessions ${sessions} · Time ${timeText} · Distance ${distanceText}km · Ascent ${Math.round(ascent)}m`
-      : `Sessions ${sessions} · Time ${timeText} · Distance ${distanceText}km · Ascent ${Math.round(ascent)}m`,
+    title: isZh ? "本月训练" : "This month",
+    body,
   };
 }
 
@@ -515,7 +514,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
   useEffect(() => {
     if (!user?.id) return;
-    void setPushKeepAliveEnabled(pushEnabled === true, buildWeeklyTraySummary(logs, new Date(), lang));
+    void setPushKeepAliveEnabled(pushEnabled === true, buildMonthlyTraySummary(logs, new Date(), lang));
   }, [user?.id, pushEnabled, logs, lang]);
 
   // ── Setter wrappers: optimistic local update + remote write ─────────────

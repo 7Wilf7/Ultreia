@@ -35,6 +35,7 @@ const USER_TABLES = [
   "workouts",
   "races",
   "coach_messages",
+  "agent_actions",
   "user_settings",
   "daily_notes",
   "push_subscriptions",

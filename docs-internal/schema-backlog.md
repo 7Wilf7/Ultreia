@@ -37,15 +37,21 @@
 
 - `daily-coach-dispatch` 自动周报写入 `coach_reports`，再发系统通知 / 收件箱提醒。
 
-## 应该尽快建表
+## 已建表并接入
 
-### 1. `agent_actions`
+### 2. `agent_actions`
+
+状态：
+
+- 2026-06-23 已建表。
+- 计划导入 Action Card、Memory 更新 Action Card 已开始写入 `agent_actions`。
+- App 启动时会读取账号下的 `create_plans` 动作，用来恢复 AI Coach 消息下方的已提炼 / 已执行 / 已忽略状态。
+- 写入 action log 是 best-effort；如果日志保存失败，不阻止计划导入或 Memory 保存。
 
 现状：
 
-- AI Coach 的计划导入 Action Card 状态保存在前端 state / localStorage。
-- 换设备看不到某条建议动作是否已执行 / 已忽略。
-- 后台任务或跨页面任务变多后，缺少统一审计记录。
+- 第一版仍保留本地 `planImportCache` 做离线/即时缓存，云端 `agent_actions` 是跨设备恢复和审计来源。
+- 周报提炼计划复用 `create_plans`，来源通过 `source_ref_type/source_ref_id` 区分。
 
 建议字段见 `docs-internal/agentization-roadmap.md` Phase 3。
 
@@ -55,13 +61,12 @@
 
 后续动作：
 
-- 用户先在 Supabase Dashboard 的 SQL Editor 执行建表 SQL。
-- 保存计划导入、Memory 更新、周报导入等动作的 `proposed / executed / rejected / failed` 状态。
-- AI Coach 消息下的 Action Card 从云端状态恢复。
+- 后续如需要更完整的审计页，再增加 action log 可视化入口。
+- 如要追踪停止/扣费/服务端完成状态，把任务结果写入 `result` / `error`。
 
 ## 中期应建表
 
-### 2. `coach_memory_facts`
+### 1. `coach_memory_facts`
 
 现状：
 
@@ -73,7 +78,7 @@
 - 一条事实一行，字段包括 category、body_en、body_zh、source、confidence、created_at、archived_at。
 - prompt 按场景选择相关事实，而不是整段塞入。
 
-### 3. `coach_report_notes` 或 `coach_annotations`
+### 2. `coach_report_notes` 或 `coach_annotations`
 
 现状：
 

@@ -30,7 +30,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
-| Phase 3 | 下一步 | Agent Action Log | 需要 Supabase schema 变更；先把 AI 提议、用户决策、执行结果和失败原因变成可追溯记录 |
+| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表并接入第一版；计划导入和 Memory 更新会写账号动作记录 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
@@ -150,6 +150,14 @@ proposed -> cancelled
 
 注意：这一步需要 Supabase schema 变更，必须先给用户 SQL，用户在 Dashboard 跑完后再改前端和 DAL。
 
+第一版接入：
+
+- `src/lib/db/agentActions.js` 负责读写 `agent_actions`。
+- App 启动读取账号下的 `create_plans` 动作，恢复 AI Coach 消息下方的已提炼 / 已执行 / 已忽略状态。
+- 计划提炼成功时写入 `proposed`；确认导入后写入 `executed`；忽略后写入 `rejected`。
+- Memory 自动更新建议同样写入 `proposed`，接受 / 放弃后写入 `executed` / `rejected`。
+- action log 写入是 best-effort，不阻止计划导入或 Memory 保存。
+
 ## Phase 4：Memory Facts 结构化
 
 目标：让长期记忆从“分区文本”升级为“事实系统”。
@@ -227,11 +235,10 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 
 下一步：
 
-1. Phase 3 第一件事是建 `agent_actions`：记录 AI 提议了什么、用户接受 / 忽略 / 修改了什么、系统执行结果如何、失败原因是什么。建表 SQL 已放在 `docs-internal/supabase-agent-actions.sql`。
-2. 这一步需要 Supabase schema 变更，必须先给用户完整 SQL；用户在 Dashboard 跑完后，再改 `src/lib/db/*` 字段映射和前端 action 状态读写。
-3. 第一版不要追求复杂自动化，只迁移现有本地 action 状态：`create_plans`、`memory_update`、周报提炼计划。目标是跨设备可追溯，而不是让 AI 自动执行。
-4. 有了 action log 后，再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
-5. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
+1. 观察 `agent_actions` 第一版在真机里的状态恢复：AI Coach 计划提炼、确认导入、忽略动作、Memory 更新是否都能跨设备保持一致。
+2. 如第一版稳定，再决定是否增加 action log 可视化入口；当前先不加新页面，避免把个人工具做重。
+3. 有了 action log 后，再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
+4. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -255,3 +262,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-23：周复盘自动设置的星期也改为滚轮；日历计划状态去掉单独 `skipped` 展示，`planned_rest` 明确为“显式计划休息 / 覆盖旧计划”的语义，不自动套用到所有空白日。
 - 2026-06-23：Phase 2 进入收尾观察；下一步确认进入 Phase 3 `agent_actions`，先做可追溯 action log，不做新的自动执行。
 - 2026-06-23：补充 `agent_actions` 建表 SQL；第一版保留 `client_id` 承接现有前端 Action Card id，并用 `source_ref_type/source_ref_id` 关联 AI Coach 消息或周报来源。
+- 2026-06-23：Phase 3 第一版接入前端：新增 `agentActions` DAL；计划导入和 Memory 更新动作会写入账号 action log；启动时读取 `create_plans` 动作恢复 AI Coach 按钮状态。

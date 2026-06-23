@@ -228,7 +228,7 @@ export function AICoachTab({
   // Memory update lifted to AppShell so it survives leaving this tab (the
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
-  memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, proposeMemoryUpdate,
+  memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, recordMemoryActionDecision, proposeMemoryUpdate,
 }) {
   const t = useT();
   const { lang } = useLanguage();
@@ -427,13 +427,19 @@ export function AICoachTab({
     setCoachMemoryBoth(e, z);
     setMemoryDraft(memoryLang === "zh" ? z : e);
     if (memoryProposal?.action) {
-      setLastMemoryAction(markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED));
+      const nextAction = recordMemoryActionDecision
+        ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED)
+        : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
+      setLastMemoryAction(nextAction);
     }
     setMemoryProposal(null);
   }
   function rejectMemoryProposal() {
     if (memoryProposal?.action) {
-      setLastMemoryAction(markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED));
+      const nextAction = recordMemoryActionDecision
+        ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED)
+        : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED);
+      setLastMemoryAction(nextAction);
     }
     setMemoryProposal(null);
   }

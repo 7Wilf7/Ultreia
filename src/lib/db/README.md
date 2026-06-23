@@ -20,6 +20,7 @@ should never import `supabase` directly — they go through these modules.
 | `races.js` | `races` | Race calendar / results |
 | `coachMessages.js` | `coach_messages` | AI Coach conversation history |
 | `coachReports.js` | `coach_reports` | AI weekly report history |
+| `agentActions.js` | `agent_actions` | Agent Action Card lifecycle log |
 | `userSettings.js` | `user_settings` | Per-user preferences (language, API model choice, coach config, coach memory…) |
 | `index.js` | — | Re-exports each module as a namespace |
 
@@ -73,6 +74,7 @@ by any business code. `src/utils/migrate.js` has been deleted.
 | `races.js` | ✅ 3.3d | See below |
 | `coachMessages.js` | ✅ 3.3e | Append-only chat history; see below |
 | `coachReports.js` | ✅ 2026-06-21 | Weekly report history; one generated report per row |
+| `agentActions.js` | ✅ 2026-06-23 | Action Card lifecycle log; app still treats writes as best-effort |
 
 ### `workouts.js` notes
 
@@ -130,3 +132,13 @@ by any business code. `src/utils/migrate.js` has been deleted.
   tokens arrive, then commits one final `appendMessage` row when the stream
   completes. Do NOT call `appendMessage` per token; the chat table remains
   append-only at one row per completed assistant turn.
+
+### `agentActions.js` notes
+
+- `listMyActions()` reads recent Action Card lifecycle records newest-first.
+  App boot uses this to restore AI Coach plan-import button states across
+  devices.
+- `upsertAction(action)` writes by `(user_id, client_id)` so existing frontend
+  action ids remain stable while the database keeps a UUID primary key.
+- Agent action writes are best-effort at call sites: failure to write the log
+  must not block confirming a plan or saving Memory.

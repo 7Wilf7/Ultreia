@@ -340,6 +340,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [races, setRaces] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [dailyNotes, setDailyNotes] = useState([]);
+  const [agentActions, setAgentActions] = useState([]);
 
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
@@ -379,6 +380,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           withTimeout(db.workouts.listMyWorkouts(), "workouts").then(value => ({ key: "workouts", value }), error => ({ key: "workouts", error })),
           withTimeout(db.races.listMyRaces(), "races").then(value => ({ key: "races", value }), error => ({ key: "races", error })),
           withTimeout(db.coachMessages.listMyMessages(), "messages").then(value => ({ key: "messages", value }), error => ({ key: "messages", error })),
+          withTimeout(db.agentActions.listMyActions(), "agentActions").then(value => ({ key: "agentActions", value }), error => ({ key: "agentActions", error })),
           withTimeout(db.dailyNotes.listMyDailyNotes(), "notes").then(value => ({ key: "notes", value }), error => ({ key: "notes", error })),
           withTimeout(db.wallet.getMyWallet(), "wallet").then(value => ({ key: "wallet", value }), error => ({ key: "wallet", error })),
         ]);
@@ -453,6 +455,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
         // Coach messages — DAL returns created_at asc (oldest first).
         if (!result.messages.error) setChatMessages(result.messages.value);
+
+        // Agent actions — cloud source of truth for Action Card lifecycle.
+        if (!result.agentActions.error) {
+          setAgentActions(result.agentActions.value || []);
+        }
 
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
@@ -1001,6 +1008,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         races={races}
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
         chatMessages={chatMessages}
+        agentActions={agentActions}
         setChatMessages={setChatMessages}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
@@ -1028,7 +1036,7 @@ function AppShell({
   user, signOut, changePassword, deleteAccount,
   logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
+  chatMessages, agentActions = [], setChatMessages, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -1214,9 +1222,33 @@ function AppShell({
   //      extractingForMsgId    — importToCalendar fetch in flight (per msg)
   //      planProposal          — opens the plan-import review modal once
   //                              extraction returns a non-empty array
+  function mergePlanCacheWithAgentActions(cache, actions) {
+    const createPlanActions = (actions || []).filter(a => a?.type === "create_plans" && a.sourceMessageId);
+    if (!createPlanActions.length) return cache;
+    const next = { ...cache };
+    for (const action of createPlanActions) {
+      const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
+      next[action.sourceMessageId] = {
+        ...(next[action.sourceMessageId] || {}),
+        plans,
+        action,
+      };
+    }
+    return next;
+  }
   const [chatLoading, setChatLoading] = useState(false);
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
+  const [planImportCache, setPlanImportCache] = useState(() => {
+    try {
+      const raw = localStorage.getItem("ultreia.coachPlanImportCache.v1");
+      const parsed = raw ? JSON.parse(raw) : {};
+      const cache = parsed && typeof parsed === "object" ? parsed : {};
+      return mergePlanCacheWithAgentActions(cache, agentActions);
+    } catch {
+      return mergePlanCacheWithAgentActions({}, agentActions);
+    }
+  });
   const chatAbortRef = useRef(null);
   const chatRunRef = useRef(0);
   const extractAbortRef = useRef(null);
@@ -1225,32 +1257,44 @@ function AppShell({
   const weeklyReportRunRef = useRef(0);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
   const weeklyReportStatus = weeklyReportLoading ? "analyzing" : weeklyReportExtracting ? "extracting" : null;
-  const [planImportCache, setPlanImportCache] = useState(() => {
-    try {
-      const raw = localStorage.getItem("ultreia.coachPlanImportCache.v1");
-      const parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch {
-      return {};
-    }
-  });
+  useEffect(() => {
+    if (!(agentActions || []).some(a => a?.type === "create_plans" && a.sourceMessageId)) return undefined;
+    const timer = setTimeout(() => {
+      setPlanImportCache(prev => mergePlanCacheWithAgentActions(prev, agentActions));
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [agentActions]);
   useEffect(() => {
     try { localStorage.setItem("ultreia.coachPlanImportCache.v1", JSON.stringify(planImportCache)); } catch { /* ignore cache write failure */ }
   }, [planImportCache]);
+  function saveAgentAction(action) {
+    if (!action?.id || !action?.type) return;
+    db.agentActions.upsertAction(action).catch(err => {
+      console.warn("[agent_actions] save failed:", err);
+    });
+  }
   function updatePlanImportActionStatus(msgId, status) {
     if (!msgId || !status) return;
     setPlanImportCache(prev => {
       const cached = prev[msgId];
       if (!cached) return prev;
       const action = cached.action || buildCreatePlansAction(cached.plans || [], { sourceMessageId: msgId });
+      const nextAction = markAgentActionStatus(action, status);
+      saveAgentAction(nextAction);
       return {
         ...prev,
         [msgId]: {
           ...cached,
-          action: markAgentActionStatus(action, status),
+          action: nextAction,
         },
       };
     });
+  }
+  function recordMemoryActionDecision(action, status) {
+    const nextAction = markAgentActionStatus(action, status);
+    saveAgentAction(nextAction);
+    setLastMemoryAction(nextAction);
+    return nextAction;
   }
 
   function stopCoachChat() {
@@ -1319,9 +1363,11 @@ function AppShell({
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       if (!text.trim()) { window.alert(t("coach.memory_empty_response")); return; }
       const parsedMemory = parseBilingualMemory(text);
+      const action = buildMemoryUpdateAction(parsedMemory, { sourceMessageCount: chatMessages.length });
+      saveAgentAction(action);
       setMemoryProposal({
         ...parsedMemory,
-        action: buildMemoryUpdateAction(parsedMemory, { sourceMessageCount: chatMessages.length }),
+        action,
       });
       setLastMemoryAction(null);
     } catch (err) {
@@ -1736,6 +1782,7 @@ Rules:
         return;
       }
       const action = buildCreatePlansAction(plans, { sourceMessageId: msgId });
+      saveAgentAction(action);
       if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans, action } }));
       setPlanProposal({ msgId, assistantContent, action });
     } catch (err) {
@@ -2069,6 +2116,7 @@ Rules:
           setMemoryProposal={setMemoryProposal}
           lastMemoryAction={lastMemoryAction}
           setLastMemoryAction={setLastMemoryAction}
+          recordMemoryActionDecision={recordMemoryActionDecision}
           proposeMemoryUpdate={proposeMemoryUpdate}
         />
     );

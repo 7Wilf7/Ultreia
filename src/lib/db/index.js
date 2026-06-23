@@ -3,6 +3,7 @@ export * as workouts from './workouts';
 export * as races from './races';
 export * as coachMessages from './coachMessages';
 export * as coachReports from './coachReports';
+export * as agentActions from './agentActions';
 export * as userSettings from './userSettings';
 export * as dailyNotes from './dailyNotes';
 export * as pushSubscriptions from './pushSubscriptions';

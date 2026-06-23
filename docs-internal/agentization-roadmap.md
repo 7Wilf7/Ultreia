@@ -179,6 +179,7 @@ proposed -> cancelled
 - 点击单条可展开查看可读动作摘要和执行结果；修改已有计划时显示 before / after 摘要，不再直接展示内部 JSON。
 - action log 写库仍是 best-effort，但前端会先合并到当前列表，保证 PWA 不需要刷新就能看到最新提议 / 接受 / 执行 / 忽略状态。
 - 用户可在 Recent Agent Actions 长按删除某条 action log，用于清理测试 Action Card；删除只清理 action 记录和消息按钮状态，不回滚已经执行的数据变更。
+- 用户可从展开的 action log 直接带着动作摘要和执行结果追问 Coach，让 Coach 复盘这次动作是否合理、下一步继续还是调整；这只创建普通聊天消息，不自动执行新动作。
 - 这一步只解决可审计性，不扩展新的 Action Card 类型。
 
 第五步接入：
@@ -265,9 +266,9 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 
 下一步：
 
-1. 观察 `agent_actions` 在真机里的状态恢复和 prompt 反哺效果：Coach 是否能少重复被忽略的建议、是否更懂哪些动作已执行。
-2. 如状态恢复稳定，再决定是否增加 action log 可视化入口；当前先不加新页面，避免把个人工具做重。
-3. 再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
+1. Phase 3 收尾观察：确认 Recent Agent Actions 的即时刷新、删除、继续追问、prompt 反哺在真机里是否稳定。
+2. 若稳定，Phase 3 可标记完成；下一阶段不急着新增自动执行，而是进入 Phase 4 小步试验 Memory Facts 结构化。
+3. Phase 4 第一版建议只做“可提炼、可审核、可归档”的结构化事实，不迁移旧 Memory、不替代现有分区文本；先让 Coach 能从对话里提出单条事实更新。
 4. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
@@ -296,3 +297,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-23：Phase 3 第二步：计划导入 Action Card 接受后先记 `accepted`，后台保存成功再记 `executed/result`，失败记 `failed/error`；Memory 更新接受时记录保存结果摘要。
 - 2026-06-23：Phase 3 第三步：AI Coach 对话和 AI 周复盘开始读取最近 Action Card 结果，把接受 / 忽略 / 失败作为后续建议的反馈上下文。
 - 2026-06-23：Phase 3 第四步：AI Coach 设置新增 `Recent Agent Actions` 轻量只读入口，最近 10 条动作可展开查看 payload/result 摘要，先补可审计性，不新增动作类型。
+- 2026-06-23：Recent Agent Actions 增加“带着这条动作问教练”入口，让 action log 从纯审计记录变成可继续讨论的 agent 上下文；仍不自动执行新动作。

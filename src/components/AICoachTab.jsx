@@ -689,7 +689,15 @@ export function AICoachTab({
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.recent_agent_actions")}</h2>
                 <button onClick={() => setShowAgentActions(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
-              <RecentAgentActions actions={agentActions} t={t} onDelete={onDeleteAgentAction} />
+              <RecentAgentActions
+                actions={agentActions}
+                t={t}
+                onDelete={onDeleteAgentAction}
+                onAskCoach={(action) => {
+                  sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
+                  setShowAgentActions(false);
+                }}
+              />
             </div>
           </div>
         </ModalRoot>
@@ -1532,7 +1540,15 @@ export function AICoachTab({
                   )}
 
                   {coachHubTab === "actions" && (
-                    <RecentAgentActions actions={agentActions} t={t} onDelete={onDeleteAgentAction} />
+                    <RecentAgentActions
+                      actions={agentActions}
+                      t={t}
+                      onDelete={onDeleteAgentAction}
+                      onAskCoach={(action) => {
+                        sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
+                        setShowCoachHub(false);
+                      }}
+                    />
                   )}
 
                   {coachHubTab === "memory" && (
@@ -1658,7 +1674,7 @@ function MemoryActionStatus({ action, t }) {
   );
 }
 
-function RecentAgentActions({ actions = [], t, onDelete }) {
+function RecentAgentActions({ actions = [], t, onDelete, onAskCoach }) {
   const recent = useMemo(() => {
     return [...(actions || [])]
       .filter(Boolean)
@@ -1753,6 +1769,20 @@ function RecentAgentActions({ actions = [], t, onDelete }) {
                   display: "grid", gap: 8,
                 }}>
                   <AgentActionDetails action={action} t={t} />
+                  {onAskCoach && (
+                    <button
+                      type="button"
+                      onClick={() => onAskCoach(action)}
+                      style={{
+                        ...s.btnGhost,
+                        justifySelf: "start",
+                        minHeight: 0,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                      }}>
+                      {t("coach.agent_action_ask_coach")}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1992,6 +2022,48 @@ function formatMemoryPreview(text) {
     .filter(Boolean)
     .slice(0, 4);
   return lines.length ? lines.join(" / ") : "-";
+}
+
+function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
+  const summary = summarizeAgentAction(action, t);
+  const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
+  const changes = Array.isArray(action.result?.planChanges) ? action.result.planChanges : [];
+  const zh = lang === "zh";
+  const lines = [
+    zh
+      ? "请基于下面这条 Agent Action 继续分析，不要直接执行新动作："
+      : "Please analyze this Agent Action. Do not execute any new action directly:",
+    "",
+    `${zh ? "类型" : "Type"}：${summary.typeLabel}`,
+    `${zh ? "状态" : "Status"}：${t(`coach.agent_action_status_${action.status || "proposed"}`)}`,
+    summary.meta ? `${zh ? "摘要" : "Summary"}：${summary.meta}` : "",
+    action.reason ? `${zh ? "原始原因" : "Original reason"}：${action.reason}` : "",
+    action.error ? `${zh ? "错误" : "Error"}：${action.error}` : "",
+  ].filter(Boolean);
+  if (plans.length) {
+    lines.push("", zh ? "动作内容：" : "Action items:");
+    plans.slice(0, 10).forEach(plan => lines.push(`- ${formatPlanActionBrief(plan, t)}`));
+  }
+  if (changes.length) {
+    lines.push("", zh ? "执行后的修改：" : "Applied changes:");
+    changes.slice(0, 10).forEach(change => {
+      lines.push(`- ${formatPlanActionBrief(change.before, t)} -> ${formatPlanActionBrief(change.after, t)}`);
+    });
+  }
+  const resultBits = [];
+  const createdCount = Number(action.result?.createdWorkoutCount || action.result?.createdCount || 0);
+  const updatedCount = Number(action.result?.updatedPlanCount || changes.length || 0);
+  const restDates = Array.isArray(action.result?.plannedRestDates) ? action.result.plannedRestDates : [];
+  const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
+  if (createdCount > 0) resultBits.push(zh ? `创建计划 ${createdCount} 条` : `created ${createdCount} planned item(s)`);
+  if (updatedCount > 0) resultBits.push(zh ? `修改计划 ${updatedCount} 条` : `updated ${updatedCount} existing plan(s)`);
+  if (restDates.length) resultBits.push(zh ? `计划休息日：${restDates.join(", ")}` : `planned rest: ${restDates.join(", ")}`);
+  if (savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
+  if (resultBits.length) lines.push("", `${zh ? "执行结果" : "Execution result"}：${resultBits.join(zh ? "；" : "; ")}`);
+  lines.push("", zh
+    ? "请告诉我：这条动作是否合理？接下来我应该继续、调整，还是撤回/手动修正？如果需要调整，请给出明确建议。"
+    : "Tell me whether this action was reasonable. Should I continue, adjust, or undo/manual-fix something next? If adjustment is needed, give a concrete recommendation.");
+  return lines.join("\n");
 }
 
 function summarizeAgentAction(action, t) {

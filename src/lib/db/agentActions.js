@@ -95,3 +95,19 @@ export async function upsertAction(action) {
   }
   return fromRow(data);
 }
+
+export async function deleteAction(action) {
+  if (!action?.id && !action?.rowId) throw new Error('deleteAction: action id is required');
+  const userId = await getCurrentUserId();
+  const query = supabase
+    .from('agent_actions')
+    .delete()
+    .eq('user_id', userId);
+  const { error } = action.rowId
+    ? await query.eq('id', action.rowId)
+    : await query.eq('client_id', action.id);
+  if (error) {
+    console.error('deleteAction failed:', error);
+    throw new Error(error.message);
+  }
+}

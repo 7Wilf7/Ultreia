@@ -178,6 +178,7 @@ proposed -> cancelled
 - 最近 10 条动作只读展示：动作类型、状态、来源、涉及日期 / 数量、失败原因。
 - 点击单条可展开查看可读动作摘要和执行结果；修改已有计划时显示 before / after 摘要，不再直接展示内部 JSON。
 - action log 写库仍是 best-effort，但前端会先合并到当前列表，保证 PWA 不需要刷新就能看到最新提议 / 接受 / 执行 / 忽略状态。
+- 用户可在 Recent Agent Actions 长按删除某条 action log，用于清理测试 Action Card；删除只清理 action 记录和消息按钮状态，不回滚已经执行的数据变更。
 - 这一步只解决可审计性，不扩展新的 Action Card 类型。
 
 第五步接入：

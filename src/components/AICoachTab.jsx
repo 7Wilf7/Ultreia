@@ -14,6 +14,7 @@ import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRestPlanItem,
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
+import { ItemActionModal } from "./ItemActionModal";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -217,7 +218,7 @@ export function AICoachTab({
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
   chatLoading, chatInput, setChatInput, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
-  agentActions = [],
+  agentActions = [], onDeleteAgentAction,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -688,7 +689,7 @@ export function AICoachTab({
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.recent_agent_actions")}</h2>
                 <button onClick={() => setShowAgentActions(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
-              <RecentAgentActions actions={agentActions} t={t} />
+              <RecentAgentActions actions={agentActions} t={t} onDelete={onDeleteAgentAction} />
             </div>
           </div>
         </ModalRoot>
@@ -1531,7 +1532,7 @@ export function AICoachTab({
                   )}
 
                   {coachHubTab === "actions" && (
-                    <RecentAgentActions actions={agentActions} t={t} />
+                    <RecentAgentActions actions={agentActions} t={t} onDelete={onDeleteAgentAction} />
                   )}
 
                   {coachHubTab === "memory" && (
@@ -1657,7 +1658,7 @@ function MemoryActionStatus({ action, t }) {
   );
 }
 
-function RecentAgentActions({ actions = [], t }) {
+function RecentAgentActions({ actions = [], t, onDelete }) {
   const recent = useMemo(() => {
     return [...(actions || [])]
       .filter(Boolean)
@@ -1665,6 +1666,23 @@ function RecentAgentActions({ actions = [], t }) {
       .slice(0, 10);
   }, [actions]);
   const [openId, setOpenId] = useState(null);
+  const [actionTarget, setActionTarget] = useState(null);
+  const pressTimer = useRef(null);
+  const longPressFired = useRef(false);
+  function startPress(action) {
+    if (!onDelete) return;
+    longPressFired.current = false;
+    pressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      setActionTarget(action);
+    }, 450);
+  }
+  function endPress() {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  }
 
   if (!recent.length) {
     return (
@@ -1695,12 +1713,21 @@ function RecentAgentActions({ actions = [], t }) {
               background: "var(--bg-elevated)",
               overflow: "hidden",
             }}>
-              <button type="button" onClick={() => setOpenId(open ? null : id)} style={{
+              <button type="button" onClick={() => {
+                if (longPressFired.current) { longPressFired.current = false; return; }
+                setOpenId(open ? null : id);
+              }} style={{
                 width: "100%", border: "none", background: "transparent",
                 display: "grid", gridTemplateColumns: "1fr auto", gap: 10,
                 textAlign: "left", padding: "11px 12px", cursor: "pointer",
                 fontFamily: "var(--font-sans)", color: "var(--ink-1)",
-              }}>
+                WebkitTouchCallout: "none",
+              }}
+                onPointerDown={() => startPress(action)}
+                onPointerUp={endPress}
+                onPointerCancel={endPress}
+                onPointerLeave={endPress}
+                onContextMenu={e => e.preventDefault()}>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 13, fontWeight: 650, marginBottom: 4 }}>
                     {summary.typeLabel}
@@ -1732,6 +1759,17 @@ function RecentAgentActions({ actions = [], t }) {
           );
         })}
       </div>
+      {actionTarget && (
+        <ItemActionModal
+          title={summarizeAgentAction(actionTarget, t).typeLabel}
+          onDelete={() => {
+            const target = actionTarget;
+            setActionTarget(null);
+            onDelete?.(target);
+          }}
+          onClose={() => setActionTarget(null)}
+        />
+      )}
     </div>
   );
 }

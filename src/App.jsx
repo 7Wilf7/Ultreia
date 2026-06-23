@@ -142,6 +142,12 @@ function mergeAgentActionList(actions = [], action) {
   return next.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 }
 
+function removeAgentActionFromList(actions = [], action) {
+  if (!action?.id && !action?.rowId) return actions || [];
+  const keys = new Set([action.id, action.rowId].filter(Boolean));
+  return (actions || []).filter(a => !keys.has(a?.id) && !keys.has(a?.rowId));
+}
+
 function compactPlanSnapshot(plan) {
   if (!plan || typeof plan !== "object") return null;
   const startedAt = plan.startedAt || plan.started_at || "";
@@ -1311,6 +1317,35 @@ function AppShell({
         console.warn("[agent_actions] save failed:", err);
       });
   }
+  async function deleteAgentAction(action) {
+    if (!action?.id && !action?.rowId) return;
+    setAgentActions(prev => removeAgentActionFromList(prev, action));
+    if (action.sourceMessageId) {
+      setPlanImportCache(prev => {
+        if (!prev[action.sourceMessageId]) return prev;
+        const next = { ...prev };
+        delete next[action.sourceMessageId];
+        return next;
+      });
+    }
+    try {
+      await db.agentActions.deleteAction(action);
+    } catch (err) {
+      console.warn("[agent_actions] delete failed:", err);
+      setAgentActions(prev => mergeAgentActionList(prev, action));
+      if (action.sourceMessageId) {
+        setPlanImportCache(prev => ({
+          ...prev,
+          [action.sourceMessageId]: {
+            ...(prev[action.sourceMessageId] || {}),
+            plans: Array.isArray(action.payload?.plans) ? action.payload.plans : [],
+            action,
+          },
+        }));
+      }
+      window.alert(t("coach.agent_action_delete_failed", { msg: err?.message || String(err) }));
+    }
+  }
   function updatePlanImportAction(msgId, transform) {
     if (!msgId || typeof transform !== "function") return;
     setPlanImportCache(prev => {
@@ -2193,6 +2228,7 @@ Rules:
           sendChat={sendChat}
           importToCalendar={importToCalendar}
           agentActions={agentActions}
+          onDeleteAgentAction={deleteAgentAction}
           onStopChat={stopCoachChat}
           onStopExtraction={stopPlanExtraction}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}

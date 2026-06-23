@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendCoachMessageMeta, messageContentForCoach, normalizeTokenUsage, parseCoachMessageMeta } from "./coachPrompt";
+import { appendCoachMessageMeta, buildAgentActionsBlock, messageContentForCoach, normalizeTokenUsage, parseCoachMessageMeta } from "./coachPrompt";
 
 describe("coach message metadata helpers", () => {
   it("appends and parses hidden message metadata", () => {
@@ -45,5 +45,42 @@ describe("normalizeTokenUsage", () => {
   it("returns null for empty or non-numeric usage", () => {
     expect(normalizeTokenUsage(null)).toBeNull();
     expect(normalizeTokenUsage({ input_tokens: "nope" })).toBeNull();
+  });
+});
+
+describe("buildAgentActionsBlock", () => {
+  it("summarizes recent action outcomes for coach feedback", () => {
+    const block = buildAgentActionsBlock([
+      {
+        type: "create_plans",
+        status: "executed",
+        updatedAt: "2026-06-23T10:00:00Z",
+        payload: { plans: [{ date: "2026-06-24" }, { date: "2026-06-25" }] },
+        result: { createdWorkoutCount: 2, plannedRestDates: ["2026-06-25"] },
+      },
+      {
+        type: "memory_update",
+        status: "rejected",
+        updatedAt: "2026-06-22T10:00:00Z",
+      },
+    ]);
+
+    expect(block).toContain("create plans");
+    expect(block).toContain("status=executed");
+    expect(block).toContain("dates=2026-06-24,2026-06-25");
+    expect(block).toContain("created=2");
+    expect(block).toContain("rest=2026-06-25");
+    expect(block).toContain("memory update");
+    expect(block).toContain("status=rejected");
+  });
+
+  it("limits action feedback lines", () => {
+    const actions = Array.from({ length: 8 }, (_, idx) => ({
+      type: "create_plans",
+      status: "executed",
+      updatedAt: `2026-06-${String(idx + 1).padStart(2, "0")}T10:00:00Z`,
+    }));
+
+    expect(buildAgentActionsBlock(actions, 3).split("\n")).toHaveLength(3);
   });
 });

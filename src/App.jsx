@@ -2114,6 +2114,7 @@ Rules:
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}
+          agentActions={agentActions}
           onStopChat={stopCoachChat}
           onStopExtraction={stopPlanExtraction}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}

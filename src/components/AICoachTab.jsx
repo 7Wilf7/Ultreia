@@ -217,6 +217,7 @@ export function AICoachTab({
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
   chatLoading, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  agentActions = [],
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -239,6 +240,7 @@ export function AICoachTab({
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
+  const [showAgentActions, setShowAgentActions] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   // Preview language is independent of UI language — defaults to UI language
   // but the user can flip it to read the prompt in the other language.
@@ -670,6 +672,20 @@ export function AICoachTab({
                   {t("coach.calendar_btn_off")}
                 </button>
               </div>
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
+      {showAgentActions && (
+        <ModalRoot onClose={() => setShowAgentActions(false)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowAgentActions(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={s.modalCard(isMobile, { maxWidth: 620 })}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.recent_agent_actions")}</h2>
+                <button onClick={() => setShowAgentActions(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <RecentAgentActions actions={agentActions} t={t} />
             </div>
           </div>
         </ModalRoot>
@@ -1339,6 +1355,10 @@ export function AICoachTab({
                 {sub(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
                 {sub(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), !!coachMemory)}
 
+                {/* Agent group */}
+                {groupHeader(t("coach.group_agent"))}
+                {sub(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)), agentActions.length > 0)}
+
                 {/* Chat group */}
                 {groupHeader(t("coach.group_chat"))}
                 {sub(t("coach.calendar_btn_label"), () => openSub(() => setShowCalendarSettings(true)))}
@@ -1403,6 +1423,7 @@ export function AICoachTab({
                     ] },
                     { header: t("coach.group_chat"), items: [
                       { id: "calendar", label: t("coach.calendar_btn_label") },
+                      { id: "actions", label: t("coach.recent_agent_actions") },
                       { id: "clear",    label: t("coach.clear_chat") },
                     ] },
                   ].map((group, gi) => (
@@ -1504,6 +1525,10 @@ export function AICoachTab({
                         </button>
                       </div>
                     </div>
+                  )}
+
+                  {coachHubTab === "actions" && (
+                    <RecentAgentActions actions={agentActions} t={t} />
                   )}
 
                   {coachHubTab === "memory" && (
@@ -1627,6 +1652,192 @@ function MemoryActionStatus({ action, t }) {
       {isExecuted ? t("coach.memory_action_executed") : t("coach.memory_action_rejected")}
     </div>
   );
+}
+
+function RecentAgentActions({ actions = [], t }) {
+  const recent = useMemo(() => {
+    return [...(actions || [])]
+      .filter(Boolean)
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .slice(0, 10);
+  }, [actions]);
+  const [openId, setOpenId] = useState(null);
+
+  if (!recent.length) {
+    return (
+      <div style={{
+        border: "1px solid var(--rule)", borderRadius: 6,
+        padding: "16px 14px", color: "var(--ink-3)", fontSize: 13,
+        background: "var(--bg-elevated)", lineHeight: 1.55,
+      }}>
+        {t("coach.agent_actions_empty")}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ ...s.muted, lineHeight: 1.55, margin: "0 0 12px" }}>
+        {t("coach.agent_actions_hint")}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {recent.map(action => {
+          const id = action.id || action.rowId || `${action.type}-${action.createdAt}`;
+          const open = openId === id;
+          const summary = summarizeAgentAction(action, t);
+          return (
+            <div key={id} style={{
+              border: "1px solid var(--rule)",
+              borderRadius: 6,
+              background: "var(--bg-elevated)",
+              overflow: "hidden",
+            }}>
+              <button type="button" onClick={() => setOpenId(open ? null : id)} style={{
+                width: "100%", border: "none", background: "transparent",
+                display: "grid", gridTemplateColumns: "1fr auto", gap: 10,
+                textAlign: "left", padding: "11px 12px", cursor: "pointer",
+                fontFamily: "var(--font-sans)", color: "var(--ink-1)",
+              }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 650, marginBottom: 4 }}>
+                    {summary.typeLabel}
+                  </span>
+                  <span style={{ display: "block", fontSize: 12, color: "var(--ink-2)", lineHeight: 1.45 }}>
+                    {summary.meta}
+                  </span>
+                  {summary.error && (
+                    <span style={{ display: "block", fontSize: 11.5, color: "var(--danger)", lineHeight: 1.45, marginTop: 3 }}>
+                      {summary.error}
+                    </span>
+                  )}
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <StatusPill status={action.status} t={t} />
+                  <span style={{ color: "var(--ink-3)", fontSize: 14 }}>{open ? "⌃" : "⌄"}</span>
+                </span>
+              </button>
+              {open && (
+                <div style={{
+                  borderTop: "1px solid var(--rule-soft)",
+                  padding: "10px 12px 12px",
+                  display: "grid", gap: 8,
+                }}>
+                  <ActionJsonBlock label={t("coach.agent_actions_payload")} value={compactActionObject(action.payload)} />
+                  <ActionJsonBlock label={t("coach.agent_actions_result")} value={compactActionObject(action.result)} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status, t }) {
+  const tone = status === "executed" ? "ok"
+    : status === "failed" ? "bad"
+      : status === "rejected" || status === "cancelled" ? "muted"
+        : "pending";
+  const style = {
+    ok: { borderColor: "var(--moss)", color: "var(--moss-deep)", background: "var(--moss-bg)" },
+    bad: { borderColor: "rgba(192,57,43,0.35)", color: "var(--danger)", background: "rgba(192,57,43,0.08)" },
+    muted: { borderColor: "var(--rule)", color: "var(--ink-3)", background: "var(--paper-2)" },
+    pending: { borderColor: "var(--rule)", color: "var(--ink-2)", background: "var(--paper)" },
+  }[tone];
+  return (
+    <span style={{
+      ...style,
+      border: "1px solid",
+      borderRadius: 999,
+      padding: "3px 7px",
+      fontSize: 11,
+      lineHeight: 1,
+      whiteSpace: "nowrap",
+    }}>
+      {t(`coach.agent_action_status_${status || "proposed"}`)}
+    </span>
+  );
+}
+
+function ActionJsonBlock({ label, value }) {
+  return (
+    <div>
+      <div style={{ ...s.label, fontSize: 10, marginBottom: 4 }}>{label}</div>
+      <pre style={{
+        margin: 0,
+        border: "1px solid var(--rule-soft)",
+        borderRadius: 4,
+        background: "var(--paper-2)",
+        color: "var(--ink-2)",
+        padding: "8px 9px",
+        fontFamily: "var(--font-mono)",
+        fontSize: 11,
+        lineHeight: 1.45,
+        whiteSpace: "pre-wrap",
+        maxHeight: 170,
+        overflowY: "auto",
+      }}>
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    </div>
+  );
+}
+
+function compactActionObject(value) {
+  if (!value || typeof value !== "object") return {};
+  if (Array.isArray(value)) return value.slice(0, 10);
+  const out = {};
+  for (const [key, raw] of Object.entries(value)) {
+    if (Array.isArray(raw)) out[key] = raw.slice(0, 10);
+    else if (raw && typeof raw === "object") out[key] = raw;
+    else if (raw !== undefined && raw !== null && raw !== "") out[key] = raw;
+  }
+  return out;
+}
+
+function summarizeAgentAction(action, t) {
+  const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
+  const affectedDates = Array.isArray(action.payload?.affectedDates)
+    ? action.payload.affectedDates
+    : [...new Set(plans.map(p => p?.date).filter(Boolean))].sort();
+  const createdCount = Number(action.result?.createdWorkoutCount ?? action.result?.createdCount ?? 0);
+  const memory = action.payload?.memory && typeof action.payload.memory === "object" ? action.payload.memory : null;
+  const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
+
+  const typeLabel = action.type === "create_plans"
+    ? t("coach.agent_action_type_create_plans")
+    : action.type === "memory_update"
+      ? t("coach.agent_action_type_memory_update")
+      : (action.title || action.type || t("coach.agent_action_type_unknown"));
+  const sourceLabel = action.sourceReportId || action.source === "weekly_report"
+    ? t("coach.agent_action_source_report")
+    : t("coach.agent_action_source_coach");
+  const detail = action.type === "create_plans"
+    ? t("coach.agent_action_plan_detail", {
+        dates: affectedDates.length ? affectedDates.slice(0, 4).join(", ") : "-",
+        count: plans.length || createdCount || 0,
+      })
+    : action.type === "memory_update"
+      ? t("coach.agent_action_memory_detail", {
+          count: savedLanguages.length || [memory?.en, memory?.zh].filter(v => String(v || "").trim()).length || 0,
+        })
+      : "";
+  const when = formatActionTime(action.createdAt);
+  const meta = [sourceLabel, detail, when].filter(Boolean).join(" · ");
+  const error = action.error ? t("coach.agent_action_error", { msg: action.error }) : "";
+  return { typeLabel, meta, error };
+}
+
+function formatActionTime(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 16);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${mm}-${dd} ${hh}:${mi}`;
 }
 
 function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, onReject, t }) {

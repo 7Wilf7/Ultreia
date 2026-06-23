@@ -30,7 +30,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
-| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、记录执行结果，并反哺 AI Coach / 周复盘上下文 |
+| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
@@ -171,6 +171,13 @@ proposed -> cancelled
 - Prompt 里只放轻量摘要：动作类型、状态、涉及日期、创建数量、计划休息日期、Memory 保存语言和错误摘要。
 - 目的不是让 AI 自动执行，而是让 Coach 把用户的接受 / 忽略 / 失败当作反馈，避免反复提出不被采纳的方向。
 
+第四步接入：
+
+- AI Coach 设置里新增轻量 `Recent Agent Actions`。
+- 最近 10 条动作只读展示：动作类型、状态、来源、涉及日期 / 数量、失败原因。
+- 点击单条可展开查看 `payload` / `result` 摘要，先不做编辑、重试或全局 action center。
+- 这一步只解决可审计性，不扩展新的 Action Card 类型。
+
 ## Phase 4：Memory Facts 结构化
 
 目标：让长期记忆从“分区文本”升级为“事实系统”。
@@ -278,3 +285,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-23：Phase 3 第一版接入前端：新增 `agentActions` DAL；计划导入和 Memory 更新动作会写入账号 action log；启动时读取 `create_plans` 动作恢复 AI Coach 按钮状态。
 - 2026-06-23：Phase 3 第二步：计划导入 Action Card 接受后先记 `accepted`，后台保存成功再记 `executed/result`，失败记 `failed/error`；Memory 更新接受时记录保存结果摘要。
 - 2026-06-23：Phase 3 第三步：AI Coach 对话和 AI 周复盘开始读取最近 Action Card 结果，把接受 / 忽略 / 失败作为后续建议的反馈上下文。
+- 2026-06-23：Phase 3 第四步：AI Coach 设置新增 `Recent Agent Actions` 轻量只读入口，最近 10 条动作可展开查看 payload/result 摘要，先补可审计性，不新增动作类型。

@@ -2,12 +2,20 @@ import { describe, expect, it } from "vitest";
 import { evaluatePlanOutcome, PLAN_DONE_RATIO } from "./planMatch";
 
 describe("evaluatePlanOutcome", () => {
-  it("uses explicit plan status before matching activities", () => {
+  it("uses explicit done status before matching activities", () => {
+    expect(evaluatePlanOutcome(
+      { isPlanned: true, planStatus: "done", type: "Road Run", distance: 10 },
+      [],
+      { isPast: true },
+    )).toEqual({ outcome: "done", ratio: null });
+  });
+
+  it("ignores legacy skipped status and falls back to matching", () => {
     expect(evaluatePlanOutcome(
       { isPlanned: true, planStatus: "skipped", type: "Road Run", distance: 10 },
-      [{ type: "Road Run", distance: 10 }],
+      [],
       { isPast: true },
-    )).toEqual({ outcome: "skipped", ratio: null });
+    )).toEqual({ outcome: "missed", ratio: null });
   });
 
   it("marks a distance plan done when same-type completed distance reaches the threshold", () => {

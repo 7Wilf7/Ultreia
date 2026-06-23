@@ -82,7 +82,7 @@ export const DATA_LABELS = {
     readiness: "[Morning Readiness — runner self-rated, 1=poor 2=ok 3=good]",
     recent: "[Recent Activities (last 10) — RPE=1–10 effort; note=runner's comment; weather=at training time]",
     dayNotes: "[Day Notes — recovery/context flags]",
-    adherence: "[Plan Adherence — last 14d, planned vs done/missed/skipped]",
+    adherence: "[Plan Adherence — last 14d, planned vs done/partial/missed]",
     upcoming: "[Planned Sessions — today/future only; planned means scheduled, NOT completed; forecast attached when within 7d]",
     focus: "[Coaching Focus This Message — conditions that fired right now; weight these in your reply]",
     none: "None",
@@ -100,7 +100,7 @@ export const DATA_LABELS = {
     readiness: "[晨间状态 —— 跑者自评，1=差 2=一般 3=好]",
     recent: "[近期活动（最近 10 条）—— RPE=1–10 自觉用力；note=跑者备注；weather=训练当时天气]",
     dayNotes: "[当日标记 —— 恢复/状态标记]",
-    adherence: "[计划依从 —— 近 14 天，计划 vs 完成/漏掉/主动跳过]",
+    adherence: "[计划依从 —— 近 14 天，计划 vs 完成/部分完成/漏掉]",
     upcoming: "[计划训练 —— 仅今天/未来；planned 表示已安排，不代表已完成；7 天内附当天预报]",
     focus: "[本次教练重点 —— 当前触发的条件，回复时重点权衡这些]",
     none: "无",
@@ -355,7 +355,6 @@ export function buildWeeklyTrend(logs, now, weeks = 8) {
 // NOT the conversation, so it survives a chat clear. Each plan is matched to the
 // SAME-TYPE completed workouts on its date and the planned target compared to
 // what was done (see evaluatePlanOutcome). A plan counts as:
-//   • skipped  — user explicitly marked it skipped (intentional rest; not a miss)
 //   • done     — marked done, OR a same-type session met ≥80% of the target
 //   • partial  — a same-type session happened but fell short of the target
 //   • missed   — past, no same-type completed workout that day
@@ -372,12 +371,11 @@ function buildPlanAdherence(logs, now) {
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
   if (!planned.length) return null;
 
-  let done = 0, partial = 0, missed = 0, skipped = 0;
+  let done = 0, partial = 0, missed = 0;
   const lines = planned.map(p => {
     const dayLogs = logs.filter(l => l.date === p.date);
     const { outcome } = evaluatePlanOutcome(p, dayLogs, { isPast: true });
-    if (outcome === "skipped") skipped++;
-    else if (outcome === "done") done++;
+    if (outcome === "done") done++;
     else if (outcome === "partial") partial++;
     else missed++;
     const metric = p.distance > 0 ? ` ${p.distance}km`
@@ -388,10 +386,8 @@ function buildPlanAdherence(logs, now) {
     return `${p.date} planned ${desc} → ${outcome}`;
   });
   const denom = done + partial + missed;
-  const extras = [partial ? `${partial} partial` : "", skipped ? `${skipped} skipped` : ""].filter(Boolean).join(", ");
-  const ratio = denom > 0
-    ? `completed ${done}/${denom}${extras ? ` (+${extras})` : ""}`
-    : `${skipped} planned, all intentionally skipped`;
+  const extras = [partial ? `${partial} partial` : ""].filter(Boolean).join(", ");
+  const ratio = `completed ${done}/${denom}${extras ? ` (+${extras})` : ""}`;
   return { body: `${ratio}\n${lines.join("\n")}`, missed };
 }
 
@@ -647,8 +643,8 @@ export function buildPromptSkeleton(lang = "en") {
       "【训练负荷】sRPE 急性:慢性 + ACWR 骤增风险",
       "【晨间状态】最近几天的自评",
       "【最近 10 条训练】含 RPE / 备注 / 当时天气",
-      "【最近当日标记】放松休息 / 按摩 / 拉伸 / 生病",
-      "【计划依从】近 14 天计划 vs 完成 / 漏 / 跳过",
+      "【最近当日标记】计划休息 / 按摩 / 拉伸 / 生病",
+      "【计划依从】近 14 天计划 vs 完成 / 部分完成 / 漏掉",
       "【未来约 21 天计划训练】（含当天预报，若有）",
       "【本次教练重点】按当前情况触发的周期 / 热适应 / 负荷 / 漏练提醒",
     ].join("\n");
@@ -670,7 +666,7 @@ export function buildPromptSkeleton(lang = "en") {
     "[Morning Readiness — recent self-ratings]",
     "[Recent Activities (last 10)] with RPE / notes / weather",
     "[Recent Day Notes] recovery / sick / mobility",
-    "[Plan Adherence — last 14d planned vs done/missed/skipped]",
+    "[Plan Adherence — last 14d planned vs done/partial/missed]",
     "[Planned Sessions — today/future only; planned means scheduled, not completed]",
     "[Coaching Focus — periodization / heat / load / missed-session cues that fired]",
   ].join("\n");

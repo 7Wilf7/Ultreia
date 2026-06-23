@@ -81,16 +81,6 @@ function extractTable(tableNode) {
   return { headers, rows };
 }
 
-function formatTokenBreakdown(t, usage) {
-  if (!usage) return "";
-  const parts = [];
-  if (usage.inputCacheHitTokens > 0) parts.push(t("coach.cost_cache_hit", { tokens: String(usage.inputCacheHitTokens) }));
-  if (usage.inputCacheMissTokens > 0) parts.push(t("coach.cost_cache_miss", { tokens: String(usage.inputCacheMissTokens) }));
-  if (usage.inputCacheWriteTokens > 0) parts.push(t("coach.cost_cache_write", { tokens: String(usage.inputCacheWriteTokens) }));
-  if (usage.outputTokens > 0) parts.push(t("coach.cost_output", { tokens: String(usage.outputTokens) }));
-  return parts.length ? ` (${parts.join(" · ")})` : "";
-}
-
 // Mobile fallback for wide markdown tables. A 7-column weekly-plan table is
 // painful to read via horizontal scroll inside a small chat bubble; instead
 // each row becomes a stacked card, with the first cell as the card title
@@ -991,8 +981,6 @@ export function AICoachTab({
                 const displayContent = parsedMessage.text;
                 const hasDisplayContent = String(displayContent || "").trim().length > 0;
                 if (!isUser && m.isStreaming && !hasDisplayContent) return null;
-                const costMeta = parsedMessage.meta;
-                const usage = costMeta?.usage;
                 const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton !== false;
                 const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
                 const extracting = extractingForMsgId === m.id;
@@ -1070,22 +1058,6 @@ export function AICoachTab({
                         {displayContent}
                       </ReactMarkdown>
                     </div>
-
-                    {!isUser && usage && (
-                      <div style={{
-                        color: "var(--ink-3)",
-                        fontSize: 11,
-                        lineHeight: 1.3,
-                        fontFamily: "var(--font-mono)",
-                        paddingLeft: 2,
-                      }}>
-                        {t("coach.cost_wallet", {
-                          provider: costMeta.provider || "AI",
-                          tokens: String(usage.totalTokens || 0),
-                          amount: `¥${(Number(costMeta.walletChargeCents || 0) / 100).toFixed(2)}`,
-                        })}{formatTokenBreakdown(t, usage)}
-                      </div>
-                    )}
 
                     {/* Calendar import affordance — text button below the bubble.
                         Gated by the showCalendarButton coach setting (default ON).

@@ -7,7 +7,8 @@
 //   • HIIT / metric-less plans                          → any same-type session = done
 // Over-achievement counts as done (planned 5 km, ran 8 km → done). A same-type
 // session that falls short is "partial"; no same-type session at all is "missed"
-// (past) or "pending" (today/future). An explicit planStatus always wins.
+// (past) or "pending" (today/future). Explicit "done" still wins; legacy
+// "skipped" values are intentionally ignored and fall back to matching.
 //
 // Shared by the Calendar day modal (per-row badge) and the AI Coach prompt's
 // plan-adherence block so the app and the coach agree on what "done" means.
@@ -30,11 +31,10 @@ function planTarget(plan) {
 //   dayLogs  — ALL logs on that date (planned + completed); we filter internally
 //   isPast   — whether the date is strictly before today
 // Returns { outcome, ratio }:
-//   outcome: 'skipped' | 'done' | 'partial' | 'missed' | 'pending' | null
+//   outcome: 'done' | 'partial' | 'missed' | 'pending' | null
 //   ratio:   actual/target when a quantitative compare happened, else null
 export function evaluatePlanOutcome(plan, dayLogs, { isPast } = {}) {
   if (!plan?.isPlanned) return { outcome: null, ratio: null };
-  if (plan.planStatus === "skipped") return { outcome: "skipped", ratio: null };
   if (plan.planStatus === "done") return { outcome: "done", ratio: null };
 
   const sameType = (dayLogs || []).filter(l => !l.isPlanned && l.type === plan.type);

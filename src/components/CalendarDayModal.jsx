@@ -418,19 +418,17 @@ export function CalendarDayModal({
                       const miniBtn = (txt, onClick) => (
                         <button onClick={onClick} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11 }}>{txt}</button>
                       );
-                      // missed + partial both get the resolve buttons (the
-                      // runner can confirm a partial counts as done, or mark it
-                      // skipped). done/skipped show an undo.
+                      // missed + partial can be manually accepted as done.
+                      // Explicit done shows an undo; "skip" is no longer a
+                      // separate status because it overlapped with missed.
                       const resolvable = outcome === "missed" || outcome === "partial";
                       return (
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
                           {outcome === "done" && badge("var(--moss)", `✓ ${t("calendar.plan_done")}`)}
                           {outcome === "partial" && badge("#b07a3e", t("calendar.plan_partial"))}
-                          {outcome === "skipped" && badge("var(--ink-3)", t("calendar.plan_skipped"))}
                           {outcome === "missed" && badge("#b07a3e", t("calendar.plan_missed"))}
                           {resolvable && miniBtn(`✓ ${t("calendar.plan_mark_done")}`, () => setPlanStatus(l.id, "done"))}
-                          {resolvable && miniBtn(t("calendar.plan_mark_skip"), () => setPlanStatus(l.id, "skipped"))}
-                          {(l.planStatus === "done" || l.planStatus === "skipped") && miniBtn(t("calendar.plan_reset"), () => setPlanStatus(l.id, "pending"))}
+                          {l.planStatus === "done" && miniBtn(t("calendar.plan_reset"), () => setPlanStatus(l.id, "pending"))}
                         </div>
                       );
                     })()}

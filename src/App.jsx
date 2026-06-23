@@ -335,8 +335,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   //    + dailyNotes (Calendar day-level tags, e.g. ['massage'])
   const [logs, setLogs] = useState([]);
   // Per-workout write sequence — lets a background save ignore its own result
-  // when a newer optimistic write has already landed (e.g. mark skipped then
-  // immediately undo: the slower skipped response must not clobber pending).
+  // when a newer optimistic write has already landed (e.g. mark done then
+  // immediately undo: the slower done response must not clobber pending).
   const logWriteSeqRef = useRef(new Map());
   const [races, setRaces] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);

@@ -129,7 +129,7 @@ export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemor
     `1. Use clear section headings. Long output is OK; do not compress important points.\n` +
     `2. First give an executive summary: what went well, what is risky, what needs to change.\n` +
     `3. Then review EACH completed workout one by one. For every workout, mention date/type/key metrics, what the session likely achieved, whether intensity was appropriate, and one concrete lesson.\n` +
-    `4. Compare completed work against planned work when possible. Point out skipped strength or missed key sessions.\n` +
+    `4. Compare completed work against planned work when possible. Point out missed or under-completed key sessions.\n` +
     `5. Interpret fatigue/readiness/RPE/HR in context. Avoid generic motivational text.\n` +
     `6. Give a detailed next 7-day training plan for ${range.nextStart} to ${range.nextEnd}. Include exact dates, workout type, distance/ascent/duration where applicable, intensity target, and purpose. Include rest days explicitly when needed.\n` +
     `7. If a plan should replace existing next-week plans, say why.\n` +

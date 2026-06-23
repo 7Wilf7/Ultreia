@@ -17,7 +17,7 @@ const FIELD_MAP = {
   note:       'note',          // text — optional free-text note ("new shoes", "knee tight")
   rpe:        'rpe',           // smallint 1–10 — optional session RPE (perceived exertion)
   isPlanned:  'is_planned',    // boolean — future plan (true) vs completed (false)
-  planStatus: 'plan_status',   // text 'pending'|'done'|'skipped' (planned rows only; null=pending)
+  planStatus: 'plan_status',   // text 'pending'|'done' (planned rows only; legacy 'skipped' is ignored)
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
   startedAt:  'started_at',    // timestamptz — when the activity actually started; null = unknown
   weather:    'weather',       // jsonb — snapshot from src/lib/weather.js (tempC, apparentC, humidity, skycon, ...)

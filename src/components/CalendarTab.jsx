@@ -3,7 +3,7 @@ import { s } from "../styles";
 import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAGS, DAILY_TAG_ICONS } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { CalendarDayModal } from "./CalendarDayModal";
+import { CalendarDayModal, todRank } from "./CalendarDayModal";
 import { skyconMeta } from "../lib/weather";
 import { startedAtToTimeOfDay } from "../utils/format";
 
@@ -648,6 +648,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   const hasCompleted = logs.some(l => !l.isPlanned);
   const foldPlans = cellPast || (isToday && hasCompleted);
   const visibleLogs = foldPlans ? logs.filter(l => !l.isPlanned) : logs;
+  const orderedVisibleLogs = [...visibleLogs].sort((a, b) => todRank(a) - todRank(b));
   const hiddenPlanCount = logs.length - visibleLogs.length;
   const hasContent = visibleLogs.length > 0;
 
@@ -712,7 +713,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
               // Past PLANNED bars recede (auto-archive) so an old, unfulfilled
               // plan stops cluttering the grid — the user no longer needs to
               // delete it. Completed bars and future plans render at full strength.
-              return visibleLogs.slice(0, 3).map(l => {
+              return orderedVisibleLogs.slice(0, 3).map(l => {
                 const c = TYPE_COLOR[l.type] || "#57564f";
                 return (
                   <span key={l.id} style={{
@@ -727,11 +728,11 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
                 );
               });
             })()}
-            {visibleLogs.length > 3 && (
+            {orderedVisibleLogs.length > 3 && (
               <span style={{
                 fontSize: 8, color: "var(--ink-3)",
                 fontFamily: "var(--font-mono)", lineHeight: 1,
-              }}>+{visibleLogs.length - 3}</span>
+              }}>+{orderedVisibleLogs.length - 3}</span>
             )}
           </div>
         )}
@@ -808,7 +809,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
 
       {/* Workouts */}
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {visibleLogs.map(l => <LogPill key={l.id} log={l} t={t} />)}
+        {orderedVisibleLogs.map(l => <LogPill key={l.id} log={l} t={t} />)}
       </div>
 
       {/* Rest placeholder — past/today + no activity at all */}

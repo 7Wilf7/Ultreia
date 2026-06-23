@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
-import { TimeWheelModal } from "./WheelPicker";
+import { SingleWheelModal, TimeWheelModal } from "./WheelPicker";
 
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -25,7 +25,9 @@ export function WeeklyReportSettingsModal({
   const [weekday, setWeekday] = useState(cleanWeekday(initial.weekday));
   const [time, setTime] = useState(cleanTime(initial.time));
   const [afterSundayImport, setAfterSundayImport] = useState(initial.afterSundayImport !== false);
+  const [weekdayPickerOpen, setWeekdayPickerOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const weekdayOptions = WEEKDAYS.map(day => ({ value: day, label: t(`weekly_settings.day_${day}`) }));
 
   function save() {
     setWeeklyReportSettings({
@@ -62,18 +64,13 @@ export function WeeklyReportSettingsModal({
           <div style={{ opacity: enabled ? 1 : 0.45, pointerEvents: enabled ? "auto" : "none" }}>
             <div style={{ ...s.label, marginTop: 16 }}>{t("weekly_settings.schedule")}</div>
             <div style={s.scheduleGrid}>
-              <select
-                value={weekday}
-                onChange={e => setWeekday(cleanWeekday(e.target.value))}
-                style={s.select}
-              >
-                {WEEKDAYS.map(day => (
-                  <option key={day} value={day}>{t(`weekly_settings.day_${day}`)}</option>
-                ))}
-              </select>
-              <button type="button" onClick={() => setTimePickerOpen(true)} style={s.timeButton}>
+              <button type="button" onClick={() => setWeekdayPickerOpen(true)} style={s.scheduleButton}>
+                <span style={s.weekdayValue}>{t(`weekly_settings.day_${weekday}`)}</span>
+                <span style={s.scheduleChevron}>⌄</span>
+              </button>
+              <button type="button" onClick={() => setTimePickerOpen(true)} style={s.scheduleButton}>
                 <span style={s.timeValue}>{time}</span>
-                <span style={s.timeChevron}>⌄</span>
+                <span style={s.scheduleChevron}>⌄</span>
               </button>
             </div>
           </div>
@@ -99,6 +96,19 @@ export function WeeklyReportSettingsModal({
           </div>
         </div>
       </div>
+      {weekdayPickerOpen && (
+        <SingleWheelModal
+          value={weekday}
+          options={weekdayOptions}
+          title={t("weekly_settings.pick_day")}
+          ariaLabel={t("weekly_settings.pick_day")}
+          onConfirm={(next) => {
+            setWeekday(cleanWeekday(next));
+            setWeekdayPickerOpen(false);
+          }}
+          onClose={() => setWeekdayPickerOpen(false)}
+        />
+      )}
       {timePickerOpen && (
         <TimeWheelModal
           value={time}
@@ -141,17 +151,8 @@ const s = {
   primary: { display: "block", fontSize: 14, fontWeight: 600 },
   secondary: { display: "block", marginTop: 4, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.45 },
   label: { fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 },
-  scheduleGrid: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) 104px", gap: 8 },
-  select: {
-    border: "1px solid var(--rule)",
-    background: "var(--bg-elevated)",
-    color: "var(--ink-1)",
-    borderRadius: 6,
-    padding: "9px 10px",
-    fontSize: 13,
-    minHeight: 38,
-  },
-  timeButton: {
+  scheduleGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 },
+  scheduleButton: {
     border: "1px solid var(--rule)",
     background: "var(--bg-elevated)",
     color: "var(--ink-1)",
@@ -167,8 +168,9 @@ const s = {
     cursor: "pointer",
     minWidth: 0,
   },
+  weekdayValue: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 },
   timeValue: { fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
-  timeChevron: { color: "var(--ink-3)", fontFamily: "var(--font-sans)", fontSize: 13, flexShrink: 0 },
+  scheduleChevron: { color: "var(--ink-3)", fontFamily: "var(--font-sans)", fontSize: 13, flexShrink: 0 },
   note: {
     marginTop: 16,
     padding: 12,

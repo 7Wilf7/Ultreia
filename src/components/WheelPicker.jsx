@@ -10,7 +10,7 @@ const PAD = Math.floor(VISIBLE / 2); // spacer rows above/below so ends can cent
 // One scroll-snap wheel column. Scrolling settles on the centered item and
 // reports it via onChange. Controlled by `value`; the initial scroll position
 // is set on mount and whenever `value` changes from outside.
-function WheelColumn({ items, value, onChange, ariaLabel }) {
+function WheelColumn({ items, value, onChange, ariaLabel, mono = true }) {
   const ref = useRef(null);
   const settleTimer = useRef(null);
   const idx = Math.max(0, items.indexOf(value));
@@ -47,7 +47,8 @@ function WheelColumn({ items, value, onChange, ariaLabel }) {
             <div key={it} style={{
               height: ITEM_H, scrollSnapAlign: "center",
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums",
+              fontFamily: mono ? "var(--font-mono)" : "var(--font-sans)",
+              fontVariantNumeric: mono ? "tabular-nums" : "normal",
               fontSize: selected ? 26 : 20,
               fontWeight: selected ? 600 : 400,
               color: selected ? "var(--ink-1)" : "var(--ink-3)",
@@ -72,6 +73,61 @@ function WheelColumn({ items, value, onChange, ariaLabel }) {
 // iOS "New alarm" sheet). `value` is "HH:MM"; Done calls onConfirm("HH:MM").
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
 const MINUTES = ["00", "30"];
+
+export function SingleWheelModal({ value, options, onConfirm, onClose, title, ariaLabel }) {
+  const t = useT();
+  const normalized = (options || []).map(opt => (
+    typeof opt === "object" && opt !== null
+      ? { value: opt.value, label: String(opt.label) }
+      : { value: opt, label: String(opt) }
+  ));
+  const fallback = normalized[0] || { value: "", label: "" };
+  const initial = normalized.find(opt => opt.value === value) || fallback;
+  const labels = normalized.map(opt => opt.label);
+  const [selectedLabel, setSelectedLabel] = useState(initial.label);
+
+  function done() {
+    const picked = normalized.find(opt => opt.label === selectedLabel) || fallback;
+    onConfirm(picked.value);
+  }
+
+  return (
+    <ModalRoot onClose={onClose}>
+      <div onClick={onClose} className="ultreia-overlay-in" style={{
+        position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
+        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        zIndex: 10000, padding: 16, overscrollBehavior: "contain",
+      }}>
+        <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{
+          background: "var(--bg-elevated)", border: "1px solid var(--rule)",
+          borderRadius: 14, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
+          width: "100%", maxWidth: 320, padding: "16px 18px 18px",
+          boxSizing: "border-box", fontFamily: "var(--font-sans)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <button onClick={onClose} style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--ink-3)" }}>
+              {t("common.cancel")}
+            </button>
+            <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{title}</span>
+            <button onClick={done} style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--moss-deep)", fontWeight: 600 }}>
+              {t("common.done")}
+            </button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 34px 0" }}>
+            <WheelColumn
+              items={labels}
+              value={selectedLabel}
+              onChange={setSelectedLabel}
+              ariaLabel={ariaLabel || title}
+              mono={false}
+            />
+          </div>
+        </div>
+      </div>
+    </ModalRoot>
+  );
+}
 
 export function TimeWheelModal({ value = "08:00", onConfirm, onClose, title }) {
   const t = useT();

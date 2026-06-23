@@ -115,18 +115,27 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 建议 Supabase 表：
 
 ```sql
-agent_actions (
-  id uuid primary key,
-  user_id uuid not null,
+-- Full SQL lives in docs-internal/supabase-agent-actions.sql
+public.agent_actions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  client_id text not null,
   type text not null,
   status text not null,
   title text,
   reason text,
-  payload jsonb,
-  result jsonb,
+  risk text not null,
+  requires_confirmation boolean not null,
+  source text not null,
+  source_ref_type text,
+  source_ref_id text,
+  payload jsonb not null,
+  result jsonb not null,
   error text,
-  created_at timestamptz default now(),
-  decided_at timestamptz
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  decided_at timestamptz,
+  executed_at timestamptz
 )
 ```
 
@@ -136,6 +145,7 @@ agent_actions (
 proposed -> accepted -> executed
 proposed -> rejected
 accepted -> failed
+proposed -> cancelled
 ```
 
 注意：这一步需要 Supabase schema 变更，必须先给用户 SQL，用户在 Dashboard 跑完后再改前端和 DAL。
@@ -217,7 +227,7 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 
 下一步：
 
-1. Phase 3 第一件事是建 `agent_actions`：记录 AI 提议了什么、用户接受 / 忽略 / 修改了什么、系统执行结果如何、失败原因是什么。
+1. Phase 3 第一件事是建 `agent_actions`：记录 AI 提议了什么、用户接受 / 忽略 / 修改了什么、系统执行结果如何、失败原因是什么。建表 SQL 已放在 `docs-internal/supabase-agent-actions.sql`。
 2. 这一步需要 Supabase schema 变更，必须先给用户完整 SQL；用户在 Dashboard 跑完后，再改 `src/lib/db/*` 字段映射和前端 action 状态读写。
 3. 第一版不要追求复杂自动化，只迁移现有本地 action 状态：`create_plans`、`memory_update`、周报提炼计划。目标是跨设备可追溯，而不是让 AI 自动执行。
 4. 有了 action log 后，再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
@@ -244,3 +254,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-22：Settings 里的 AI 周复盘收拢成二级入口（详情 / 设置）；自动生成时间选择改用应用内滚轮。普通 AI Coach 回复注解入口移除，保留直接聊天。
 - 2026-06-23：周复盘自动设置的星期也改为滚轮；日历计划状态去掉单独 `skipped` 展示，`planned_rest` 明确为“显式计划休息 / 覆盖旧计划”的语义，不自动套用到所有空白日。
 - 2026-06-23：Phase 2 进入收尾观察；下一步确认进入 Phase 3 `agent_actions`，先做可追溯 action log，不做新的自动执行。
+- 2026-06-23：补充 `agent_actions` 建表 SQL；第一版保留 `client_id` 承接现有前端 Action Card id，并用 `source_ref_type/source_ref_id` 关联 AI Coach 消息或周报来源。

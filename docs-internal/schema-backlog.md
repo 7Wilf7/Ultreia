@@ -49,8 +49,13 @@
 
 建议字段见 `docs-internal/agentization-roadmap.md` Phase 3。
 
+建表 SQL：
+
+- `docs-internal/supabase-agent-actions.sql`
+
 后续动作：
 
+- 用户先在 Supabase Dashboard 的 SQL Editor 执行建表 SQL。
 - 保存计划导入、Memory 更新、周报导入等动作的 `proposed / executed / rejected / failed` 状态。
 - AI Coach 消息下的 Action Card 从云端状态恢复。
 

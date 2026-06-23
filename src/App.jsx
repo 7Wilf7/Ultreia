@@ -70,7 +70,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
-import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
+import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -1273,13 +1273,13 @@ function AppShell({
       console.warn("[agent_actions] save failed:", err);
     });
   }
-  function updatePlanImportActionStatus(msgId, status) {
-    if (!msgId || !status) return;
+  function updatePlanImportAction(msgId, transform) {
+    if (!msgId || typeof transform !== "function") return;
     setPlanImportCache(prev => {
       const cached = prev[msgId];
       if (!cached) return prev;
       const action = cached.action || buildCreatePlansAction(cached.plans || [], { sourceMessageId: msgId });
-      const nextAction = markAgentActionStatus(action, status);
+      const nextAction = transform(action);
       saveAgentAction(nextAction);
       return {
         ...prev,
@@ -1290,8 +1290,13 @@ function AppShell({
       };
     });
   }
-  function recordMemoryActionDecision(action, status) {
-    const nextAction = markAgentActionStatus(action, status);
+  function updatePlanImportActionStatus(msgId, status) {
+    updatePlanImportAction(msgId, action => markAgentActionStatus(action, status));
+  }
+  function recordMemoryActionDecision(action, status, result = null) {
+    const nextAction = result && status === AGENT_ACTION_STATUS.EXECUTED
+      ? completeAgentAction(action, result)
+      : markAgentActionStatus(action, status);
     saveAgentAction(nextAction);
     setLastMemoryAction(nextAction);
     return nextAction;
@@ -1826,14 +1831,25 @@ Rules:
     // bulkAddLogs is optimistic — the rows appear on Calendar before this
     // returns. Close the review modal immediately and skip the "success"
     // alert (which used to compete with a possible later failure alert).
+    const msgId = planProposal?.msgId;
     const workoutDates = workouts.map(w => w.date).filter(Boolean);
     const appliedRestDates = applyPlanRestTags(restDates, workoutDates);
+    updatePlanImportActionStatus(msgId, AGENT_ACTION_STATUS.ACCEPTED);
     bulkAddLogs(workouts, {
       source: "ai_coach_plan",
       replacePlannedDates: true,
       replacePlannedDatesOn: appliedRestDates,
+      onPersisted: (created) => {
+        updatePlanImportAction(msgId, action => completeAgentAction(action, {
+          createdWorkoutIds: (created || []).map(w => w.id).filter(Boolean),
+          createdWorkoutCount: (created || []).length,
+          plannedRestDates: appliedRestDates,
+        }));
+      },
+      onFailed: (err) => {
+        updatePlanImportAction(msgId, action => failAgentAction(action, err));
+      },
     });
-    updatePlanImportActionStatus(planProposal?.msgId, AGENT_ACTION_STATUS.EXECUTED);
     setPlanProposal(null);
   }
 

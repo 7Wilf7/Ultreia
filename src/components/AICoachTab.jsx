@@ -428,7 +428,10 @@ export function AICoachTab({
     setMemoryDraft(memoryLang === "zh" ? z : e);
     if (memoryProposal?.action) {
       const nextAction = recordMemoryActionDecision
-        ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED)
+        ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
+            savedLanguages: [e ? "en" : null, z ? "zh" : null].filter(Boolean),
+            savedCharacterCount: { en: e.length, zh: z.length },
+          })
         : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
       setLastMemoryAction(nextAction);
     }

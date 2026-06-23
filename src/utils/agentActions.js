@@ -5,8 +5,12 @@ export const AGENT_ACTION_TYPES = {
 
 export const AGENT_ACTION_STATUS = {
   PROPOSED: "proposed",
+  ACCEPTED: "accepted",
+  EXECUTING: "executing",
   EXECUTED: "executed",
   REJECTED: "rejected",
+  FAILED: "failed",
+  CANCELLED: "cancelled",
 };
 
 export function isRestPlanItem(plan) {
@@ -67,12 +71,32 @@ export function buildMemoryUpdateAction(memory, opts = {}) {
 
 export function markAgentActionStatus(action, status, now = new Date()) {
   if (!action || !status) return action;
+  const timestamp = now instanceof Date ? now.toISOString() : String(now);
   return {
     ...action,
     status,
     decidedAt: status === AGENT_ACTION_STATUS.PROPOSED
       ? null
-      : (now instanceof Date ? now.toISOString() : String(now)),
+      : (action.decidedAt || timestamp),
+    executedAt: status === AGENT_ACTION_STATUS.EXECUTED
+      ? timestamp
+      : (action.executedAt || null),
+  };
+}
+
+export function completeAgentAction(action, result = {}, now = new Date()) {
+  return {
+    ...markAgentActionStatus(action, AGENT_ACTION_STATUS.EXECUTED, now),
+    result: result && typeof result === "object" ? result : {},
+    error: "",
+  };
+}
+
+export function failAgentAction(action, error, now = new Date()) {
+  const message = error?.message || String(error || "Action failed");
+  return {
+    ...markAgentActionStatus(action, AGENT_ACTION_STATUS.FAILED, now),
+    error: message,
   };
 }
 

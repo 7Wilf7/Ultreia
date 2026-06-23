@@ -30,7 +30,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
-| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表并接入第一版；计划导入和 Memory 更新会写账号动作记录 |
+| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；计划导入和 Memory 更新会写账号动作记录，并记录执行结果 / 失败原因 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
@@ -158,6 +158,13 @@ proposed -> cancelled
 - Memory 自动更新建议同样写入 `proposed`，接受 / 放弃后写入 `executed` / `rejected`。
 - action log 写入是 best-effort，不阻止计划导入或 Memory 保存。
 
+第二步接入：
+
+- 用户点击计划导入 Action Card 的「接受并执行」后，先把动作标记为 `accepted`。
+- `bulkAddLogs` 后台保存成功后，再把动作标记为 `executed`，并在 `result` 里记录创建的 workout id、创建数量和计划休息日期。
+- 保存失败时把动作标记为 `failed`，并把错误信息写入 `error`，方便后续排查或重新提炼。
+- Memory 更新接受后会在 `result` 里记录保存了哪些语言版本和字符数。
+
 ## Phase 4：Memory Facts 结构化
 
 目标：让长期记忆从“分区文本”升级为“事实系统”。
@@ -235,9 +242,9 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 
 下一步：
 
-1. 观察 `agent_actions` 第一版在真机里的状态恢复：AI Coach 计划提炼、确认导入、忽略动作、Memory 更新是否都能跨设备保持一致。
-2. 如第一版稳定，再决定是否增加 action log 可视化入口；当前先不加新页面，避免把个人工具做重。
-3. 有了 action log 后，再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
+1. 观察 `agent_actions` 在真机里的状态恢复：AI Coach 计划提炼、确认导入、忽略动作、失败动作、Memory 更新是否都能跨设备保持一致。
+2. 如状态恢复稳定，再决定是否增加 action log 可视化入口；当前先不加新页面，避免把个人工具做重。
+3. 再决定是否把“停止后是否仍扣费 / 服务端是否完成”也纳入任务结果记录。
 4. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
@@ -263,3 +270,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-23：Phase 2 进入收尾观察；下一步确认进入 Phase 3 `agent_actions`，先做可追溯 action log，不做新的自动执行。
 - 2026-06-23：补充 `agent_actions` 建表 SQL；第一版保留 `client_id` 承接现有前端 Action Card id，并用 `source_ref_type/source_ref_id` 关联 AI Coach 消息或周报来源。
 - 2026-06-23：Phase 3 第一版接入前端：新增 `agentActions` DAL；计划导入和 Memory 更新动作会写入账号 action log；启动时读取 `create_plans` 动作恢复 AI Coach 按钮状态。
+- 2026-06-23：Phase 3 第二步：计划导入 Action Card 接受后先记 `accepted`，后台保存成功再记 `executed/result`，失败记 `failed/error`；Memory 更新接受时记录保存结果摘要。

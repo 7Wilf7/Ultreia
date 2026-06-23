@@ -575,7 +575,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
           ? "scheduled later today, NOT completed yet"
           : "scheduled today, NOT completed unless a completed workout also appears in Recent Activities")
         : "future planned, NOT completed";
-      const planParts = [`${l.date}${tod ? ` ${tod}` : ""} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`, `[${status}]`];
+      const planParts = [`plan_id=${l.id} ${l.date}${tod ? ` ${tod}` : ""} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""}`, `[${status}]`];
       if (l.distance > 0) planParts.push(`${l.distance}km`);
       if (l.ascent > 0) planParts.push(`+${l.ascent}m`);
       if (l.planDetail?.speed > 0) planParts.push(`${l.planDetail.speed}km/h`);
@@ -726,6 +726,7 @@ export function parsePlansFromLLM(text) {
   try {
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.items)) return parsed.items;
   } catch { /* fall through */ }
   // Last resort — find the FIRST `[ … ]` substring and try that.
   const m = cleaned.match(/\[[\s\S]*\]/);

@@ -19,9 +19,19 @@ export function isRestPlanItem(plan) {
   return kind === "rest" || type === "rest" || type === "planned rest";
 }
 
+export function getPlanTargetId(plan) {
+  return String(plan?.targetPlanId || plan?.planId || "").trim();
+}
+
+export function isPlanUpdateItem(plan) {
+  const action = String(plan?.action || plan?.mode || "").toLowerCase();
+  return action === "update" && !!getPlanTargetId(plan);
+}
+
 function inferCreatePlansRisk(plans, opts = {}) {
   if (opts.risk) return opts.risk;
   if (Number(opts.replacesExistingPlanCount || 0) > 0) return "medium";
+  if (plans.some(isPlanUpdateItem)) return "medium";
   if (plans.length > 1) return "medium";
   return "low";
 }
@@ -29,6 +39,7 @@ function inferCreatePlansRisk(plans, opts = {}) {
 export function buildCreatePlansAction(plans, opts = {}) {
   const safePlans = Array.isArray(plans) ? plans.filter(Boolean) : [];
   const affectedDates = [...new Set(safePlans.map(p => p?.date).filter(Boolean))].sort();
+  const updatedPlanIds = [...new Set(safePlans.map(getPlanTargetId).filter(Boolean))].sort();
   return {
     id: opts.id || `create-plans-${opts.sourceMessageId || Date.now()}`,
     type: AGENT_ACTION_TYPES.CREATE_PLANS,
@@ -37,6 +48,7 @@ export function buildCreatePlansAction(plans, opts = {}) {
     payload: {
       plans: safePlans,
       affectedDates,
+      updatedPlanIds,
       replacesExistingPlans: opts.replacesExistingPlans !== false,
     },
     risk: inferCreatePlansRisk(safePlans, opts),
@@ -125,21 +137,30 @@ export function describeCreatePlansImpact(action, existingPlans = []) {
   const affectedDates = [...new Set(plans.map(p => p?.date).filter(Boolean))].sort();
   const restDates = [...new Set(plans.filter(isRestPlanItem).map(p => p?.date).filter(Boolean))].sort();
   const workoutPlans = plans.filter(p => !isRestPlanItem(p));
+  const updatePlans = workoutPlans.filter(isPlanUpdateItem);
+  const createPlans = workoutPlans.filter(p => !isPlanUpdateItem(p));
+  const updatedPlanIds = [...new Set(updatePlans.map(getPlanTargetId).filter(Boolean))].sort();
   const existingByDate = new Map();
   for (const p of existingPlans || []) {
     if (!p?.date || !p.isPlanned) continue;
     existingByDate.set(p.date, (existingByDate.get(p.date) || 0) + 1);
   }
-  const overwrittenDates = affectedDates
+  const dateWideReplaceDates = [...new Set([
+    ...createPlans.map(p => p?.date).filter(Boolean),
+    ...restDates,
+  ])].sort();
+  const overwrittenDates = dateWideReplaceDates
     .map(date => ({ date, count: existingByDate.get(date) || 0 }))
     .filter(x => x.count > 0);
 
   return {
     itemCount: plans.length,
-    createCount: workoutPlans.length,
+    createCount: createPlans.length,
+    updateCount: updatePlans.length,
     restCount: restDates.length,
     affectedDates,
     restDates,
+    updatedPlanIds,
     overwrittenDates,
     replacesExistingPlans: action?.payload?.replacesExistingPlans !== false,
   };

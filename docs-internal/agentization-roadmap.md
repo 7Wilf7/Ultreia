@@ -28,7 +28,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | 阶段 | 状态 | 目标 | 当前判断 |
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
-| Phase 1 | 已完成 | Action Card 雏形 | 日历计划和 Memory 更新已接入前端 Action Card |
+| Phase 1 | 已完成 | Action Card 雏形 | 日历计划、单条未来计划修改和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
 | Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
@@ -68,6 +68,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 - AI 回复后可以出现 Action Card。
 - 用户能确认 / 修改 / 拒绝。
 - 确认后能写入日历或 Memory。
+- 已有未来计划可在能定位到目标计划时被单条替换，不再只能按日期整天覆盖。
 - 执行失败时有明确错误。
 - `npm run test` / `npm run lint` / `npm run build` 通过。
 
@@ -177,6 +178,13 @@ proposed -> cancelled
 - 最近 10 条动作只读展示：动作类型、状态、来源、涉及日期 / 数量、失败原因。
 - 点击单条可展开查看 `payload` / `result` 摘要，先不做编辑、重试或全局 action center。
 - 这一步只解决可审计性，不扩展新的 Action Card 类型。
+
+第五步接入：
+
+- 计划提炼时把当前未来计划的 `plan_id` 提供给结构化提炼器。
+- 当 Coach 明确是在修改已有计划时，Action Card item 使用 `action="update"` + `targetPlanId`。
+- 执行时只删除并替换该 planned row，不按日期清掉同一天其它计划；新增计划和明确休息日仍按日期替换。
+- 这一步让“修改未来计划”从纯文本建议进入可确认动作链路，但仍保持用户审核后执行。
 
 ## Phase 4：Memory Facts 结构化
 

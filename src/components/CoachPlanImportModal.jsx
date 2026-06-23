@@ -4,7 +4,7 @@ import { ACTIVITY_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../co
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
-import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, isRestPlanItem } from "../utils/agentActions";
+import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, getPlanTargetId, isPlanUpdateItem, isRestPlanItem } from "../utils/agentActions";
 import { planFields } from "./CalendarDayModal";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -27,9 +27,12 @@ function buildDraft(p, idx) {
   const type = ACTIVITY_TYPES.includes(p.type) ? p.type : "Road Run";
   const f = planFields(type);
   const subs = Array.isArray(p.subTypes) ? p.subTypes : [];
+  const targetPlanId = getPlanTargetId(p);
   return {
     _id: `proposal-${idx}`,
     _selected: true,
+    action: targetPlanId ? "update" : "create",
+    targetPlanId,
     date: p.date || "",
     type,
     distance: f.distance && p.distance != null ? String(p.distance) : "",
@@ -97,7 +100,8 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
   const impact = describeCreatePlansImpact(previewAction, existingPlans);
   const actionStatus = agentAction.status || "proposed";
   const displayRisk = impact.overwrittenDates.length > 0 || selectedItems.length > 1 ? "medium" : "low";
-  const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it)).length;
+  const selectedUpdateCount = selectedItems.filter(isPlanUpdateItem).length;
+  const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it) && !isPlanUpdateItem(it)).length;
   const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
 
   async function doImport() {
@@ -112,7 +116,10 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
     // Shape non-rest items into workout records — type-specific, mirroring the Calendar
     // add-plan form (planFields). Fields not shown for a type stay zeroed.
     const restDates = selected.filter(isRestPlanItem).map(it => it.date);
-    const workouts = selected.filter(it => !isRestPlanItem(it)).map(it => {
+    const workoutItems = selected.filter(it => !isRestPlanItem(it));
+    const replacePlannedDates = workoutItems.filter(it => !isPlanUpdateItem(it)).map(it => it.date);
+    const replacePlannedIds = workoutItems.map(getPlanTargetId).filter(Boolean);
+    const workouts = workoutItems.map(it => {
       const f = planFields(it.type);
       const distance = f.distance ? (parseFloat(it.distance) || 0) : 0;
       const ascent = f.ascent
@@ -143,7 +150,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
     });
     setImporting(true);
     try {
-      await onConfirm(workouts, { restDates });
+      await onConfirm(workouts, { restDates, replacePlannedDates, replacePlannedIds });
     } finally {
       setImporting(false);
     }
@@ -222,7 +229,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
             </div>
           </div>
           <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
-            {t("coach.action_create_plans_reason", { n: selectedCount, workouts: selectedWorkoutCount, rests: selectedRestCount })}
+            {t("coach.action_create_plans_reason", { n: selectedCount, workouts: selectedWorkoutCount, updates: selectedUpdateCount, rests: selectedRestCount })}
           </div>
           <div style={{ ...s.muted, fontSize: 12, marginTop: 8 }}>
             {t("coach.action_requires_confirmation")}
@@ -331,6 +338,19 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
                     ) : (
                       <div style={{ ...s.tag(it.type), fontSize: 11 }}>
                         {t(`enum.activity.${it.type}`)}
+                      </div>
+                    )}
+                    {isPlanUpdateItem(it) && (
+                      <div style={{
+                        fontSize: 10,
+                        fontFamily: "var(--font-mono)",
+                        padding: "3px 7px",
+                        border: "1px solid var(--moss)",
+                        background: "var(--moss-bg)",
+                        color: "var(--moss-deep)",
+                        textTransform: "uppercase",
+                      }}>
+                        {t("coach.action_update_badge")}
                       </div>
                     )}
                     <div style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--ink-3)",

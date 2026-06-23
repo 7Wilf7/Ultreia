@@ -6,8 +6,10 @@ import {
   describeCreatePlansImpact,
   getCreatePlans,
   getMemoryUpdate,
+  getPlanTargetId,
   isCreatePlansAction,
   isMemoryUpdateAction,
+  isPlanUpdateItem,
   isRestPlanItem,
   markAgentActionStatus,
 } from "./agentActions";
@@ -81,9 +83,11 @@ describe("agent action helpers", () => {
     ])).toEqual({
       itemCount: 2,
       createCount: 2,
+      updateCount: 0,
       restCount: 0,
       affectedDates: ["2026-06-20", "2026-06-21"],
       restDates: [],
+      updatedPlanIds: [],
       overwrittenDates: [
         { date: "2026-06-20", count: 1 },
         { date: "2026-06-21", count: 2 },
@@ -106,12 +110,39 @@ describe("agent action helpers", () => {
     ])).toMatchObject({
       itemCount: 2,
       createCount: 1,
+      updateCount: 0,
       restCount: 1,
       restDates: ["2026-06-20"],
+      updatedPlanIds: [],
       overwrittenDates: [
         { date: "2026-06-20", count: 1 },
         { date: "2026-06-21", count: 1 },
       ],
+    });
+  });
+
+  it("describes targeted plan updates without date-wide overwrite warnings", () => {
+    const action = buildCreatePlansAction([
+      { action: "update", targetPlanId: "plan-1", date: "2026-06-20", type: "Road Run", distance: 8 },
+    ]);
+
+    expect(action.risk).toBe("medium");
+    expect(action.payload.updatedPlanIds).toEqual(["plan-1"]);
+    expect(getPlanTargetId(action.payload.plans[0])).toBe("plan-1");
+    expect(isPlanUpdateItem(action.payload.plans[0])).toBe(true);
+    expect(describeCreatePlansImpact(action, [
+      { id: "plan-1", date: "2026-06-20", isPlanned: true },
+      { id: "plan-2", date: "2026-06-20", isPlanned: true },
+    ])).toEqual({
+      itemCount: 1,
+      createCount: 0,
+      updateCount: 1,
+      restCount: 0,
+      affectedDates: ["2026-06-20"],
+      restDates: [],
+      updatedPlanIds: ["plan-1"],
+      overwrittenDates: [],
+      replacesExistingPlans: true,
     });
   });
 

@@ -680,7 +680,14 @@ export function AICoachTab({
       {showAgentActions && (
         <ModalRoot onClose={() => setShowAgentActions(false)}>
           <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowAgentActions(false)}>
-            <div onClick={(e) => e.stopPropagation()} style={s.modalCard(isMobile, { maxWidth: 620 })}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                ...s.modalCard(isMobile, { maxWidth: 520, float: true }),
+                maxHeight: isMobile ? "min(72dvh, 560px)" : "min(72vh, 580px)",
+                overflowY: "auto",
+              }}
+            >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.recent_agent_actions")}</h2>
                 <button onClick={() => setShowAgentActions(false)} style={s.modalCloseBtn} aria-label="Close">×</button>

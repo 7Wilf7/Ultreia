@@ -201,6 +201,24 @@ export async function deletePlannedOnDates(dates) {
   }
 }
 
+// Delete only the named PLANNED rows. Used when an Agent Action modifies one
+// future plan without wiping other planned rows on the same date.
+export async function deletePlannedByIds(ids) {
+  const unique = [...new Set((ids || []).filter(Boolean))];
+  if (unique.length === 0) return;
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('workouts')
+    .delete()
+    .eq('user_id', userId)
+    .eq('is_planned', true)
+    .in('id', unique);
+  if (error) {
+    console.error('deletePlannedByIds failed:', error);
+    throw new Error(error.message);
+  }
+}
+
 export async function bulkInsertWorkouts(workouts, { source = 'garmin_csv' } = {}) {
   if (!workouts || workouts.length === 0) return [];
   const userId = await getCurrentUserId();

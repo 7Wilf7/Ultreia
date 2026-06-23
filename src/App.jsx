@@ -710,7 +710,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     source = "garmin_csv",
     fetchWeather = false,
     replacePlannedDates = false,
-    replacePlannedDatesOn = [],
+    replacePlannedDatesOn = null,
+    replacePlannedIds = [],
     onPersisted = null,
     onFailed = null,
   } = {}) {
@@ -723,21 +724,27 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       createdAt: new Date().toISOString(),
       isOptimistic: true,
     }));
-    // When replacing (coach plan import), the imported plan supersedes any
-    // existing PLANNED rows on those same dates — drop them optimistically so
-    // the calendar doesn't briefly show two plans (old 5km + new 8km).
-    const planDates = replacePlannedDates ? [...new Set([
-      ...workouts.map(w => w.date).filter(Boolean),
-      ...(Array.isArray(replacePlannedDatesOn) ? replacePlannedDatesOn.filter(Boolean) : []),
-    ])] : [];
+    const explicitReplaceDates = Array.isArray(replacePlannedDatesOn) ? replacePlannedDatesOn.filter(Boolean) : null;
+    // Date-wide replacement is for new plan/rest items. Targeted replacement is
+    // for editing one existing plan without deleting other plans on that date.
+    const planDates = replacePlannedDates ? [...new Set(
+      explicitReplaceDates || workouts.map(w => w.date).filter(Boolean)
+    )] : [];
+    const plannedIdSet = new Set((replacePlannedIds || []).filter(Boolean));
     setLogs(prev => [
       ...optimistics,
-      ...(replacePlannedDates ? prev.filter(l => !(l.isPlanned && planDates.includes(l.date))) : prev),
+      ...prev.filter(l => {
+        if (!l.isPlanned) return true;
+        if (replacePlannedDates && planDates.includes(l.date)) return false;
+        if (plannedIdSet.has(l.id)) return false;
+        return true;
+      }),
     ]);
 
     (async () => {
       try {
         if (replacePlannedDates) await db.workouts.deletePlannedOnDates(planDates);
+        if (plannedIdSet.size) await db.workouts.deletePlannedByIds([...plannedIdSet]);
         let toInsert = workouts;
         // FIT import can request weather for rows that fall inside Caiyun's
         // window (now / past 24h), or long rows whose tail overlaps that
@@ -772,7 +779,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         setLogs(prev => prev.filter(l => !tempIds.has(l.id)));
         // A replace import may have already deleted the old plan rows before
         // failing — resync from server truth so the calendar isn't left wrong.
-        if (replacePlannedDates) refreshLogs().catch(() => {});
+        if (replacePlannedDates || plannedIdSet.size) refreshLogs().catch(() => {});
         onFailed?.(err);
         window.alert(err.message);
       }
@@ -1729,6 +1736,14 @@ function AppShell({
     extractRunRef.current = runId;
     extractAbortRef.current = controller;
     setExtractingForMsgId(msgId);
+    const extractionDataBlock = buildDataBlock({
+      logs, races, now, lang: "en",
+      currentWeather: weatherCtx.currentWeather,
+      forecastByDate: weatherCtx.forecastByDate,
+      dailyNotes,
+      raceDayWeather: null,
+      agentActions,
+    });
     const todayStr = localDateKey(now);
     const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
     const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
@@ -1741,9 +1756,16 @@ Coach's reply:
 ${assistantContent}
 ---
 
+Current planning context:
+---
+${extractionDataBlock}
+---
+
 Output a JSON array. Each item:
 {
   "kind": "workout" | "rest" (optional; use "rest" only for an explicit no-workout / planned rest day),
+  "action": "create" | "update" (optional; use "update" ONLY when the coach clearly modifies one existing item from [Planned Sessions]),
+  "targetPlanId": string (required ONLY for action="update"; copy the exact plan_id from [Planned Sessions]),
   "date": "YYYY-MM-DD",
   "type": ${typeUnion} (required for workout items; omit for rest items),
   "distance": number (kilometres, optional),
@@ -1757,6 +1779,8 @@ Output a JSON array. Each item:
 
 Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
+- If the reply changes an existing planned session shown in [Planned Sessions], emit action="update" and targetPlanId with the exact plan_id. Output the FULL replacement plan after the change, not just the changed field.
+- If you cannot confidently match the suggestion to exactly one existing plan_id, do NOT use update; emit a normal create item instead.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
   - Road Run: "distance"; put the run type in "subTypes" as exactly one of "Easy Run"/"Aerobic Run"/"Tempo Run"/"Interval Run" when the coach names an intensity. Do NOT emit "duration" for Road Run.
   - Trail Run / Hiking: "distance" and "ascent" (metres). Do NOT emit "duration".
@@ -1829,22 +1853,30 @@ Rules:
     return addRestDates;
   }
 
-  function confirmImportPlans(workouts, { restDates = [] } = {}) {
+  function confirmImportPlans(workouts, { restDates = [], replacePlannedDates = [], replacePlannedIds = [] } = {}) {
     // bulkAddLogs is optimistic — the rows appear on Calendar before this
     // returns. Close the review modal immediately and skip the "success"
     // alert (which used to compete with a possible later failure alert).
     const msgId = planProposal?.msgId;
     const workoutDates = workouts.map(w => w.date).filter(Boolean);
     const appliedRestDates = applyPlanRestTags(restDates, workoutDates);
+    const dateWideReplaceDates = [...new Set([
+      ...replacePlannedDates,
+      ...appliedRestDates,
+    ].filter(Boolean))];
+    const targetedPlanIds = [...new Set((replacePlannedIds || []).filter(Boolean))];
     updatePlanImportActionStatus(msgId, AGENT_ACTION_STATUS.ACCEPTED);
     bulkAddLogs(workouts, {
       source: "ai_coach_plan",
-      replacePlannedDates: true,
-      replacePlannedDatesOn: appliedRestDates,
+      replacePlannedDates: dateWideReplaceDates.length > 0,
+      replacePlannedDatesOn: dateWideReplaceDates,
+      replacePlannedIds: targetedPlanIds,
       onPersisted: (created) => {
         updatePlanImportAction(msgId, action => completeAgentAction(action, {
           createdWorkoutIds: (created || []).map(w => w.id).filter(Boolean),
           createdWorkoutCount: (created || []).length,
+          updatedPlanIds: targetedPlanIds,
+          updatedPlanCount: targetedPlanIds.length,
           plannedRestDates: appliedRestDates,
         }));
       },

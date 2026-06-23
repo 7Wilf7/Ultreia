@@ -135,6 +135,30 @@ function buildMonthlyTraySummary(logs = [], now = new Date(), lang = "zh") {
   };
 }
 
+function mergeAgentActionList(actions = [], action) {
+  if (!action?.id && !action?.rowId) return actions || [];
+  const key = action.id || action.rowId;
+  const next = [action, ...(actions || []).filter(a => (a?.id || a?.rowId) !== key)];
+  return next.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+}
+
+function compactPlanSnapshot(plan) {
+  if (!plan || typeof plan !== "object") return null;
+  const startedAt = plan.startedAt || plan.started_at || "";
+  const hour = startedAt ? new Date(startedAt).getHours() : null;
+  const timeOfDay = Number.isFinite(hour) ? (hour < 12 ? "am" : "pm") : "";
+  return {
+    date: plan.date || "",
+    type: plan.type || "",
+    subTypes: Array.isArray(plan.subTypes) ? plan.subTypes : [],
+    distance: Number(plan.distance || 0) || 0,
+    ascent: Number(plan.ascent || 0) || 0,
+    speed: Number(plan.planDetail?.speed || 0) || 0,
+    durationMin: Math.round(Number(plan.duration || 0) / 60) || 0,
+    timeOfDay,
+  };
+}
+
 function readinessComplete(readiness) {
   return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
 }
@@ -1016,6 +1040,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
         chatMessages={chatMessages}
         agentActions={agentActions}
+        setAgentActions={setAgentActions}
         setChatMessages={setChatMessages}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
@@ -1043,7 +1068,7 @@ function AppShell({
   user, signOut, changePassword, deleteAccount,
   logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, agentActions = [], setChatMessages, appendLocalChatMessage, clearAllChatMessages,
+  chatMessages, agentActions = [], setAgentActions, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -1244,6 +1269,7 @@ function AppShell({
     return next;
   }
   const [chatLoading, setChatLoading] = useState(false);
+  const [coachChatDraft, setCoachChatDraft] = useState("");
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planProposal, setPlanProposal] = useState(null);
   const [planImportCache, setPlanImportCache] = useState(() => {
@@ -1276,9 +1302,14 @@ function AppShell({
   }, [planImportCache]);
   function saveAgentAction(action) {
     if (!action?.id || !action?.type) return;
-    db.agentActions.upsertAction(action).catch(err => {
-      console.warn("[agent_actions] save failed:", err);
-    });
+    setAgentActions?.(prev => mergeAgentActionList(prev, action));
+    db.agentActions.upsertAction(action)
+      .then(saved => {
+        if (saved) setAgentActions?.(prev => mergeAgentActionList(prev, saved));
+      })
+      .catch(err => {
+        console.warn("[agent_actions] save failed:", err);
+      });
   }
   function updatePlanImportAction(msgId, transform) {
     if (!msgId || typeof transform !== "function") return;
@@ -1858,7 +1889,19 @@ Rules:
     // returns. Close the review modal immediately and skip the "success"
     // alert (which used to compete with a possible later failure alert).
     const msgId = planProposal?.msgId;
-    const workoutDates = workouts.map(w => w.date).filter(Boolean);
+    const planChanges = workouts
+      .filter(w => w?._targetPlanId)
+      .map(w => ({
+        targetPlanId: w._targetPlanId,
+        before: compactPlanSnapshot(logs.find(l => l.id === w._targetPlanId)),
+        after: compactPlanSnapshot(w),
+      }));
+    const cleanWorkouts = workouts.map(w => {
+      const clean = { ...w };
+      delete clean._targetPlanId;
+      return clean;
+    });
+    const workoutDates = cleanWorkouts.map(w => w.date).filter(Boolean);
     const appliedRestDates = applyPlanRestTags(restDates, workoutDates);
     const dateWideReplaceDates = [...new Set([
       ...replacePlannedDates,
@@ -1866,7 +1909,7 @@ Rules:
     ].filter(Boolean))];
     const targetedPlanIds = [...new Set((replacePlannedIds || []).filter(Boolean))];
     updatePlanImportActionStatus(msgId, AGENT_ACTION_STATUS.ACCEPTED);
-    bulkAddLogs(workouts, {
+    bulkAddLogs(cleanWorkouts, {
       source: "ai_coach_plan",
       replacePlannedDates: dateWideReplaceDates.length > 0,
       replacePlannedDatesOn: dateWideReplaceDates,
@@ -1877,6 +1920,7 @@ Rules:
           createdWorkoutCount: (created || []).length,
           updatedPlanIds: targetedPlanIds,
           updatedPlanCount: targetedPlanIds.length,
+          planChanges,
           plannedRestDates: appliedRestDates,
         }));
       },
@@ -2143,6 +2187,8 @@ Rules:
           setCoachHintsPending={setCoachHintsPending}
           /* Lifted state + handlers — see AppShell top for definitions. */
           chatLoading={chatLoading}
+          chatInput={coachChatDraft}
+          setChatInput={setCoachChatDraft}
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}

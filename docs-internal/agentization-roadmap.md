@@ -30,7 +30,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划、单条未来计划修改和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
-| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口 |
+| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口 |
 | Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
@@ -176,7 +176,8 @@ proposed -> cancelled
 
 - AI Coach 设置里新增轻量 `Recent Agent Actions`。
 - 最近 10 条动作只读展示：动作类型、状态、来源、涉及日期 / 数量、失败原因。
-- 点击单条可展开查看 `payload` / `result` 摘要，先不做编辑、重试或全局 action center。
+- 点击单条可展开查看可读动作摘要和执行结果；修改已有计划时显示 before / after 摘要，不再直接展示内部 JSON。
+- action log 写库仍是 best-effort，但前端会先合并到当前列表，保证 PWA 不需要刷新就能看到最新提议 / 接受 / 执行 / 忽略状态。
 - 这一步只解决可审计性，不扩展新的 Action Card 类型。
 
 第五步接入：

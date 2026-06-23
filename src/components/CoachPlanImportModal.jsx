@@ -146,6 +146,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
         startedAt: timeOfDayToStartedAt(it.date, it.timeOfDay),
         isPlanned: true,
         tags: [],
+        _targetPlanId: getPlanTargetId(it) || undefined,
       };
     });
     setImporting(true);

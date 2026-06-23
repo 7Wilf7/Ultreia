@@ -10,7 +10,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
-import { AGENT_ACTION_STATUS, markAgentActionStatus } from "../utils/agentActions";
+import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
@@ -216,7 +216,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  chatLoading, chatInput, setChatInput, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   agentActions = [],
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
@@ -252,10 +252,6 @@ export function AICoachTab({
   const [memoryEditing, setMemoryEditing] = useState(false);
   // The memory text shown/edited for the currently-selected language.
   const shownMemory = memoryLang === "zh" ? coachMemoryZh : coachMemory;
-  // Empty by default — the daily template is shown as a placeholder so it
-  // disappears the moment the user starts typing, instead of being pre-filled
-  // content the user has to delete.
-  const [chatInput, setChatInput] = useState("");
   // First-send guidance: { msg, hints } while the one-time nudge modal is open.
   const [coachHints, setCoachHints] = useState(null);
 
@@ -1729,8 +1725,7 @@ function RecentAgentActions({ actions = [], t }) {
                   padding: "10px 12px 12px",
                   display: "grid", gap: 8,
                 }}>
-                  <ActionJsonBlock label={t("coach.agent_actions_payload")} value={compactActionObject(action.payload)} />
-                  <ActionJsonBlock label={t("coach.agent_actions_result")} value={compactActionObject(action.result)} />
+                  <AgentActionDetails action={action} t={t} />
                 </div>
               )}
             </div>
@@ -1767,40 +1762,198 @@ function StatusPill({ status, t }) {
   );
 }
 
-function ActionJsonBlock({ label, value }) {
+function AgentActionDetails({ action, t }) {
+  if (action.type === "create_plans") return <PlanActionDetails action={action} t={t} />;
+  if (action.type === "memory_update") return <MemoryActionDetails action={action} t={t} />;
+  return <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>;
+}
+
+function PlanActionDetails({ action, t }) {
+  const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
+  const changes = Array.isArray(action.result?.planChanges) ? action.result.planChanges : [];
+  const hasResult = (action.result && typeof action.result === "object" && Object.keys(action.result).length > 0) || !!action.error;
+  const createdCount = Number(action.result?.createdWorkoutCount || action.result?.createdCount || 0);
+  const updatedCount = Number(action.result?.updatedPlanCount || changes.length || 0);
+  const restDates = Array.isArray(action.result?.plannedRestDates) ? action.result.plannedRestDates : [];
+
+  return (
+    <>
+      {plans.length > 0 && (
+        <ActionDetailSection title={t("coach.agent_actions_items")}>
+          <div style={{ display: "grid", gap: 6 }}>
+            {plans.slice(0, 10).map((plan, idx) => {
+              const kind = isRestPlanItem(plan)
+                ? t("coach.agent_action_item_rest")
+                : isPlanUpdateItem(plan)
+                  ? t("coach.agent_action_item_update")
+                  : t("coach.agent_action_item_new");
+              return (
+                <div key={`${plan.date || "plan"}-${idx}`} style={detailRowStyle}>
+                  <span style={detailBadgeStyle}>{kind}</span>
+                  <span>{formatPlanActionBrief(plan, t)}</span>
+                </div>
+              );
+            })}
+          </div>
+        </ActionDetailSection>
+      )}
+      {changes.length > 0 && (
+        <ActionDetailSection title={t("coach.agent_actions_changes")}>
+          <div style={{ display: "grid", gap: 6 }}>
+            {changes.slice(0, 10).map((change, idx) => (
+              <div key={`${change.targetPlanId || "change"}-${idx}`} style={detailChangeStyle}>
+                <div>{formatPlanActionBrief(change.before, t)}</div>
+                <div style={{ color: "var(--ink-3)", fontSize: 11 }}>-&gt;</div>
+                <div>{formatPlanActionBrief(change.after, t)}</div>
+              </div>
+            ))}
+          </div>
+        </ActionDetailSection>
+      )}
+      {hasResult && (
+        <ActionDetailSection title={t("coach.agent_actions_result")}>
+          <div style={{ display: "grid", gap: 5, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.45 }}>
+            {createdCount > 0 && <div>{t("coach.agent_action_created_count", { count: createdCount })}</div>}
+            {updatedCount > 0 && <div>{t("coach.agent_action_updated_count", { count: updatedCount })}</div>}
+            {restDates.length > 0 && <div>{t("coach.agent_action_rest_dates", { dates: restDates.join(", ") })}</div>}
+            {action.error && <div style={{ color: "var(--danger)" }}>{t("coach.agent_action_error", { msg: action.error })}</div>}
+            {!createdCount && !updatedCount && !restDates.length && !action.error && (
+              <div>{t("coach.agent_action_empty_detail")}</div>
+            )}
+          </div>
+        </ActionDetailSection>
+      )}
+      {!plans.length && !changes.length && !hasResult && (
+        <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>
+      )}
+    </>
+  );
+}
+
+function MemoryActionDetails({ action, t }) {
+  const memory = action.payload?.memory && typeof action.payload.memory === "object" ? action.payload.memory : {};
+  const previews = [
+    memory.zh ? ["中文", memory.zh] : null,
+    memory.en ? ["EN", memory.en] : null,
+  ].filter(Boolean);
+  const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
+  return (
+    <>
+      {previews.length > 0 && (
+        <ActionDetailSection title={t("coach.agent_action_memory_preview")}>
+          <div style={{ display: "grid", gap: 7 }}>
+            {previews.map(([label, text]) => (
+              <div key={label} style={detailChangeStyle}>
+                <div style={{ fontSize: 11, color: "var(--ink-3)", fontWeight: 650 }}>{label}</div>
+                <div>{formatMemoryPreview(text)}</div>
+              </div>
+            ))}
+          </div>
+        </ActionDetailSection>
+      )}
+      {(savedLanguages.length > 0 || action.error) && (
+        <ActionDetailSection title={t("coach.agent_actions_result")}>
+          <div style={{ color: action.error ? "var(--danger)" : "var(--ink-2)", fontSize: 12, lineHeight: 1.45 }}>
+            {action.error
+              ? t("coach.agent_action_error", { msg: action.error })
+              : t("coach.agent_action_memory_saved", { langs: savedLanguages.join(" / ") })}
+          </div>
+        </ActionDetailSection>
+      )}
+      {!previews.length && !savedLanguages.length && !action.error && (
+        <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>
+      )}
+    </>
+  );
+}
+
+function ActionDetailSection({ title, children }) {
   return (
     <div>
-      <div style={{ ...s.label, fontSize: 10, marginBottom: 4 }}>{label}</div>
-      <pre style={{
-        margin: 0,
-        border: "1px solid var(--rule-soft)",
-        borderRadius: 4,
-        background: "var(--paper-2)",
-        color: "var(--ink-2)",
-        padding: "8px 9px",
-        fontFamily: "var(--font-mono)",
-        fontSize: 11,
-        lineHeight: 1.45,
-        whiteSpace: "pre-wrap",
-        maxHeight: 170,
-        overflowY: "auto",
-      }}>
-        {JSON.stringify(value, null, 2)}
-      </pre>
+      <div style={{ ...s.label, fontSize: 10, marginBottom: 5 }}>{title}</div>
+      {children}
     </div>
   );
 }
 
-function compactActionObject(value) {
-  if (!value || typeof value !== "object") return {};
-  if (Array.isArray(value)) return value.slice(0, 10);
-  const out = {};
-  for (const [key, raw] of Object.entries(value)) {
-    if (Array.isArray(raw)) out[key] = raw.slice(0, 10);
-    else if (raw && typeof raw === "object") out[key] = raw;
-    else if (raw !== undefined && raw !== null && raw !== "") out[key] = raw;
+const detailRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "auto 1fr",
+  gap: 8,
+  alignItems: "start",
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: "var(--ink-2)",
+};
+
+const detailBadgeStyle = {
+  border: "1px solid var(--rule)",
+  borderRadius: 999,
+  padding: "2px 6px",
+  color: "var(--ink-3)",
+  fontSize: 10,
+  lineHeight: 1.2,
+  whiteSpace: "nowrap",
+};
+
+const detailChangeStyle = {
+  border: "1px solid var(--rule-soft)",
+  borderRadius: 4,
+  background: "var(--paper-2)",
+  padding: "7px 8px",
+  fontSize: 12,
+  lineHeight: 1.45,
+  color: "var(--ink-2)",
+};
+
+const detailEmptyStyle = {
+  color: "var(--ink-3)",
+  fontSize: 12,
+  lineHeight: 1.45,
+};
+
+function formatPlanActionBrief(plan, t) {
+  if (!plan) return "-";
+  if (isRestPlanItem(plan)) {
+    return [plan.date || "-", t("calendar.planned_rest_label"), plan.notes].filter(Boolean).join(" · ");
   }
-  return out;
+  const subTypes = Array.isArray(plan.subTypes) ? plan.subTypes : [];
+  const runType = plan.runType || "";
+  const subTypeLabel = runType
+    ? t(`enum.subtype.${runType}`)
+    : subTypes.map(st => t(`enum.subtype.${st}`)).join(" / ");
+  const bits = [
+    plan.date || "-",
+    plan.type ? t(`enum.activity.${plan.type}`) : "",
+    subTypeLabel,
+  ];
+  const distance = Number(plan.distance || 0);
+  const ascent = Number(plan.ascent || 0);
+  const speed = Number(plan.speed || plan.planDetail?.speed || 0);
+  const durationMin = Number(plan.durationMin || 0) || Math.round(Number(plan.duration || 0) / 60) || 0;
+  if (distance > 0) bits.push(`${formatCompactNumber(distance)} km`);
+  if (ascent > 0) bits.push(`+${Math.round(ascent)} m`);
+  if (speed > 0) bits.push(`${formatCompactNumber(speed)} km/h`);
+  if (durationMin > 0) bits.push(`${durationMin} ${t("form.minutes")}`);
+  if (plan.timeOfDay === "am" || plan.timeOfDay === "pm") bits.push(t(`calendar.plan_tod_${plan.timeOfDay}`));
+  const targetId = getPlanTargetId(plan);
+  if (targetId) bits.push(`#${targetId.slice(0, 6)}`);
+  return bits.filter(Boolean).join(" · ");
+}
+
+function formatCompactNumber(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return "0";
+  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(/\.0$/, "");
+}
+
+function formatMemoryPreview(text) {
+  const lines = String(text || "")
+    .split(/\n+/)
+    .map(line => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  return lines.length ? lines.join(" / ") : "-";
 }
 
 function summarizeAgentAction(action, t) {

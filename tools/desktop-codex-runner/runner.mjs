@@ -30,11 +30,13 @@ main().catch(err => {
 
 async function main() {
   console.log(`[runner] starting ${RUNNER_ID}`);
-  await heartbeat({ bootedAt: new Date().toISOString() });
+  const bootedAt = new Date().toISOString();
+  let bootReported = false;
 
   while (!stopping) {
     try {
-      await heartbeat();
+      await heartbeat(bootReported ? {} : { bootedAt });
+      bootReported = true;
       await supabase.rpc("expire_stale_ai_jobs");
       const job = await claimJob();
       if (job) {
@@ -98,7 +100,8 @@ async function claimJob() {
     p_lease_seconds: LEASE_SECONDS,
   });
   if (error) throw new Error(`claim_ai_job failed: ${error.message}`);
-  return data || null;
+  const job = Array.isArray(data) ? data[0] : data;
+  return job?.id ? job : null;
 }
 
 async function processJob(job) {
@@ -202,8 +205,8 @@ async function runCodex(payload, job) {
     if (CODEX_MODEL) args.push("--model", CODEX_MODEL);
     args.push("-");
 
-    const command = process.platform === "win32" ? "npx.cmd" : "npx";
-    const { stdout, stderr } = await runProcess(command, args, prompt, CODEX_TIMEOUT_MS);
+    const { command, commandArgs } = buildCodexCommand(args);
+    const { stdout, stderr } = await runProcess(command, commandArgs, prompt, CODEX_TIMEOUT_MS);
     const parsed = parseCodexJsonl(stdout);
     if (!parsed.text?.trim()) {
       throw new Error(`empty_codex_response${stderr ? `: ${stderr.slice(0, 300)}` : ""}`);
@@ -219,6 +222,13 @@ async function runCodex(payload, job) {
   } finally {
     await rm(cwd, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+function buildCodexCommand(args) {
+  if (process.platform !== "win32") {
+    return { command: "npx", commandArgs: args };
+  }
+  return { command: "cmd.exe", commandArgs: ["/d", "/s", "/c", "npx.cmd", ...args] };
 }
 
 function buildPrompt(payload, job) {

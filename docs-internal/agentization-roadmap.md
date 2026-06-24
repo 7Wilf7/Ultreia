@@ -199,6 +199,7 @@ proposed -> cancelled
 - `coach_memory_facts` 已成为当前长期记忆主线；`status=active` 的事实进入 AI Coach / 周报 prompt，`archived` 不进入。
 - 旧分区文本字段 `coach_memory` / `coach_memory_zh` 已退出 UI 和 prompt，仅作为历史兼容字段保留；Wilf 迁移完成后可用一次性 SQL 清空个人账号旧文本。
 - 自动更新会基于当前 active facts + 最近对话生成英文 + 中文事实建议，并以 `memory_update` Action Card 审核后启用。
+- `agent_actions` 只是 Memory 更新的审计日志，不是事实记忆的数据源；跨设备可见的长期记忆以 `coach_memory_facts` 为准。接受 Memory 更新时必须先确认 facts 写库成功，再把 `memory_update` 标记为 `executed`。
 - 英文事实用于模型上下文，中文用于审核和阅读。
 - Phase 3 的 `agent_actions` 已能记录 Memory 更新的提议、接受 / 忽略和结果，因此 Phase 4 可以接着做事实级记录。
 
@@ -332,3 +333,4 @@ archived_at
 - 2026-06-24：Phase 4.2 夜间记忆审核第一版接入：借鉴 Claude dreaming 的“异步整理记忆、用户审核后生效”模式，但实现上继续使用 DeepSeek + Action Card。开关放在 AI Coach → Memory；后台 `daily-coach-dispatch` 新增 `memory_update` 模式，有当天新对话才生成 `memory_update` 待审核动作和 inbox 提醒，不直接写入 `coach_memory`。定时触发 SQL 单独放在 `docs-internal/supabase-nightly-memory-review-cron.sql`。
 - 2026-06-24：Phase 4.3 把 active Memory facts 接入 AI Coach / 周报上下文：只读取 `status=active` 的事实，归档事实不进入 prompt；旧分区 Memory 暂保留为历史字段，不迁移删除。
 - 2026-06-24：Phase 4.4 facts-only Memory 收尾：旧分区文本 Memory 从 AI Coach / 周报 prompt 和 UI 移除；Memory 面板只展示 Current / Archived facts；新增 `docs-internal/supabase-clear-legacy-coach-memory.sql` 供 Wilf 清空 `user_settings.coach_memory` / `coach_memory_zh`，不影响 facts、聊天、Action Log 或训练数据。
+- 2026-06-24：修正 Memory 更新保存顺序：过去 `memory_update` action 可能先被标记为 executed，但 `coach_memory_facts` 写库失败只在控制台 warning，导致换设备看不到事实。现在接受审核后会等待 facts 写库成功，成功后才记录 executed；失败则保留审核卡并显示错误。新增 `docs-internal/supabase-check-memory-facts-and-actions.sql` 用于只读核对 facts 与 action log。

@@ -233,6 +233,7 @@ export function AICoachTab({
   memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, recordMemoryActionDecision, saveMemoryFacts, proposeMemoryUpdate,
 }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   // Markdown component map depends on isMobile (mobile swaps wide tables to
@@ -398,7 +399,7 @@ export function AICoachTab({
 
   // Accepts the kept points from the per-point review and activates them as
   // structured Memory facts. The legacy free-text Memory is no longer written.
-  function acceptMemoryProposal(en, zh) {
+  async function acceptMemoryProposal(en, zh) {
     const e = (en || "").trim(), z = (zh || "").trim();
     const actionId = memoryProposal?.action?.id || `memory-update-${Date.now()}`;
     const facts = extractMemoryFacts({ en: e, zh: z }, {
@@ -409,18 +410,28 @@ export function AICoachTab({
       sourceSummary: "Memory auto-update",
       status: "active",
     });
-    saveMemoryFacts?.(facts);
-    if (memoryProposal?.action) {
-      const nextAction = recordMemoryActionDecision
-        ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
-            savedLanguages: [e ? "en" : null, z ? "zh" : null].filter(Boolean),
-            savedCharacterCount: { en: e.length, zh: z.length },
-            savedFactCount: facts.length,
-          })
-        : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
-      setLastMemoryAction(nextAction);
+    try {
+      if (facts.length && typeof saveMemoryFacts !== "function") {
+        throw new Error("Memory facts save handler is unavailable");
+      }
+      const savedFacts = facts.length ? await saveMemoryFacts(facts) : [];
+      if (facts.length && (!Array.isArray(savedFacts) || savedFacts.length < facts.length)) {
+        throw new Error(`Only saved ${savedFacts?.length || 0} of ${facts.length} Memory facts`);
+      }
+      if (memoryProposal?.action) {
+        const nextAction = recordMemoryActionDecision
+          ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
+              savedLanguages: [e ? "en" : null, z ? "zh" : null].filter(Boolean),
+              savedCharacterCount: { en: e.length, zh: z.length },
+              savedFactCount: savedFacts.length,
+            })
+          : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
+        setLastMemoryAction(nextAction);
+      }
+      setMemoryProposal(null);
+    } catch (err) {
+      appDialog.alert(t("coach.memory_facts_save_failed", { msg: err?.message || String(err) }));
     }
-    setMemoryProposal(null);
   }
   function rejectMemoryProposal() {
     if (memoryProposal?.action) {

@@ -1356,19 +1356,14 @@ function AppShell({
         console.warn("[agent_actions] save failed:", err);
       });
   }
-  function saveMemoryFacts(facts = []) {
+  async function saveMemoryFacts(facts = []) {
     const safeFacts = (Array.isArray(facts) ? facts : []).filter(f => f?.clientId || f?.id);
-    if (!safeFacts.length) return;
-    setMemoryFacts(prev => safeFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
-    db.memoryFacts.upsertFacts(safeFacts)
-      .then(savedFacts => {
-        if (savedFacts?.length) {
-          setMemoryFacts(prev => savedFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
-        }
-      })
-      .catch(err => {
-        console.warn("[memory_facts] save failed:", err);
-      });
+    if (!safeFacts.length) return [];
+    const savedFacts = await db.memoryFacts.upsertFacts(safeFacts);
+    if (savedFacts?.length) {
+      setMemoryFacts(prev => savedFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
+    }
+    return savedFacts || [];
   }
   async function setMemoryFactStatus(fact, status) {
     if (!fact || !status) return;

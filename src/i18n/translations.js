@@ -1059,6 +1059,7 @@ const dict = {
   "coach.memory_facts_title": { en: "Memory facts", zh: "记忆事实" },
   "coach.memory_facts_hint": { en: "Reviewed fact cards used by AI Coach and AI weekly reports. Archived facts stay visible for review but are excluded from prompts.", zh: "这里是 AI Coach 和 AI 周复盘会读取的已审核事实卡片。已归档事实仍可查看，但不会进入 Prompt。" },
   "coach.memory_facts_empty": { en: "No reviewed facts yet. Accept an auto Memory update to create facts.", zh: "还没有已审核事实。接受一次自动 Memory 更新后会生成事实卡片。" },
+  "coach.memory_facts_save_failed": { en: "Failed to save Memory facts: {msg}", zh: "保存记忆事实失败：{msg}" },
   "coach.memory_facts_archived_empty": { en: "No archived facts.", zh: "还没有归档的事实。" },
   "coach.memory_facts_count": { en: "{count} shown", zh: "显示 {count} 条" },
   "coach.memory_facts_filter_current": { en: "Current", zh: "当前" },

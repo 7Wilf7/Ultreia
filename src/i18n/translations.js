@@ -1039,6 +1039,8 @@ const dict = {
   "coach.memory_edit":        { en: "Edit",                 zh: "编辑" },
   "coach.memory_auto_update": { en: "Auto-update from chat", zh: "从对话自动更新" },
   "coach.memory_updating":    { en: "Updating…",            zh: "更新中……" },
+  "coach.memory_nightly_review": { en: "Nightly Memory review", zh: "夜间记忆审核" },
+  "coach.memory_nightly_review_desc": { en: "When there is new coach chat today, run once overnight and create a review card. It never writes Memory until you accept it, and it may use one AI call.", zh: "当天有新的教练对话时，夜间最多运行一次并生成待审核卡片。你接受前不会写入 Memory，可能产生一次 AI 调用费用。" },
   "coach.memory_ready_banner": { en: "Memory update ready — tap to review what to keep", zh: "记忆更新已就绪 —— 点击查看要保留/删除的内容" },
   "coach.memory_need_chat":   { en: "Chat with the coach first — there's nothing to summarize yet.", zh: "请先和教练聊几句，再使用自动更新。" },
   "coach.memory_empty_response":{ en: "The model returned an empty memory. Try again or edit manually.", zh: "模型返回空内容。请重试或手动编辑。" },

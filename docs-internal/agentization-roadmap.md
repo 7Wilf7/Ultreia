@@ -31,7 +31,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划、单条未来计划修改和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 已完成（后台 cron 后置） | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制、App 内自动生成设置和周日导入后询问已落地；真正后台定时后置 |
 | Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
-| Phase 4 | 进行中 | Memory Facts 结构化 | 旁路事实表已开始接入；接受 Memory 更新后可生成 active facts 并在 Memory 面板查看 / 归档 / 恢复 |
+| Phase 4 | 进行中 | Memory Facts 结构化 | 旁路事实表已接入；接受 Memory 更新后可生成 active facts 并在 Memory 面板查看 / 归档 / 恢复；夜间记忆审核第一版已接入 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
 ## Phase 1：Action Card 雏形
@@ -297,7 +297,7 @@ archived_at
 2. 再决定是否把 active facts 摘要插入 AI Coach / 周报 prompt；插入前必须保持旧分区 Memory 作为 fallback。
 3. 后续如果需要“候选事实逐条审核”，再把 proposed facts 作为独立 Action Card；当前不在点 Discard 前写入 facts，避免半确认事实残留。
 4. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
-5. “夜间自动更新记忆”可作为后续小阶段，但必须先确认收费和触发边界：只在当天有新对话时运行，生成待审核 Action Card / inbox，不自动写入 active Memory；默认每天最多一次，并清楚显示可能产生的 AI 调用成本。
+5. 夜间记忆审核第一版已接入：设置在 AI Coach → Memory 内，默认关闭；只在当天有新对话时运行，生成待审核 Action Card / inbox，不自动写入 active Memory；默认每天最多一次，并清楚显示可能产生的 AI 调用成本。上线前需要单独部署 `daily-coach-dispatch` Edge Function，并在 Supabase Dashboard 跑 `docs-internal/supabase-nightly-memory-review-cron.sql` 才会真正凌晨自动触发。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -330,3 +330,4 @@ archived_at
 - 2026-06-24：Phase 3 标记为已完成（观察中）；可以推进 Phase 4，但第一步只做 `coach_memory_facts` 旁路事实层，不迁移旧分区 Memory，也不让 facts 立刻替代 Coach prompt 的主记忆。
 - 2026-06-24：准备 Phase 4.1 建表 SQL：`docs-internal/supabase-coach-memory-facts.sql`。下一步必须先由用户在 Supabase Dashboard 跑 SQL，再接 `memoryFacts` DAL 和 Memory facts 审核界面。
 - 2026-06-24：Phase 4.1 第一版接入前端：新增 `memoryFacts` DAL；接受 Memory 自动更新后，从最终保留的分区 Memory 拆出 active facts 保存到账户；Memory 面板增加 facts 区域，可查看 active/proposed facts，并支持归档 active facts、查看 archived facts、恢复误归档 facts。当前 facts 不额外消耗 AI、不替代 prompt 主记忆。
+- 2026-06-24：Phase 4.2 夜间记忆审核第一版接入：借鉴 Claude dreaming 的“异步整理记忆、用户审核后生效”模式，但实现上继续使用 DeepSeek + Action Card。开关放在 AI Coach → Memory；后台 `daily-coach-dispatch` 新增 `memory_update` 模式，有当天新对话才生成 `memory_update` 待审核动作和 inbox 提醒，不直接写入 `coach_memory`。定时触发 SQL 单独放在 `docs-internal/supabase-nightly-memory-review-cron.sql`。

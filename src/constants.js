@@ -418,6 +418,7 @@ export const DEFAULT_COACH_CONFIG = {
   outputLength: "standard",
   intervention: "standard",
   showCalendarButton: true,
+  nightlyMemoryReview: false,
 };
 
 export const COACH_STYLES = [

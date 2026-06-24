@@ -462,6 +462,7 @@ export function AICoachTab({
   function setOutputLength(id) { setCoachConfig({ ...coachConfig, outputLength: id }); }
   function setIntervention(id) { setCoachConfig({ ...coachConfig, intervention: id }); }
   function setShowCalendarButton(v) { setCoachConfig({ ...coachConfig, showCalendarButton: v }); }
+  function setNightlyMemoryReview(v) { setCoachConfig({ ...coachConfig, nightlyMemoryReview: v }); }
 
   // Dynamic data block injected into the system prompt. Only the section titles
   // are localized; values (dates, race names, numbers) stay verbatim across
@@ -724,6 +725,11 @@ export function AICoachTab({
                 <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+              <MemoryReviewSetting
+                enabled={coachConfig.nightlyMemoryReview === true}
+                onToggle={setNightlyMemoryReview}
+                t={t}
+              />
 
               {!memoryEditing && !memoryProposal && (
                 <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
@@ -1574,6 +1580,11 @@ export function AICoachTab({
                   {coachHubTab === "memory" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+                      <MemoryReviewSetting
+                        enabled={coachConfig.nightlyMemoryReview === true}
+                        onToggle={setNightlyMemoryReview}
+                        t={t}
+                      />
                       {!memoryEditing && !memoryProposal && (
                         <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                           <button onClick={proposeMemoryUpdate}
@@ -1690,6 +1701,62 @@ function MemoryActionStatus({ action, t }) {
       background: "var(--paper-2)",
     }}>
       {isExecuted ? t("coach.memory_action_executed") : t("coach.memory_action_rejected")}
+    </div>
+  );
+}
+
+function MemoryReviewSetting({ enabled, onToggle, t }) {
+  return (
+    <div style={{
+      border: "1px solid var(--rule-soft)",
+      background: "var(--paper-2)",
+      borderRadius: 4,
+      padding: "10px 11px",
+      marginBottom: 12,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+    }}>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13, fontWeight: 650, color: "var(--ink-1)" }}>
+          {t("coach.memory_nightly_review")}
+        </span>
+        <span style={{ display: "block", marginTop: 3, fontSize: 11.5, lineHeight: 1.45, color: "var(--ink-3)" }}>
+          {t("coach.memory_nightly_review_desc")}
+        </span>
+      </span>
+      <button
+        type="button"
+        onClick={() => onToggle?.(!enabled)}
+        role="switch"
+        aria-checked={enabled}
+        style={{
+          width: 40,
+          height: 22,
+          minHeight: 22,
+          flexShrink: 0,
+          borderRadius: 999,
+          border: "1px solid var(--rule)",
+          background: enabled ? "var(--accent)" : "var(--bg-elevated)",
+          position: "relative",
+          cursor: "pointer",
+          transition: "background 0.15s ease, border-color 0.15s ease",
+          padding: 0,
+        }}
+      >
+        <span style={{
+          position: "absolute",
+          top: 2,
+          left: enabled ? 20 : 2,
+          width: 16,
+          height: 16,
+          borderRadius: "50%",
+          background: enabled ? "var(--accent-ink)" : "var(--ink-3)",
+          boxShadow: "0 1px 2px oklch(0 0 0 / 0.22)",
+          transition: "left 0.15s ease, background 0.15s ease",
+        }} />
+      </button>
     </div>
   );
 }

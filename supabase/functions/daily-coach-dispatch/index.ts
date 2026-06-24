@@ -10,6 +10,10 @@
 //   { "mode": "weekly_recap", "force": true, "user_id": "..." }
 // runs the first agentization Phase 2 loop: a weekly recap written to inbox
 // and pushed to the phone. No calendar or Memory data is changed.
+//   { "mode": "memory_update", "force": true, "user_id": "..." }
+// runs a nightly Memory review: if the user has opted in and has new coach
+// chat today, create a pending memory_update Action Card. It does NOT write
+// user_settings.coach_memory; the app opens the normal review UI next launch.
 // Daily dedup is enforced by push_log (unique on user_id + local date).
 // Weekly recap dedup is currently best-effort via same-week push_inbox title.
 //
@@ -136,6 +140,29 @@ function localParts(tz: string): { hour: number; minute: number; date: string } 
     hour: parseInt(get("hour"), 10) % 24,
     minute: parseInt(get("minute"), 10) || 0,
     date: `${get("year")}-${get("month")}-${get("day")}`,
+  };
+}
+
+function localDateTimeToUtcIso(dateStr: string, timeStr: string, tz: string): string {
+  let guess = new Date(`${dateStr}T${timeStr}:00Z`);
+  const desiredMs = Date.parse(`${dateStr}T${timeStr}:00Z`);
+  for (let i = 0; i < 3; i += 1) {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz, hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    });
+    const parts = fmt.formatToParts(guess);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    const seenMs = Date.parse(`${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}:00Z`);
+    guess = new Date(guess.getTime() + (desiredMs - seenMs));
+  }
+  return guess.toISOString();
+}
+
+function localDateUtcWindow(dateStr: string, tz: string): { startIso: string; endIso: string } {
+  return {
+    startIso: localDateTimeToUtcIso(dateStr, "00:00", tz),
+    endIso: localDateTimeToUtcIso(dateAdd(dateStr, 1), "00:00", tz),
   };
 }
 
@@ -273,6 +300,65 @@ function buildWeeklyRecapPrompt(opts: {
   return { system, user };
 }
 
+function buildMemoryUpdatePrompt(opts: {
+  lang: string;
+  memory: string;
+  chatRows: any[];
+}): { system: string; user: string } {
+  const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
+  const chat = (opts.chatRows || []).map((m) => {
+    const who = m.role === "user" ? "Runner" : "Coach";
+    const text = String(m.content || "").replace(/\s+/g, " ").trim().slice(0, 1200);
+    return text ? `[${who}] ${text}` : "";
+  }).filter(Boolean).join("\n\n");
+  const sectionsEn = [
+    "[Injuries / Health]",
+    "[Goals / Races]",
+    "[Training Preferences]",
+    "[Coaching Style]",
+    "[Recurring Patterns]",
+  ].join("\n");
+  const sectionsZh = [
+    "[伤病 / 健康]",
+    "[目标 / 比赛]",
+    "[训练偏好]",
+    "[教练风格]",
+    "[长期模式]",
+  ].join("\n");
+  const system =
+    `You update a runner's long-term coach Memory from recent chat. ` +
+    `Return only durable, repeatedly useful facts. Do not write one-off session details. ` +
+    `Output bilingual Memory in English and Simplified Chinese with exact line-by-line correspondence. ` +
+    `The app will ask the runner to review before saving, so do not claim anything was saved.`;
+  const user =
+    `[Preferred UI language] ${langName}\n\n` +
+    `[Current memory]\n${opts.memory || "(empty)"}\n\n` +
+    `[Recent coach chat from today]\n${chat || "(empty)"}\n\n` +
+    `Guidelines:\n` +
+    `- Keep these exact English section headings:\n${sectionsEn}\n` +
+    `- Keep these exact Chinese section headings:\n${sectionsZh}\n` +
+    `- Under each heading, write one short fact per line as "- ...".\n` +
+    `- Keep durable facts only: injuries/health constraints, goals/races, training preferences, coaching style preferences, recurring patterns.\n` +
+    `- Drop today's specific question, one-off advice, temporary mood, and generic encouragement.\n` +
+    `- If nothing meaningful should change, return the existing memory normalized into the section structure.\n` +
+    `- Maximum about 500 words total.\n\n` +
+    `Output EXACTLY:\n` +
+    `===EN===\n${sectionsEn}\n<english facts>\n` +
+    `===ZH===\n${sectionsZh}\n<中文事实>`;
+  return { system, user };
+}
+
+function parseBilingualMemory(text: string): { en: string; zh: string } {
+  const parts = String(text || "").split(/===\s*ZH\s*===/i);
+  if (parts.length >= 2) {
+    const en = parts[0].replace(/===\s*EN\s*===/i, "").trim();
+    const zh = parts.slice(1).join("").replace(/===\s*EN\s*===/i, "").trim();
+    if (en || zh) return { en: en || zh, zh: zh || en };
+  }
+  const plain = String(text || "").replace(/===\s*(EN|ZH)\s*===/ig, "").trim();
+  return { en: plain, zh: plain };
+}
+
 async function callLLM(key: string, system: string, user: string): Promise<{ text: string; usage: unknown; id: string }> {
   const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",
@@ -393,7 +479,11 @@ Deno.serve(async (req) => {
       user_id?: string;
       date?: string;
     };
-    const mode = body.mode === "weekly_recap" ? "weekly_recap" : "daily_checkin";
+    const mode = body.mode === "weekly_recap"
+      ? "weekly_recap"
+      : body.mode === "memory_update"
+        ? "memory_update"
+        : "daily_checkin";
     const saRaw = Deno.env.get("FCM_SERVICE_ACCOUNT");
     if (!saRaw) return json({ error: "FCM_SERVICE_ACCOUNT not set" }, 500);
     const sa = JSON.parse(saRaw);
@@ -402,11 +492,12 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-    // Everyone with push enabled; we filter by local half-hour slot in JS.
+    // Everyone with the relevant automation enabled; we filter by local
+    // half-hour slot in JS for daily push, and by coach_config for Memory.
     let settingsQuery = supabase
       .from("user_settings")
-      .select("user_id, push_hours, push_times, push_timezone, coach_memory, lang")
-      .eq("push_enabled", true);
+      .select("user_id, push_enabled, push_hours, push_times, push_timezone, coach_memory, lang, coach_config");
+    if (mode === "daily_checkin") settingsQuery = settingsQuery.eq("push_enabled", true);
     if (body.user_id) settingsQuery = settingsQuery.eq("user_id", body.user_id);
     const { data: settings, error: sErr } = await settingsQuery;
     if (sErr) return json({ error: sErr.message }, 500);
@@ -418,6 +509,142 @@ Deno.serve(async (req) => {
       const tz = u.push_timezone || "UTC";
       const parts = localParts(tz);
       const date = body.date || parts.date;
+      if (mode === "memory_update") {
+        if (u.coach_config?.nightlyMemoryReview !== true && !body.force) continue;
+        const { startIso, endIso } = localDateUtcWindow(date, tz);
+
+        if (!body.force) {
+          const { data: logged } = await supabase
+            .from("agent_actions")
+            .select("id")
+            .eq("user_id", u.user_id)
+            .eq("type", "memory_update")
+            .eq("source", "nightly_memory_review")
+            .gte("created_at", startIso)
+            .lt("created_at", endIso)
+            .limit(1)
+            .maybeSingle();
+          if (logged) continue;
+        }
+
+        const { data: chatRows, error: chatErr } = await supabase
+          .from("coach_messages")
+          .select("id, role, content, created_at")
+          .eq("user_id", u.user_id)
+          .gte("created_at", startIso)
+          .lt("created_at", endIso)
+          .order("created_at", { ascending: true })
+          .limit(30);
+        if (chatErr) { summary.push({ user: u.user_id, error: chatErr.message }); continue; }
+        if (!chatRows?.some((m: any) => m.role === "user")) {
+          summary.push({ user: u.user_id, mode, skipped: "no_user_chat" });
+          continue;
+        }
+
+        const { error: ensureErr } = await supabase.rpc("wallet_ensure", {
+          p_user_id: u.user_id,
+          p_initial_cents: 500,
+        });
+        if (ensureErr) { summary.push({ user: u.user_id, error: "wallet_ensure_failed" }); continue; }
+        const { data: wallet } = await supabase
+          .from("wallets")
+          .select("balance_cents")
+          .eq("user_id", u.user_id)
+          .single();
+        if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) {
+          summary.push({ user: u.user_id, skipped: "insufficient_balance" });
+          continue;
+        }
+
+        const { system, user } = buildMemoryUpdatePrompt({
+          lang: u.lang || "en",
+          memory: u.coach_memory || "",
+          chatRows: chatRows || [],
+        });
+
+        let text = "";
+        let usage: unknown = null;
+        let upstreamId = "";
+        try {
+          const llm = await callLLM(deepseekKey, system, user);
+          text = llm.text;
+          usage = llm.usage;
+          upstreamId = llm.id;
+        } catch (e) {
+          summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
+          continue;
+        }
+        if (!text) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+
+        const parsed = parseBilingualMemory(text);
+        if (!parsed.en && !parsed.zh) { summary.push({ user: u.user_id, error: "empty memory parse" }); continue; }
+
+        const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(usage);
+        const requestId = upstreamId ? `nightly-memory:${upstreamId}` : `nightly-memory:${u.user_id}:${date}`;
+        const { error: debitErr } = await supabase.rpc("wallet_debit", {
+          p_user_id: u.user_id,
+          p_amount_cents: chargeCents,
+          p_kind: "ai_charge",
+          p_provider: "deepseek",
+          p_request_id: requestId,
+          p_metadata: {
+            source: "nightly_memory_review",
+            model: DEEPSEEK_MODEL,
+            usage,
+            billable_usage: billableUsage,
+            actual_cost_cents: actualCostCents,
+            charge_policy: AI_CHARGE_POLICY,
+          },
+        });
+        if (debitErr) {
+          const insufficient = String(debitErr.message || "").includes("insufficient_balance");
+          summary.push({ user: u.user_id, error: insufficient ? "insufficient_balance" : "wallet_debit_failed" });
+          continue;
+        }
+
+        const clientId = `nightly-memory-${date}-${u.user_id}`;
+        const sourceRef = chatRows?.length ? String(chatRows[chatRows.length - 1].id || "") : null;
+        const { error: actionErr } = await supabase
+          .from("agent_actions")
+          .upsert({
+            user_id: u.user_id,
+            client_id: clientId,
+            type: "memory_update",
+            status: "proposed",
+            title: "Update long-term memory",
+            reason: "The coach reviewed today's chat and found durable facts that can be saved to Memory.",
+            risk: "low",
+            requires_confirmation: true,
+            source: "nightly_memory_review",
+            source_ref_type: sourceRef ? "coach_message" : null,
+            source_ref_id: sourceRef,
+            payload: {
+              memory: parsed,
+              sourceMessageCount: chatRows?.length || 0,
+              localDate: date,
+            },
+            result: {
+              chargeCents,
+              actualCostCents,
+              model: DEEPSEEK_MODEL,
+              requestId,
+            },
+            created_at: new Date().toISOString(),
+          }, { onConflict: "user_id,client_id" });
+        if (actionErr) {
+          summary.push({ user: u.user_id, error: `agent_action: ${actionErr.message}` });
+          continue;
+        }
+
+        const title = u.lang === "zh" ? "记忆更新待审核" : "Memory update ready";
+        const message = u.lang === "zh"
+          ? "教练已根据今天的对话整理出长期记忆建议，打开 AI Coach 审核后才会保存。"
+          : "The coach drafted a Memory update from today's chat. Open AI Coach to review before saving.";
+        await supabase.from("push_inbox").insert({ user_id: u.user_id, title, body: message });
+        summary.push({ user: u.user_id, mode, date, action: clientId, chargeCents, actualCostCents });
+        continue;
+      }
+
       if (mode === "weekly_recap") {
         const { start, end, nextStart, nextEnd } = weekWindow(date);
         if (!body.force) {

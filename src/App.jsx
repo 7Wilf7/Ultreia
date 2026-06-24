@@ -163,6 +163,30 @@ function mergeMemoryFactList(facts = [], fact) {
   return next.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
 }
 
+function pendingMemoryActionToProposal(action) {
+  if (action?.type !== "memory_update" || action.status !== AGENT_ACTION_STATUS.PROPOSED) return null;
+  const memory = action.payload?.memory;
+  if (!memory || typeof memory !== "object") return null;
+  const parsedMemory = {
+    en: typeof memory.en === "string" ? memory.en : "",
+    zh: typeof memory.zh === "string" ? memory.zh : "",
+  };
+  if (!parsedMemory.en.trim() && !parsedMemory.zh.trim()) return null;
+  const sourceMessageCount = Number(action.payload?.sourceMessageCount || 0);
+  return {
+    ...parsedMemory,
+    action,
+    facts: extractMemoryFacts(parsedMemory, {
+      clientPrefix: `memory-fact-${action.id}`,
+      memoryActionId: action.id,
+      sourceMessageCount,
+      source: action.source || "ai_coach_memory",
+      sourceSummary: action.source === "nightly_memory_review" ? "Nightly Memory review" : "Memory auto-update",
+      status: "proposed",
+    }),
+  };
+}
+
 function compactPlanSnapshot(plan) {
   if (!plan || typeof plan !== "object") return null;
   const startedAt = plan.startedAt || plan.started_at || "";
@@ -1466,6 +1490,21 @@ function AppShell({
   const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } once ready
   const [lastMemoryAction, setLastMemoryAction] = useState(null);
   const [showMemory, setShowMemory] = useState(false);
+  useEffect(() => {
+    if (memoryProposal || memoryUpdating) return undefined;
+    const pending = (agentActions || [])
+      .map(pendingMemoryActionToProposal)
+      .filter(Boolean)
+      .sort((a, b) => String(b.action?.createdAt || "").localeCompare(String(a.action?.createdAt || "")))[0];
+    if (pending) {
+      const timer = setTimeout(() => {
+        setMemoryProposal(pending);
+        setLastMemoryAction(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [agentActions, memoryProposal, memoryUpdating]);
 
   const refreshWallet = useCallback(async () => {
     const next = await db.wallet.getMyWallet();

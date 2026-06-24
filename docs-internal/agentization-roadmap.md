@@ -29,9 +29,9 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划、单条未来计划修改和 Memory 更新已接入前端 Action Card |
-| Phase 2 | 收尾观察 | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制和 App 内自动生成设置已落地；真正后台定时后置 |
-| Phase 3 | 进行中 | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口 |
-| Phase 4 | 待开始 | Memory Facts 结构化 | 暂不急，当前分区文本够用 |
+| Phase 2 | 已完成（后台 cron 后置） | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制、App 内自动生成设置和周日导入后询问已落地；真正后台定时后置 |
+| Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
+| Phase 4 | 可开始 | Memory Facts 结构化 | 第一版只做旁路事实表和审核流，不迁移旧 Memory、不替代现有分区文本 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
 ## Phase 1：Action Card 雏形
@@ -196,21 +196,25 @@ proposed -> cancelled
 
 当前状态：
 
-- 已有分区文本。
-- 自动更新会生成英文 + 中文。
+- 已有分区文本，存在 `coach_memory` / `coach_memory_zh`，仍是当前主线。
+- 自动更新会生成英文 + 中文，并以 `memory_update` Action Card 审核后保存。
 - 正式发给 Coach 的主记忆是英文，中文用于审核和阅读。
+- Phase 3 的 `agent_actions` 已能记录 Memory 更新的提议、接受 / 忽略和结果，因此 Phase 4 可以接着做事实级记录。
 
-暂不急着做的原因：
+推进判断：
 
-- 现在只有个人使用，Memory 规模不大。
-- 分区文本已解决大部分可读性问题。
-- 直接建表会增加 UI、迁移、prompt 选择逻辑复杂度。
+- 可以开始，但不做大迁移。
+- 旧分区 Memory 继续保留为可读总览和 prompt fallback。
+- 第一版只建立旁路事实系统：AI 从对话 / 周报 / Action Log 提炼“单条事实”，用户审核后保存、归档或忽略。
+- 保存的 fact 暂时只用于 Memory 面板查看和后续 prompt 试验，不立刻替代 `[Long-term Memory]`。
 
-未来触发条件：
+第一版范围（Phase 4.1）：
 
-- Memory 经常超过 500 字。
-- 旧事实被覆盖。
-- 用户需要按事实逐条编辑、归档、确认来源。
+1. 新建 `coach_memory_facts` 表，字段支持分类、英文 / 中文正文、来源、状态、置信类型和归档。
+2. 新增 DAL：读取最近 active facts、创建 proposed fact、标记 accepted / archived / rejected。
+3. Memory 自动更新时，除继续生成整段分区 Memory 外，可以额外提炼候选 facts，作为 Action Card 审核。
+4. Memory 面板先增加一个轻量 facts 区域：只显示 active / proposed，不做复杂搜索。
+5. Prompt 侧先不强依赖 facts；等事实质量稳定后，再把 active facts 摘要插入 Coach prompt。
 
 建议字段：
 
@@ -219,12 +223,32 @@ category
 content_en
 content_zh
 source
+source_ref_type
+source_ref_id
+confidence
 status
 created_at
 updated_at
+accepted_at
 last_used_at
 archived_at
 ```
+
+完成标准：
+
+- 能从一次对话或周报中提炼出 1-3 条候选长期事实。
+- 用户能逐条接受 / 忽略；接受后成为 active fact。
+- 用户能归档已接受事实，归档后不再进入后续 prompt。
+- 每条 fact 能看到来源类型和来源摘要。
+- 旧的分区 Memory 不被破坏，仍可手动编辑和作为 prompt fallback。
+- `npm run test` / `npm run lint` / `npm run build` 通过。
+
+暂缓内容：
+
+- 不迁移旧 `coach_memory` 文本。
+- 不做复杂事实搜索 / 标签管理。
+- 不让 AI 自动删除或覆盖事实。
+- 不把 facts 作为 Coach prompt 唯一记忆来源。
 
 ## Phase 5：外部训练数据自动同步
 
@@ -248,9 +272,9 @@ archived_at
 
 ## 当前下一步
 
-Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
+可以推进 Phase 4，但先做 Phase 4.1：Memory Facts 旁路事实层。
 
-已落地：
+为什么现在可以推进：
 
 1. `Import to Calendar` 的计划提炼结果已经包装成 `create_plans` 类型的前端 `agentAction`。
 2. 弹窗从单纯导入审核改为 Action Card 审核：先显示建议动作、风险等级、确认说明和「将执行」清单，再逐条编辑计划。
@@ -264,13 +288,17 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 10. Phase 2 第一版开始：`daily-coach-dispatch` 增加 `weekly_recap` 模式，读取本周训练、当周 / 下周计划、每日状态和目标赛，生成 AI 周复盘。
 11. Phase 2.1 调整方向：周复盘不再当作收件箱短消息，而是 Settings 里的完整报告页面；先支持本周 / 上周手动生成、查看账号内最近周报，并可从报告提炼接下来计划。
 12. `coach_reports` 已建表并接入前端；新周报写入账号，旧本机周报会迁移一次。
+13. `agent_actions` 已建表并接入前端，计划导入 / Memory 更新 / 周报提炼动作能记录状态、执行结果和失败原因。
+14. AI Coach 和周报 prompt 已能读取最近 action 反馈，Recent Agent Actions 也能即时刷新、长按删除、展开查看可读详情，并把单条动作带回 Coach 追问。
 
 下一步：
 
-1. Phase 3 收尾观察：确认 Recent Agent Actions 的即时刷新、删除、继续追问、prompt 反哺在真机里是否稳定。
-2. 若稳定，Phase 3 可标记完成；下一阶段不急着新增自动执行，而是进入 Phase 4 小步试验 Memory Facts 结构化。
-3. Phase 4 第一版建议只做“可提炼、可审核、可归档”的结构化事实，不迁移旧 Memory、不替代现有分区文本；先让 Coach 能从对话里提出单条事实更新。
-4. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
+1. 先准备 `coach_memory_facts` 的 Supabase SQL；用户在 Dashboard 跑完后再改 DAL / 前端。
+2. 接 `src/lib/db/memoryFacts.js`，只做读取、创建、接受、忽略、归档。
+3. 在 Memory 自动更新流里提炼候选 facts，复用 Action Card 审核，不破坏现有整段 Memory 更新。
+4. Memory 面板增加轻量 facts 区域，先服务查看和手动归档。
+5. 稳定后再决定是否把 active facts 摘要插入 AI Coach / 周报 prompt。
+6. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -300,3 +328,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-23：Phase 3 第四步：AI Coach 设置新增 `Recent Agent Actions` 轻量只读入口，最近 10 条动作可展开查看 payload/result 摘要，先补可审计性，不新增动作类型。
 - 2026-06-23：Recent Agent Actions 增加“带着这条动作问教练”入口，让 action log 从纯审计记录变成可继续讨论的 agent 上下文；仍不自动执行新动作。
 - 2026-06-24：Recent Agent Actions 展开详情继续收敛成用户可读视图：修改计划按日期分组展示「原计划 / 新计划」，隐藏内部计划 id，执行结果改短标签；这一步确认 action log 的价值是可审计、可追问，而不是暴露数据库结构。
+- 2026-06-24：Phase 3 标记为已完成（观察中）；可以推进 Phase 4，但第一步只做 `coach_memory_facts` 旁路事实层，不迁移旧分区 Memory，也不让 facts 立刻替代 Coach prompt 的主记忆。

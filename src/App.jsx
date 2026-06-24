@@ -133,15 +133,27 @@ function buildMonthlyTraySummary(logs = [], now = new Date(), lang = "zh") {
   const isZh = lang === "zh";
   const distanceText = distance >= 10 ? distance.toFixed(0) : distance.toFixed(1);
   const timeText = seconds > 0 ? formatDurationShort(seconds) : "0m";
-  const leftTop = `Sessions ${String(sessions).padStart(3, " ")}`;
+  const leftTopValue = String(sessions);
+  const leftBottomValue = `${distanceText}km`;
+  const rightTopValue = timeText;
+  const rightBottomValue = `${Math.round(ascent)}m`;
+  const leftTop = `Sessions ${leftTopValue.padStart(3, " ")}`;
   const leftBottom = `Distance ${String(distanceText).padStart(5, " ")}km`;
   const body = [
-    `${leftTop.padEnd(16, " ")} · Time   ${String(timeText).padStart(5, " ")}`,
+    `${leftTop.padEnd(16, " ")} · Time   ${rightTopValue.padStart(5, " ")}`,
     `${leftBottom.padEnd(16, " ")} · Ascent ${String(Math.round(ascent)).padStart(5, " ")}m`,
   ].join("\n");
   return {
     title: isZh ? "本月训练" : "This month",
     body,
+    leftTopLabel: "Sessions",
+    leftTopValue,
+    leftBottomLabel: "Distance",
+    leftBottomValue,
+    rightTopLabel: "Time",
+    rightTopValue,
+    rightBottomLabel: "Ascent",
+    rightBottomValue,
   };
 }
 

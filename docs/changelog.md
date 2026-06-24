@@ -17,6 +17,7 @@
 - **全局界面风格调整**：App shell 改为接近 Aevum 的 Linear-inspired 深色产品界面，使用暗色半透明面板、细边线和克制的深苔绿 / olive 焦点色；活动列表、导入预览、设置弹窗、删除确认和底部导航同步收敛到新风格。
 - **安卓常驻通知统计口径修正**：本月 Distance 和 Training 顶部本月 Distance 保持一致，只统计 Road Run / Trail Run / Hiking / Floor Climbing 的距离，不再把 HIIT / Strength 里可能残留的距离算进去。
 - **安卓常驻通知对齐优化**：通知栏本月统计改成固定宽度的两行显示，让 Sessions / Time 和 Distance / Ascent 的分隔点、右侧字段更稳定对齐。
+- **安卓常驻通知列对齐修正**：常驻通知改用原生分列布局显示本月统计，让 Sessions / Distance 的数据列、两个分隔点、Time / Ascent 标签列和右侧数据列分别对齐。
 - **Recent Agent Actions 更直观**：展开计划修改记录时按日期展示「原计划 / 新计划」，不再露出内部计划编号；执行结果改成更短的摘要标签。
 - **系统弹窗收敛为应用内提示**：AI / Memory 更新错误、表单校验、放弃未保存修改、收件箱清空和 Memory facts 归档确认改为 Ultreia 自己的应用内弹窗，不再出现浏览器 / PWA 的系统级 "www.ultreia.run says" 提示。
 

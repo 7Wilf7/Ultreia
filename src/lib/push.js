@@ -93,6 +93,14 @@ export async function setPushKeepAliveEnabled(enabled, summary = {}) {
       await UltreiaKeepAlive.start({
         title: summary.title || "This month",
         body: summary.body || "Sessions   0     · Time      0m\nDistance   0.0km · Ascent     0m",
+        leftTopLabel: summary.leftTopLabel || "Sessions",
+        leftTopValue: summary.leftTopValue || "0",
+        leftBottomLabel: summary.leftBottomLabel || "Distance",
+        leftBottomValue: summary.leftBottomValue || "0.0km",
+        rightTopLabel: summary.rightTopLabel || "Time",
+        rightTopValue: summary.rightTopValue || "0m",
+        rightBottomLabel: summary.rightBottomLabel || "Ascent",
+        rightBottomValue: summary.rightBottomValue || "0m",
       });
       appendPushDebug('keepAliveStarted', summary);
     } else {

@@ -23,7 +23,27 @@ public class UltreiaKeepAlivePlugin extends Plugin {
         try {
             String title = call.getString("title", "This month");
             String body = call.getString("body", "Sessions   0     · Time      0m\nDistance   0.0km · Ascent     0m");
-            UltreiaKeepAliveService.start(getContext(), title, body);
+            String leftTopLabel = call.getString("leftTopLabel", "Sessions");
+            String leftTopValue = call.getString("leftTopValue", "0");
+            String leftBottomLabel = call.getString("leftBottomLabel", "Distance");
+            String leftBottomValue = call.getString("leftBottomValue", "0.0km");
+            String rightTopLabel = call.getString("rightTopLabel", "Time");
+            String rightTopValue = call.getString("rightTopValue", "0m");
+            String rightBottomLabel = call.getString("rightBottomLabel", "Ascent");
+            String rightBottomValue = call.getString("rightBottomValue", "0m");
+            UltreiaKeepAliveService.start(
+                getContext(),
+                title,
+                body,
+                leftTopLabel,
+                leftTopValue,
+                leftBottomLabel,
+                leftBottomValue,
+                rightTopLabel,
+                rightTopValue,
+                rightBottomLabel,
+                rightBottomValue
+            );
             JSObject ret = new JSObject();
             ret.put("running", true);
             call.resolve(ret);

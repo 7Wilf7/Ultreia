@@ -36,7 +36,7 @@
 后续动作：
 
 - `daily-coach-dispatch` 自动周报已接入 `coach_reports`，并在保存完整报告后发送短系统通知 / 收件箱提醒。
-- 待在 Supabase Dashboard 执行 `docs-internal/supabase-weekly-report-cron.sql`，正式启用每 30 分钟的服务端调度检查。
+- 在 Supabase Dashboard 执行 `docs-internal/supabase-weekly-report-cron.sql` 后，正式启用每 30 分钟的服务端调度检查；当前生产环境已由 Wilf 执行过一次，如更换 `CRON_SECRET` 或重建项目再重跑。
 
 ## 已建表并接入
 
@@ -65,9 +65,9 @@
 - 后续如需要更完整的审计页，再增加 action log 可视化入口。
 - 如要追踪停止/扣费/服务端完成状态，把任务结果写入 `result` / `error`。
 
-## 待建表 / 待接入
+## 已建表并接入
 
-### 1. `coach_memory_facts`
+### 3. `coach_memory_facts`
 
 现状：
 
@@ -85,7 +85,9 @@
 
 - `docs-internal/supabase-coach-memory-facts.sql`
 
-### 2. `coach_report_notes` 或 `coach_annotations`
+## 待建表 / 待接入
+
+### 1. `coach_report_notes` 或 `coach_annotations`
 
 现状：
 

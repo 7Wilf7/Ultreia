@@ -398,13 +398,14 @@ accepted -> failed
 
 目标：减少用户手动上传，增强 agent 的感知能力。
 
-优先级：
+当前结论：
 
-1. Strava API 自动同步；
-2. Garmin / 高驰直连如果个人资质不可行，就不碰；
-3. 日历系统同步可后置。
+- 短期不把 Strava API 自动同步作为 Ultreia Agent 化路线。技术链路成立（Garmin / 高驰可先同步到 Strava，Ultreia 再接 Webhook / API），但 Strava API 政策限制把 API 数据用于 AI application、RAG、embedding、context window / working memory，以及未经授权的 agent / MCP 场景；这与 Ultreia AI Coach 的核心用法冲突。
+- Strava 数据也不等于手表原始 FIT：它能提供摘要和部分 streams，但无法稳定覆盖 Training Effect、RPE、完整原始记录等；心率区间只能在拿得到心率 stream 时近似重算。
+- Garmin / 高驰直连如果仍需要企业资质，短期也不碰。
+- 日历系统同步可后置。
 
-没有自动同步，agent 的主动性会被数据新鲜度限制。它再聪明，也只能基于用户手动喂进来的训练判断。
+没有自动同步，agent 的主动性确实会被数据新鲜度限制。但在没有干净、合规、数据质量足够的入口前，不应该为了“自动”牺牲 AI Coach 的政策安全和训练判断质量。短期继续把 FIT / ZIP 作为高质量数据入口，Agent 化优先从 Ultreia 内部闭环推进。
 
 ## 7. 不建议做的方向
 

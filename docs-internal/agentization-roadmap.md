@@ -32,7 +32,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 2 | 已完成（服务端 cron 待启用） | AI 周复盘 Page | 全屏周报页、账号保存、文本注解和停止控制已落地；服务端会按用户本地星期 / 时间生成并写入 `coach_reports`，待执行 cron SQL 正式启用 |
 | Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
 | Phase 4 | 进行中 | Memory Facts 结构化 | 事实表已接入；Memory 面板改为 facts-only；AI Coach / 周报只读取 active facts；旧分区 Memory 已退出 prompt，清理 SQL 已准备；夜间记忆审核第一版已接入 |
-| Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
+| Phase 5 | 暂不推进 | 自动同步外部训练数据 | Strava API 因 AI 使用政策和数据完整性问题，不作为短期路线 |
 
 ## Phase 1：Action Card 雏形
 
@@ -254,21 +254,68 @@ archived_at
 
 目标：减少手动上传，让 agent 的感知更及时。
 
-优先候选：
+当前结论：
 
-- Strava API 自动同步。
+- 短期不做 Strava API 自动同步，也不把它作为 Agent 化主线。
+- 原因不是“接不了”：Garmin / COROS 同步到 Strava、Strava Webhook / API 拉活动在技术上都成立。
+- 真正 blocker 是两点：
+  1. Strava API 政策明确限制把 API 数据用于 AI application、RAG、embedding、context window / working memory，以及未经授权的 agent / MCP 场景；这和 Ultreia AI Coach / 周报 / Memory / Action Card 的核心用法冲突。
+  2. Strava 拿到的是活动摘要和部分 streams，不等于手表原始 FIT；Training Effect、RPE、完整原始记录等无法稳定获得，心率区间也只能在可拿到心率 stream 时近似重算。
+- 因此，Strava 可以作为“用户个人在外部 AI 平台里授权官方 Strava MCP”的个人工作流，但不适合作为 Ultreia 后端写库后再喂给 AI Coach 的产品能力。
 
 暂不碰：
 
+- Strava API 自动同步（除非未来政策和可用数据范围明显变化，或仅做不进入 AI prompt 的只读展示）。
 - App 内 GPS 记录。
 - Garmin Health API 企业接入。
 - 复杂多平台同步。
 
 评估点：
 
-- 国内 Garmin / 高驰同步到 Strava 是否稳定。
-- Strava 免费 API 配额是否够个人使用。
-- 同步过来的数据是否缺心率区间、天气、RPE，需要怎么降级。
+- 是否存在更干净的第一方个人数据入口：例如设备厂商正式个人 API、用户授权导出包、或本地文件夹 / 云盘自动导入 FIT。
+- 如果未来重新评估 Strava，只能先明确：同步数据是否进入 AI prompt；如果进入，必须先确认政策允许。
+- 在没有干净自动同步前，继续把 FIT / ZIP 导入视为高质量数据入口；AI Agent 的下一步优先从 Ultreia 内部闭环推进，而不是外部平台同步。
+
+## 下一批可落地 Agent 化机会
+
+Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultreia 已经有的数据变成更多“观察 → 建议 → 用户确认 → 执行 → 记录”的闭环。
+
+优先级建议：
+
+1. **计划偏差补救 Action Card**
+   - 触发：过去 7–14 天出现漏练 / 部分完成，尤其是目标赛临近或连续两次未完成。
+   - 数据来源：`evaluatePlanOutcome` 已能判断计划完成 / 部分完成 / 漏掉；AI Coach prompt 也已经读取计划依从。
+   - 动作：生成“调整接下来 3–7 天计划”的 `create_plans` / update Action Card，例如降载、挪长距离、补恢复日。
+   - 边界：不自动补跑、不自动加量；必须解释原因并让用户确认。
+   - 为什么优先：它直接承接现有 Action Card、Calendar 和 Agent Action Log，不需要新表。
+
+2. **恢复风险 / 负荷守门 Action Card**
+   - 触发：ACWR high / danger、RPE 覆盖足够、晨间状态差、备注出现疼痛 / 疲劳等信号。
+   - 数据来源：`computeTrainingLoad`、readiness、最近训练备注、当前未来计划。
+   - 动作：建议把某一天改成恢复跑 / 休息 / 低强度，或提醒不要叠加质量课。
+   - 边界：健康风险只能建议和解释，不做诊断；所有计划变更都走确认。
+
+3. **天气驱动的计划调整 Action Card**
+   - 触发：未来 7 天已有长距离 / 强度训练，同时预报出现高温高湿、强风、空气质量差或大雨。
+   - 数据来源：现有 `weatherCtx.forecastByDate` 和 planned sessions。
+   - 动作：建议换到更合适日期 / 时段，或保留日期但降低目标。
+   - 边界：只调整未来计划；不影响已完成训练。
+
+4. **数据质量补全助手**
+   - 触发：最近完成训练缺 RPE、导入活动有未知类型、天气可补但未补、重要训练缺备注。
+   - 动作：先做非 AI 的轻量 checklist；需要写库时让用户确认。后续可把“补 RPE / 补备注 / 改类型”扩展成低风险 Action Card。
+   - 为什么重要：ACWR、周报、Memory 的质量依赖 RPE / 备注 / 类型准确性，补数据比多接一个模型更实用。
+
+5. **赛前简报 / 装备检查**
+   - 触发：A 级目标赛进入 14 天窗口，且已填写地点 / 天气可用。
+   - 动作：生成赛前 briefing（天气、补给、装备、减量重点、风险提醒），并可把“需要确认的准备事项”做成 checklist。
+   - 边界：第一版只生成报告 / checklist，不自动改训练计划；如要调整减量计划，再走 Action Card。
+
+暂不作为下一批：
+
+- 全自动周期化计划重排：影响范围太大，必须等局部 Action Card 稳定后再说。
+- 后台静默改日历：违反当前原则。
+- 外部训练自动同步：Strava 下调，Garmin / 高驰直连暂无干净个人入口。
 
 ## 当前下一步
 
@@ -298,6 +345,7 @@ archived_at
 3. 后续如果需要“候选事实逐条审核”，再把 proposed facts 作为独立 Action Card；当前不在点 Discard 前写入 facts，避免半确认事实残留。
 4. 服务端定时周报代码已完成；部署 `daily-coach-dispatch` 并执行 `docs-internal/supabase-weekly-report-cron.sql` 后正式启用。Settings 保留为用户设置星期 / 时间的控制面板，前端不再负责定时触发。
 5. 夜间记忆审核第一版已接入：设置在 AI Coach → Memory 内，默认关闭；只在当天有新对话时运行，生成待审核 Action Card / inbox，不自动写入 active Memory；默认每天最多一次，并清楚显示可能产生的 AI 调用成本。上线前需要单独部署 `daily-coach-dispatch` Edge Function，并在 Supabase Dashboard 跑 `docs-internal/supabase-nightly-memory-review-cron.sql` 才会真正凌晨自动触发。
+6. Strava 自动同步短期下调，不作为下一阶段 Agent 化任务；下一步优先做“计划偏差补救 Action Card”，再扩展到恢复风险和天气计划调整。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -318,6 +366,7 @@ archived_at
 - 2026-06-22：文本注解改为移动端友好的浮动“加注解”按钮和底部固定输入栏；AI Coach 聊天、周报分析、计划提炼加入停止入口；周日上传活动后先以本地确认弹窗触发手动周报。
 - 2026-06-22：`user_settings` 周报自动生成字段接入前端；Settings 增加周复盘自动生成设置，支持开关、星期、时间和周日导入后询问开关。当前触发边界是 App 打开 / 回到前台检查，不做系统后台静默执行。
 - 2026-06-22：Settings 里的 AI 周复盘收拢成二级入口（详情 / 设置）；自动生成时间选择改用应用内滚轮。普通 AI Coach 回复注解入口移除，保留直接聊天。
+- 2026-06-24：Phase 5 外部训练自动同步下调为暂不推进。Strava 技术上可接 Garmin / COROS 同步后的活动，但 API 政策限制 AI application / agent / context 使用，且数据不等同 FIT 原始记录；短期继续以 FIT / ZIP 为高质量入口，Agent 化优先推进内部闭环。
 - 2026-06-23：周复盘自动设置的星期也改为滚轮；日历计划状态去掉单独 `skipped` 展示，`planned_rest` 明确为“显式计划休息 / 覆盖旧计划”的语义，不自动套用到所有空白日。
 - 2026-06-23：Phase 2 进入收尾观察；下一步确认进入 Phase 3 `agent_actions`，先做可追溯 action log，不做新的自动执行。
 - 2026-06-23：补充 `agent_actions` 建表 SQL；第一版保留 `client_id` 承接现有前端 Action Card id，并用 `source_ref_type/source_ref_id` 关联 AI Coach 消息或周报来源。

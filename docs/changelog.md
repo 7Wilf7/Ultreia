@@ -4,8 +4,9 @@
 
 ## 2026-06-24
 
-- **深色界面颜色修正**：主色从蓝紫调整为更贴近当前 logo 的 moss / olive；Training、Races、Settings、天气设置和 AI Coach 里的选中态修复为深色可读样式，不再出现白底浅字或按钮挤压。
-- **全局界面风格调整**：App shell 改为接近 Aevum 的 Linear-inspired 深色产品界面，使用暗色半透明面板、细边线和克制的 logo moss / olive 焦点色；活动列表、导入预览、设置弹窗、删除确认和底部导航同步收敛到新风格。
+- **深色界面高级感增强**：主色压暗为深苔绿，加入柔和动态流光、微噪点、细线微光和按钮 / 输入框微交互；比赛 tag 改成暗底描边，不再使用亮色底配白字。
+- **深色界面颜色修正**：主色从蓝紫调整为更贴近当前 logo 的深苔绿 / olive；Training、Races、Settings、天气设置和 AI Coach 里的选中态修复为深色可读样式，不再出现白底浅字或按钮挤压。
+- **全局界面风格调整**：App shell 改为接近 Aevum 的 Linear-inspired 深色产品界面，使用暗色半透明面板、细边线和克制的深苔绿 / olive 焦点色；活动列表、导入预览、设置弹窗、删除确认和底部导航同步收敛到新风格。
 - **安卓常驻通知统计口径修正**：本月 Distance 和 Training 顶部本月 Distance 保持一致，只统计 Road Run / Trail Run / Hiking / Floor Climbing 的距离，不再把 HIIT / Strength 里可能残留的距离算进去。
 - **安卓常驻通知对齐优化**：通知栏本月统计改成固定宽度的两行显示，让 Sessions / Time 和 Distance / Ascent 的分隔点、右侧字段更稳定对齐。
 - **Recent Agent Actions 更直观**：展开计划修改记录时按日期展示「原计划 / 新计划」，不再露出内部计划编号；执行结果改成更短的摘要标签。

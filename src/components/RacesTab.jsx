@@ -481,22 +481,26 @@ export function RacesTab({
     if (!color) return s.subTag;
     return {
       ...s.subTag,
-      background: color,
+      background: `${color}26`,
       borderColor: color,
-      color: "var(--ink-inv)",
+      color: "var(--ink-1)",
       fontWeight: 600,
+      boxShadow: `0 0 16px ${color}22`,
     };
   }
 
   function renderCategoryTag(cat) {
     if (!cat) return null;
+    const color = RACE_CATEGORY_COLOR[cat] || "#6b7469";
     return (
       <span style={{
         fontFamily: "var(--font-mono)",
-        fontSize: 11, padding: "2px 8px", borderRadius: 2,
-        background: RACE_CATEGORY_COLOR[cat] || "var(--rule-soft)",
-        color: "var(--ink-1)", fontWeight: 500, whiteSpace: "nowrap",
+        fontSize: 11, padding: "2px 8px", borderRadius: 4,
+        background: `linear-gradient(180deg, ${color}33, ${color}1f)`,
+        border: `1px solid ${color}`,
+        color: "var(--ink-1)", fontWeight: 650, whiteSpace: "nowrap",
         textTransform: "uppercase", letterSpacing: "0.05em",
+        boxShadow: `0 0 14px ${color}20`,
         flexShrink: 0,
       }}>{t(`enum.race_cat.${cat}`)}</span>
     );
@@ -895,8 +899,8 @@ export function RacesTab({
             {r.isTarget && r.priority && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
-                color: r.priority === "A" ? "var(--bg-deep)" : "var(--ink-1)",
-                background: r.priority === "A" ? "var(--accent)" : r.priority === "B" ? "var(--accent-soft)" : "transparent",
+                color: r.priority === "A" ? "var(--accent-ink)" : "var(--ink-1)",
+                background: r.priority === "A" ? "linear-gradient(180deg, oklch(0.58 0.060 138), var(--accent))" : r.priority === "B" ? "var(--accent-soft)" : "transparent",
                 border: "1px solid " + (r.priority === "A" ? "var(--accent)" : "var(--rule)"),
                 padding: "2px 7px", flexShrink: 0,
               }}>▲ {r.priority}</span>
@@ -986,8 +990,8 @@ export function RacesTab({
           {r.isTarget && r.priority && (
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
-              color: r.priority === "A" ? "var(--bg-deep)" : "var(--ink-1)",
-              background: r.priority === "A" ? "var(--accent)" : r.priority === "B" ? "var(--accent-soft)" : "transparent",
+              color: r.priority === "A" ? "var(--accent-ink)" : "var(--ink-1)",
+              background: r.priority === "A" ? "linear-gradient(180deg, oklch(0.58 0.060 138), var(--accent))" : r.priority === "B" ? "var(--accent-soft)" : "transparent",
               border: "1px solid " + (r.priority === "A" ? "var(--accent)" : "var(--rule)"),
               padding: "2px 8px",
               whiteSpace: "nowrap",
@@ -1175,9 +1179,10 @@ export function RacesTab({
                     style={{
                       ...s.chip(active),
                       ...(active && tierColor ? {
-                        background: tierColor,
+                        background: `${tierColor}26`,
                         borderColor: tierColor,
-                        color: "var(--ink-inv)",
+                        color: "var(--ink-1)",
+                        boxShadow: `0 0 18px ${tierColor}22`,
                       } : tierColor ? {
                         // Even when not picked, show a small color hint on the
                         // left so the user can map tier ↔ color at a glance.

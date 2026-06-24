@@ -2341,12 +2341,13 @@ Rules:
           className="ultreia-overlay-in"
           style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
-            background: "var(--accent)", color: "var(--bg-deep)", border: "none",
+            background: "linear-gradient(180deg, oklch(0.58 0.060 138), var(--accent))",
+            color: "var(--accent-ink)", border: "none",
             padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px",
             fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 650,
             cursor: "pointer", textAlign: "center", width: "100%",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            boxShadow: "var(--shadow-soft)",
+            boxShadow: "var(--shadow-soft), 0 0 30px oklch(0.40 0.060 138 / 0.22)",
           }}>
           <span aria-hidden="true">🧠</span>
           <span>{t("coach.memory_ready_banner")}</span>

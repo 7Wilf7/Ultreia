@@ -210,15 +210,15 @@ export const RACE_CATEGORIES = [
   "Other",
 ];
 
-// Color per race category — muted, parchment / stone tints. Used as tag bg.
+// Color per race category — darkened neon-edge tones for the dark app shell.
 export const RACE_CATEGORY_COLOR = {
-  "Half Marathon": "#e1dccc",   /* warm stone */
-  "Marathon":      "#d6cfb8",   /* darker stone */
-  "10K":           "#e0e4d5",   /* moss-bg */
-  "Trail":         "#cdc4ad",   /* parchment-deep */
-  "Spartan":       "#e8d4ce",   /* faded brick */
-  "Hyrox":         "#ecdec0",   /* faded amber */
-  "Other":         "#e1dfd6",   /* rule-soft */
+  "Half Marathon": "#8d856d",
+  "Marathon":      "#786f55",
+  "10K":           "#65745c",
+  "Trail":         "#746f57",
+  "Spartan":       "#8f5a4e",
+  "Hyrox":         "#947747",
+  "Other":         "#747269",
 };
 
 // Fixed system prompt — not user-editable. Keep it short and principled.

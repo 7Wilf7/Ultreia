@@ -10,36 +10,37 @@
   --font-mono: "SF Mono", SFMono-Regular, ui-monospace, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* ---- Surface ---- */
-  --bg:           oklch(0.115 0.006 274);
-  --bg-elevated: oklch(0.145 0.008 274 / 0.94);
-  --bg-sunken:   oklch(0.095 0.006 274);
-  --bg-deep:     oklch(0.07 0.006 274);
-  --panel:       oklch(0.178 0.008 274 / 0.84);
-  --panel-2:     oklch(0.225 0.01 274 / 0.78);
-  --panel-3:     oklch(0.29 0.012 274 / 0.88);
+  --bg:           oklch(0.108 0.007 145);
+  --bg-elevated: oklch(0.14 0.009 145 / 0.94);
+  --bg-sunken:   oklch(0.088 0.007 145);
+  --bg-deep:     oklch(0.058 0.007 145);
+  --panel:       oklch(0.172 0.010 145 / 0.84);
+  --panel-2:     oklch(0.215 0.012 145 / 0.78);
+  --panel-3:     oklch(0.275 0.014 145 / 0.88);
   --paper:       var(--panel);
   --paper-2:     var(--panel-2);
 
   /* ---- Ink (text) ---- */
-  --ink:   oklch(0.955 0.004 274);
+  --ink:   oklch(0.955 0.004 145);
   --ink-1: var(--ink);
-  --ink-2: oklch(0.765 0.014 274);
-  --ink-3: oklch(0.61 0.018 274);
-  --ink-inv: oklch(0.975 0.004 274);
+  --ink-2: oklch(0.765 0.014 145);
+  --ink-3: oklch(0.61 0.018 145);
+  --ink-inv: oklch(0.975 0.004 145);
 
   /* ---- Rules / borders ---- */
-  --rule:         oklch(0.38 0.018 274 / 0.52);
-  --rule-soft:    oklch(0.48 0.03 274 / 0.2);
-  --rule-strong:  oklch(0.67 0.042 274 / 0.62);
-  --rule-ink:     oklch(0.88 0.02 274 / 0.72);
+  --rule:         oklch(0.36 0.020 145 / 0.52);
+  --rule-soft:    oklch(0.45 0.030 145 / 0.2);
+  --rule-strong:  oklch(0.60 0.045 145 / 0.66);
+  --rule-ink:     oklch(0.86 0.020 145 / 0.72);
 
   /* ---- Accent: logo-adjacent moss / olive, not Aevum violet ---- */
-  --accent:       oklch(0.70 0.085 132);
-  --accent-dark:  oklch(0.87 0.060 132);
-  --accent-soft:  oklch(0.285 0.042 132 / 0.72);
-  --aura-blue:    oklch(0.66 0.075 184);
-  --aura-violet:  oklch(0.62 0.075 132);
-  --aura-cyan:    oklch(0.76 0.085 166);
+  --accent:       oklch(0.54 0.055 138);
+  --accent-dark:  oklch(0.78 0.045 138);
+  --accent-soft:  oklch(0.215 0.038 138 / 0.82);
+  --accent-ink:   oklch(0.965 0.006 138);
+  --aura-blue:    oklch(0.52 0.060 184);
+  --aura-violet:  oklch(0.46 0.055 138);
+  --aura-cyan:    oklch(0.62 0.070 166);
   --moss:         var(--accent);
   --moss-light:   var(--accent-dark);
   --moss-deep:    var(--accent-dark);
@@ -57,7 +58,8 @@
   /* ---- Effects ---- */
   --shadow:      0 18px 58px oklch(0 0 0 / 0.34);
   --shadow-soft: 0 10px 30px oklch(0 0 0 / 0.20);
-  --glow:        0 0 0 1px oklch(0.78 0.070 132 / 0.18), 0 16px 54px oklch(0.55 0.10 132 / 0.16);
+  --glow:        0 0 0 1px oklch(0.62 0.055 138 / 0.24), 0 0 34px oklch(0.40 0.070 138 / 0.18);
+  --line-glow:   0 0 0 1px oklch(0.64 0.045 138 / 0.24);
   --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
   --r-sm:        8px;
   --r-md:        12px;
@@ -76,6 +78,7 @@
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.55;
+  font-feature-settings: "cv02" 1, "cv03" 1, "cv04" 1, "cv11" 1;
 
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -101,9 +104,10 @@ body {
   position: relative;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 18% -10%, oklch(0.50 0.10 132 / 0.11), transparent 34%),
-    radial-gradient(circle at 112% 8%, oklch(0.55 0.085 166 / 0.09), transparent 38%),
-    linear-gradient(180deg, oklch(0.13 0.006 274) 0%, var(--bg) 44%, oklch(0.095 0.006 274) 100%);
+    radial-gradient(circle at 18% -10%, oklch(0.36 0.070 138 / 0.28), transparent 32%),
+    radial-gradient(circle at 112% 8%, oklch(0.48 0.065 166 / 0.17), transparent 36%),
+    radial-gradient(circle at 50% 112%, oklch(0.25 0.050 138 / 0.20), transparent 44%),
+    linear-gradient(180deg, oklch(0.125 0.008 145) 0%, var(--bg) 44%, oklch(0.082 0.007 145) 100%);
   background-attachment: fixed;
 }
 
@@ -118,18 +122,24 @@ body::after {
 body::before {
   z-index: 0;
   background:
-    linear-gradient(110deg, transparent 0%, oklch(0.58 0.075 132 / 0.055) 35%, transparent 62%),
+    radial-gradient(ellipse at 34% 18%, oklch(0.52 0.060 138 / 0.12), transparent 45%),
+    linear-gradient(112deg, transparent 0%, oklch(0.48 0.065 138 / 0.11) 34%, oklch(0.60 0.065 166 / 0.06) 48%, transparent 68%),
     linear-gradient(180deg, oklch(1 0 0 / 0.035), transparent 22%);
+  filter: blur(14px);
   transform-origin: center;
-  animation: ultreia-ambient-flow 18s var(--ease-out) infinite alternate;
+  animation: ultreia-ambient-flow 22s var(--ease-out) infinite alternate;
 }
 
 body::after {
   z-index: 0;
-  opacity: 0.18;
+  opacity: 0.24;
   background-image:
-    radial-gradient(circle at 1px 1px, oklch(1 0 0 / 0.18) 1px, transparent 0);
-  background-size: 18px 18px;
+    radial-gradient(circle at 1px 1px, oklch(1 0 0 / 0.12) 1px, transparent 0),
+    radial-gradient(circle at 1px 1px, oklch(0.58 0.055 138 / 0.11) 0.8px, transparent 0),
+    linear-gradient(90deg, oklch(1 0 0 / 0.018) 1px, transparent 1px),
+    linear-gradient(0deg, oklch(1 0 0 / 0.014) 1px, transparent 1px);
+  background-size: 22px 22px, 5px 5px, 4px 4px, 4px 4px;
+  mix-blend-mode: screen;
   mask-image: linear-gradient(to bottom, black, transparent 76%);
 }
 
@@ -139,7 +149,32 @@ button, input, select, textarea {
   color: inherit;
 }
 
-button { cursor: pointer; }
+button {
+  cursor: pointer;
+  transition:
+    border-color 150ms var(--ease-out),
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out),
+    box-shadow 150ms var(--ease-out),
+    transform 90ms var(--ease-out),
+    filter 150ms var(--ease-out);
+}
+button:disabled { cursor: default; }
+
+@media (hover: hover) {
+  button:not(:disabled):not([aria-label="Close"]):hover {
+    border-color: var(--rule-strong);
+    box-shadow: var(--line-glow);
+  }
+
+  a:hover {
+    filter: brightness(1.08);
+  }
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px) scale(0.995);
+}
 
 /* Native-app feel: no long-press text selection or the Android WebView
    "Copy / Select all" callout menu (it was hijacking the long-press on
@@ -155,6 +190,16 @@ input, textarea, select, [contenteditable="true"], pre, .selectable {
   -webkit-user-select: text;
   user-select: text;
   -webkit-touch-callout: default;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.045),
+    0 0 0 1px oklch(0.54 0.055 138 / 0.22),
+    0 0 28px oklch(0.38 0.060 138 / 0.18) !important;
 }
 
 /* Numbers everywhere should be tabular so columns align. */
@@ -197,8 +242,8 @@ summary::-webkit-details-marker { display: none; }
 }
 
 @keyframes ultreia-ambient-flow {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); opacity: 0.56; }
-  to   { transform: translate3d(1.5%, 1%, 0) scale(1.06); opacity: 0.92; }
+  from { transform: translate3d(-2%, -1%, 0) scale(1.02) rotate(-1deg); opacity: 0.44; }
+  to   { transform: translate3d(2%, 1%, 0) scale(1.08) rotate(1deg); opacity: 0.88; }
 }
 
 /* Indeterminate progress bar — used by the in-app APK update download when
@@ -221,8 +266,8 @@ summary::-webkit-details-marker { display: none; }
    (e.g. AI Coach weather pill → the calendar's today weather card). Works on
    any background, unlike ultreia-flash which swaps the bg. */
 @keyframes ultreia-flash-ring {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.70 0.085 132 / 0); }
-  30%, 70% { box-shadow: 0 0 0 3px oklch(0.70 0.085 132 / 0.62); }
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.54 0.055 138 / 0); }
+  30%, 70% { box-shadow: 0 0 0 3px oklch(0.54 0.055 138 / 0.62); }
 }
 .ultreia-flash-ring {
   animation: ultreia-flash-ring 0.7s ease-in-out 3;

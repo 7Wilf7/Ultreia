@@ -89,7 +89,7 @@ export function ApiSettingsModal({
                 borderRadius: "50%", boxSizing: "border-box",
                 border: `1px solid ${pricingOpen ? "var(--accent)" : "var(--ink-3)"}`,
                 background: pricingOpen ? "var(--accent)" : "transparent",
-                color: pricingOpen ? "var(--bg-deep)" : "var(--ink-3)",
+                color: pricingOpen ? "var(--accent-ink)" : "var(--ink-3)",
                 fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)",
                 cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",

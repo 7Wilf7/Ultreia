@@ -372,7 +372,7 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
               borderRadius: 999,
               border: "1px solid var(--rule)",
               background: showInfo ? "var(--accent)" : "var(--bg-elevated)",
-              color: showInfo ? "var(--bg-deep)" : "var(--ink-2)",
+              color: showInfo ? "var(--accent-ink)" : "var(--ink-2)",
               fontFamily: "var(--font-mono)",
               fontSize: 13,
               fontWeight: 700,

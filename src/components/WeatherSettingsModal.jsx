@@ -113,5 +113,5 @@ const s = {
   },
   actions: { display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 },
   secondaryBtn: { border: "1px solid var(--rule)", background: "var(--bg)", color: "var(--ink-1)", borderRadius: 6, padding: "9px 14px", cursor: "pointer" },
-  primaryBtn: { border: "1px solid var(--accent)", background: "var(--accent)", color: "var(--bg-deep)", borderRadius: 6, padding: "9px 14px", cursor: "pointer" },
+  primaryBtn: { border: "1px solid var(--accent)", background: "linear-gradient(180deg, oklch(0.58 0.060 138), var(--accent))", color: "var(--accent-ink)", borderRadius: 6, padding: "9px 14px", cursor: "pointer" },
 };

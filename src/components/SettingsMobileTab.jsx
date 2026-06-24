@@ -387,12 +387,12 @@ function LangSwitch({ lang, onToggle }) {
         <span style={{
           flex: 1, textAlign: "center", fontSize: 13, fontFamily: "var(--font-sans)",
           fontWeight: 600, zIndex: 1, transition: "color 180ms",
-          color: !isEn ? "var(--bg-deep)" : "var(--ink-3)",
+          color: !isEn ? "var(--accent-ink)" : "var(--ink-3)",
         }}>中</span>
         <span style={{
           flex: 1, textAlign: "center", fontSize: 11, fontFamily: "var(--font-mono)",
           fontWeight: 600, zIndex: 1, letterSpacing: "0.04em", transition: "color 180ms",
-          color: isEn ? "var(--bg-deep)" : "var(--ink-3)",
+          color: isEn ? "var(--accent-ink)" : "var(--ink-3)",
         }}>EN</span>
       </div>
     </div>

@@ -8,20 +8,24 @@ import { TYPE_COLOR } from "./constants";
 export const s = {
   // --- Containers ---
   card: {
+    background: "linear-gradient(180deg, oklch(0.20 0.012 145 / 0.88), var(--bg-elevated))",
+    border: "1px solid var(--rule)",
+    borderRadius: 8,
+    padding: "16px 18px",
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.055), 0 0 0 1px oklch(0.54 0.055 138 / 0.055)",
+    backdropFilter: "blur(16px) saturate(1.12)",
+    WebkitBackdropFilter: "blur(16px) saturate(1.12)",
+    transition: "border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out), background 180ms var(--ease-out), transform 140ms var(--ease-out)",
+  },
+  cardDark: {
     background: "linear-gradient(180deg, var(--panel), var(--bg-elevated))",
     border: "1px solid var(--rule)",
     borderRadius: 8,
     padding: "16px 18px",
-    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.055)",
-    backdropFilter: "blur(14px)",
-    WebkitBackdropFilter: "blur(14px)",
-  },
-  cardDark: {
-    background: "var(--panel)",
-    border: "1px solid var(--rule)",
-    borderRadius: 8,
-    padding: "16px 18px",
-    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.045)",
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.045), 0 0 0 1px oklch(0.54 0.055 138 / 0.04)",
+    backdropFilter: "blur(14px) saturate(1.08)",
+    WebkitBackdropFilter: "blur(14px) saturate(1.08)",
+    transition: "border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out), background 180ms var(--ease-out), transform 140ms var(--ease-out)",
   },
 
   // --- Tags ---
@@ -29,8 +33,8 @@ export const s = {
   tag: (t) => ({
     fontFamily: "var(--font-mono)",
     fontSize: 11,
-    background: TYPE_COLOR[t] || "var(--ink-2)",
-    color: "var(--ink-inv)",
+    background: TYPE_COLOR[t] || "var(--panel-3)",
+    color: "var(--accent-ink)",
     borderRadius: 6,
     padding: "3px 9px",
     whiteSpace: "nowrap",
@@ -112,6 +116,7 @@ export const s = {
     color: "var(--ink-1)",
     outline: "none",
     fontFamily: "var(--font-sans)",
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.035)",
     transition: "border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out)",
   },
 
@@ -121,12 +126,12 @@ export const s = {
     borderRadius: 8,
     padding: "9px 18px",
     fontSize: 13,
-    background: "var(--accent)",
-    color: "var(--bg-deep)",
+    background: "linear-gradient(180deg, oklch(0.58 0.060 138), var(--accent))",
+    color: "var(--accent-ink)",
     cursor: "pointer",
     fontWeight: 650,
     fontFamily: "var(--font-sans)",
-    boxShadow: "0 0 0 1px oklch(1 0 0 / 0.04)",
+    boxShadow: "0 0 0 1px oklch(1 0 0 / 0.04), 0 0 26px oklch(0.45 0.060 138 / 0.18)",
     transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 80ms var(--ease-out)",
   },
   btnGhost: {
@@ -139,6 +144,7 @@ export const s = {
     cursor: "pointer",
     fontFamily: "var(--font-sans)",
     fontWeight: 500,
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.035)",
     transition: "border-color 160ms var(--ease-out), color 160ms var(--ease-out), background-color 160ms var(--ease-out)",
   },
 
@@ -182,10 +188,10 @@ export const s = {
     // full-screen page. Desktop is unaffected by `float`.
     const floatMobile = isMobile && float;
     return {
-      background: bg,
+      background: `linear-gradient(180deg, oklch(0.19 0.012 145 / 0.96), ${bg})`,
       border: floatMobile || !isMobile ? "1px solid var(--rule)" : "none",
       borderRadius: floatMobile ? 12 : (isMobile ? 0 : 10),
-      boxShadow: floatMobile || !isMobile ? "var(--shadow)" : "none",
+      boxShadow: floatMobile || !isMobile ? "var(--shadow), var(--glow)" : "none",
       color: "var(--ink-1)",
       width: "100%",
       maxWidth: (isMobile && !float) ? "none" : (floatMobile ? 460 : maxWidth),
@@ -228,7 +234,7 @@ export const s = {
   // Chip — filter pills / mode toggles. Sentence case + sans, easier to scan.
   chip: (active) => ({
     border: "1px solid " + (active ? "var(--accent)" : "var(--rule)"),
-    background: active ? "var(--accent-soft)" : "var(--panel-2)",
+    background: active ? "linear-gradient(180deg, oklch(0.25 0.042 138 / 0.92), var(--accent-soft))" : "var(--panel-2)",
     color: active ? "var(--accent-dark)" : "var(--ink-2)",
     borderRadius: 8,
     padding: "6px 12px",
@@ -238,7 +244,8 @@ export const s = {
     flexShrink: 0,
     fontFamily: "var(--font-sans)",
     fontWeight: 500,
-    transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out)",
+    boxShadow: active ? "0 0 0 1px oklch(0.54 0.055 138 / 0.10), 0 0 22px oklch(0.40 0.060 138 / 0.14)" : "inset 0 1px 0 oklch(1 0 0 / 0.025)",
+    transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), transform 90ms var(--ease-out)",
   }),
 };
 

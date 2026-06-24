@@ -64,7 +64,7 @@
 - 后续如需要更完整的审计页，再增加 action log 可视化入口。
 - 如要追踪停止/扣费/服务端完成状态，把任务结果写入 `result` / `error`。
 
-## 中期应建表
+## 待建表 / 待接入
 
 ### 1. `coach_memory_facts`
 
@@ -72,11 +72,17 @@
 
 - 长期记忆仍是一段分区文本，存在 profile/settings 字段里。
 - 自动更新是覆盖式，缺少事实级时间戳、主题、来源和撤销能力。
+- Phase 4.1 已决定先做旁路事实层，不迁移旧 `coach_memory`，也不立刻替代 AI Coach prompt 主记忆。
 
 建议方向：
 
-- 一条事实一行，字段包括 category、body_en、body_zh、source、confidence、created_at、archived_at。
-- prompt 按场景选择相关事实，而不是整段塞入。
+- 一条事实一行，字段包括 `category`、`content_en`、`content_zh`、`source`、`source_ref_type`、`source_ref_id`、`confidence`、`status`、`created_at`、`accepted_at`、`archived_at`。
+- 第一版状态为 `proposed` / `active` / `rejected` / `archived`。
+- 先用于 Memory 面板查看、审核和归档；稳定后再决定是否把 active facts 摘要插入 prompt。
+
+建表 SQL：
+
+- `docs-internal/supabase-coach-memory-facts.sql`
 
 ### 2. `coach_report_notes` 或 `coach_annotations`
 

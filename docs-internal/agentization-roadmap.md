@@ -272,7 +272,7 @@ archived_at
 
 ## 当前下一步
 
-可以推进 Phase 4，但先做 Phase 4.1：Memory Facts 旁路事实层。
+可以推进 Phase 4.1：Memory Facts 旁路事实层。当前已准备建表 SQL，等用户在 Supabase Dashboard 跑完后，再接 DAL / 前端审核流。
 
 为什么现在可以推进：
 
@@ -293,8 +293,8 @@ archived_at
 
 下一步：
 
-1. 先准备 `coach_memory_facts` 的 Supabase SQL；用户在 Dashboard 跑完后再改 DAL / 前端。
-2. 接 `src/lib/db/memoryFacts.js`，只做读取、创建、接受、忽略、归档。
+1. 用户先在 Supabase Dashboard 跑 `docs-internal/supabase-coach-memory-facts.sql`。
+2. 跑完后接 `src/lib/db/memoryFacts.js`，只做读取、创建、接受、忽略、归档。
 3. 在 Memory 自动更新流里提炼候选 facts，复用 Action Card 审核，不破坏现有整段 Memory 更新。
 4. Memory 面板增加轻量 facts 区域，先服务查看和手动归档。
 5. 稳定后再决定是否把 active facts 摘要插入 AI Coach / 周报 prompt。
@@ -329,3 +329,4 @@ archived_at
 - 2026-06-23：Recent Agent Actions 增加“带着这条动作问教练”入口，让 action log 从纯审计记录变成可继续讨论的 agent 上下文；仍不自动执行新动作。
 - 2026-06-24：Recent Agent Actions 展开详情继续收敛成用户可读视图：修改计划按日期分组展示「原计划 / 新计划」，隐藏内部计划 id，执行结果改短标签；这一步确认 action log 的价值是可审计、可追问，而不是暴露数据库结构。
 - 2026-06-24：Phase 3 标记为已完成（观察中）；可以推进 Phase 4，但第一步只做 `coach_memory_facts` 旁路事实层，不迁移旧分区 Memory，也不让 facts 立刻替代 Coach prompt 的主记忆。
+- 2026-06-24：准备 Phase 4.1 建表 SQL：`docs-internal/supabase-coach-memory-facts.sql`。下一步必须先由用户在 Supabase Dashboard 跑 SQL，再接 `memoryFacts` DAL 和 Memory facts 审核界面。

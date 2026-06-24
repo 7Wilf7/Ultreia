@@ -15,16 +15,67 @@ export function parseBilingualMemory(text) {
 }
 
 export const MEMORY_SECTIONS = [
-  { en: "[Injuries / Health]", zh: "[伤病 / 健康]" },
-  { en: "[Goals / Races]", zh: "[目标 / 比赛]" },
-  { en: "[Training Preferences]", zh: "[训练偏好]" },
-  { en: "[Coaching Style]", zh: "[教练风格]" },
-  { en: "[Recurring Patterns]", zh: "[长期模式]" },
+  { key: "injury_health", en: "[Injuries / Health]", zh: "[伤病 / 健康]" },
+  { key: "goals_races", en: "[Goals / Races]", zh: "[目标 / 比赛]" },
+  { key: "training_preferences", en: "[Training Preferences]", zh: "[训练偏好]" },
+  { key: "coaching_style", en: "[Coaching Style]", zh: "[教练风格]" },
+  { key: "recurring_patterns", en: "[Recurring Patterns]", zh: "[长期模式]" },
 ];
 
 export function isMemorySectionHeading(line = "") {
   const normalized = String(line || "").trim();
   return MEMORY_SECTIONS.some(s => s.en === normalized || s.zh === normalized);
+}
+
+function normalizeMemoryFactLine(line = "") {
+  return String(line || "").replace(/^[-*]\s*/, "").trim();
+}
+
+function isEmptyMemoryFact(line = "") {
+  const normalized = normalizeMemoryFactLine(line).toLowerCase();
+  return !normalized || normalized === "none" || normalized === "无";
+}
+
+export function extractMemoryFacts(memory = {}, opts = {}) {
+  const enLines = String(memory.en || "").split("\n").map(line => line.trim()).filter(Boolean);
+  const zhLines = String(memory.zh || "").split("\n").map(line => line.trim()).filter(Boolean);
+  const aligned = enLines.length === zhLines.length && enLines.length > 0;
+  const primaryLines = enLines.length ? enLines : zhLines;
+  const primaryLang = enLines.length ? "en" : "zh";
+  const facts = [];
+  let currentSection = "other";
+
+  primaryLines.forEach((line, index) => {
+    const zhLine = aligned ? zhLines[index] : (primaryLang === "zh" ? line : "");
+    const section = MEMORY_SECTIONS.find(s => s.en === line || s.zh === line || s.zh === zhLine);
+    if (section) {
+      currentSection = section.key;
+      return;
+    }
+    if (isMemorySectionHeading(line) || isMemorySectionHeading(zhLine)) return;
+
+    const contentEn = normalizeMemoryFactLine(line);
+    const contentZh = normalizeMemoryFactLine(zhLine);
+    if (isEmptyMemoryFact(contentEn) && isEmptyMemoryFact(contentZh)) return;
+    facts.push({
+      clientId: `${opts.clientPrefix || "memory-fact"}-${currentSection}-${index}`,
+      category: currentSection,
+      contentEn: primaryLang === "zh" && !aligned ? "" : contentEn,
+      contentZh: contentZh || contentEn,
+      source: opts.source || "ai_coach_memory",
+      sourceRefType: opts.sourceRefType || null,
+      sourceRefId: opts.sourceRefId || null,
+      sourceSummary: opts.sourceSummary || "",
+      confidence: opts.confidence || "user_confirmed",
+      status: opts.status || "active",
+      metadata: {
+        sourceMessageCount: Number(opts.sourceMessageCount || 0),
+        memoryActionId: opts.memoryActionId || null,
+      },
+    });
+  });
+
+  return facts;
 }
 
 export function fillEmptyMemorySections(text = "", lang = "en") {

@@ -9,7 +9,7 @@ import {
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
-import { fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
+import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
@@ -219,6 +219,7 @@ export function AICoachTab({
   // shows the model is working.
   chatLoading, chatInput, setChatInput, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   agentActions = [], onDeleteAgentAction,
+  memoryFacts = [], onMemoryFactStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -230,7 +231,7 @@ export function AICoachTab({
   // Memory update lifted to AppShell so it survives leaving this tab (the
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
-  memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, recordMemoryActionDecision, proposeMemoryUpdate,
+  memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, recordMemoryActionDecision, saveMemoryFacts, proposeMemoryUpdate,
 }) {
   const t = useT();
   const { lang } = useLanguage();
@@ -425,11 +426,22 @@ export function AICoachTab({
     const e = (en || "").trim(), z = (zh || "").trim();
     setCoachMemoryBoth(e, z);
     setMemoryDraft(memoryLang === "zh" ? z : e);
+    const actionId = memoryProposal?.action?.id || `memory-update-${Date.now()}`;
+    const facts = extractMemoryFacts({ en: e, zh: z }, {
+      clientPrefix: `memory-fact-${actionId}`,
+      memoryActionId: actionId,
+      sourceMessageCount: memoryProposal?.action?.payload?.sourceMessageCount || 0,
+      source: "ai_coach_memory",
+      sourceSummary: "Memory auto-update",
+      status: "active",
+    });
+    saveMemoryFacts?.(facts);
     if (memoryProposal?.action) {
       const nextAction = recordMemoryActionDecision
         ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
             savedLanguages: [e ? "en" : null, z ? "zh" : null].filter(Boolean),
             savedCharacterCount: { en: e.length, zh: z.length },
+            savedFactCount: facts.length,
           })
         : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
       setLastMemoryAction(nextAction);
@@ -754,12 +766,20 @@ export function AICoachTab({
                   </div>
                 </>
               ) : (
-                <pre style={{
-                  ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-                  whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 420, overflowY: "auto",
-                  color: shownMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
-                  minHeight: 80,
-                }}>{shownMemory || t("coach.memory_empty")}</pre>
+                <>
+                  <pre style={{
+                    ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
+                    whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 320, overflowY: "auto",
+                    color: shownMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
+                    minHeight: 80,
+                  }}>{shownMemory || t("coach.memory_empty")}</pre>
+                  <MemoryFactsPanel
+                    facts={memoryFacts}
+                    displayLang={memoryLang}
+                    onStatus={onMemoryFactStatus}
+                    t={t}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -1673,6 +1693,80 @@ function MemoryActionStatus({ action, t }) {
     </div>
   );
 }
+
+function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
+  const visibleFacts = useMemo(() => {
+    return [...(facts || [])]
+      .filter(f => f?.status === "active" || f?.status === "proposed")
+      .sort((a, b) => {
+        const statusRank = (status) => status === "proposed" ? 0 : 1;
+        const byStatus = statusRank(a.status) - statusRank(b.status);
+        if (byStatus) return byStatus;
+        return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+      })
+      .slice(0, 20);
+  }, [facts]);
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+        <div style={{ ...s.label, margin: 0 }}>{t("coach.memory_facts_title")}</div>
+        <div style={{ color: "var(--ink-3)", fontSize: 11 }}>{t("coach.memory_facts_count", { count: visibleFacts.length })}</div>
+      </div>
+      <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.45, marginBottom: 8 }}>
+        {t("coach.memory_facts_hint")}
+      </div>
+      {!visibleFacts.length ? (
+        <div style={detailEmptyStyle}>{t("coach.memory_facts_empty")}</div>
+      ) : (
+        <div style={{ display: "grid", gap: 7 }}>
+          {visibleFacts.map(fact => (
+            <div key={fact.rowId || fact.clientId || fact.id} style={{
+              border: "1px solid var(--rule-soft)",
+              borderRadius: 4,
+              background: "var(--paper-2)",
+              padding: "8px 9px",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, flexWrap: "wrap" }}>
+                <span style={detailBadgeStyle}>{t(`coach.memory_fact_category_${fact.category || "other"}`)}</span>
+                <span style={{
+                  ...detailBadgeStyle,
+                  color: fact.status === "proposed" ? "var(--moss-deep)" : "var(--ink-3)",
+                  borderColor: fact.status === "proposed" ? "var(--moss)" : "var(--rule)",
+                }}>
+                  {t(`coach.memory_fact_status_${fact.status || "active"}`)}
+                </span>
+              </div>
+              <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-1)" }}>
+                {displayLang === "zh"
+                  ? (fact.contentZh || fact.contentEn || "-")
+                  : (fact.contentEn || fact.contentZh || "-")}
+              </div>
+              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                {fact.status === "proposed" && (
+                  <>
+                    <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_accept")}</button>
+                    <button type="button" onClick={() => onStatus?.(fact, "rejected")} style={memoryFactButtonStyle}>{t("coach.memory_fact_reject")}</button>
+                  </>
+                )}
+                {fact.status === "active" && (
+                  <button type="button" onClick={() => onStatus?.(fact, "archived")} style={memoryFactButtonStyle}>{t("coach.memory_fact_archive")}</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const memoryFactButtonStyle = {
+  ...s.btnGhost,
+  minHeight: 0,
+  padding: "4px 8px",
+  fontSize: 11,
+};
 
 function RecentAgentActions({ actions = [], t, onDelete, onAskCoach }) {
   const recent = useMemo(() => {

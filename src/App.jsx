@@ -15,7 +15,7 @@ import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
 import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
-import { buildMemoryUpdatePrompt, parseBilingualMemory } from "./utils/memory";
+import { buildMemoryUpdatePrompt, extractMemoryFacts, parseBilingualMemory } from "./utils/memory";
 import { reportError } from "./lib/errorOverlay";
 import { pickGreeting, timeGreeting } from "./data/greetings";
 import { CalendarTab } from "./components/CalendarTab";
@@ -154,6 +154,13 @@ function removeAgentActionFromList(actions = [], action) {
   if (!action?.id && !action?.rowId) return actions || [];
   const keys = new Set([action.id, action.rowId].filter(Boolean));
   return (actions || []).filter(a => !keys.has(a?.id) && !keys.has(a?.rowId));
+}
+
+function mergeMemoryFactList(facts = [], fact) {
+  if (!fact?.id && !fact?.rowId && !fact?.clientId) return facts || [];
+  const key = fact.rowId || fact.clientId || fact.id;
+  const next = [fact, ...(facts || []).filter(f => (f?.rowId || f?.clientId || f?.id) !== key)];
+  return next.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
 }
 
 function compactPlanSnapshot(plan) {
@@ -379,6 +386,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [chatMessages, setChatMessages] = useState([]);
   const [dailyNotes, setDailyNotes] = useState([]);
   const [agentActions, setAgentActions] = useState([]);
+  const [memoryFacts, setMemoryFacts] = useState([]);
 
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
@@ -419,6 +427,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           withTimeout(db.races.listMyRaces(), "races").then(value => ({ key: "races", value }), error => ({ key: "races", error })),
           withTimeout(db.coachMessages.listMyMessages(), "messages").then(value => ({ key: "messages", value }), error => ({ key: "messages", error })),
           withTimeout(db.agentActions.listMyActions(), "agentActions").then(value => ({ key: "agentActions", value }), error => ({ key: "agentActions", error })),
+          withTimeout(db.memoryFacts.listMyFacts(), "memoryFacts").then(value => ({ key: "memoryFacts", value }), error => ({ key: "memoryFacts", error })),
           withTimeout(db.dailyNotes.listMyDailyNotes(), "notes").then(value => ({ key: "notes", value }), error => ({ key: "notes", error })),
           withTimeout(db.wallet.getMyWallet(), "wallet").then(value => ({ key: "wallet", value }), error => ({ key: "wallet", error })),
         ]);
@@ -497,6 +506,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Agent actions — cloud source of truth for Action Card lifecycle.
         if (!result.agentActions.error) {
           setAgentActions(result.agentActions.value || []);
+        }
+
+        if (!result.memoryFacts.error) {
+          setMemoryFacts(result.memoryFacts.value || []);
         }
 
         // Daily notes — DAL returns date desc. Calendar indexes by date so
@@ -1055,6 +1068,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         chatMessages={chatMessages}
         agentActions={agentActions}
         setAgentActions={setAgentActions}
+        memoryFacts={memoryFacts}
+        setMemoryFacts={setMemoryFacts}
         setChatMessages={setChatMessages}
         appendLocalChatMessage={appendLocalChatMessage}
         clearAllChatMessages={clearAllChatMessages}
@@ -1082,7 +1097,7 @@ function AppShell({
   user, signOut, changePassword, deleteAccount,
   logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, agentActions = [], setAgentActions, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
+  chatMessages, agentActions = [], setAgentActions, memoryFacts = [], setMemoryFacts, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   coachMemory, setCoachMemory,
@@ -1325,6 +1340,41 @@ function AppShell({
         console.warn("[agent_actions] save failed:", err);
       });
   }
+  function saveMemoryFacts(facts = []) {
+    const safeFacts = (Array.isArray(facts) ? facts : []).filter(f => f?.clientId || f?.id);
+    if (!safeFacts.length) return;
+    setMemoryFacts(prev => safeFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
+    db.memoryFacts.upsertFacts(safeFacts)
+      .then(savedFacts => {
+        if (savedFacts?.length) {
+          setMemoryFacts(prev => savedFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
+        }
+      })
+      .catch(err => {
+        console.warn("[memory_facts] save failed:", err);
+      });
+  }
+  async function setMemoryFactStatus(fact, status) {
+    if (!fact || !status) return;
+    const now = new Date().toISOString();
+    const optimistic = {
+      ...fact,
+      status,
+      updatedAt: now,
+      acceptedAt: status === "active" ? (fact.acceptedAt || now) : fact.acceptedAt,
+      rejectedAt: status === "rejected" ? (fact.rejectedAt || now) : fact.rejectedAt,
+      archivedAt: status === "archived" ? (fact.archivedAt || now) : fact.archivedAt,
+    };
+    setMemoryFacts(prev => mergeMemoryFactList(prev, optimistic));
+    try {
+      const saved = await db.memoryFacts.updateFactStatus(fact, status);
+      if (saved) setMemoryFacts(prev => mergeMemoryFactList(prev, saved));
+    } catch (err) {
+      console.warn("[memory_facts] status update failed:", err);
+      setMemoryFacts(prev => mergeMemoryFactList(prev, fact));
+      window.alert(t("coach.memory_fact_update_failed", { msg: err?.message || String(err) }));
+    }
+  }
   async function deleteAgentAction(action) {
     if (!action?.id && !action?.rowId) return;
     setAgentActions(prev => removeAgentActionFromList(prev, action));
@@ -1450,10 +1500,19 @@ function AppShell({
       if (!text.trim()) { window.alert(t("coach.memory_empty_response")); return; }
       const parsedMemory = parseBilingualMemory(text);
       const action = buildMemoryUpdateAction(parsedMemory, { sourceMessageCount: chatMessages.length });
+      const candidateFacts = extractMemoryFacts(parsedMemory, {
+        clientPrefix: `memory-fact-${action.id}`,
+        memoryActionId: action.id,
+        sourceMessageCount: chatMessages.length,
+        source: "ai_coach_memory",
+        sourceSummary: "Memory auto-update",
+        status: "proposed",
+      });
       saveAgentAction(action);
       setMemoryProposal({
         ...parsedMemory,
         action,
+        facts: candidateFacts,
       });
       setLastMemoryAction(null);
     } catch (err) {
@@ -2237,6 +2296,8 @@ Rules:
           importToCalendar={importToCalendar}
           agentActions={agentActions}
           onDeleteAgentAction={deleteAgentAction}
+          memoryFacts={memoryFacts}
+          onMemoryFactStatus={setMemoryFactStatus}
           onStopChat={stopCoachChat}
           onStopExtraction={stopPlanExtraction}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}
@@ -2258,6 +2319,7 @@ Rules:
           lastMemoryAction={lastMemoryAction}
           setLastMemoryAction={setLastMemoryAction}
           recordMemoryActionDecision={recordMemoryActionDecision}
+          saveMemoryFacts={saveMemoryFacts}
           proposeMemoryUpdate={proposeMemoryUpdate}
         />
     );

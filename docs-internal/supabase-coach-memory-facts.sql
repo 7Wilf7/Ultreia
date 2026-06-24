@@ -52,6 +52,14 @@ alter table public.coach_memory_facts
   add column if not exists archived_at timestamptz,
   add column if not exists last_used_at timestamptz;
 
+-- Recovery for earlier draft / partial runs. In one failed setup, confidence
+-- existed as a numeric score, while Phase 4.1 now treats it as a small text enum.
+alter table public.coach_memory_facts
+  alter column confidence drop default;
+
+alter table public.coach_memory_facts
+  alter column confidence type text using confidence::text;
+
 alter table public.coach_memory_facts
   alter column id set default gen_random_uuid(),
   alter column category set default 'other',
@@ -68,7 +76,13 @@ set
   client_id = coalesce(nullif(client_id, ''), id::text),
   category = coalesce(nullif(category, ''), 'other'),
   source = coalesce(nullif(source, ''), 'ai_coach'),
-  confidence = coalesce(nullif(confidence, ''), 'user_confirmed'),
+  confidence = case
+    when confidence in ('user_confirmed', 'ai_suggested', 'inferred') then confidence
+    when confidence in ('confirmed', 'accepted', 'active') then 'user_confirmed'
+    when confidence in ('suggested', 'ai', 'ai_generated') then 'ai_suggested'
+    when confidence is null or btrim(confidence) = '' then 'user_confirmed'
+    else 'inferred'
+  end,
   status = coalesce(nullif(status, ''), 'proposed'),
   metadata = coalesce(metadata, '{}'::jsonb),
   created_at = coalesce(created_at, now()),

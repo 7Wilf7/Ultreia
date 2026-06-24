@@ -1695,9 +1695,11 @@ function MemoryActionStatus({ action, t }) {
 }
 
 function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
+  const [view, setView] = useState("current");
   const visibleFacts = useMemo(() => {
+    const statuses = view === "archived" ? ["archived"] : ["active", "proposed"];
     return [...(facts || [])]
-      .filter(f => f?.status === "active" || f?.status === "proposed")
+      .filter(f => statuses.includes(f?.status || "active"))
       .sort((a, b) => {
         const statusRank = (status) => status === "proposed" ? 0 : 1;
         const byStatus = statusRank(a.status) - statusRank(b.status);
@@ -1705,7 +1707,7 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
         return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
       })
       .slice(0, 20);
-  }, [facts]);
+  }, [facts, view]);
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -1713,11 +1715,33 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
         <div style={{ ...s.label, margin: 0 }}>{t("coach.memory_facts_title")}</div>
         <div style={{ color: "var(--ink-3)", fontSize: 11 }}>{t("coach.memory_facts_count", { count: visibleFacts.length })}</div>
       </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+        {["current", "archived"].map(option => {
+          const selected = view === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setView(option)}
+              style={{
+                ...memoryFactFilterButtonStyle,
+                background: selected ? "var(--ink-1)" : "transparent",
+                color: selected ? "var(--paper)" : "var(--ink-2)",
+                borderColor: selected ? "var(--ink-1)" : "var(--rule)",
+              }}
+            >
+              {t(`coach.memory_facts_filter_${option}`)}
+            </button>
+          );
+        })}
+      </div>
       <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.45, marginBottom: 8 }}>
         {t("coach.memory_facts_hint")}
       </div>
       {!visibleFacts.length ? (
-        <div style={detailEmptyStyle}>{t("coach.memory_facts_empty")}</div>
+        <div style={detailEmptyStyle}>
+          {view === "archived" ? t("coach.memory_facts_archived_empty") : t("coach.memory_facts_empty")}
+        </div>
       ) : (
         <div style={{ display: "grid", gap: 7 }}>
           {visibleFacts.map(fact => (
@@ -1750,7 +1774,20 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
                   </>
                 )}
                 {fact.status === "active" && (
-                  <button type="button" onClick={() => onStatus?.(fact, "archived")} style={memoryFactButtonStyle}>{t("coach.memory_fact_archive")}</button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm(t("coach.memory_fact_archive_confirm"))) {
+                        onStatus?.(fact, "archived");
+                      }
+                    }}
+                    style={memoryFactButtonStyle}
+                  >
+                    {t("coach.memory_fact_archive")}
+                  </button>
+                )}
+                {fact.status === "archived" && (
+                  <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_restore")}</button>
                 )}
               </div>
             </div>
@@ -1760,6 +1797,14 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
     </div>
   );
 }
+
+const memoryFactFilterButtonStyle = {
+  ...s.btnGhost,
+  minHeight: 0,
+  padding: "5px 10px",
+  fontSize: 11,
+  borderRadius: 999,
+};
 
 const memoryFactButtonStyle = {
   ...s.btnGhost,

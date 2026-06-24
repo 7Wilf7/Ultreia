@@ -31,7 +31,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划、单条未来计划修改和 Memory 更新已接入前端 Action Card |
 | Phase 2 | 已完成（后台 cron 后置） | AI 周复盘 Page | 已改为 Settings 全屏周报页，并接入账号内周报保存；文本注解、停止控制、App 内自动生成设置和周日导入后询问已落地；真正后台定时后置 |
 | Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
-| Phase 4 | 进行中 | Memory Facts 结构化 | 旁路事实表已开始接入；接受 Memory 更新后可生成 active facts 并在 Memory 面板查看 / 归档 |
+| Phase 4 | 进行中 | Memory Facts 结构化 | 旁路事实表已开始接入；接受 Memory 更新后可生成 active facts 并在 Memory 面板查看 / 归档 / 恢复 |
 | Phase 5 | 待评估 | 自动同步外部训练数据 | Strava API 是优先候选 |
 
 ## Phase 1：Action Card 雏形
@@ -213,7 +213,7 @@ proposed -> cancelled
 1. 新建 `coach_memory_facts` 表，字段支持分类、英文 / 中文正文、来源、状态、置信类型和归档。
 2. 新增 DAL：读取最近 active facts、创建 proposed fact、标记 accepted / archived / rejected。
 3. Memory 自动更新时，除继续生成整段分区 Memory 外，可以额外提炼候选 facts，作为 Action Card 审核。
-4. Memory 面板先增加一个轻量 facts 区域：只显示 active / proposed，不做复杂搜索。
+4. Memory 面板先增加一个轻量 facts 区域：支持 Current / Archived 筛选、归档确认和恢复，不做复杂搜索。
 5. Prompt 侧先不强依赖 facts；等事实质量稳定后，再把 active facts 摘要插入 Coach prompt。
 
 建议字段：
@@ -272,7 +272,7 @@ archived_at
 
 ## 当前下一步
 
-可以继续推进 Phase 4.1：Memory Facts 旁路事实层。当前已接入第一版 DAL 和 Memory 面板查看 / 归档；事实由用户接受后的整段 Memory 条目拆出，不额外调用 AI，也不替代现有 prompt 主记忆。
+可以继续推进 Phase 4.1：Memory Facts 旁路事实层。当前已接入第一版 DAL 和 Memory 面板查看 / 归档 / 恢复；事实由用户接受后的整段 Memory 条目拆出，不额外调用 AI，也不替代现有 prompt 主记忆。
 
 为什么现在可以推进：
 
@@ -293,10 +293,11 @@ archived_at
 
 下一步：
 
-1. 观察真机上接受 Memory 更新后，facts 是否按最终保留条目生成，归档是否即时生效。
+1. 观察真机上接受 Memory 更新后，facts 是否按最终保留条目生成，归档 / 恢复是否即时生效。
 2. 再决定是否把 active facts 摘要插入 AI Coach / 周报 prompt；插入前必须保持旧分区 Memory 作为 fallback。
 3. 后续如果需要“候选事实逐条审核”，再把 proposed facts 作为独立 Action Card；当前不在点 Discard 前写入 facts，避免半确认事实残留。
 4. 如需要真正后台定时，再把 `daily-coach-dispatch` 的每周任务改为读取 `user_settings`，生成后写 `coach_reports`，再发系统通知 / 收件箱提醒；当前 App 内定时已够个人使用先验。
+5. “夜间自动更新记忆”可作为后续小阶段，但必须先确认收费和触发边界：只在当天有新对话时运行，生成待审核 Action Card / inbox，不自动写入 active Memory；默认每天最多一次，并清楚显示可能产生的 AI 调用成本。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -328,4 +329,4 @@ archived_at
 - 2026-06-24：Recent Agent Actions 展开详情继续收敛成用户可读视图：修改计划按日期分组展示「原计划 / 新计划」，隐藏内部计划 id，执行结果改短标签；这一步确认 action log 的价值是可审计、可追问，而不是暴露数据库结构。
 - 2026-06-24：Phase 3 标记为已完成（观察中）；可以推进 Phase 4，但第一步只做 `coach_memory_facts` 旁路事实层，不迁移旧分区 Memory，也不让 facts 立刻替代 Coach prompt 的主记忆。
 - 2026-06-24：准备 Phase 4.1 建表 SQL：`docs-internal/supabase-coach-memory-facts.sql`。下一步必须先由用户在 Supabase Dashboard 跑 SQL，再接 `memoryFacts` DAL 和 Memory facts 审核界面。
-- 2026-06-24：Phase 4.1 第一版接入前端：新增 `memoryFacts` DAL；接受 Memory 自动更新后，从最终保留的分区 Memory 拆出 active facts 保存到账户；Memory 面板增加 facts 区域，可查看 active/proposed facts 并归档 active facts。当前 facts 不额外消耗 AI、不替代 prompt 主记忆。
+- 2026-06-24：Phase 4.1 第一版接入前端：新增 `memoryFacts` DAL；接受 Memory 自动更新后，从最终保留的分区 Memory 拆出 active facts 保存到账户；Memory 面板增加 facts 区域，可查看 active/proposed facts，并支持归档 active facts、查看 archived facts、恢复误归档 facts。当前 facts 不额外消耗 AI、不替代 prompt 主记忆。

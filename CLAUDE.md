@@ -30,31 +30,32 @@
 
 ## 需求路由预检（Aevum vs Ultreia）
 
-以后处理任何新需求前，先做一层项目归属判断：这件事应该在 **Aevum / Wilf OS** 做，还是在 **Ultreia** 做。判断不需要写长报告，但如果需求涉及跨产品边界、全局入口或记忆流转，要先明确归属再动手。
+以后处理任何新需求前，先做一层项目归属判断：这件事应该在 **Aevum** 做，还是在 **Ultreia** 做。判断不需要写长报告，但如果需求涉及跨产品边界、全局入口或记忆流转，要先明确归属再动手。
 
 默认规则：
 
 - **放在 Ultreia**：训练记录、活动导入、日历训练计划、赛事、PR、天气与训练关系、AI Coach、周复盘、Action Card、运动相关长期记忆、训练海报、Ultreia 内设置和 Android / PWA 发版。
-- **放在 Aevum / Wilf OS**：全局 Today、Quick Add、Products 入口、跨产品事件中心 `wilf_events`、Memory Inbox、账号 / 全局设置、Ledger / Daily Log / AI Atlas 等非训练产品、跨产品审核与分发。
+- **放在 Aevum**：全局 Today、Quick Add、Products 入口、跨产品事件中心 `wilf_events`、Memory Inbox、账号 / 全局设置、Viatica / Sidera / Vestigia 等非训练产品、跨产品审核与分发。
 - **交界需求**：如果 Aevum 产生了会影响训练判断的事件（装备购买、报名比赛、理疗恢复、睡眠疲劳等），Aevum 负责收集和审核，Ultreia 只读取已确认且训练相关的事件，并在 AI Coach 中解释使用。
 - **不要把 Ultreia 扩成超级 App**：凡是“全局入口 / 跨产品编排 / 统一记忆审核”倾向，都优先放 Aevum；Ultreia 只做训练域内最小接入。
 - 如果归属不确定，先按“是否直接改变训练体验”判断：直接改变训练记录、计划、教练建议或赛事准备 = Ultreia；只是让多个产品协同或统一入口 = Aevum。
 
-## Wilf OS 长期方向
+## Aevum 长期方向
 
-Wilf 的最终方向不是把 Ultreia 做成一个孤立的跑步 App，而是围绕自己搭一组个人产品生态，暂称 **Wilf OS**。Wilf OS 第一版是手机优先的 PWA 总入口和共享事件中心：它负责 Today、Quick Add、Products、Memory Inbox、账号 / 设置等全局入口；各产品保持独立，不做一个大杂烩超级 App。
+Wilf 的最终方向不是把 Ultreia 做成一个孤立的跑步 App，而是围绕自己搭一组个人产品生态，正式名称为 **Aevum**。Aevum 是手机优先的个人控制平面、共享记忆系统和全局 Agent 入口：它负责 Today、Quick Add、Products、Memory Inbox、账号 / 设置等全局入口；各产品保持独立，不做一个大杂烩超级 App。
 
 这套生态里的核心产品分工：
 
+- **Aevum**：个人系统、共享记忆、权限和总 Agent。
 - **Ultreia**：严肃的运动训练与 AI Coach 产品，继续保持克制、专业、数据导向。
-- **Ledger**：第二个正式产品，认真记录每一笔消费，尤其是运动装备、比赛报名、健康恢复、订阅等结构化事件。
-- **Daily Log**：后续记录睡眠、疲劳、压力、疼痛、恢复感等日常状态，作为训练判断的辅助信号。
-- **AI Atlas**：后续从星图毛坯重做成 AI 学习路线、复习卡、进度和更新记录。
+- **Viatica**：个人财务与记账产品，管理金钱、账户、消费、预算和资源。
+- **Sidera**：个人学习与知识成长系统，管理学习领域、概念关系、路线、复习和掌握状态。
+- **Vestigia**：低阻力的个人捕捉与反思空间，记录灵感、日记、观察、决定和生活片段。
 - **Obsidian**：只做长期文档、项目复盘和知识归档，不承担实时产品交互。
 
-产品之间的连接边界是统一事件中心 `wilf_events`，而不是互相直接读私有数据库。Ledger、Daily Log、AI Atlas、Ultreia 都可以产生事件；其他产品只读取被授权、相关且已确认的事件。普通消费默认只留在 Ledger；运动装备、健康、比赛、疲劳、训练计划相关事件进入 Memory Inbox，经过 Wilf 确认后，才允许进入 Ultreia AI Coach 的上下文。
+产品之间的连接边界是统一事件中心 `wilf_events`（技术名称），而不是互相直接读私有数据库。Viatica、Sidera、Vestigia、Ultreia 都可以产生事件；其他产品只读取被授权、相关且已确认的事件。普通消费默认只留在 Viatica；运动装备、健康、比赛、疲劳、训练计划相关事件进入 Memory Inbox，经过 Wilf 确认后，才允许进入 Ultreia AI Coach 的上下文。
 
-对 Ultreia 的要求：不要把它扩成超级 App。Ultreia 只负责运动训练、训练数据、赛事准备、恢复风险和 AI Coach 判断；Wilf OS 负责全局入口、跨产品记忆和审核。未来当 Ultreia 读取 Wilf OS 事件时，它应该把这些事件当作可解释的个人上下文，例如新买越野鞋、报名比赛、理疗恢复、疲劳状态、训练计划变化，并在建议中保持边界清晰，不夸大承诺。
+对 Ultreia 的要求：不要把它扩成超级 App。Ultreia 只负责运动训练、训练数据、赛事准备、恢复风险和 AI Coach 判断；Aevum 负责全局入口、跨产品记忆和审核。未来当 Ultreia 读取 Aevum 事件时，它应该把这些事件当作可解释的个人上下文，例如新买越野鞋、报名比赛、理疗恢复、疲劳状态、训练计划变化，并在建议中保持边界清晰，不夸大承诺。
 
 ## Agent 化推进
 
@@ -209,7 +210,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - **移动端优先**：用户的需求绝大多数针对手机端；PC 端网页按"跟随移动端"的原则自行优化、保持合理即可，不用每个改动都纠结桌面。用户会不时上 PC 网页看，有问题会反馈。
 - **普通改动自动提交推送**：完成代码/文档改动并通过验证后，直接 `git commit` + `git push` 到当前分支，不再单独询问。**Android APK / tag 发版例外**：只有用户明确说“推 APK / 发 APK / bump / tag”时才 bump 版本并推 tag。
 - **规则文件同步**：修改本项目协作规则、工作流约定、发版流程或项目记忆时，`AGENTS.md` 和 `CLAUDE.md` 必须同步更新；不要只改其中一个。
-- **需求路由预检**：每个新需求执行前先判断归属 Aevum / Wilf OS 还是 Ultreia；直接改变训练体验的放 Ultreia，跨产品入口、事件中心和统一记忆审核放 Aevum / Wilf OS。
+- **需求路由预检**：每个新需求执行前先判断归属 Aevum 还是 Ultreia；直接改变训练体验的放 Ultreia，跨产品入口、事件中心和统一记忆审核放 Aevum。
 - 大改动前先在小样本上验证，参考全局 CLAUDE.md 中的工作纪律
 - 不引入额外构建工具或框架除非明确需要 (例如 Next.js、Remix)
 - 新依赖安装前先告知用途和体积影响

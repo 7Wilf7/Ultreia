@@ -13,6 +13,11 @@ const LEASE_SECONDS = positiveInt(env.LEASE_SECONDS, 180);
 const CODEX_TIMEOUT_MS = positiveInt(env.CODEX_TIMEOUT_MS, 120000);
 const CODEX_PACKAGE = env.CODEX_PACKAGE || "@openai/codex@0.142.0";
 const CODEX_MODEL = env.CODEX_MODEL || "";
+const CODEX_REASONING_EFFORT = optionalEnum(
+  env.CODEX_REASONING_EFFORT,
+  ["minimal", "low", "medium", "high", "xhigh"],
+  "CODEX_REASONING_EFFORT",
+);
 const MAX_PROMPT_CHARS = positiveInt(env.MAX_PROMPT_CHARS, 120000);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -65,6 +70,13 @@ function positiveInt(value, fallback) {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : fallback;
 }
 
+function optionalEnum(value, allowed, name) {
+  if (!value) return "";
+  const normalized = String(value).trim().toLowerCase();
+  if (allowed.includes(normalized)) return normalized;
+  throw new Error(`${name} must be one of: ${allowed.join(", ")}`);
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -80,6 +92,8 @@ async function heartbeat(extra = {}) {
       metadata: {
         hostname: env.COMPUTERNAME || env.HOSTNAME || null,
         codexPackage: CODEX_PACKAGE,
+        codexModel: CODEX_MODEL || null,
+        reasoningEffort: CODEX_REASONING_EFFORT || null,
         lockedDown: true,
         ...extra,
       },
@@ -203,6 +217,7 @@ async function runCodex(payload, job) {
       "--cd", cwd,
     ];
     if (CODEX_MODEL) args.push("--model", CODEX_MODEL);
+    if (CODEX_REASONING_EFFORT) args.push("-c", `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`);
     args.push("-");
 
     const { command, commandArgs } = buildCodexCommand(args);
@@ -215,6 +230,7 @@ async function runCodex(payload, job) {
       text: parsed.text.trim(),
       usage: parsed.usage || null,
       model: CODEX_MODEL || "codex-cli",
+      reasoning_effort: CODEX_REASONING_EFFORT || null,
       runner_id: RUNNER_ID,
       codex_package: CODEX_PACKAGE,
       completed_at: new Date().toISOString(),

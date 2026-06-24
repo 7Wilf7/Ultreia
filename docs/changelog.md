@@ -4,6 +4,7 @@
 
 ## 2026-06-25
 
+- **AI Coach 桌面 Codex 路线 POC**：新增 desktop Codex runner 的最小链路草案和服务端 fallback 支持；桌面 Codex 在线时可优先生成 AI Coach 回复，离线 / 超时 / 失败时自动回退 DeepSeek，并在回复下方显示实际使用路线。
 - **开屏问候语去状态化**：问候语池清理掉与具体训练状态 / 计划绑定的句子，补充更多纯激励文案；轮换逻辑改为整池洗牌，一轮没抽完前不会重复同一句。
 - **深苔藓绿动态光效增强**：移动端和桌面端外壳加入更可见但克制的 deep moss / olive ambient light，Training / Calendar / Races / AI Coach / Settings 五个移动端 tab 都能透出背景光效；active tab、按钮 hover 和输入 focus 增加低饱和 moss glow，不改业务逻辑。
 

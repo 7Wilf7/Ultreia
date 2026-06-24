@@ -81,6 +81,7 @@ export async function coachProxyStream({ system, messages, max_tokens, onToken, 
     usage: result.usage || meta.usage || null,
     provider: meta.provider || 'deepseek',
     model: meta.model,
+    fallback: meta.fallback || null,
     wallet: meta.wallet,
   };
 }

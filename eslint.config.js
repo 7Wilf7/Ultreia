@@ -24,11 +24,11 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
-  // Node-runtime files: Vite config + Vercel serverless functions in /api
-  // both run under Node, not the browser. Without this override eslint
+  // Node-runtime files: Vite config + Vercel serverless functions in /api,
+  // scripts, and local tools run under Node, not the browser. Without this override eslint
   // flags every `process.env.*` lookup as "no-undef".
   {
-    files: ['vite.config.js', 'api/**/*.js', 'scripts/**/*.{js,mjs}'],
+    files: ['vite.config.js', 'api/**/*.js', 'scripts/**/*.{js,mjs}', 'tools/**/*.{js,mjs}'],
     languageOptions: {
       globals: { ...globals.node },
     },

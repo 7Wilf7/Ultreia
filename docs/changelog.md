@@ -6,6 +6,7 @@
 
 - **Memory facts 成为长期记忆主线**：接受 AI Coach 的 Memory 自动更新后，会把已保留条目拆成可查看的事实卡片，按伤病 / 健康、目标 / 比赛、训练偏好、教练风格和长期模式分类；事实可在 Memory 面板中查看、归档、恢复。
 - **Memory facts 保存更可靠**：接受 Memory 更新时会先确认事实卡片已经写入账号，再把 Agent 动作标记为已执行；如果保存失败，审核卡会保留并显示错误，避免出现“动作完成但换设备看不到事实”的假完成。
+- **Memory facts 时间字段补全**：保存事实卡片时会自动补齐提议时间和接受时间，修复新事实因缺少 `proposed_at` 而无法写入云端的问题。
 - **旧文本 Memory 退出教练上下文**：AI Coach 和 AI 周复盘只读取 Current Memory facts；Archived facts 和旧的整段 Memory 文本不再进入 Prompt。
 - **旧 Memory 清理 SQL**：新增一次性清理脚本，用于在确认迁移完成后清空账号里的旧文本 Memory 字段，不影响 Memory facts、聊天、动作记录或训练数据。
 - **Memory facts 诊断 SQL**：新增只读检查脚本，可同时查看账号下的事实卡片和最近 Memory 更新动作，方便确认数据是否真正写入云端。

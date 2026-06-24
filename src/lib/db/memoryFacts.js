@@ -28,6 +28,8 @@ function fromRow(row) {
 }
 
 function toRow(fact, userId) {
+  const now = new Date().toISOString();
+  const status = fact.status || 'proposed';
   return {
     user_id: userId,
     client_id: fact.clientId || fact.id,
@@ -39,10 +41,10 @@ function toRow(fact, userId) {
     source_ref_id: fact.sourceRefId || null,
     source_summary: fact.sourceSummary || null,
     confidence: fact.confidence || 'user_confirmed',
-    status: fact.status || 'proposed',
+    status,
     metadata: fact.metadata && typeof fact.metadata === 'object' ? fact.metadata : {},
-    proposed_at: fact.proposedAt || undefined,
-    accepted_at: fact.acceptedAt || null,
+    proposed_at: fact.proposedAt || fact.createdAt || now,
+    accepted_at: fact.acceptedAt || (status === 'active' ? now : null),
     rejected_at: fact.rejectedAt || null,
     archived_at: fact.archivedAt || null,
     last_used_at: fact.lastUsedAt || null,

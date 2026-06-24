@@ -10,6 +10,9 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.TypefaceSpan;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
@@ -22,7 +25,7 @@ public class UltreiaKeepAliveService extends Service {
     private static final String EXTRA_BODY = "body";
     private static volatile boolean running = false;
     private static String notificationTitle = "This month";
-    private static String notificationBody = "Sessions 0 · Time 0m\nDistance 0.0km · Ascent 0m";
+    private static String notificationBody = "Sessions   0     · Time      0m\nDistance   0.0km · Ascent     0m";
 
     public static void start(Context context, String title, String body) {
         Intent intent = new Intent(context, UltreiaKeepAliveService.class);
@@ -107,17 +110,24 @@ public class UltreiaKeepAliveService extends Service {
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
         PendingIntent pending = PendingIntent.getActivity(this, 0, launch, flags);
+        CharSequence body = monospaceBody();
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(notificationTitle)
-            .setContentText(notificationBody)
-            .setStyle(new NotificationCompat.BigTextStyle().bigText(notificationBody))
+            .setContentText(body)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(pending)
             .setOngoing(true)
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build();
+    }
+
+    private CharSequence monospaceBody() {
+        SpannableString text = new SpannableString(notificationBody);
+        text.setSpan(new TypefaceSpan("monospace"), 0, text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return text;
     }
 }

@@ -5,6 +5,7 @@ import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
   DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
+  RUN_GROUP_TYPES,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -123,12 +124,19 @@ function buildMonthlyTraySummary(logs = [], now = new Date(), lang = "zh") {
   const monthLogs = logs.filter(l => l && !l.isPlanned && l.date >= start && l.date <= end);
   const sessions = monthLogs.length;
   const seconds = monthLogs.reduce((sum, l) => sum + (Number(l.duration) || 0), 0);
-  const distance = monthLogs.reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
+  const distance = monthLogs
+    .filter(l => RUN_GROUP_TYPES.includes(l.type))
+    .reduce((sum, l) => sum + (Number(l.distance) || 0), 0);
   const ascent = monthLogs.reduce((sum, l) => sum + (Number(l.ascent) || 0), 0);
   const isZh = lang === "zh";
   const distanceText = distance >= 10 ? distance.toFixed(0) : distance.toFixed(1);
   const timeText = seconds > 0 ? formatDurationShort(seconds) : "0m";
-  const body = `Sessions ${sessions} · Time ${timeText}\nDistance ${distanceText}km · Ascent ${Math.round(ascent)}m`;
+  const leftTop = `Sessions ${String(sessions).padStart(3, " ")}`;
+  const leftBottom = `Distance ${String(distanceText).padStart(5, " ")}km`;
+  const body = [
+    `${leftTop.padEnd(16, " ")} · Time   ${String(timeText).padStart(5, " ")}`,
+    `${leftBottom.padEnd(16, " ")} · Ascent ${String(Math.round(ascent)).padStart(5, " ")}m`,
+  ].join("\n");
   return {
     title: isZh ? "本月训练" : "This month",
     body,

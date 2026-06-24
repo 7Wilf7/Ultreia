@@ -1867,12 +1867,20 @@ function PlanActionDetails({ action, t }) {
       )}
       {changes.length > 0 && (
         <ActionDetailSection title={t("coach.agent_actions_changes")}>
-          <div style={{ display: "grid", gap: 6 }}>
-            {changes.slice(0, 10).map((change, idx) => (
-              <div key={`${change.targetPlanId || "change"}-${idx}`} style={detailChangeStyle}>
-                <div>{formatPlanActionBrief(change.before, t)}</div>
-                <div style={{ color: "var(--ink-3)", fontSize: 11 }}>-&gt;</div>
-                <div>{formatPlanActionBrief(change.after, t)}</div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {groupPlanChangesByDate(changes.slice(0, 10)).map((group) => (
+              <div key={group.date} style={detailChangeStyle}>
+                <div style={detailChangeDateStyle}>{group.date}</div>
+                <div style={{ display: "grid", gap: 7 }}>
+                  {group.items.map((change, idx) => (
+                    <div key={`${change.targetPlanId || group.date}-${idx}`} style={detailChangeGridStyle}>
+                      <span style={detailMiniLabelStyle}>{t("coach.agent_action_before")}</span>
+                      <span>{formatPlanActionBrief(change.before, t, { includeDate: false })}</span>
+                      <span style={detailMiniLabelStyle}>{t("coach.agent_action_after")}</span>
+                      <span>{formatPlanActionBrief(change.after, t, { includeDate: false })}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -1880,10 +1888,10 @@ function PlanActionDetails({ action, t }) {
       )}
       {hasResult && (
         <ActionDetailSection title={t("coach.agent_actions_result")}>
-          <div style={{ display: "grid", gap: 5, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.45 }}>
-            {createdCount > 0 && <div>{t("coach.agent_action_created_count", { count: createdCount })}</div>}
-            {updatedCount > 0 && <div>{t("coach.agent_action_updated_count", { count: updatedCount })}</div>}
-            {restDates.length > 0 && <div>{t("coach.agent_action_rest_dates", { dates: restDates.join(", ") })}</div>}
+          <div style={detailResultWrapStyle}>
+            {createdCount > 0 && <span style={detailResultPillStyle}>{t("coach.agent_action_created_count_short", { count: createdCount })}</span>}
+            {updatedCount > 0 && <span style={detailResultPillStyle}>{t("coach.agent_action_updated_count_short", { count: updatedCount })}</span>}
+            {restDates.length > 0 && <span style={detailResultPillStyle}>{t("coach.agent_action_rest_dates", { dates: restDates.join(", ") })}</span>}
             {action.error && <div style={{ color: "var(--danger)" }}>{t("coach.agent_action_error", { msg: action.error })}</div>}
             {!createdCount && !updatedCount && !restDates.length && !action.error && (
               <div>{t("coach.agent_action_empty_detail")}</div>
@@ -1968,10 +1976,47 @@ const detailChangeStyle = {
   border: "1px solid var(--rule-soft)",
   borderRadius: 4,
   background: "var(--paper-2)",
-  padding: "7px 8px",
+  padding: "8px 8px",
   fontSize: 12,
   lineHeight: 1.45,
   color: "var(--ink-2)",
+};
+
+const detailChangeDateStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  color: "var(--ink)",
+  marginBottom: 6,
+};
+
+const detailChangeGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "44px minmax(0, 1fr)",
+  gap: "3px 7px",
+  alignItems: "start",
+};
+
+const detailMiniLabelStyle = {
+  color: "var(--ink-3)",
+  fontSize: 10,
+  lineHeight: 1.45,
+  whiteSpace: "nowrap",
+};
+
+const detailResultWrapStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: 6,
+  color: "var(--ink-2)",
+  fontSize: 12,
+  lineHeight: 1.45,
+};
+
+const detailResultPillStyle = {
+  border: "1px solid var(--rule-soft)",
+  borderRadius: 6,
+  background: "var(--paper-2)",
+  padding: "4px 7px",
 };
 
 const detailEmptyStyle = {
@@ -1980,10 +2025,26 @@ const detailEmptyStyle = {
   lineHeight: 1.45,
 };
 
-function formatPlanActionBrief(plan, t) {
+function groupPlanChangesByDate(changes = []) {
+  const groups = [];
+  const byDate = new Map();
+  changes.forEach((change, idx) => {
+    const date = change?.after?.date || change?.before?.date || "-";
+    if (!byDate.has(date)) {
+      const group = { date, items: [] };
+      byDate.set(date, group);
+      groups.push(group);
+    }
+    byDate.get(date).items.push({ ...change, _idx: idx });
+  });
+  return groups;
+}
+
+function formatPlanActionBrief(plan, t, options = {}) {
+  const { includeDate = true, includeTargetId = false } = options;
   if (!plan) return "-";
   if (isRestPlanItem(plan)) {
-    return [plan.date || "-", t("calendar.planned_rest_label"), plan.notes].filter(Boolean).join(" · ");
+    return [includeDate ? (plan.date || "-") : "", t("calendar.planned_rest_label"), plan.notes].filter(Boolean).join(" · ");
   }
   const subTypes = Array.isArray(plan.subTypes) ? plan.subTypes : [];
   const runType = plan.runType || "";
@@ -1991,7 +2052,8 @@ function formatPlanActionBrief(plan, t) {
     ? t(`enum.subtype.${runType}`)
     : subTypes.map(st => t(`enum.subtype.${st}`)).join(" / ");
   const bits = [
-    plan.date || "-",
+    includeDate ? (plan.date || "-") : "",
+    plan.timeOfDay === "am" || plan.timeOfDay === "pm" ? t(`calendar.plan_tod_${plan.timeOfDay}`) : "",
     plan.type ? t(`enum.activity.${plan.type}`) : "",
     subTypeLabel,
   ];
@@ -2003,9 +2065,8 @@ function formatPlanActionBrief(plan, t) {
   if (ascent > 0) bits.push(`+${Math.round(ascent)} m`);
   if (speed > 0) bits.push(`${formatCompactNumber(speed)} km/h`);
   if (durationMin > 0) bits.push(`${durationMin} ${t("form.minutes")}`);
-  if (plan.timeOfDay === "am" || plan.timeOfDay === "pm") bits.push(t(`calendar.plan_tod_${plan.timeOfDay}`));
   const targetId = getPlanTargetId(plan);
-  if (targetId) bits.push(`#${targetId.slice(0, 6)}`);
+  if (includeTargetId && targetId) bits.push(`#${targetId.slice(0, 6)}`);
   return bits.filter(Boolean).join(" · ");
 }
 

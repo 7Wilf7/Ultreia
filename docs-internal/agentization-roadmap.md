@@ -177,6 +177,7 @@ proposed -> cancelled
 - AI Coach 设置里新增轻量 `Recent Agent Actions`。
 - 最近 10 条动作只读展示：动作类型、状态、来源、涉及日期 / 数量、失败原因。
 - 点击单条可展开查看可读动作摘要和执行结果；修改已有计划时显示 before / after 摘要，不再直接展示内部 JSON。
+- 展开详情要按用户理解组织，而不是按 payload 原始字段组织：计划修改按日期聚合展示「原计划 / 新计划」，隐藏内部计划 id，执行结果用短摘要标签显示。
 - action log 写库仍是 best-effort，但前端会先合并到当前列表，保证 PWA 不需要刷新就能看到最新提议 / 接受 / 执行 / 忽略状态。
 - 用户可在 Recent Agent Actions 长按删除某条 action log，用于清理测试 Action Card；删除只清理 action 记录和消息按钮状态，不回滚已经执行的数据变更。
 - 用户可从展开的 action log 直接带着动作摘要和执行结果追问 Coach，让 Coach 复盘这次动作是否合理、下一步继续还是调整；这只创建普通聊天消息，不自动执行新动作。
@@ -298,3 +299,4 @@ Phase 2 已进入收尾观察，下一步是 Phase 3：Agent Action Log。
 - 2026-06-23：Phase 3 第三步：AI Coach 对话和 AI 周复盘开始读取最近 Action Card 结果，把接受 / 忽略 / 失败作为后续建议的反馈上下文。
 - 2026-06-23：Phase 3 第四步：AI Coach 设置新增 `Recent Agent Actions` 轻量只读入口，最近 10 条动作可展开查看 payload/result 摘要，先补可审计性，不新增动作类型。
 - 2026-06-23：Recent Agent Actions 增加“带着这条动作问教练”入口，让 action log 从纯审计记录变成可继续讨论的 agent 上下文；仍不自动执行新动作。
+- 2026-06-24：Recent Agent Actions 展开详情继续收敛成用户可读视图：修改计划按日期分组展示「原计划 / 新计划」，隐藏内部计划 id，执行结果改短标签；这一步确认 action log 的价值是可审计、可追问，而不是暴露数据库结构。

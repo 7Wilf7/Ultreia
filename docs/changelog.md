@@ -2,6 +2,12 @@
 
 > Ultreia 的"装修日志" —— 从 2026-05-13 闲来无事点了下 artifacts 开始，到今天每一天加了什么、改了什么、拆了什么。
 
+## 2026-06-24
+
+- **安卓常驻通知统计口径修正**：本月 Distance 和 Training 顶部本月 Distance 保持一致，只统计 Road Run / Trail Run / Hiking / Floor Climbing 的距离，不再把 HIIT / Strength 里可能残留的距离算进去。
+- **安卓常驻通知对齐优化**：通知栏本月统计改成固定宽度的两行显示，让 Sessions / Time 和 Distance / Ascent 的分隔点、右侧字段更稳定对齐。
+- **Recent Agent Actions 更直观**：展开计划修改记录时按日期展示「原计划 / 新计划」，不再露出内部计划编号；执行结果改成更短的摘要标签。
+
 ## 2026-06-23
 
 - **Recent Agent Actions 可视化**：AI Coach 设置里新增“最近 Agent 动作”，可查看最近 10 条计划导入 / Memory 更新动作的类型、状态、来源、涉及日期 / 数量、失败原因，并展开查看动作内容和执行结果摘要。

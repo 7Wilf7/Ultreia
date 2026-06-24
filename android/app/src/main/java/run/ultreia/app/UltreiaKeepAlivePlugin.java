@@ -22,7 +22,7 @@ public class UltreiaKeepAlivePlugin extends Plugin {
     public void start(PluginCall call) {
         try {
             String title = call.getString("title", "This month");
-            String body = call.getString("body", "Sessions 0 · Time 0m\nDistance 0.0km · Ascent 0m");
+            String body = call.getString("body", "Sessions   0     · Time      0m\nDistance   0.0km · Ascent     0m");
             UltreiaKeepAliveService.start(getContext(), title, body);
             JSObject ret = new JSObject();
             ret.put("running", true);

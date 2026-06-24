@@ -8,6 +8,7 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 
 - 已有能力：训练上下文注入、AI Coach 对话、计划解析、Memory facts 审核、周复盘、服务端定时任务、Agent Action Log，以及多个需要用户确认的 Action Card。
 - 主要短板：持续任务对象和统一工具层还不完整；主动循环仍以低风险、可确认动作优先，尚未进入自动执行阶段。
+- 运行时探索：开始接入 `desktop_codex` provider POC，让本地 Codex runner 可作为 AI Coach / 未来总 Agent 的优先模型路线；DeepSeek 保持 fallback。
 
 中期目标是推进到 **可确认动作的 AI Coach Agent**：
 
@@ -34,6 +35,7 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 | Phase 4 | 进行中 | Memory Facts 结构化 | 事实表已接入；Memory 面板改为 facts-only；AI Coach / 周报只读取 active facts；旧分区 Memory 已退出 prompt，清理 SQL 已准备；夜间记忆审核第一版已接入 |
 | Phase 5 | 暂不推进 | 自动同步外部训练数据 | Strava API 因 AI 使用政策和数据完整性问题，不作为短期路线 |
 | Phase 6 | 进行中 | 内部闭环 Action Cards | 计划偏差补救 Action Card 第一版已落地；下一梯队是恢复风险、天气调整、数据质量补全和赛前简报 |
+| Runtime POC | 进行中 | Desktop Codex provider | `ai_jobs` / 本地 runner / `coach-proxy` fallback 第一版已接入，先验证 AI Coach 单条对话；周报、Memory、推送后续再统一接 provider router |
 
 ## Phase 1：Action Card 雏形
 
@@ -403,3 +405,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-24：修正 Memory 更新保存顺序：过去 `memory_update` action 可能先被标记为 executed，但 `coach_memory_facts` 写库失败只在控制台 warning，导致换设备看不到事实。现在接受审核后会等待 facts 写库成功，成功后才记录 executed；失败则保留审核卡并显示错误。新增 `docs-internal/supabase-check-memory-facts-and-actions.sql` 用于只读核对 facts 与 action log。
 - 2026-06-24：Phase 2 服务端定时周报补齐：`weekly_recap` 按用户本地星期 / 半点时间运行，读取 Current Memory facts 和 Recent Agent Actions，完整报告写入 `coach_reports` 后发送短通知；前端到点触发已移除。周日导入提示收敛为补漏：已有周报早于新导入活动、或预定时间已过但报告仍缺失时提供手动分析兜底。
 - 2026-06-24：Phase 6 第一版落地：AI Coach 会识别最近两周漏练 / 部分完成的计划，在对话上方提示生成“计划偏差补救” Action Card；用户确认前不改日历，执行结果写入 Agent Action Log。下一梯队按恢复风险、天气调整、数据质量补全、赛前简报推进。
+- 2026-06-25：Desktop Codex provider POC 第一版接入：新增 `ai_jobs` SQL 草案、本地 `desktop-codex-runner` 和 `coach-proxy` 的 `desktop_codex → DeepSeek fallback` 路线。原则：本地 Codex 凭据只留在 runner 电脑；runner 不开放公网端口；Codex 运行在空临时目录、read-only sandbox，并禁用 plugins / apps / browser / computer-use / image generation。第一阶段只验证 AI Coach 单条聊天，后续再扩展到周报、Memory 和推送。

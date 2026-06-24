@@ -214,17 +214,29 @@ function readinessComplete(readiness) {
   return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
 }
 
-function buildCoachReplyMeta({ providerId, model, usage, walletChargeCents }) {
+function buildCoachReplyMeta({ providerId, model, usage, walletChargeCents, fallback }) {
   const normalized = normalizeTokenUsage(usage);
-  if (!normalized) return null;
   return {
     provider: providerId,
     model,
     freeTier: false,
-    usage: normalized,
+    usage: normalized || null,
     walletChargeCents: Number(walletChargeCents || 0),
+    fallback: fallback || null,
     createdAt: new Date().toISOString(),
   };
+}
+
+function coachProviderLabel(providerId, fallback = null) {
+  const provider = String(providerId || "").toLowerCase();
+  const base = provider === "desktop_codex"
+    ? "Desktop Codex"
+    : provider === "deepseek"
+      ? "DeepSeek"
+      : providerId || "AI";
+  return fallback?.from === "desktop_codex" && provider === "deepseek"
+    ? "DeepSeek fallback"
+    : base;
 }
 
 function describeWorkoutForCoach(w, idx) {
@@ -1338,6 +1350,7 @@ function AppShell({
   }
   const [chatLoading, setChatLoading] = useState(false);
   const [coachChatDraft, setCoachChatDraft] = useState("");
+  const [lastCoachProvider, setLastCoachProvider] = useState({ id: "deepseek", label: "DeepSeek", fallback: null });
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [planProposal, setPlanProposal] = useState(null);
@@ -1850,11 +1863,18 @@ function AppShell({
       if (controller.signal.aborted || runId !== chatRunRef.current) return false;
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+      const providerId = data.provider || "deepseek";
+      setLastCoachProvider({
+        id: providerId,
+        label: coachProviderLabel(providerId, data.fallback || null),
+        fallback: data.fallback || null,
+      });
       const meta = buildCoachReplyMeta({
-        providerId: data.provider || "deepseek",
+        providerId,
         model: data.model || DEFAULT_MODEL,
         usage: data.usage,
         walletChargeCents: data.wallet?.charge_cents ?? 0,
+        fallback: data.fallback || null,
       });
       const finalContent = appendCoachMessageMeta(reply, meta);
       try {
@@ -2441,6 +2461,8 @@ Rules:
           chatLoading={chatLoading}
           chatInput={coachChatDraft}
           setChatInput={setCoachChatDraft}
+          coachProviderLabel={lastCoachProvider.label}
+          coachProviderFallback={lastCoachProvider.fallback}
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}

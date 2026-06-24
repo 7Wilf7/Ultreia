@@ -202,6 +202,22 @@ function makeMdComponents(isMobile) {
 // 40 (~20 exchanges) keeps the nudge from firing on every short session.
 const LONG_CHAT_HINT_THRESHOLD = 40;
 
+function formatProviderMeta(meta, lang) {
+  if (!meta?.provider) return "";
+  const provider = String(meta.provider).toLowerCase();
+  const providerLabel = provider === "desktop_codex"
+    ? "Desktop Codex"
+    : provider === "deepseek"
+      ? "DeepSeek"
+      : String(meta.provider);
+  if (meta.fallback?.from === "desktop_codex" && provider === "deepseek") {
+    return lang === "zh"
+      ? `Codex 不可用 → 已使用 DeepSeek fallback`
+      : `Codex unavailable → used DeepSeek fallback`;
+  }
+  return providerLabel;
+}
+
 export function AICoachTab({
   coachConfig, setCoachConfig,
   chatMessages,
@@ -216,7 +232,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, chatInput, setChatInput, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  chatLoading, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   planDeviationSummary = null, planRescueLoading = false, onPlanRescueRequest,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
@@ -534,7 +550,7 @@ export function AICoachTab({
   const activeMemoryFactCount = memoryFacts.filter(f => f?.status === "active").length;
   const memoryReady = activeMemoryFactCount > 0;
   const calendarImportOn = coachConfig.showCalendarButton !== false;
-  const providerLabel = "DeepSeek";
+  const providerLabel = currentProviderLabel || "DeepSeek";
   const coachStyleLabel = t(`enum.coach.${coachConfig.style || "balanced"}`);
   const outputLabel = t(`enum.length.${coachConfig.outputLength || "standard"}`);
   const interventionLabel = t(`enum.intervention.${coachConfig.intervention || "standard"}`);
@@ -812,7 +828,9 @@ export function AICoachTab({
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
         <span
-          title={lang === "zh" ? "AI Coach 当前使用 DeepSeek" : "AI Coach currently uses DeepSeek"}
+          title={coachProviderFallback
+            ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
+            : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`)}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
@@ -1073,6 +1091,7 @@ export function AICoachTab({
                 const isUser = m.role === "user";
                 const parsedMessage = parseCoachMessageMeta(m.content);
                 const displayContent = parsedMessage.text;
+                const providerMeta = !isUser ? formatProviderMeta(parsedMessage.meta, lang) : "";
                 const hasDisplayContent = String(displayContent || "").trim().length > 0;
                 if (!isUser && m.isStreaming && !hasDisplayContent) return null;
                 const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton !== false;
@@ -1152,6 +1171,18 @@ export function AICoachTab({
                         {displayContent}
                       </ReactMarkdown>
                     </div>
+
+                    {providerMeta && (
+                      <div style={{
+                        fontSize: 10,
+                        lineHeight: 1.2,
+                        color: parsedMessage.meta?.fallback ? "var(--warn)" : "var(--ink-3)",
+                        fontFamily: "var(--font-sans)",
+                        padding: "0 2px",
+                      }}>
+                        {providerMeta}
+                      </div>
+                    )}
 
                     {/* Calendar import affordance — text button below the bubble.
                         Gated by the showCalendarButton coach setting (default ON).

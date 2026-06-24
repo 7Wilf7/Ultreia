@@ -33,6 +33,7 @@ const FIELD_MAP = {
   weeklyReportWeekday: 'weekly_report_weekday', // 0 Sunday ... 6 Saturday
   weeklyReportTime: 'weekly_report_time',       // "HH:MM"
   weeklyReportAfterSundayImport: 'weekly_report_after_sunday_import',
+  aiProviderPreference: 'ai_provider_preference', // "auto" | "prefer_codex" | "deepseek_only"
 };
 
 function fromRow(row) {

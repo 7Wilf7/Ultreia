@@ -1,0 +1,11 @@
+{
+  "name": "ultreia-desktop-codex-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node runner.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.0"
+  }
+}

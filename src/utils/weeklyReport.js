@@ -84,7 +84,7 @@ function fmtDailyNote(n) {
   return `- ${parts.join(" · ")}`;
 }
 
-export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemory, logs, races, dailyNotes, now, range, agentActions = [] }) {
+export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemory, logs, races, dailyNotes, now, range, agentActions = [], memoryFacts = [] }) {
   const completed = logs
     .filter(w => !w.isPlanned && w.date >= range.start && w.date <= range.end)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -113,7 +113,7 @@ export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemor
     `This report is not a chat reply: do not stop midway to ask the runner questions. ` +
     `If information is missing, state assumptions and mark what to confirm, then still provide a provisional recommendation.`;
 
-  const profileBlock = buildDataBlock({ logs, races, now, lang: "en", dailyNotes, agentActions });
+  const profileBlock = buildDataBlock({ logs, races, now, lang: "en", dailyNotes, agentActions, memoryFacts });
   const user =
     `Report range: ${range.start} to ${range.end}. Next plan range: ${range.nextStart} to ${range.nextEnd}.\n\n` +
     `[Runner profile and longer context]\n${profileBlock}\n\n` +

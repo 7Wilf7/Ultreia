@@ -21,6 +21,7 @@ should never import `supabase` directly — they go through these modules.
 | `coachMessages.js` | `coach_messages` | AI Coach conversation history |
 | `coachReports.js` | `coach_reports` | AI weekly report history |
 | `agentActions.js` | `agent_actions` | Agent Action Card lifecycle log |
+| `memoryFacts.js` | `coach_memory_facts` | Reviewed long-term memory fact cards |
 | `userSettings.js` | `user_settings` | Per-user preferences (language, API model choice, coach config, coach memory…) |
 | `index.js` | — | Re-exports each module as a namespace |
 
@@ -75,6 +76,7 @@ by any business code. `src/utils/migrate.js` has been deleted.
 | `coachMessages.js` | ✅ 3.3e | Append-only chat history; see below |
 | `coachReports.js` | ✅ 2026-06-21 | Weekly report history; one generated report per row |
 | `agentActions.js` | ✅ 2026-06-23 | Action Card lifecycle log; app still treats writes as best-effort |
+| `memoryFacts.js` | ✅ 2026-06-24 | Reviewed Memory fact cards; active facts feed Coach / weekly report context, archived facts are excluded |
 
 ### `workouts.js` notes
 
@@ -142,3 +144,12 @@ by any business code. `src/utils/migrate.js` has been deleted.
   action ids remain stable while the database keeps a UUID primary key.
 - Agent action writes are best-effort at call sites: failure to write the log
   must not block confirming a plan or saving Memory.
+
+### `memoryFacts.js` notes
+
+- `listMyFacts()` reads active / proposed facts by default for the Memory panel
+  and prompt context. Archived facts are fetched only when the user switches the
+  Memory facts filter to Archived.
+- Prompt assembly only uses `status === "active"` facts. Archived / rejected /
+  proposed facts must not influence Coach replies until explicitly restored or
+  accepted.

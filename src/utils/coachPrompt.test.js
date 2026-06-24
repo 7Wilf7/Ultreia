@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { appendCoachMessageMeta, buildAgentActionsBlock, messageContentForCoach, normalizeTokenUsage, parseCoachMessageMeta } from "./coachPrompt";
+import {
+  appendCoachMessageMeta,
+  buildAgentActionsBlock,
+  buildDataBlock,
+  buildMemoryFactsBlock,
+  messageContentForCoach,
+  normalizeTokenUsage,
+  parseCoachMessageMeta,
+} from "./coachPrompt";
 
 describe("coach message metadata helpers", () => {
   it("appends and parses hidden message metadata", () => {
@@ -82,5 +90,32 @@ describe("buildAgentActionsBlock", () => {
     }));
 
     expect(buildAgentActionsBlock(actions, 3).split("\n")).toHaveLength(3);
+  });
+});
+
+describe("buildMemoryFactsBlock", () => {
+  it("includes only active reviewed facts", () => {
+    const block = buildMemoryFactsBlock([
+      { category: "injury_health", status: "active", contentEn: "Achilles gets irritated when easy runs become too fast.", updatedAt: "2026-06-24T10:00:00Z" },
+      { category: "goals_races", status: "archived", contentEn: "Old race goal.", updatedAt: "2026-06-25T10:00:00Z" },
+    ]);
+
+    expect(block).toContain("Achilles");
+    expect(block).not.toContain("Old race goal");
+  });
+
+  it("adds active facts to the live data block", () => {
+    const block = buildDataBlock({
+      logs: [],
+      races: [],
+      dailyNotes: [],
+      now: new Date("2026-06-24T08:00:00+08:00"),
+      memoryFacts: [
+        { category: "training_preferences", status: "active", contentEn: "Prefers direct, data-first coaching.", updatedAt: "2026-06-24T10:00:00Z" },
+      ],
+    });
+
+    expect(block).toContain("[Memory Facts");
+    expect(block).toContain("Prefers direct, data-first coaching");
   });
 });

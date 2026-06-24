@@ -84,6 +84,7 @@ export const DATA_LABELS = {
     dayNotes: "[Day Notes — recovery/context flags]",
     adherence: "[Plan Adherence — last 14d, planned vs done/partial/missed]",
     upcoming: "[Planned Sessions — today/future only; planned means scheduled, NOT completed; forecast attached when within 7d]",
+    memoryFacts: "[Memory Facts — reviewed durable facts; active facts only; archived facts excluded]",
     agentActions: "[Recent Agent Actions — coach proposals and runner decisions; use as feedback, do not repeat rejected patterns blindly]",
     focus: "[Coaching Focus This Message — conditions that fired right now; weight these in your reply]",
     none: "None",
@@ -103,6 +104,7 @@ export const DATA_LABELS = {
     dayNotes: "[当日标记 —— 恢复/状态标记]",
     adherence: "[计划依从 —— 近 14 天，计划 vs 完成/部分完成/漏掉]",
     upcoming: "[计划训练 —— 仅今天/未来；planned 表示已安排，不代表已完成；7 天内附当天预报]",
+    memoryFacts: "[记忆事实 —— 已审核的长期事实；仅当前事实；已归档事实不进入]",
     agentActions: "[近期 Agent 动作 —— 教练建议与跑者决策；作为反馈参考，不要机械重复被忽略的方向]",
     focus: "[本次教练重点 —— 当前触发的条件，回复时重点权衡这些]",
     none: "无",
@@ -501,13 +503,35 @@ export function buildAgentActionsBlock(agentActions = [], limit = 6) {
     .join("\n");
 }
 
+function formatMemoryFactLine(fact, lang = "en") {
+  if (!fact || fact.status !== "active") return "";
+  const content = lang === "zh"
+    ? (fact.contentZh || fact.contentEn || "")
+    : (fact.contentEn || fact.contentZh || "");
+  const text = String(content || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  const category = String(fact.category || "other").replace(/_/g, " ");
+  return `- ${category}: ${text}`;
+}
+
+export function buildMemoryFactsBlock(memoryFacts = [], lang = "en", limit = 12) {
+  if (!Array.isArray(memoryFacts) || !memoryFacts.length) return "";
+  return memoryFacts
+    .filter(f => f?.status === "active")
+    .sort((a, b) => String(b.updatedAt || b.acceptedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.acceptedAt || a.createdAt || "")))
+    .slice(0, limit)
+    .map(f => formatMemoryFactLine(f, lang))
+    .filter(Boolean)
+    .join("\n");
+}
+
 // Dynamic data block injected into the system prompt. Only the section titles
 // are localized; values (dates, race names, numbers) stay verbatim across
 // languages so the model receives consistent data.
 // `currentWeather` is the realtime snapshot (or null when unavailable).
 // `forecastByDate` is a Map<YYYY-MM-DD, dailyForecast> covering the next 7
 // days; used to attach daily weather to planned sessions in that window.
-export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, dailyNotes = [], raceDayWeather = null, agentActions = [] }) {
+export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, dailyNotes = [], raceDayWeather = null, agentActions = [], memoryFacts = [] }) {
   const D = DATA_LABELS[lang] || DATA_LABELS.en;
   // Strip future-planned entries — the LLM should only see what actually
   // happened. Planned rows would otherwise be misread as "recent activity"
@@ -650,6 +674,8 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
   const adherence = buildPlanAdherence(logs, now);
   if (adherence) sections.push(`${D.adherence}\n${adherence.body}`);
   if (upcomingPlans) sections.push(`${D.upcoming}\n${upcomingPlans}`);
+  const memoryFactsBlock = buildMemoryFactsBlock(memoryFacts, lang);
+  if (memoryFactsBlock) sections.push(`${D.memoryFacts}\n${memoryFactsBlock}`);
   const agentActionsBlock = buildAgentActionsBlock(agentActions);
   if (agentActionsBlock) sections.push(`${D.agentActions}\n${agentActionsBlock}`);
   // Conditional directive layer goes LAST so it's the most salient thing the
@@ -687,6 +713,7 @@ export function buildPromptSkeleton(lang = "en") {
       "【最近当日标记】计划休息 / 按摩 / 拉伸 / 生病",
       "【计划依从】近 14 天计划 vs 完成 / 部分完成 / 漏掉",
       "【未来约 21 天计划训练】（含当天预报，若有）",
+      "【记忆事实】已审核的长期事实卡片（已归档不进入）",
       "【近期 Agent 动作】建议动作、你的接受 / 忽略 / 失败反馈",
       "【本次教练重点】按当前情况触发的周期 / 热适应 / 负荷 / 漏练提醒",
     ].join("\n");
@@ -710,6 +737,7 @@ export function buildPromptSkeleton(lang = "en") {
     "[Recent Day Notes] recovery / sick / mobility",
     "[Plan Adherence — last 14d planned vs done/partial/missed]",
     "[Planned Sessions — today/future only; planned means scheduled, not completed]",
+    "[Memory Facts] reviewed durable fact cards (archived excluded)",
     "[Recent Agent Actions] proposals + accepted/rejected/failed outcomes",
     "[Coaching Focus — periodization / heat / load / missed-session cues that fired]",
   ].join("\n");

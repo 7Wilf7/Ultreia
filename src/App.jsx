@@ -1618,6 +1618,7 @@ function AppShell({
         now: now || new Date(),
         range,
         agentActions,
+        memoryFacts,
       });
       const data = await db.usage.coachProxy({
         system: prompt.system,
@@ -1662,6 +1663,7 @@ function AppShell({
     coachMemoryZh,
     dailyNotes,
     logs,
+    memoryFacts,
     now,
     profile,
     races,
@@ -1808,7 +1810,7 @@ function AppShell({
       profile, coachConfig, coachMemory,
       dataBlock: buildDataBlock({
         logs: freshLogs, races, now, lang: "en",
-        currentWeather, forecastByDate, dailyNotes, raceDayWeather, agentActions,
+        currentWeather, forecastByDate, dailyNotes, raceDayWeather, agentActions, memoryFacts,
       }),
       lang: "en",
     });

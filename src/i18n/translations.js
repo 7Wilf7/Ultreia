@@ -1104,6 +1104,7 @@ const dict = {
   "coach.agent_action_status_cancelled": { en: "Cancelled", zh: "已取消" },
   "coach.agent_action_source_coach": { en: "AI Coach reply", zh: "AI Coach 回复" },
   "coach.agent_action_source_report": { en: "Weekly report", zh: "周报" },
+  "coach.agent_action_source_plan_rescue": { en: "Plan rescue", zh: "计划偏差补救" },
   "coach.agent_action_plan_detail": { en: "{count} item(s) · {dates}", zh: "{count} 条 · {dates}" },
   "coach.agent_action_memory_detail": { en: "{count} memory fact(s)", zh: "{count} 条记忆事实" },
   "coach.agent_action_error": { en: "Failed: {msg}", zh: "失败原因：{msg}" },
@@ -1163,6 +1164,13 @@ const dict = {
   "coach.long_chat_action":   { en: "Open Memory",          zh: "打开 Memory" },
   "coach.long_chat_chip":     { en: "{n} messages — distill to Memory?", zh: "{n} 条对话 · 固化到 Memory？" },
   "coach.long_chat_dismiss":  { en: "Collapse",             zh: "收起" },
+  "coach.plan_rescue_title":   { en: "Plan deviation detected", zh: "发现计划偏差" },
+  "coach.plan_rescue_body":    { en: "In the last {lookback} days, {count} planned session(s) were missed or only partially completed ({missed} missed / {partial} partial). The coach can generate a rescue Action Card; Calendar changes still require your confirmation.", zh: "近 {lookback} 天有 {count} 次计划偏差（漏掉 {missed} / 部分完成 {partial}）。可以让教练生成一张补救动作卡；确认前不会改动日历。" },
+  "coach.plan_rescue_primary": { en: "Generate rescue action", zh: "生成补救动作" },
+  "coach.plan_rescue_generating": { en: "Generating…",       zh: "生成中……" },
+  "coach.plan_rescue_dismiss": { en: "Not now",              zh: "暂不处理" },
+  "coach.plan_rescue_no_deviation": { en: "No recent plan deviation needs a rescue action right now.", zh: "目前没有需要补救的近期计划偏差。" },
+  "coach.plan_rescue_no_plans": { en: "The coach did not find a safe concrete rescue action. Nothing was changed.", zh: "教练没有生成足够安全、具体的补救动作。没有改动任何数据。" },
 
   // ===== AI Coach → Calendar import =====
   "coach.import_button":      { en: "Review action",          zh: "审核建议动作" },

@@ -1,8 +1,8 @@
 // This file exports a few small date/label helpers (formatHeaderDate,
 // logHeadline, todRank) alongside the modal component — CalendarTab imports
-// them. Splitting them into a separate module would churn import sites for zero
-// runtime benefit, so we disable the dev-only Fast-Refresh rule here (same call
-// LanguageContext.jsx makes).
+// them. Splitting all of them into separate modules would churn import sites for
+// zero runtime benefit, so we disable the dev-only Fast-Refresh rule here (same
+// call LanguageContext.jsx makes).
 /* eslint-disable react-refresh/only-export-components */
 import { useState, useRef } from "react";
 import { s } from "../styles";
@@ -11,27 +11,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, formatPlanDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
 import { evaluatePlanOutcome } from "../utils/planMatch";
-
-// Per-type plan field visibility — which inputs the add/edit-plan form shows for
-// a given activity type (time-of-day is always shown). Mirrored in
-// CoachPlanImportModal so a plan reads the same wherever it's edited.
-//   Road Run        → run type + distance
-//   Trail / Hiking  → distance + ascent
-//   Floor Climbing  → ascent
-//   Cycling         → distance + speed
-//   Swimming        → duration
-//   Strength        → body area(s)
-//   HIIT            → time-of-day only
-export function planFields(type) {
-  return {
-    runType:  type === "Road Run",
-    distance: type === "Road Run" || type === "Trail Run" || type === "Hiking" || type === "Cycling",
-    ascent:   type === "Trail Run" || type === "Hiking" || type === "Floor Climbing",
-    speed:    type === "Cycling",
-    duration: type === "Swimming",
-    strength: type === "Strength",
-  };
-}
+import { planFields } from "../utils/planFields";
 
 // Compact target readout for a PLANNED row, by type. Mirrors planFields so the
 // row shows exactly what the user planned (never a spurious "00s").

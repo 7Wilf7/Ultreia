@@ -217,6 +217,7 @@ export function AICoachTab({
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
   chatLoading, chatInput, setChatInput, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  planDeviationSummary = null, planRescueLoading = false, onPlanRescueRequest,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
@@ -271,6 +272,12 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
+  const [dismissedPlanRescueSignature, setDismissedPlanRescueSignature] = useState("");
+  const showPlanRescue = !!(
+    planDeviationSummary?.affectedCount > 0
+    && dismissedPlanRescueSignature !== planDeviationSummary.signature
+    && typeof onPlanRescueRequest === "function"
+  );
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -959,6 +966,69 @@ export function AICoachTab({
               }}>×</button>
           </div>
         )
+      )}
+
+      {showPlanRescue && (
+        <div style={{
+          marginBottom: 12,
+          padding: isMobile ? "9px 10px" : "10px 12px",
+          border: "1px solid var(--rule)",
+          background: "var(--bg-elevated)",
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}>
+          <div style={{ flex: 1, minWidth: isMobile ? 180 : 260, lineHeight: 1.5 }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 12,
+              fontWeight: 650,
+              color: "var(--ink-1)",
+              marginBottom: 2,
+            }}>
+              <span style={{ color: "var(--warn)" }}>⚠</span>
+              <span>{t("coach.plan_rescue_title")}</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
+              {t("coach.plan_rescue_body", {
+                lookback: planDeviationSummary.lookbackDays,
+                count: planDeviationSummary.affectedCount,
+                missed: planDeviationSummary.missedCount,
+                partial: planDeviationSummary.partialCount,
+              })}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={onPlanRescueRequest}
+              disabled={planRescueLoading}
+              style={{
+                ...s.btn,
+                fontSize: 12,
+                padding: "6px 10px",
+                opacity: planRescueLoading ? 0.65 : 1,
+                cursor: planRescueLoading ? "default" : "pointer",
+              }}>
+              {planRescueLoading ? t("coach.plan_rescue_generating") : t("coach.plan_rescue_primary")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissedPlanRescueSignature(planDeviationSummary.signature)}
+              disabled={planRescueLoading}
+              style={{
+                ...s.btnGhost,
+                fontSize: 12,
+                padding: "6px 10px",
+                opacity: planRescueLoading ? 0.6 : 1,
+              }}>
+              {t("coach.plan_rescue_dismiss")}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Message window — fixed in the middle. The pills above and the input
@@ -2301,7 +2371,9 @@ function summarizeAgentAction(action, t) {
       : (action.title || action.type || t("coach.agent_action_type_unknown"));
   const sourceLabel = action.sourceReportId || action.source === "weekly_report"
     ? t("coach.agent_action_source_report")
-    : t("coach.agent_action_source_coach");
+    : action.source === "plan_deviation_rescue"
+      ? t("coach.agent_action_source_plan_rescue")
+      : t("coach.agent_action_source_coach");
   const detail = action.type === "create_plans"
     ? t("coach.agent_action_plan_detail", {
         dates: affectedDates.length ? affectedDates.slice(0, 4).join(", ") : "-",

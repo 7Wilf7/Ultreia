@@ -9,6 +9,7 @@ import {
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
+import { buildPlanDeviationRescuePrompt, summarizePlanDeviation } from "./utils/planDeviation";
 import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
@@ -1150,6 +1151,11 @@ function AppShell({
   const [racesSubTab, setRacesSubTab] = useState("target");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
+  const planDeviationTodayKey = localDateKey(now);
+  const planDeviationSummary = useMemo(
+    () => summarizePlanDeviation(logs, new Date(`${planDeviationTodayKey}T12:00:00`)),
+    [logs, planDeviationTodayKey],
+  );
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showWallet, setShowWallet] = useState(false);
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
@@ -1333,6 +1339,7 @@ function AppShell({
   const [chatLoading, setChatLoading] = useState(false);
   const [coachChatDraft, setCoachChatDraft] = useState("");
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
+  const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [planProposal, setPlanProposal] = useState(null);
   const [planImportCache, setPlanImportCache] = useState(() => {
     try {
@@ -1449,9 +1456,23 @@ function AppShell({
       };
     });
   }
-  function updatePlanImportActionStatus(msgId, status) {
-    updatePlanImportAction(msgId, action => markAgentActionStatus(action, status));
+
+  function updatePlanActionRecord(action, transform) {
+    if (!action || typeof transform !== "function") return null;
+    if (action.sourceMessageId) {
+      updatePlanImportAction(action.sourceMessageId, transform);
+      return transform(action);
+    }
+    const nextAction = transform(action);
+    saveAgentAction(nextAction);
+    setPlanProposal(prev => (
+      prev?.action?.id === action.id
+        ? { ...prev, action: nextAction }
+        : prev
+    ));
+    return nextAction;
   }
+
   function recordMemoryActionDecision(action, status, result = null) {
     const nextAction = result && status === AGENT_ACTION_STATUS.EXECUTED
       ? completeAgentAction(action, result)
@@ -1986,6 +2007,89 @@ Rules:
     }
   }
 
+  async function proposePlanDeviationRescue() {
+    if (planRescueLoading) return;
+    setPlanRescueLoading(true);
+    try {
+      let freshLogs = logs;
+      try {
+        freshLogs = await refreshLogs();
+      } catch (err) {
+        console.warn("[AI Coach] refreshLogs failed before plan rescue, using cached state:", err);
+      }
+
+      const summary = summarizePlanDeviation(freshLogs, now || new Date());
+      if (!summary) {
+        appDialog.alert(t("coach.plan_rescue_no_deviation"));
+        return;
+      }
+
+      const dataBlock = buildDataBlock({
+        logs: freshLogs,
+        races,
+        now: now || new Date(),
+        lang: "en",
+        currentWeather: weatherCtx.currentWeather,
+        forecastByDate: weatherCtx.forecastByDate,
+        dailyNotes,
+        raceDayWeather: null,
+        agentActions,
+        memoryFacts,
+      });
+      const prompt = buildPlanDeviationRescuePrompt({
+        summary,
+        dataBlock,
+        now: now || new Date(),
+      });
+      const data = await db.usage.coachProxy({
+        system: "",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 8000,
+      });
+      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      const plans = parsePlansFromLLM(text);
+      if (plans.length === 0) {
+        appDialog.alert(t("coach.plan_rescue_no_plans"));
+        return;
+      }
+      const baseAction = buildCreatePlansAction(plans, {
+        id: `plan-rescue-${Date.now()}`,
+        source: "plan_deviation_rescue",
+        risk: "medium",
+      });
+      const action = {
+        ...baseAction,
+        title: "Repair plan after missed sessions",
+        reason: "Recent planned sessions were missed or only partially completed. Review these calendar changes before applying them.",
+        payload: {
+          ...baseAction.payload,
+          planDeviation: {
+            lookbackDays: summary.lookbackDays,
+            missedCount: summary.missedCount,
+            partialCount: summary.partialCount,
+            affectedCount: summary.affectedCount,
+            items: summary.items.slice(0, 8),
+            signature: summary.signature,
+          },
+        },
+      };
+      saveAgentAction(action);
+      setPlanProposal({ msgId: null, assistantContent: "", action });
+    } catch (err) {
+      console.error("[AI Coach] Plan rescue error:", err);
+      if (err?.code === "insufficient_balance") {
+        appDialog.alert(t("wallet.insufficient_ai"));
+        openWalletSurface();
+        refreshWallet().catch(() => {});
+      } else {
+        appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      }
+    } finally {
+      setPlanRescueLoading(false);
+    }
+  }
+
   function applyPlanRestTags(restDates = [], workoutDates = []) {
     const workoutDateSet = new Set(workoutDates.filter(Boolean));
     const addRestDates = [...new Set(restDates.filter(Boolean))].filter(date => !workoutDateSet.has(date));
@@ -2009,7 +2113,7 @@ Rules:
     // bulkAddLogs is optimistic — the rows appear on Calendar before this
     // returns. Close the review modal immediately and skip the "success"
     // alert (which used to compete with a possible later failure alert).
-    const msgId = planProposal?.msgId;
+    const sourceAction = planProposal?.action || null;
     const planChanges = workouts
       .filter(w => w?._targetPlanId)
       .map(w => ({
@@ -2029,14 +2133,14 @@ Rules:
       ...appliedRestDates,
     ].filter(Boolean))];
     const targetedPlanIds = [...new Set((replacePlannedIds || []).filter(Boolean))];
-    updatePlanImportActionStatus(msgId, AGENT_ACTION_STATUS.ACCEPTED);
+    const acceptedAction = updatePlanActionRecord(sourceAction, action => markAgentActionStatus(action, AGENT_ACTION_STATUS.ACCEPTED)) || sourceAction;
     bulkAddLogs(cleanWorkouts, {
       source: "ai_coach_plan",
       replacePlannedDates: dateWideReplaceDates.length > 0,
       replacePlannedDatesOn: dateWideReplaceDates,
       replacePlannedIds: targetedPlanIds,
       onPersisted: (created) => {
-        updatePlanImportAction(msgId, action => completeAgentAction(action, {
+        updatePlanActionRecord(acceptedAction, action => completeAgentAction(action, {
           createdWorkoutIds: (created || []).map(w => w.id).filter(Boolean),
           createdWorkoutCount: (created || []).length,
           updatedPlanIds: targetedPlanIds,
@@ -2046,14 +2150,14 @@ Rules:
         }));
       },
       onFailed: (err) => {
-        updatePlanImportAction(msgId, action => failAgentAction(action, err));
+        updatePlanActionRecord(acceptedAction, action => failAgentAction(action, err));
       },
     });
     setPlanProposal(null);
   }
 
   function rejectPlanProposal() {
-    updatePlanImportActionStatus(planProposal?.msgId, AGENT_ACTION_STATUS.REJECTED);
+    updatePlanActionRecord(planProposal?.action, action => markAgentActionStatus(action, AGENT_ACTION_STATUS.REJECTED));
     setPlanProposal(null);
   }
 
@@ -2345,6 +2449,9 @@ Rules:
           onStopExtraction={stopPlanExtraction}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}
           getPlanImportActionStatus={(msgId) => msgId ? (planImportCache[msgId]?.action?.status || null) : null}
+          planDeviationSummary={planDeviationSummary}
+          planRescueLoading={planRescueLoading}
+          onPlanRescueRequest={proposePlanDeviationRescue}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           /* "need location" weather pill now routes to the profile editor,

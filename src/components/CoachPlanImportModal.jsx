@@ -5,7 +5,7 @@ import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
 import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, getPlanTargetId, isPlanUpdateItem, isRestPlanItem } from "../utils/agentActions";
-import { planFields } from "./CalendarDayModal";
+import { planFields } from "../utils/planFields";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";

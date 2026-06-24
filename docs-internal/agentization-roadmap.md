@@ -4,10 +4,10 @@
 
 ## 当前定位
 
-Ultreia 当前状态是 **AI Coach Copilot**：
+Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI Coach Agent**：
 
-- 强项：训练上下文注入、AI Coach 对话、计划解析、Memory 审核、每日提醒。
-- 短板：没有持续任务对象、没有统一工具层、没有 agent action log、主动循环还很弱。
+- 已有能力：训练上下文注入、AI Coach 对话、计划解析、Memory facts 审核、周复盘、服务端定时任务、Agent Action Log，以及多个需要用户确认的 Action Card。
+- 主要短板：持续任务对象和统一工具层还不完整；主动循环仍以低风险、可确认动作优先，尚未进入自动执行阶段。
 
 中期目标是推进到 **可确认动作的 AI Coach Agent**：
 
@@ -33,6 +33,7 @@ Ultreia 当前状态是 **AI Coach Copilot**：
 | Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
 | Phase 4 | 进行中 | Memory Facts 结构化 | 事实表已接入；Memory 面板改为 facts-only；AI Coach / 周报只读取 active facts；旧分区 Memory 已退出 prompt，清理 SQL 已准备；夜间记忆审核第一版已接入 |
 | Phase 5 | 暂不推进 | 自动同步外部训练数据 | Strava API 因 AI 使用政策和数据完整性问题，不作为短期路线 |
+| Phase 6 | 进行中 | 内部闭环 Action Cards | 计划偏差补救 Action Card 第一版已落地；下一梯队是恢复风险、天气调整、数据质量补全和赛前简报 |
 
 ## Phase 1：Action Card 雏形
 
@@ -276,13 +277,41 @@ archived_at
 - 如果未来重新评估 Strava，只能先明确：同步数据是否进入 AI prompt；如果进入，必须先确认政策允许。
 - 在没有干净自动同步前，继续把 FIT / ZIP 导入视为高质量数据入口；AI Agent 的下一步优先从 Ultreia 内部闭环推进，而不是外部平台同步。
 
+## Phase 6：内部闭环 Action Cards
+
+目标：在不引入外部自动同步、不做黑箱自动执行的前提下，把 Ultreia 已经掌握的数据继续转化成“观察 → 建议 → 用户确认 → 执行 → 记录”的局部闭环。
+
+第一版已落地：
+
+- **计划偏差补救 Action Card**：AI Coach 读取最近两周计划完成情况，发现漏练 / 部分完成后，在对话上方给出轻提醒；用户点击后生成调整接下来几天计划的 Action Card。
+- 生成动作时会同时读取未来计划、天气、近期训练、目标赛事、Memory facts 和最近 Agent 动作反馈。
+- 执行仍复用 `create_plans` Action Card：可新增计划、安排明确休息日，或在能定位到未来计划时修改单条计划。
+- 状态会写入 Agent Action Log，来源标记为“计划偏差补救”，可在 Recent Agent Actions 中回看。
+
+第一版边界：
+
+- 不自动补跑，不把漏掉的量机械堆回未来几天。
+- 不后台静默改日历，必须用户确认。
+- 不把健康风险写成诊断，只给训练安排层面的解释和建议。
+- 不新建 schema；复用已有 `agent_actions` 和计划导入执行链路。
+
+下一阶段梯队：
+
+| 梯队 | 能力 | 触发 | 动作 | 边界 |
+|---|---|---|---|---|
+| 1 | 计划偏差补救 | 最近 7–14 天漏练 / 部分完成 | 调整接下来 3–7 天计划 | 已落地第一版；继续观察真机效果 |
+| 2 | 恢复风险 / 负荷守门 | ACWR high / danger、RPE 偏高、晨间状态差、疼痛 / 疲劳备注 | 建议恢复日、降强度或暂停叠加强度课 | 不诊断；所有改计划都确认后执行 |
+| 3 | 天气驱动计划调整 | 未来 7 天强度 / 长距离遇到高温高湿、强风、污染或大雨 | 建议换日期 / 时段，或降低目标 | 只调整未来计划；不影响已完成训练 |
+| 4 | 数据质量补全助手 | 缺 RPE、缺备注、导入类型不准、天气可补未补 | 先做 checklist；后续可扩成低风险 Action Card | 写库前确认；不为了补全制造复杂流程 |
+| 5 | 赛前简报 / 装备检查 | A 级目标赛进入 14 天窗口，地点 / 天气可用 | 生成 briefing 和 checklist；必要时再提计划调整卡 | 第一版只报告 / checklist，不自动改训练 |
+
 ## 下一批可落地 Agent 化机会
 
 Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultreia 已经有的数据变成更多“观察 → 建议 → 用户确认 → 执行 → 记录”的闭环。
 
 优先级建议：
 
-1. **计划偏差补救 Action Card**
+1. **计划偏差补救 Action Card（第一版已落地，观察中）**
    - 触发：过去 7–14 天出现漏练 / 部分完成，尤其是目标赛临近或连续两次未完成。
    - 数据来源：`evaluatePlanOutcome` 已能判断计划完成 / 部分完成 / 漏掉；AI Coach prompt 也已经读取计划依从。
    - 动作：生成“调整接下来 3–7 天计划”的 `create_plans` / update Action Card，例如降载、挪长距离、补恢复日。
@@ -319,33 +348,22 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 
 ## 当前下一步
 
-可以继续推进 Phase 4.4：facts-only Memory 收尾。当前已接入 DAL、Memory 面板查看 / 归档 / 恢复，并把 active facts 作为主记忆插入 AI Coach / 周报 prompt；旧分区 Memory 已退出 UI 和 prompt。
+可以继续推进 Phase 6：内部闭环 Action Cards。当前计划偏差补救第一版已接入，下一步先观察它在真机上的触发频率、建议质量和执行记录，再决定是否进入恢复风险 / 负荷守门。
 
 为什么现在可以推进：
 
-1. `Import to Calendar` 的计划提炼结果已经包装成 `create_plans` 类型的前端 `agentAction`。
-2. 弹窗从单纯导入审核改为 Action Card 审核：先显示建议动作、风险等级、确认说明和「将执行」清单，再逐条编辑计划。
-3. `create_plans` 会提前提示哪些日期已有计划将被替换；已完成训练不受影响。
-4. 同一条 AI 回复提炼过后，按钮会显示为已提炼状态，再点直接打开缓存结果，不重复提炼。
-5. 明确的“无计划休息 / 不跑 / 休息日”会作为 `planned_rest` 日历状态执行：覆盖同日旧计划训练，但不创建 workout row、不污染统计；普通空白日不自动打这个标签。
-6. 风险等级从固定中风险改为按影响范围判断：少量新增为低风险，批量改动或覆盖旧计划为中风险。
-7. Action Card 已有本地生命周期状态：`proposed` / `executed` / `rejected`。接受后按钮显示已执行，忽略后显示已忽略；关闭弹窗不改变状态。
-8. Memory 自动更新已包装成 `memory_update` Action Card：AI 只提出建议，用户审核条目后接受才写入长期记忆，放弃则不改动。
-9. Phase 1 第一版仍只存在前端 state / localStorage 缓存，不建新表，不做自动执行。
-10. Phase 2 第一版开始：`daily-coach-dispatch` 增加 `weekly_recap` 模式，读取本周训练、当周 / 下周计划、每日状态和目标赛，生成 AI 周复盘。
-11. Phase 2.1 调整方向：周复盘不再当作收件箱短消息，而是 Settings 里的完整报告页面；先支持本周 / 上周手动生成、查看账号内最近周报，并可从报告提炼接下来计划。
-12. `coach_reports` 已建表并接入前端；新周报写入账号，旧本机周报会迁移一次。
-13. `agent_actions` 已建表并接入前端，计划导入 / Memory 更新 / 周报提炼动作能记录状态、执行结果和失败原因。
-14. AI Coach 和周报 prompt 已能读取最近 action 反馈，Recent Agent Actions 也能即时刷新、长按删除、展开查看可读详情，并把单条动作带回 Coach 追问。
+1. `create_plans` Action Card 已稳定支持新增计划、明确休息日和单条未来计划修改。
+2. `agent_actions` 已能记录动作提议、接受 / 忽略、执行结果和失败原因，并反哺 AI Coach / 周报上下文。
+3. AI Coach 已能读取计划依从、未来计划、天气、训练负荷、晨间状态、目标赛事、Memory facts 和最近动作反馈。
+4. 计划偏差补救不需要新 schema，也不需要扩大执行权限；它只是把已有观察信号变成一张新的可确认 Action Card。
+5. Strava 自动同步短期下调后，内部闭环 Action Card 是更干净的 Agent 化推进路线。
 
 下一步：
 
-1. 观察真机上接受 Memory 更新后，facts 是否按最终保留条目生成，归档 / 恢复是否即时生效。
-2. 观察 active facts 成为唯一长期记忆来源后，Coach 是否更稳定引用已审核事实；如果出现缺口，优先补 facts 提炼和审核，而不是恢复旧文本 fallback。
-3. 后续如果需要“候选事实逐条审核”，再把 proposed facts 作为独立 Action Card；当前不在点 Discard 前写入 facts，避免半确认事实残留。
-4. 服务端定时周报代码已完成；部署 `daily-coach-dispatch` 并执行 `docs-internal/supabase-weekly-report-cron.sql` 后正式启用。Settings 保留为用户设置星期 / 时间的控制面板，前端不再负责定时触发。
-5. 夜间记忆审核第一版已接入：设置在 AI Coach → Memory 内，默认关闭；只在当天有新对话时运行，生成待审核 Action Card / inbox，不自动写入 active Memory；默认每天最多一次，并清楚显示可能产生的 AI 调用成本。上线前需要单独部署 `daily-coach-dispatch` Edge Function，并在 Supabase Dashboard 跑 `docs-internal/supabase-nightly-memory-review-cron.sql` 才会真正凌晨自动触发。
-6. Strava 自动同步短期下调，不作为下一阶段 Agent 化任务；下一步优先做“计划偏差补救 Action Card”，再扩展到恢复风险和天气计划调整。
+1. 观察“计划偏差补救 Action Card”在真机上的触发频率：提示不能太吵，也不能漏掉连续偏差。
+2. 观察生成建议是否真的在“补救”而不是“补跑”：优先降载、挪动、恢复和现实可执行性。
+3. 如果建议质量稳定，再进入第二梯队：恢复风险 / 负荷守门 Action Card。
+4. 服务端定时周报、夜间记忆审核仍需要各自部署 Edge Function / cron SQL 才会真正后台触发；它们不阻塞 Phase 6 前端闭环继续推进。
 
 相关 schema 排查和优先级见 `docs-internal/schema-backlog.md`。
 
@@ -384,3 +402,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-24：Phase 4.4 facts-only Memory 收尾：旧分区文本 Memory 从 AI Coach / 周报 prompt 和 UI 移除；Memory 面板只展示 Current / Archived facts；新增 `docs-internal/supabase-clear-legacy-coach-memory.sql` 供 Wilf 清空 `user_settings.coach_memory` / `coach_memory_zh`，不影响 facts、聊天、Action Log 或训练数据。
 - 2026-06-24：修正 Memory 更新保存顺序：过去 `memory_update` action 可能先被标记为 executed，但 `coach_memory_facts` 写库失败只在控制台 warning，导致换设备看不到事实。现在接受审核后会等待 facts 写库成功，成功后才记录 executed；失败则保留审核卡并显示错误。新增 `docs-internal/supabase-check-memory-facts-and-actions.sql` 用于只读核对 facts 与 action log。
 - 2026-06-24：Phase 2 服务端定时周报补齐：`weekly_recap` 按用户本地星期 / 半点时间运行，读取 Current Memory facts 和 Recent Agent Actions，完整报告写入 `coach_reports` 后发送短通知；前端到点触发已移除。周日导入提示收敛为补漏：已有周报早于新导入活动、或预定时间已过但报告仍缺失时提供手动分析兜底。
+- 2026-06-24：Phase 6 第一版落地：AI Coach 会识别最近两周漏练 / 部分完成的计划，在对话上方提示生成“计划偏差补救” Action Card；用户确认前不改日历，执行结果写入 Agent Action Log。下一梯队按恢复风险、天气调整、数据质量补全、赛前简报推进。

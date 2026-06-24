@@ -6,7 +6,7 @@ import { formatDuration } from "../utils/format";
 import { computeTrainingLoad } from "../utils/trainingLoad";
 
 // ACWR ramp → restrained color cue (moss=good, ochre=watch, burnt=spike).
-const RAMP_COLOR = { optimal: "var(--moss)", low: "var(--ink-3)", high: "#b07a3e", danger: "#b54e1a", unknown: "var(--ink-3)" };
+const RAMP_COLOR = { optimal: "var(--moss)", low: "var(--ink-3)", high: "var(--warn)", danger: "var(--danger)", unknown: "var(--ink-3)" };
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";

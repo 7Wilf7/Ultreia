@@ -20,18 +20,18 @@ export function ConfirmDeleteModal({ confirmDelete, setConfirmDelete, onConfirm 
   return (
     <ModalRoot onClose={() => setConfirmDelete(null)}>
     <div onClick={() => setConfirmDelete(null)} className="ultreia-overlay-in"
-      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
+      style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "oklch(0.04 0.006 274 / 0.72)", backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
       <div onClick={e => e.stopPropagation()} className="ultreia-modal-in"
-        style={{ background: "#fff", borderRadius: 12, padding: "20px 22px", maxWidth: 360, width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+        style={{ background: "var(--panel)", border: "1px solid var(--rule)", color: "var(--ink-1)", borderRadius: 12, padding: "20px 22px", maxWidth: 360, width: "100%", boxShadow: "var(--shadow)" }}>
         <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>{title}</div>
-        <div style={{ fontSize: 13, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
+        <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
           <button onClick={() => setConfirmDelete(null)}
             style={{ ...s.btnGhost, minHeight: 44, padding: "10px 18px" }}>
             {t("common.cancel")}
           </button>
           <button onClick={onConfirm}
-            style={{ ...s.btn, background: "#c0392b", borderColor: "#c0392b", minHeight: 44, padding: "10px 18px" }}>
+            style={{ ...s.btn, background: "var(--danger)", borderColor: "var(--danger)", color: "var(--ink-inv)", minHeight: 44, padding: "10px 18px" }}>
             {t("common.delete")}
           </button>
         </div>

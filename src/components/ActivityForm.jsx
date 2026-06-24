@@ -77,8 +77,8 @@ function fromLog(log) {
 function LabeledInput({ label, unit, value, onChange, placeholder, type = "number", step }) {
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
-        {label}{unit && <span style={{ color: "#aaa", fontWeight: 400 }}> ({unit})</span>}
+      <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
+        {label}{unit && <span style={{ color: "var(--ink-3)", fontWeight: 400 }}> ({unit})</span>}
       </span>
       <input type={type} step={step} placeholder={placeholder} value={value} onChange={onChange} style={s.input} />
     </label>
@@ -233,7 +233,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.date")}</span>
+          <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>{t("form.date")}</span>
           {/* Native date input. Click the calendar icon at the right to open the picker;
               the rest of the input remains editable so users can type YYYY-MM-DD directly. */}
           <input type="date" value={form.date}
@@ -243,7 +243,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
         {/* div, not label — a label wrapping the Dropdown's button double-fires
             the click (open→close) and the picker never opens. */}
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>{t("form.type")}</span>
+          <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>{t("form.type")}</span>
           <Dropdown
             ariaLabel={t("form.type")}
             options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
@@ -259,14 +259,14 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           form for users who never need this field. */}
       <div style={{ marginBottom: 12 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
+          <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
             {t("form.started_at")}
-            <span style={{ color: "#aaa", fontWeight: 400 }}> ({t("form.started_at_optional")})</span>
+            <span style={{ color: "var(--ink-3)", fontWeight: 400 }}> ({t("form.started_at_optional")})</span>
           </span>
           <input type="datetime-local" value={form.startedAtLocal}
             onChange={e => setForm({ ...form, startedAtLocal: e.target.value })}
             style={s.input} />
-          <span style={{ fontSize: 11, color: "#999", lineHeight: 1.4 }}>{t("form.started_at_hint")}</span>
+          <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.4 }}>{t("form.started_at_hint")}</span>
         </label>
       </div>
 
@@ -380,15 +380,15 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           the hint below spells out the 1–10 scale for users new to RPE. */}
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 160 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
-            {t("form.rpe")}<span style={{ color: "#aaa", fontWeight: 400 }}> (1–10, {t("form.optional")})</span>
+          <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
+            {t("form.rpe")}<span style={{ color: "var(--ink-3)", fontWeight: 400 }}> (1–10, {t("form.optional")})</span>
           </span>
           <input type="number" inputMode="numeric" min="1" max="10" step="1"
             placeholder="—" value={form.rpe}
             onChange={e => setForm({ ...form, rpe: e.target.value.replace(/[^0-9]/g, "").slice(0, 2) })}
             style={s.input} />
         </label>
-        <span style={{ fontSize: 11, color: "#999", lineHeight: 1.45, display: "block", marginTop: 6 }}>
+        <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.45, display: "block", marginTop: 6 }}>
           {t("form.rpe_hint")}
         </span>
       </div>
@@ -397,8 +397,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           like "new shoes" / "knee felt tight" become coaching context. */}
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <span style={{ fontSize: 11, color: "#666", fontWeight: 500 }}>
-            {t("form.note")}<span style={{ color: "#aaa", fontWeight: 400 }}> ({t("form.optional")})</span>
+          <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
+            {t("form.note")}<span style={{ color: "var(--ink-3)", fontWeight: 400 }}> ({t("form.optional")})</span>
           </span>
           <textarea rows={2} placeholder={t("form.note_placeholder")}
             value={form.note}
@@ -415,7 +415,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           <input type="checkbox" checked={form.fetchWeather}
             onChange={e => setForm({ ...form, fetchWeather: e.target.checked })}
             style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
-          <span style={{ fontSize: 12, color: "#666" }}>{t("form.fetch_weather")}</span>
+          <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{t("form.fetch_weather")}</span>
         </label>
       )}
 

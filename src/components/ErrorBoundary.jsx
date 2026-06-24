@@ -28,17 +28,17 @@ export class ErrorBoundary extends Component {
     return (
       <div style={{
         padding: 16, font: "12px/1.6 ui-monospace, Menlo, Consolas, monospace",
-        color: "#7a1414", background: "#fff5f5", minHeight: "100vh",
+        color: "var(--danger)", background: "var(--bg)", minHeight: "100vh",
         whiteSpace: "pre-wrap", wordBreak: "break-word",
       }}>
         <h2 style={{ margin: "0 0 10px" }}>⚠ App crashed — screenshot this</h2>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <button onClick={() => { try { navigator.clipboard.writeText(text); } catch { /* blocked */ } }}
-            style={{ background: "#7a1414", color: "#fff", border: "none", borderRadius: 3, padding: "6px 14px", cursor: "pointer" }}>
+            style={{ background: "var(--danger)", color: "var(--ink-inv)", border: "none", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}>
             Copy
           </button>
           <button onClick={() => location.reload()}
-            style={{ background: "#333", color: "#fff", border: "none", borderRadius: 3, padding: "6px 14px", cursor: "pointer" }}>
+            style={{ background: "var(--panel-2)", color: "var(--ink-1)", border: "1px solid var(--rule)", borderRadius: 8, padding: "6px 14px", cursor: "pointer" }}>
             Reload
           </button>
         </div>

@@ -292,9 +292,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       <nav style={{
         position: "fixed", left: 0, right: 0, bottom: 0,
         zIndex: 20,
-        background: "var(--bg-elevated)",
+        background: "var(--panel)",
         borderTop: "1px solid var(--rule)",
-        boxShadow: "0 -10px 28px rgba(20,20,19,0.08)",
+        boxShadow: "0 -12px 36px oklch(0 0 0 / 0.28)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
         paddingBottom: "env(safe-area-inset-bottom)",
         display: "grid",
         gridTemplateColumns: "repeat(5, 1fr)",
@@ -338,11 +340,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 width: 38,
                 height: 28,
                 borderRadius: 999,
-                background: active ? "var(--moss-bg)" : "transparent",
-                border: active ? "1px solid rgba(74,92,55,0.28)" : "1px solid transparent",
-                color: active ? "var(--ink-1)" : "var(--ink-3)",
+                background: active ? "var(--accent-soft)" : "transparent",
+                border: active ? "1px solid var(--accent)" : "1px solid transparent",
+                color: active ? "var(--accent-dark)" : "var(--ink-3)",
                 transform: active ? "translateY(-1px)" : "none",
-                transition: "background-color 160ms cubic-bezier(0.2,0.7,0.3,1), border-color 160ms cubic-bezier(0.2,0.7,0.3,1), transform 160ms cubic-bezier(0.2,0.7,0.3,1)",
+                transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out), color 160ms var(--ease-out)",
               }}>
                 <Icon size={20} />
                 {showSpinner && (
@@ -350,12 +352,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                     position: "absolute",
                     right: -10,
                     top: -6,
-                    color: "var(--moss)",
+                    color: "var(--accent)",
                     background: "var(--bg-elevated)",
                     borderRadius: 8,
                     lineHeight: 0,
                   }}>
-                    <Spinner size={11} thickness={1.4} color="var(--moss)" />
+                    <Spinner size={11} thickness={1.4} color="var(--accent)" />
                   </span>
                 )}
               </span>

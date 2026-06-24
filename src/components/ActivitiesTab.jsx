@@ -605,22 +605,22 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           </button>
           <div style={{ flex: 1 }} />
           <button onClick={bulkDeleteSelected} disabled={selectedCount === 0}
-            style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "#c0392b", borderColor: "#c0392b", opacity: selectedCount === 0 ? 0.5 : 1 }}>
+            style={{ ...s.btn, fontSize: 12, padding: "5px 12px", background: "var(--danger)", borderColor: "var(--danger)", color: "var(--ink-inv)", opacity: selectedCount === 0 ? 0.5 : 1 }}>
             {t("activities.delete_sel")}
           </button>
         </div>
       )}
 
       {uploadMsg && (
-        <div style={{ fontSize: 12, color: "#555", background: "#f0f0f0", borderRadius: 6, padding: "8px 12px", marginBottom: 14, lineHeight: 1.6 }}>{uploadMsg}</div>
+        <div style={{ fontSize: 12, color: "var(--ink-2)", background: "var(--panel-2)", border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 12px", marginBottom: 14, lineHeight: 1.6 }}>{uploadMsg}</div>
       )}
 
       {parseProgress && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, color: "#555", marginBottom: 6, fontFamily: "var(--font-mono)" }}>
+          <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 6, fontFamily: "var(--font-mono)" }}>
             {t("activities.parsing_progress", { done: parseProgress.done, total: parseProgress.total })}
           </div>
-          <div style={{ height: 6, background: "var(--bg-sunken, #eee)", borderRadius: 3, overflow: "hidden" }}>
+          <div style={{ height: 6, background: "var(--bg-sunken)", borderRadius: 3, overflow: "hidden" }}>
             <div style={{
               height: "100%",
               width: `${Math.round((parseProgress.done / parseProgress.total) * 100)}%`,
@@ -631,9 +631,9 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       )}
 
       {duplicateWarning && (
-        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
-          <div style={{ ...s.section, color: "#7a5a00" }}>{t("activities.duplicate_title")}</div>
-          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
+        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
+          <div style={{ ...s.section, color: "var(--warn)" }}>{t("activities.duplicate_title")}</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
             {t("activities.duplicate_csv", { dups: duplicateWarning.dupIds.length, total: duplicateWarning.incoming.length })}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -645,20 +645,20 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
       )}
 
       {unknownTypeRows && (
-        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
-          <div style={{ ...s.section, color: "#7a5a00" }}>{t("activities.unknown_type_title")}</div>
-          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>
+        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
+          <div style={{ ...s.section, color: "var(--warn)" }}>{t("activities.unknown_type_title")}</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>
             {t("activities.unknown_type_body", { n: unknownTypeRows.filter(r => r._unknown).length, g: unknownGroups.length })}
           </div>
           {/* Grouped by original sport name — one choice per type covers all its
               rows. No inner scroll (it clipped the Dropdown menu); page scrolls. */}
           <div style={{ marginBottom: 10 }}>
             {unknownGroups.map(({ orig, count }) => (
-              <div key={orig} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div key={orig} style={{ background: "var(--panel-2)", border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", marginBottom: 6, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 12, flex: 1, minWidth: 150 }}>
-                  <span style={{ color: "#999" }}>{t("activities.unknown_type_original")}</span>
-                  <span style={{ fontFamily: "var(--font-mono)", color: "#333" }}>{orig}</span>
-                  <span style={{ color: "#aaa", marginLeft: 6 }}>{t("activities.unknown_count", { n: count })}</span>
+                  <span style={{ color: "var(--ink-3)" }}>{t("activities.unknown_type_original")}</span>
+                  <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)" }}>{orig}</span>
+                  <span style={{ color: "var(--ink-3)", marginLeft: 6 }}>{t("activities.unknown_count", { n: count })}</span>
                 </div>
                 <div style={{ width: 170 }}>
                   <Dropdown
@@ -704,11 +704,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               to be scrolled to). The page scrolls instead. */}
           <div>
             {parsedRows.map(r => (
-              <div key={r.id} style={{ background: "#fff", borderRadius: 6, padding: "8px 10px", marginBottom: 6, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div key={r.id} style={{ background: "var(--panel-2)", border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", marginBottom: 6, display: "flex", flexDirection: "column", gap: 6 }}>
                 {/* Line 1 — select · date · type · (Road Run) subtype picker */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
-                  <div style={{ fontSize: 11, color: "#888", flexShrink: 0 }}>{formatDateShort(r.date)}</div>
+                  <div style={{ fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>{formatDateShort(r.date)}</div>
                   <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
                   {r.type === "Road Run" && (
                     <div style={{ width: 132, marginLeft: "auto" }}>
@@ -726,7 +726,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     the user confirms import so the preview stays a clean audit
                     surface instead of a mini form for every row. */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ fontSize: 12, flex: 1, color: "#555", fontFamily: "var(--font-mono)", minWidth: 0 }}>
+                  <div style={{ fontSize: 12, flex: 1, color: "var(--ink-2)", fontFamily: "var(--font-mono)", minWidth: 0 }}>
                     {r.distance > 0 && <span>{r.distance}km · </span>}
                     {formatDuration(r.duration)}{r.hr > 0 && ` · HR ${r.hr}`}{r.ascent > 0 && ` · +${r.ascent}m`}
                   </div>
@@ -758,7 +758,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {displayedLogs.length === 0 && (
-          <div style={{ ...s.cardDark, textAlign: "center", color: "#888", padding: "30px 16px", fontSize: 13 }}>
+          <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "30px 16px", fontSize: 13 }}>
             {t("activities.empty")}
           </div>
         )}
@@ -788,10 +788,10 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                 onTouchStart={() => startPress(l)} onTouchEnd={endPress} onTouchMove={endPress} onTouchCancel={endPress}
                 onMouseDown={() => startPress(l)} onMouseUp={endPress} onMouseLeave={endPress}
                 style={{
-                  background: isSelected ? "#eef5ff" : "var(--bg-elevated)",
-                  borderTop:    "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
-                  borderRight:  "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
-                  borderBottom: "1px solid " + (isSelected ? "#7aa8e0" : "var(--rule)"),
+                  background: isSelected ? "var(--accent-soft)" : "var(--panel)",
+                  borderTop:    "1px solid " + (isSelected ? "var(--accent)" : "var(--rule)"),
+                  borderRight:  "1px solid " + (isSelected ? "var(--accent)" : "var(--rule)"),
+                  borderBottom: "1px solid " + (isSelected ? "var(--accent)" : "var(--rule)"),
                   borderLeft:   "4px solid " + (TYPE_COLOR[l.type] || "var(--rule)"),
                   padding: "9px 12px 10px",
                   display: "flex", flexDirection: "column", gap: 5,
@@ -915,7 +915,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                 alignItems: isNarrow ? "stretch" : "center",
                 gap: isNarrow ? 8 : 12,
                 cursor: "pointer",
-                ...(isSelected ? { background: "#eef5ff", borderColor: "#7aa8e0" } : {}),
+                ...(isSelected ? { background: "var(--accent-soft)", borderColor: "var(--accent)" } : {}),
               }}>
               {/* Top row (narrow: header line; desktop: left identifier block).
                   Contains: checkbox? · date · type tag · subtype chips · delete-button-on-narrow.

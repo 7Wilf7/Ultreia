@@ -2,38 +2,36 @@ import { TYPE_COLOR } from "./constants";
 
 /**
  * Inline style tokens — kept centralized here so the whole UI shares one
- * vocabulary. Aesthetic: brutalist-minimal monochrome + low-sat moss accent
- * + topographic / instrument feel.
- *
- * Sharp corners (mostly), hairline rules, mono for numbers, generous
- * negative space. Borders carry the design instead of fills.
+ * vocabulary. Aesthetic: Linear-inspired dark product UI — precise hairlines,
+ * translucent panels, restrained violet-blue focus, dense training data.
  */
 export const s = {
   // --- Containers ---
-  // Cards are bordered, not filled — feels like a field-notebook page.
   card: {
-    background: "var(--bg-elevated)",
+    background: "linear-gradient(180deg, var(--panel), var(--bg-elevated))",
     border: "1px solid var(--rule)",
-    borderRadius: 4,
+    borderRadius: 8,
     padding: "16px 18px",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.55)",
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.055)",
+    backdropFilter: "blur(14px)",
+    WebkitBackdropFilter: "blur(14px)",
   },
   cardDark: {
-    background: "var(--bg)",
+    background: "var(--panel)",
     border: "1px solid var(--rule)",
-    borderRadius: 4,
+    borderRadius: 8,
     padding: "16px 18px",
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.045)",
   },
 
   // --- Tags ---
-  // Activity-type tag: solid block — stamp aesthetic. Uppercase is intentional
-  // here because the tag acts as a categorical marker, not running text.
+  // Activity-type tag: compact categorical marker.
   tag: (t) => ({
     fontFamily: "var(--font-mono)",
     fontSize: 11,
     background: TYPE_COLOR[t] || "var(--ink-2)",
     color: "var(--ink-inv)",
-    borderRadius: 0,
+    borderRadius: 6,
     padding: "3px 9px",
     whiteSpace: "nowrap",
     fontWeight: 500,
@@ -47,7 +45,7 @@ export const s = {
     background: "transparent",
     color: "var(--ink-2)",
     border: "1px solid var(--rule)",
-    borderRadius: 0,
+    borderRadius: 6,
     padding: "2px 8px",
     whiteSpace: "nowrap",
     textTransform: "uppercase",
@@ -75,7 +73,7 @@ export const s = {
     fontWeight: 600,
     color: "var(--ink-1)",
     marginBottom: 12,
-    letterSpacing: "-0.005em",
+    letterSpacing: 0,
   },
   muted: {
     fontFamily: "var(--font-sans)",
@@ -107,40 +105,41 @@ export const s = {
     width: "100%",
     boxSizing: "border-box",
     border: "1px solid var(--rule)",
-    borderRadius: 2,
+    borderRadius: 8,
     padding: "10px 12px",
     fontSize: 14,
-    background: "var(--bg-elevated)",
+    background: "var(--panel-2)",
     color: "var(--ink-1)",
     outline: "none",
     fontFamily: "var(--font-sans)",
-    transition: "border-color 120ms",
+    transition: "border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), background-color 160ms var(--ease-out)",
   },
 
-  // Primary action — solid ink, sharp edges, sentence case for readability.
+  // Primary action — restrained accent, sentence case for readability.
   btn: {
-    border: "1px solid var(--ink-1)",
-    borderRadius: 2,
+    border: "1px solid var(--accent)",
+    borderRadius: 8,
     padding: "9px 18px",
     fontSize: 13,
-    background: "var(--ink-1)",
-    color: "var(--ink-inv)",
+    background: "var(--accent)",
+    color: "var(--bg-deep)",
     cursor: "pointer",
-    fontWeight: 500,
+    fontWeight: 650,
     fontFamily: "var(--font-sans)",
-    transition: "background-color 120ms, transform 80ms",
+    boxShadow: "0 0 0 1px oklch(1 0 0 / 0.04)",
+    transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 80ms var(--ease-out)",
   },
   btnGhost: {
     border: "1px solid var(--rule)",
-    borderRadius: 2,
+    borderRadius: 8,
     padding: "9px 16px",
     fontSize: 13,
-    background: "transparent",
+    background: "var(--panel-2)",
     color: "var(--ink-2)",
     cursor: "pointer",
     fontFamily: "var(--font-sans)",
     fontWeight: 500,
-    transition: "border-color 120ms, color 120ms",
+    transition: "border-color 160ms var(--ease-out), color 160ms var(--ease-out), background-color 160ms var(--ease-out)",
   },
 
   // --- Modal overlay + card ---
@@ -156,7 +155,7 @@ export const s = {
   modalOverlay: (isMobile, { float = false } = {}) => ({
     position: "fixed",
     top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.4)",
+    background: "oklch(0.04 0.006 274 / 0.72)",
     display: "flex",
     alignItems: isMobile ? (float ? "center" : "stretch") : "flex-start",
     justifyContent: "center",
@@ -173,11 +172,11 @@ export const s = {
     overscrollBehavior: "contain",
     // Subtle backdrop blur + fade-in. Blur unifies the "second-level modal"
     // feel across the app (inbox already blurred); fade is via ultreia-overlay-in.
-    backdropFilter: "blur(5px)",
-    WebkitBackdropFilter: "blur(5px)",
+    backdropFilter: "blur(10px)",
+    WebkitBackdropFilter: "blur(10px)",
     animation: "ultreia-overlay-in 0.16s ease-out",
   }),
-  modalCard: (isMobile, { maxWidth = 600, bg = "var(--bg-elevated)", float = false } = {}) => {
+  modalCard: (isMobile, { maxWidth = 600, bg = "var(--panel)", float = false } = {}) => {
     // Floating mobile card: behaves like the desktop centered card (border,
     // radius, shadow, capped height with internal scroll) instead of a
     // full-screen page. Desktop is unaffected by `float`.
@@ -185,8 +184,9 @@ export const s = {
     return {
       background: bg,
       border: floatMobile || !isMobile ? "1px solid var(--rule)" : "none",
-      borderRadius: floatMobile ? 12 : (isMobile ? 0 : 4),
-      boxShadow: floatMobile || !isMobile ? "0 10px 40px rgba(0,0,0,0.2)" : "none",
+      borderRadius: floatMobile ? 12 : (isMobile ? 0 : 10),
+      boxShadow: floatMobile || !isMobile ? "var(--shadow)" : "none",
+      color: "var(--ink-1)",
       width: "100%",
       maxWidth: (isMobile && !float) ? "none" : (floatMobile ? 460 : maxWidth),
       margin: (isMobile && !float) ? 0 : (floatMobile ? "auto" : "20px auto"),
@@ -227,10 +227,10 @@ export const s = {
 
   // Chip — filter pills / mode toggles. Sentence case + sans, easier to scan.
   chip: (active) => ({
-    border: "1px solid " + (active ? "var(--ink-1)" : "var(--rule)"),
-    background: active ? "var(--ink-1)" : "transparent",
-    color: active ? "var(--ink-inv)" : "var(--ink-2)",
-    borderRadius: 2,
+    border: "1px solid " + (active ? "var(--accent)" : "var(--rule)"),
+    background: active ? "var(--accent-soft)" : "var(--panel-2)",
+    color: active ? "var(--accent-dark)" : "var(--ink-2)",
+    borderRadius: 8,
     padding: "6px 12px",
     fontSize: 13,
     cursor: "pointer",
@@ -238,20 +238,19 @@ export const s = {
     flexShrink: 0,
     fontFamily: "var(--font-sans)",
     fontWeight: 500,
-    transition: "background-color 120ms, border-color 120ms",
+    transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), color 160ms var(--ease-out)",
   }),
 };
 
 /**
- * Topographic SVG background — a thin contour line pattern. Use as a
- * subtle decoration on hero stat cards, hero numbers, etc. Renders as
- * an inline data URL so no asset is shipped.
+ * Faint contour SVG background for training stat panels. Kept extremely subtle
+ * so the app remains a product surface, not a decorative poster.
  */
 export const CONTOUR_BG = {
   backgroundImage:
     `url("data:image/svg+xml;utf8,${encodeURIComponent(
       `<svg xmlns='http://www.w3.org/2000/svg' width='200' height='80' viewBox='0 0 200 80'>
-        <g fill='none' stroke='%23141413' stroke-width='0.4' opacity='0.06'>
+        <g fill='none' stroke='%23f4f0ff' stroke-width='0.4' opacity='0.075'>
           <path d='M-10 60 Q 40 20, 100 35 T 210 25'/>
           <path d='M-10 70 Q 50 30, 120 45 T 210 35'/>
           <path d='M-10 50 Q 30 10, 90 25 T 210 18'/>

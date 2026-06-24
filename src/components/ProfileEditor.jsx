@@ -84,7 +84,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
     <div onClick={mode === "setup" ? undefined : attemptClose}
       style={s.modalOverlay(isMobile, { float: true })}>
       <div onClick={e => e.stopPropagation()}
-        style={s.modalCard(isMobile, { maxWidth: 680, bg: "#fff", float: true })}>
+        style={s.modalCard(isMobile, { maxWidth: 680, float: true })}>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
           <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>
@@ -101,7 +101,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Display name — shown first, required */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 4 }}>
-            {t("profile.display_name")} <span style={{ color: "#c0392b" }}>*</span>
+            {t("profile.display_name")} <span style={{ color: "var(--danger)" }}>*</span>
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.display_name_hint")}</span>
           </div>
           <input type="text" value={draft.displayName}
@@ -113,8 +113,8 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Birth date */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 4 }}>
-            {t("profile.birth_date")} <span style={{ color: "#c0392b" }}>*</span>
-            {age != null && <span style={{ color: "#888", marginLeft: 8 }}>{t("profile.age_suffix", { age })}</span>}
+            {t("profile.birth_date")} <span style={{ color: "var(--danger)" }}>*</span>
+            {age != null && <span style={{ color: "var(--ink-3)", marginLeft: 8 }}>{t("profile.age_suffix", { age })}</span>}
           </div>
           <input type="date" value={draft.birthDate}
             onChange={e => setDraft({ ...draft, birthDate: e.target.value })}
@@ -124,7 +124,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Gender */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>
-            {t("profile.gender")} <span style={{ color: "#c0392b" }}>*</span>
+            {t("profile.gender")} <span style={{ color: "var(--danger)" }}>*</span>
           </div>
           <div style={{ maxWidth: 200 }}>
             <Dropdown
@@ -141,7 +141,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
             of location truth; the old Settings → Default location is gone. */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 4 }}>
-            {t("profile.city")} <span style={{ color: "#c0392b" }}>*</span>
+            {t("profile.city")} <span style={{ color: "var(--danger)" }}>*</span>
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.city_hint")}</span>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
@@ -195,7 +195,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
         {/* Years of training */}
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...s.label, marginBottom: 6 }}>
-            {t("profile.years_training")} <span style={{ color: "#c0392b" }}>*</span>
+            {t("profile.years_training")} <span style={{ color: "var(--danger)" }}>*</span>
             <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.years_training_hint")}</span>
           </div>
           <div style={{ maxWidth: 260 }}>
@@ -271,13 +271,13 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
           <div style={{ ...s.label, marginBottom: 6 }}>{t("profile.heart_rate")}</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 8 }}>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, color: "#666" }}>{t("profile.resting_hr")} <span style={{ color: "#aaa" }}>(bpm)</span></span>
+              <span style={{ fontSize: 11, color: "var(--ink-2)" }}>{t("profile.resting_hr")} <span style={{ color: "var(--ink-3)" }}>(bpm)</span></span>
               <input type="number" placeholder="55" value={draft.restingHR}
                 onChange={e => setDraft({ ...draft, restingHR: e.target.value })}
                 style={{ ...s.input, width: 100 }} />
             </label>
             <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <span style={{ fontSize: 11, color: "#666" }}>{t("profile.max_hr")} <span style={{ color: "#aaa" }}>(bpm)</span></span>
+              <span style={{ fontSize: 11, color: "var(--ink-2)" }}>{t("profile.max_hr")} <span style={{ color: "var(--ink-3)" }}>(bpm)</span></span>
               <input type="number" placeholder="190" value={draft.maxHR}
                 onChange={e => setDraft({ ...draft, maxHR: e.target.value })}
                 style={{ ...s.input, width: 100 }} />
@@ -300,8 +300,8 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
                 : null;
             }
             return (
-              <div style={{ background: "#fafafa", borderRadius: 6, padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 11, color: "#555", lineHeight: 1.8 }}>
-                <div style={{ marginBottom: 4, fontFamily: "var(--font-sans)", color: "#444" }}>{t("profile.hr_zone_preview")}</div>
+              <div style={{ background: "var(--panel-2)", border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 12px", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)", lineHeight: 1.8 }}>
+                <div style={{ marginBottom: 4, fontFamily: "var(--font-sans)", color: "var(--ink-1)" }}>{t("profile.hr_zone_preview")}</div>
                 {zones.map(z => (
                   <div key={z.id}>{z.id}: {z.low}–{z.high} bpm</div>
                 ))}
@@ -321,7 +321,7 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
           {!complete && (
-            <span style={{ ...s.muted, color: "#c0392b", marginRight: "auto", fontSize: 12 }}>
+            <span style={{ ...s.muted, color: "var(--danger)", marginRight: "auto", fontSize: 12 }}>
               {t("common.required")}
             </span>
           )}
@@ -393,7 +393,7 @@ export function ProfilePreview({ profile, defaultLocation, onClose, onEdit }) {
     <ModalRoot onClose={onClose}>
       <div onClick={onClose} style={s.modalOverlay(isMobile, { float: true })}>
         <div onClick={e => e.stopPropagation()}
-          style={s.modalCard(isMobile, { maxWidth: 480, bg: "#fff", float: true })}>
+          style={s.modalCard(isMobile, { maxWidth: 480, float: true })}>
           {/* Header: edit (left) · title · close (right) */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
             <button onClick={onEdit} style={{ ...s.btnGhost, fontSize: 13, padding: "6px 12px" }}>

@@ -2122,7 +2122,7 @@ Rules:
   const headerCell = {
     border: "1px solid var(--rule)",
     borderRight: "none",
-    background: "var(--bg-elevated)",
+    background: "var(--panel)",
     height: 32,
     padding: "0 11px",
     fontSize: 13,
@@ -2341,12 +2341,12 @@ Rules:
           className="ultreia-overlay-in"
           style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
-            background: "var(--moss)", color: "var(--ink-inv)", border: "none",
+            background: "var(--accent)", color: "var(--bg-deep)", border: "none",
             padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px",
-            fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500,
+            fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 650,
             cursor: "pointer", textAlign: "center", width: "100%",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+            boxShadow: "var(--shadow-soft)",
           }}>
           <span aria-hidden="true">🧠</span>
           <span>{t("coach.memory_ready_banner")}</span>
@@ -2719,7 +2719,12 @@ Rules:
       <div style={{
         display: "flex",
         marginBottom: isMobile ? 20 : 18,
-        borderBottom: "1px solid var(--rule)",
+        border: "1px solid var(--rule)",
+        borderRadius: 12,
+        background: "var(--panel)",
+        padding: 4,
+        backdropFilter: "blur(14px)",
+        WebkitBackdropFilter: "blur(14px)",
         overflowX: "auto", WebkitOverflowScrolling: "touch",
       }}>
         {desktopTabs.map(({ label, key, Icon }, i) => {
@@ -2728,17 +2733,17 @@ Rules:
           return (
             <button key={label} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
-              background: "transparent", border: "none",
+              background: active ? "var(--accent-soft)" : "transparent",
+              border: active ? "1px solid var(--accent)" : "1px solid transparent",
+              borderRadius: 9,
               padding: isMobile ? "10px 8px 12px" : "9px 18px 11px",
               fontSize: isMobile ? 13 : 17,
               fontFamily: "var(--font-sans)",
               fontWeight: active ? 600 : 500,
-              color: active ? "var(--ink-1)" : "var(--ink-3)",
+              color: active ? "var(--accent-dark)" : "var(--ink-3)",
               cursor: "pointer", whiteSpace: "nowrap",
               position: "relative",
-              borderBottom: active ? "2px solid var(--ink-1)" : "2px solid transparent",
-              marginBottom: -1,
-              transition: "color 120ms",
+              transition: "color 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out)",
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}>
               <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
@@ -2752,7 +2757,7 @@ Rules:
                     borderRadius: 8,
                     lineHeight: 0,
                   }}>
-                    <Spinner size={10} thickness={1.4} color="var(--moss)" />
+                    <Spinner size={10} thickness={1.4} color="var(--accent)" />
                   </span>
                 )}
               </span>

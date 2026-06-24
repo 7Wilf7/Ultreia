@@ -425,8 +425,8 @@ export function CalendarDayModal({
                       return (
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7, flexWrap: "wrap" }}>
                           {outcome === "done" && badge("var(--moss)", `✓ ${t("calendar.plan_done")}`)}
-                          {outcome === "partial" && badge("#b07a3e", t("calendar.plan_partial"))}
-                          {outcome === "missed" && badge("#b07a3e", t("calendar.plan_missed"))}
+                          {outcome === "partial" && badge("var(--warn)", t("calendar.plan_partial"))}
+                          {outcome === "missed" && badge("var(--warn)", t("calendar.plan_missed"))}
                           {resolvable && miniBtn(`✓ ${t("calendar.plan_mark_done")}`, () => setPlanStatus(l.id, "done"))}
                           {l.planStatus === "done" && miniBtn(t("calendar.plan_reset"), () => setPlanStatus(l.id, "pending"))}
                         </div>

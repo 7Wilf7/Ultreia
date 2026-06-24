@@ -772,9 +772,9 @@ export function RacesTab({
         {mobileTopTab === "races" && (
           <>
             {pastRaceWarning && (
-              <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
-                <div style={{ ...s.section, color: "#7a5a00" }}>{t("races.past_warn_title")}</div>
-                <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
+              <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
+                <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
                   <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
@@ -820,9 +820,9 @@ export function RacesTab({
       </div>
 
       {pastRaceWarning && (
-        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid #d4a017", background: "#fffbea" }}>
-          <div style={{ ...s.section, color: "#7a5a00" }}>{t("races.past_warn_title")}</div>
-          <div style={{ fontSize: 13, color: "#555", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
+        <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
+          <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
             <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>

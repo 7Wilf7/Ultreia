@@ -889,7 +889,7 @@ export function AICoachTab({
               <span style={{
                 position: "absolute", top: -6, right: -6,
                 minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box",
-                borderRadius: 8, background: "var(--warn)", color: "#fff",
+                borderRadius: 8, background: "var(--warn)", color: "var(--bg-deep)",
                 fontSize: 9, fontWeight: 700, lineHeight: "16px", textAlign: "center",
                 fontFamily: "var(--font-mono)",
               }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
@@ -1635,7 +1635,7 @@ export function AICoachTab({
                       </p>
                       <button onClick={() => { setShowCoachHub(false); clearChat(); }}
                         disabled={chatMessages.length === 0}
-                        style={{ ...s.btn, background: "#c0392b", borderColor: "#c0392b", opacity: chatMessages.length === 0 ? 0.4 : 1 }}>
+                        style={{ ...s.btn, background: "var(--danger)", borderColor: "var(--danger)", color: "var(--ink-inv)", opacity: chatMessages.length === 0 ? 0.4 : 1 }}>
                         {t("coach.clear_chat")} ({chatMessages.length})
                       </button>
                     </div>

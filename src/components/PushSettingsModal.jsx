@@ -71,14 +71,14 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
     <ModalRoot onClose={onClose}>
       <div onClick={onClose} className="ultreia-overlay-in" style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        background: "rgba(20,20,19,0.45)",
-        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        background: "oklch(0.04 0.006 274 / 0.72)",
+        backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
         display: "flex", alignItems: "center", justifyContent: "center",
         zIndex: 9999, padding: 16, overscrollBehavior: "contain",
       }}>
         <div onClick={e => e.stopPropagation()} className="ultreia-modal-in" style={{
-          background: "var(--bg-elevated)", border: "1px solid var(--rule)",
-          borderRadius: 4, boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
+          background: "var(--panel)", border: "1px solid var(--rule)",
+          borderRadius: 12, boxShadow: "var(--shadow)",
           width: "100%", maxWidth: 480, maxHeight: "calc(100dvh - 32px)",
           overflowY: "auto", padding: "22px 24px 20px", boxSizing: "border-box",
           fontFamily: "var(--font-sans)",
@@ -100,14 +100,14 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
               style={{
                 width: 40, height: 22, minHeight: 22, flexShrink: 0, borderRadius: 11,
                 border: "none", boxSizing: "border-box",
-                background: enabled ? "var(--moss)" : "var(--rule)",
+                background: enabled ? "var(--accent)" : "var(--panel-3)",
                 position: "relative", cursor: "pointer", transition: "background 0.15s",
                 padding: 0,
               }}>
               <span style={{
                 position: "absolute", top: 2, left: enabled ? 20 : 2,
                 width: 18, height: 18, borderRadius: "50%",
-                background: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.35)",
+                background: "var(--ink-inv)", boxShadow: "0 1px 2px oklch(0 0 0 / 0.35)",
                 transition: "left 0.15s",
               }} />
             </button>

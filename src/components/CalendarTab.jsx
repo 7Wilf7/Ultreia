@@ -714,7 +714,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
               // plan stops cluttering the grid — the user no longer needs to
               // delete it. Completed bars and future plans render at full strength.
               return orderedVisibleLogs.slice(0, 3).map(l => {
-                const c = TYPE_COLOR[l.type] || "#57564f";
+                const c = TYPE_COLOR[l.type] || "var(--ink-2)";
                 return (
                   <span key={l.id} style={{
                     width: "76%", maxWidth: 26, height: 4,
@@ -864,7 +864,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
 function LogPill({ log, t }) {
   const isRun = RUN_GROUP_TYPES.includes(log.type);
   const isPlanned = log.isPlanned;
-  const color = TYPE_COLOR[log.type] || "#57564f";
+  const color = TYPE_COLOR[log.type] || "var(--ink-2)";
 
   // Metrics line: distance + ascent for runs; strength shows its area(s) so a
   // planned "Strength" reads as "Core" not a bare label. AM/PM (when set) leads.

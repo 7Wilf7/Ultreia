@@ -16,7 +16,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "UltreiaKeepAlive")
 public class UltreiaKeepAlivePlugin extends Plugin {
-    private static final String AGENT_CHANNEL_ID = "ultreia_agent_done";
+    private static final String AGENT_CHANNEL_ID = "ultreia_agent_done_silent_v2";
 
     @PluginMethod
     public void start(PluginCall call) {
@@ -92,7 +92,9 @@ public class UltreiaKeepAlivePlugin extends Plugin {
                 .setContentText(body)
                 .setContentIntent(pending)
                 .setAutoCancel(true)
-                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_STATUS);
 
             NotificationManager manager = (NotificationManager) getContext().getSystemService(android.content.Context.NOTIFICATION_SERVICE);
@@ -110,9 +112,12 @@ public class UltreiaKeepAlivePlugin extends Plugin {
         NotificationChannel channel = new NotificationChannel(
             AGENT_CHANNEL_ID,
             "Agent task results",
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_LOW
         );
         channel.setDescription("AI report and coach task completion alerts");
+        channel.enableLights(false);
+        channel.enableVibration(false);
+        channel.setSound(null, null);
         NotificationManager manager = (NotificationManager) getContext().getSystemService(android.content.Context.NOTIFICATION_SERVICE);
         if (manager != null) manager.createNotificationChannel(channel);
     }

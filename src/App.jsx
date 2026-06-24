@@ -230,7 +230,7 @@ function buildCoachReplyMeta({ providerId, model, usage, walletChargeCents, fall
 function coachProviderLabel(providerId, fallback = null) {
   const provider = String(providerId || "").toLowerCase();
   const base = provider === "desktop_codex"
-    ? "Desktop Codex"
+    ? "Codex"
     : provider === "deepseek"
       ? "DeepSeek"
       : providerId || "AI";
@@ -2028,7 +2028,7 @@ Rules:
   }
 
   async function proposePlanDeviationRescue() {
-    if (planRescueLoading) return;
+    if (planRescueLoading) return false;
     setPlanRescueLoading(true);
     try {
       let freshLogs = logs;
@@ -2041,7 +2041,7 @@ Rules:
       const summary = summarizePlanDeviation(freshLogs, now || new Date());
       if (!summary) {
         appDialog.alert(t("coach.plan_rescue_no_deviation"));
-        return;
+        return false;
       }
 
       const dataBlock = buildDataBlock({
@@ -2071,7 +2071,7 @@ Rules:
       const plans = parsePlansFromLLM(text);
       if (plans.length === 0) {
         appDialog.alert(t("coach.plan_rescue_no_plans"));
-        return;
+        return false;
       }
       const baseAction = buildCreatePlansAction(plans, {
         id: `plan-rescue-${Date.now()}`,
@@ -2096,6 +2096,7 @@ Rules:
       };
       saveAgentAction(action);
       setPlanProposal({ msgId: null, assistantContent: "", action });
+      return true;
     } catch (err) {
       console.error("[AI Coach] Plan rescue error:", err);
       if (err?.code === "insufficient_balance") {
@@ -2105,6 +2106,7 @@ Rules:
       } else {
         appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       }
+      return false;
     } finally {
       setPlanRescueLoading(false);
     }

@@ -20,7 +20,7 @@ import androidx.core.app.ServiceCompat;
 import androidx.core.content.ContextCompat;
 
 public class UltreiaKeepAliveService extends Service {
-    private static final String CHANNEL_ID = "ultreia_keep_alive";
+    private static final String CHANNEL_ID = "ultreia_keep_alive_silent_v2";
     private static final int NOTIFICATION_ID = 7701;
     private static final String EXTRA_TITLE = "title";
     private static final String EXTRA_BODY = "body";
@@ -104,17 +104,22 @@ public class UltreiaKeepAliveService extends Service {
                 rightBottomValue = nonEmpty(intent.getStringExtra(EXTRA_RIGHT_BOTTOM_VALUE), rightBottomValue);
             }
             Notification notification = buildNotification();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceCompat.startForeground(
-                    this,
-                    NOTIFICATION_ID,
-                    notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-                );
+            if (running) {
+                NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                if (manager != null) manager.notify(NOTIFICATION_ID, notification);
             } else {
-                startForeground(NOTIFICATION_ID, notification);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    ServiceCompat.startForeground(
+                        this,
+                        NOTIFICATION_ID,
+                        notification,
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    );
+                } else {
+                    startForeground(NOTIFICATION_ID, notification);
+                }
+                running = true;
             }
-            running = true;
         } catch (Exception e) {
             running = false;
             stopSelf();
@@ -143,6 +148,9 @@ public class UltreiaKeepAliveService extends Service {
         );
         channel.setDescription("Keeps daily coach push more reliable");
         channel.setShowBadge(false);
+        channel.enableLights(false);
+        channel.enableVibration(false);
+        channel.setSound(null, null);
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.createNotificationChannel(channel);
     }
@@ -170,7 +178,10 @@ public class UltreiaKeepAliveService extends Service {
             .setContentIntent(pending)
             .setOngoing(true)
             .setShowWhen(false)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setLocalOnly(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build();
     }

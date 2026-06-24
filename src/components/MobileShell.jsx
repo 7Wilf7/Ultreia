@@ -35,7 +35,7 @@ function inHorizontalScroller(node) {
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
-const SNAP_MS = 260;
+const SNAP_MS = 220;
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
   const t = useT();
@@ -208,7 +208,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       scrollActiveToTop();
       return;
     }
-    go(idx, { animate: true });
+    go(idx, { animate: Math.abs(idx - tab) <= 1 });
   }
 
   const pullY = refreshing ? 44 : 0;

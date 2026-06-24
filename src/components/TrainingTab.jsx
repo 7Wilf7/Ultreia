@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -166,17 +166,9 @@ export function TrainingTab({
   const t = useT();
   const isMobile = useIsMobile();
   const sectionTouch = useRef(null);
-  const viewDragX = useRef(0);
-  const [viewDrag, setViewDrag] = useState({ x: 0, active: false });
-
-  function setViewDragX(x, active = true) {
-    viewDragX.current = x;
-    setViewDrag({ x, active });
-  }
 
   function changeView(nextView) {
     if (nextView === view) return;
-    setViewDragX(0, false);
     setView(nextView);
   }
 
@@ -206,7 +198,6 @@ export function TrainingTab({
         const dir = dx < 0 ? 1 : -1;
         const canMove = (dir > 0 && view === "activities") || (dir < 0 && view === "charts");
         st.mode = canMove ? "inner" : "pass";
-        if (st.mode === "inner") setViewDragX(0, true);
       } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
         st.mode = "scroll";
       } else {
@@ -216,7 +207,6 @@ export function TrainingTab({
     if (st.mode === "inner") {
       e.stopPropagation();
       e.preventDefault?.();
-      setViewDragX(dx, true);
     }
   }
 
@@ -225,7 +215,6 @@ export function TrainingTab({
     const st = sectionTouch.current;
     sectionTouch.current = null;
     if (st.mode !== "inner") {
-      setViewDragX(0, false);
       return;
     }
     const p = e.changedTouches?.[0];
@@ -237,7 +226,6 @@ export function TrainingTab({
     const threshold = Math.min((st.w || 1) * 0.16, 58);
     const shouldCommit = Math.abs(dx) >= threshold || Math.abs(velocity) > 0.38;
     if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
-      setViewDragX(0, false);
       return;
     }
     if (dx < 0 && view === "activities") {
@@ -246,8 +234,6 @@ export function TrainingTab({
     } else if (dx > 0 && view === "charts") {
       e.stopPropagation();
       changeView("activities");
-    } else {
-      setViewDragX(0, false);
     }
   }
 
@@ -412,11 +398,6 @@ export function TrainingTab({
       onTouchStart={onSectionTouchStart}
       onTouchMove={onSectionTouchMove}
       onTouchEnd={onSectionTouchEnd}
-      style={isMobile ? {
-        transform: `translateX(${viewDrag.x}px)`,
-        transition: viewDrag.active ? "none" : "transform 240ms cubic-bezier(0.18,0.86,0.24,1)",
-        willChange: viewDrag.active ? "transform" : undefined,
-      } : undefined}
     >
       {view !== "activities" && (
       <div style={stickyHeaderStyle}>

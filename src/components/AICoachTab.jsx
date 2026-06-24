@@ -201,12 +201,13 @@ function makeMdComponents(isMobile) {
 // older turns start competing with the system prompt for the model's focus.
 // 40 (~20 exchanges) keeps the nudge from firing on every short session.
 const LONG_CHAT_HINT_THRESHOLD = 40;
+const PLAN_RESCUE_DISMISS_KEY = "ultreia.planRescue.dismissedSignature";
 
 function formatProviderMeta(meta, lang) {
   if (!meta?.provider) return "";
   const provider = String(meta.provider).toLowerCase();
   const providerLabel = provider === "desktop_codex"
-    ? "Desktop Codex"
+    ? "Codex"
     : provider === "deepseek"
       ? "DeepSeek"
       : String(meta.provider);
@@ -288,7 +289,23 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
-  const [dismissedPlanRescueSignature, setDismissedPlanRescueSignature] = useState("");
+  const [dismissedPlanRescueSignature, setDismissedPlanRescueSignature] = useState(() => {
+    try { return localStorage.getItem(PLAN_RESCUE_DISMISS_KEY) || ""; }
+    catch { return ""; }
+  });
+  const dismissPlanRescueSignature = useCallback((signature) => {
+    const next = signature || "";
+    setDismissedPlanRescueSignature(next);
+    try {
+      if (next) localStorage.setItem(PLAN_RESCUE_DISMISS_KEY, next);
+      else localStorage.removeItem(PLAN_RESCUE_DISMISS_KEY);
+    } catch { /* private mode */ }
+  }, []);
+  const handlePlanRescueRequest = useCallback(async () => {
+    const signature = planDeviationSummary?.signature || "";
+    const generated = await onPlanRescueRequest?.();
+    if (generated && signature) dismissPlanRescueSignature(signature);
+  }, [dismissPlanRescueSignature, onPlanRescueRequest, planDeviationSummary?.signature]);
   const showPlanRescue = !!(
     planDeviationSummary?.affectedCount > 0
     && dismissedPlanRescueSignature !== planDeviationSummary.signature
@@ -1022,7 +1039,7 @@ export function AICoachTab({
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <button
               type="button"
-              onClick={onPlanRescueRequest}
+              onClick={handlePlanRescueRequest}
               disabled={planRescueLoading}
               style={{
                 ...s.btn,
@@ -1035,7 +1052,7 @@ export function AICoachTab({
             </button>
             <button
               type="button"
-              onClick={() => setDismissedPlanRescueSignature(planDeviationSummary.signature)}
+              onClick={() => dismissPlanRescueSignature(planDeviationSummary.signature)}
               disabled={planRescueLoading}
               style={{
                 ...s.btnGhost,

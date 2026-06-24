@@ -484,7 +484,9 @@ function formatAgentActionLine(action) {
     if (Array.isArray(action.result.plannedRestDates) && action.result.plannedRestDates.length) {
       parts.push(`rest=${action.result.plannedRestDates.slice(0, 5).join(",")}`);
     }
-    if (Array.isArray(action.result.savedLanguages) && action.result.savedLanguages.length) {
+    if (Number.isFinite(Number(action.result.savedFactCount)) && Number(action.result.savedFactCount) > 0) {
+      parts.push(`saved_facts=${Number(action.result.savedFactCount)}`);
+    } else if (Array.isArray(action.result.savedLanguages) && action.result.savedLanguages.length) {
       parts.push(`saved_memory=${action.result.savedLanguages.join("+")}`);
     }
   }

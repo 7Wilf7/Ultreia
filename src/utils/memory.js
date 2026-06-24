@@ -101,14 +101,29 @@ export function fillEmptyMemorySections(text = "", lang = "en") {
   return out.join("\n").trim();
 }
 
-export function buildMemoryUpdatePrompt({ coachMemory = "", chatTranscript = "" } = {}) {
+function formatExistingMemoryFacts(memoryFacts = []) {
+  const active = Array.isArray(memoryFacts)
+    ? memoryFacts.filter(f => f?.status === "active")
+    : [];
+  if (!active.length) return "(empty)";
+  return active
+    .map(f => {
+      const category = f.category || "other";
+      const en = String(f.contentEn || f.contentZh || "").trim();
+      const zh = String(f.contentZh || f.contentEn || "").trim();
+      return `- [${category}] EN: ${en || "(empty)"} | ZH: ${zh || "(empty)"}`;
+    })
+    .join("\n");
+}
+
+export function buildMemoryUpdatePrompt({ memoryFacts = [], chatTranscript = "" } = {}) {
   const enSections = MEMORY_SECTIONS.map(s => s.en).join("\n");
   const zhSections = MEMORY_SECTIONS.map(s => s.zh).join("\n");
 
-  return `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
+  return `You are updating reviewed long-term Memory fact cards about a runner. The facts capture DURABLE, repeatedly-useful information about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
-Current memory (English):
-${coachMemory || "(empty)"}
+Existing active Memory facts:
+${formatExistingMemoryFacts(memoryFacts)}
 
 Recent conversation:
 ${chatTranscript || "(empty)"}
@@ -122,9 +137,9 @@ ${enSections}
 - Don't repeat what's already in the user's profile: age, location, basic stats.
 - Maximum ~500 words total. Trim older or less useful entries if needed.
 - Leave a section empty if there is no durable fact for it.
-- If nothing meaningful should change, return the existing memory, but normalize it into the section structure when useful.
+- If nothing meaningful should change, return the existing facts, but normalize them into the section structure when useful.
 
-Output the updated memory in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
+Output the updated Memory facts in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
 ===EN===
 ${enSections}
 <english facts under the relevant headings, one "- ..." fact per line>

@@ -84,7 +84,7 @@ function fmtDailyNote(n) {
   return `- ${parts.join(" · ")}`;
 }
 
-export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemory, logs, races, dailyNotes, now, range, agentActions = [], memoryFacts = [] }) {
+export function buildWeeklyReportPrompt({ lang, coachConfig, logs, races, dailyNotes, now, range, agentActions = [], memoryFacts = [] }) {
   const completed = logs
     .filter(w => !w.isPlanned && w.date >= range.start && w.date <= range.end)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -118,7 +118,6 @@ export function buildWeeklyReportPrompt({ lang, profile, coachConfig, coachMemor
     `Report range: ${range.start} to ${range.end}. Next plan range: ${range.nextStart} to ${range.nextEnd}.\n\n` +
     `[Runner profile and longer context]\n${profileBlock}\n\n` +
     `[Coach preference]\n${JSON.stringify(coachConfig || {})}\n\n` +
-    `[Coach memory]\n${coachMemory || profile?.coachMemory || "none"}\n\n` +
     `[This week completed workouts]\n${completed.length ? completed.map(fmtWorkout).join("\n") : "none"}\n\n` +
     `[This week planned workouts]\n${plannedThisWeek.length ? plannedThisWeek.map(fmtWorkout).join("\n") : "none"}\n\n` +
     `[Next week existing plans]\n${plannedNextWeek.length ? plannedNextWeek.map(fmtWorkout).join("\n") : "none"}\n\n` +

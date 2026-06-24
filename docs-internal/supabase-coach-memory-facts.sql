@@ -2,9 +2,10 @@
 -- Run in Supabase Dashboard -> SQL Editor before wiring the app to read/write
 -- coach_memory_facts.
 --
--- This is intentionally written as a repeatable migration. Phase 4.1 keeps the
--- existing coach_memory / coach_memory_zh text memory as the primary fallback;
--- this table is a sidecar fact layer for reviewed, source-traceable facts.
+-- This is intentionally written as a repeatable migration. Phase 4 started as
+-- a sidecar fact layer; facts are now the primary Memory source in the app.
+-- The legacy coach_memory / coach_memory_zh fields are kept only for cleanup
+-- and backward compatibility.
 
 create extension if not exists pgcrypto;
 

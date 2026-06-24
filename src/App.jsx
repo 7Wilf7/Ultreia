@@ -421,8 +421,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // still exist in user_settings, but normal users no longer configure or use
   // personal provider keys from the UI.
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
-  const [coachMemory, setCoachMemoryState] = useState("");
-  const [coachMemoryZh, setCoachMemoryZhState] = useState("");
   const [lang, setLangState] = useState(DEFAULT_LANG);
   // Default location for weather fetch — used when navigator.geolocation /
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
@@ -487,8 +485,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             ...DEFAULT_COACH_CONFIG,
             ...(settingsData.coachConfig || {}),
           });
-          setCoachMemoryState(settingsData.coachMemory ?? "");
-          setCoachMemoryZhState(settingsData.coachMemoryZh ?? "");
           setDefaultLocationState({
             lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
             lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
@@ -615,8 +611,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
   async function updateSettings(patch) {
     if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
-    if ("coachMemory" in patch) setCoachMemoryState(patch.coachMemory);
-    if ("coachMemoryZh" in patch) setCoachMemoryZhState(patch.coachMemoryZh);
     if ("lang" in patch) setLangState(patch.lang);
     if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
     if ("pushHours" in patch) setPushHoursState(Array.isArray(patch.pushHours) ? patch.pushHours : []);
@@ -638,11 +632,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const setProfile = (next) => updateProfile(next);
   const setItraPI = (v) => updateProfile({ itraPI: v });
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
-  const setCoachMemory = (v) => updateSettings({ coachMemory: v });
-  const setCoachMemoryZh = (v) => updateSettings({ coachMemoryZh: v });
-  // Save both language versions in one write (used when accepting a bilingual
-  // memory proposal so EN + 中 stay in sync).
-  const setCoachMemoryBoth = (en, zh) => updateSettings({ coachMemory: en, coachMemoryZh: zh });
   const setLang = (v) => updateSettings({ lang: v });
   const setPushSettings = (patch) => updateSettings(patch);
   const setWeeklyReportSettings = (patch) => updateSettings(patch);
@@ -1105,8 +1094,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             itraPI={itraPI} setItraPI={setItraPI}
             profile={profile} setProfile={setProfile}
             coachConfig={coachConfig} setCoachConfig={setCoachConfig}
-            coachMemory={coachMemory} setCoachMemory={setCoachMemory}
-            coachMemoryZh={coachMemoryZh} setCoachMemoryZh={setCoachMemoryZh} setCoachMemoryBoth={setCoachMemoryBoth}
             lang={lang} setLang={setLang}
             defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
             wallet={wallet} setWallet={setWallet}
@@ -1130,8 +1117,6 @@ function AppShell({
   chatMessages, agentActions = [], setAgentActions, memoryFacts = [], setMemoryFacts, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
-  coachMemory, setCoachMemory,
-  coachMemoryZh, setCoachMemoryZh, setCoachMemoryBoth,
   lang, setLang,
   defaultLocation, setDefaultLocation,
   wallet, setWallet,
@@ -1526,14 +1511,14 @@ function AppShell({
     refreshWallet().catch(err => console.warn("[wallet] refresh failed:", err));
   }, [refreshWallet, setWallet]);
 
-  // Ask the LLM to distill an updated memory from the current chat + existing
-  // memory. Runs at app scope (not inside AICoachTab) so unmounting that tab
+  // Ask the LLM to distill durable Memory facts from the current chat + existing
+  // fact cards. Runs at app scope (not inside AICoachTab) so unmounting that tab
   // mid-request doesn't drop the result. Errors surface via alert; success
   // sets memoryProposal, which both the Memory modal and the top banner react to.
   async function proposeMemoryUpdate() {
     if (!chatMessages.length) { appDialog.alert(t("coach.memory_need_chat")); return; }
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
-    const memoryPrompt = buildMemoryUpdatePrompt({ coachMemory, chatTranscript });
+    const memoryPrompt = buildMemoryUpdatePrompt({ memoryFacts, chatTranscript });
     setMemoryUpdating(true);
     try {
       const data = await db.usage.coachProxy({
@@ -1616,9 +1601,7 @@ function AppShell({
     try {
       const prompt = buildWeeklyReportPrompt({
         lang: "zh",
-        profile,
         coachConfig,
-        coachMemory: coachMemoryZh || coachMemory,
         logs,
         races,
         dailyNotes,
@@ -1666,13 +1649,10 @@ function AppShell({
     applyWalletBalance,
     agentActions,
     coachConfig,
-    coachMemory,
-    coachMemoryZh,
     dailyNotes,
     logs,
     memoryFacts,
     now,
-    profile,
     races,
     t,
     weeklyReportLoading,
@@ -1726,8 +1706,6 @@ function AppShell({
         settings: {
           lang,
           coachConfig,
-          coachMemory,
-          coachMemoryZh,
           defaultLocation,
           pushEnabled,
           pushHours,
@@ -1814,7 +1792,7 @@ function AppShell({
     } catch { /* best-effort — skip race weather on any failure */ }
 
     const systemPrompt = buildSystemPrompt({
-      profile, coachConfig, coachMemory,
+      profile, coachConfig,
       dataBlock: buildDataBlock({
         logs: freshLogs, races, now, lang: "en",
         currentWeather, forecastByDate, dailyNotes, raceDayWeather, agentActions, memoryFacts,
@@ -2318,11 +2296,6 @@ Rules:
           profile={profile}
           coachConfig={coachConfig}
           setCoachConfig={setCoachConfig}
-          coachMemory={coachMemory}
-          setCoachMemory={setCoachMemory}
-          coachMemoryZh={coachMemoryZh}
-          setCoachMemoryZh={setCoachMemoryZh}
-          setCoachMemoryBoth={setCoachMemoryBoth}
           chatMessages={chatMessages}
           appendLocalChatMessage={appendLocalChatMessage}
           now={now}

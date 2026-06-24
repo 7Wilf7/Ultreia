@@ -204,8 +204,6 @@ const LONG_CHAT_HINT_THRESHOLD = 40;
 
 export function AICoachTab({
   coachConfig, setCoachConfig,
-  coachMemory,
-  coachMemoryZh, setCoachMemoryBoth,
   chatMessages,
   logs = [], races = [],
   setConfirmDelete,
@@ -250,11 +248,7 @@ export function AICoachTab({
   const [previewLang, setPreviewLang] = useState(lang);
   // showMemory / memoryUpdating / memoryProposal are now lifted to AppShell
   // (props) so the update can finish after the user leaves this tab.
-  const [memoryLang, setMemoryLang] = useState(lang); // EN/中 toggle for the memory view
-  const [memoryDraft, setMemoryDraft] = useState(coachMemory);
-  const [memoryEditing, setMemoryEditing] = useState(false);
-  // The memory text shown/edited for the currently-selected language.
-  const shownMemory = memoryLang === "zh" ? coachMemoryZh : coachMemory;
+  const memoryDisplayLang = lang === "zh" ? "zh" : "en";
   // First-send guidance: { msg, hints } while the one-time nudge modal is open.
   const [coachHints, setCoachHints] = useState(null);
 
@@ -398,35 +392,14 @@ export function AICoachTab({
     setConfirmDelete({ type: "chat", id: null });
   }
 
-  function startEditMemory() {
-    setMemoryDraft(shownMemory);
-    setMemoryEditing(true);
-  }
-  function saveMemory() {
-    // Option A: a manual edit IS what gets sent to the AI. The prompt only ever
-    // sends the canonical (coach_memory) field, so writing just the Chinese mirror
-    // used to be silently ignored. Now any manual edit overwrites BOTH fields with
-    // the edited text — so what you typed is exactly what the coach receives,
-    // regardless of which language tab you were on. (The bilingual split only
-    // persists for AI-generated memory proposals, until you edit by hand.)
-    setCoachMemoryBoth(memoryDraft, memoryDraft);
-    setMemoryEditing(false);
-  }
-  function cancelEditMemory() {
-    setMemoryDraft(shownMemory);
-    setMemoryEditing(false);
-  }
-
   // proposeMemoryUpdate lives in AppShell now (lifted) so the request survives
   // this tab unmounting — it's passed in as a prop and triggered from the
   // Memory modal's "Update" button below.
 
-  // Accepts the kept points from the per-point review — both language versions,
-  // kept in sync, saved in one write.
+  // Accepts the kept points from the per-point review and activates them as
+  // structured Memory facts. The legacy free-text Memory is no longer written.
   function acceptMemoryProposal(en, zh) {
     const e = (en || "").trim(), z = (zh || "").trim();
-    setCoachMemoryBoth(e, z);
-    setMemoryDraft(memoryLang === "zh" ? z : e);
     const actionId = memoryProposal?.action?.id || `memory-update-${Date.now()}`;
     const facts = extractMemoryFacts({ en: e, zh: z }, {
       clientPrefix: `memory-fact-${actionId}`,
@@ -540,15 +513,16 @@ export function AICoachTab({
   // underneath. Kept `inChat` as a constant to avoid churning the big JSX
   // block guard below.
   const inChat = true;
-  const memoryReady = !!coachMemory?.trim();
+  const activeMemoryFactCount = memoryFacts.filter(f => f?.status === "active").length;
+  const memoryReady = activeMemoryFactCount > 0;
   const calendarImportOn = coachConfig.showCalendarButton !== false;
   const providerLabel = "DeepSeek";
   const coachStyleLabel = t(`enum.coach.${coachConfig.style || "balanced"}`);
   const outputLabel = t(`enum.length.${coachConfig.outputLength || "standard"}`);
   const interventionLabel = t(`enum.intervention.${coachConfig.intervention || "standard"}`);
   const memoryLabel = lang === "zh"
-    ? (memoryReady ? "已设置" : "未设置")
-    : (memoryReady ? "ready" : "empty");
+    ? (memoryReady ? `${activeMemoryFactCount} 条` : "无")
+    : (memoryReady ? `${activeMemoryFactCount} facts` : "empty");
   const calendarLabel = lang === "zh"
     ? (calendarImportOn ? "显示" : "隐藏")
     : (calendarImportOn ? "shown" : "hidden");
@@ -732,7 +706,7 @@ export function AICoachTab({
                 t={t}
               />
 
-              {!memoryEditing && !memoryProposal && (
+              {!memoryProposal && (
                 <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                   <button onClick={proposeMemoryUpdate}
                     disabled={memoryUpdating || chatMessages.length === 0}
@@ -740,11 +714,6 @@ export function AICoachTab({
                     {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                     {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                   </button>
-                  <button onClick={startEditMemory}
-                    style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
-                    {t("coach.memory_edit")}
-                  </button>
-                  <MemoryLangToggle memoryLang={memoryLang} setMemoryLang={setMemoryLang} />
                 </div>
               )}
               {lastMemoryAction && !memoryProposal && (
@@ -754,39 +723,19 @@ export function AICoachTab({
               {memoryProposal ? (
                 <MemoryProposalReview
                   proposal={memoryProposal}
-                  displayLang={memoryLang}
-                  oldEn={coachMemory}
-                  oldZh={coachMemoryZh}
+                  displayLang={memoryDisplayLang}
+                  oldFacts={memoryFacts}
                   onAccept={acceptMemoryProposal}
                   onReject={rejectMemoryProposal}
                   t={t}
                 />
-              ) : memoryEditing ? (
-                <>
-                  <textarea rows={10} value={memoryDraft}
-                    onChange={e => setMemoryDraft(e.target.value)}
-                    placeholder={t("coach.memory_placeholder")}
-                    style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, resize: "vertical" }} />
-                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button onClick={saveMemory} style={s.btn}>{t("common.save")}</button>
-                    <button onClick={cancelEditMemory} style={s.btnGhost}>{t("common.cancel")}</button>
-                  </div>
-                </>
               ) : (
-                <>
-                  <pre style={{
-                    ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-                    whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 320, overflowY: "auto",
-                    color: shownMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
-                    minHeight: 80,
-                  }}>{shownMemory || t("coach.memory_empty")}</pre>
-                  <MemoryFactsPanel
-                    facts={memoryFacts}
-                    displayLang={memoryLang}
-                    onStatus={onMemoryFactStatus}
-                    t={t}
-                  />
-                </>
+                <MemoryFactsPanel
+                  facts={memoryFacts}
+                  displayLang={memoryDisplayLang}
+                  onStatus={onMemoryFactStatus}
+                  t={t}
+                />
               )}
             </div>
           </div>
@@ -934,7 +883,7 @@ export function AICoachTab({
               cursor: "pointer", WebkitTapHighlightColor: "transparent",
             }}>
             <SettingsIcon size={15} />
-            {coachMemory && (
+            {memoryReady && (
               <span style={{
                 position: "absolute", top: 4, right: 4,
                 width: 5, height: 5, borderRadius: 999,
@@ -1251,7 +1200,7 @@ export function AICoachTab({
           <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 84 }}>
             <button onClick={() => setShowCoachHub(true)} aria-label={t("coach.menu_open")}
               style={{ ...s.btnGhost, padding: "8px 10px", fontSize: 13, lineHeight: 1.2 }}>
-              ⚙{coachMemory ? " ●" : ""}
+              ⚙{memoryReady ? " ●" : ""}
             </button>
             <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !chatInput.trim()}
               style={{
@@ -1392,7 +1341,7 @@ export function AICoachTab({
                 </button>
                 {sub(t("coach.edit_profile"), () => pick(onEditProfile))}
                 {sub(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
-                {sub(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), !!coachMemory)}
+                {sub(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), memoryReady)}
 
                 {/* Agent group */}
                 {groupHeader(t("coach.group_agent"))}
@@ -1458,7 +1407,7 @@ export function AICoachTab({
                       { id: "prompt",  label: t("coach.preview_prompt"), parent: true },
                       { id: "profile", label: t("coach.edit_profile"), indent: true },
                       { id: "config",  label: t("coach.show_config"), indent: true },
-                      { id: "memory",  label: t("coach.show_memory") + (coachMemory ? " ●" : ""), indent: true },
+                      { id: "memory",  label: t("coach.show_memory") + (memoryReady ? " ●" : ""), indent: true },
                     ] },
                     { header: t("coach.group_chat"), items: [
                       { id: "calendar", label: t("coach.calendar_btn_label") },
@@ -1586,7 +1535,7 @@ export function AICoachTab({
                         onToggle={setNightlyMemoryReview}
                         t={t}
                       />
-                      {!memoryEditing && !memoryProposal && (
+                      {!memoryProposal && (
                         <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
                           <button onClick={proposeMemoryUpdate}
                             disabled={memoryUpdating || chatMessages.length === 0}
@@ -1594,10 +1543,6 @@ export function AICoachTab({
                             {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                             {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                           </button>
-                          <button onClick={startEditMemory} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px" }}>
-                            {t("coach.memory_edit")}
-                          </button>
-                          <MemoryLangToggle memoryLang={memoryLang} setMemoryLang={setMemoryLang} />
                         </div>
                       )}
                       {lastMemoryAction && !memoryProposal && (
@@ -1606,31 +1551,19 @@ export function AICoachTab({
                       {memoryProposal ? (
                         <MemoryProposalReview
                           proposal={memoryProposal}
-                          displayLang={memoryLang}
-                          oldEn={coachMemory}
-                          oldZh={coachMemoryZh}
+                          displayLang={memoryDisplayLang}
+                          oldFacts={memoryFacts}
                           onAccept={acceptMemoryProposal}
                           onReject={rejectMemoryProposal}
                           t={t}
                         />
-                      ) : memoryEditing ? (
-                        <>
-                          <textarea rows={12} value={memoryDraft}
-                            onChange={e => setMemoryDraft(e.target.value)}
-                            placeholder={t("coach.memory_placeholder")}
-                            style={{ ...s.input, fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.55, resize: "vertical" }} />
-                          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                            <button onClick={saveMemory} style={s.btn}>{t("common.save")}</button>
-                            <button onClick={cancelEditMemory} style={s.btnGhost}>{t("common.cancel")}</button>
-                          </div>
-                        </>
                       ) : (
-                        <pre style={{
-                          ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,
-                          whiteSpace: "pre-wrap", lineHeight: 1.55, maxHeight: 420, overflowY: "auto",
-                          color: shownMemory ? "var(--ink-1)" : "var(--ink-3)", background: "var(--bg-elevated)",
-                          minHeight: 80,
-                        }}>{shownMemory || t("coach.memory_empty")}</pre>
+                        <MemoryFactsPanel
+                          facts={memoryFacts}
+                          displayLang={memoryDisplayLang}
+                          onStatus={onMemoryFactStatus}
+                          t={t}
+                        />
                       )}
                     </div>
                   )}
@@ -2121,6 +2054,7 @@ function MemoryActionDetails({ action, t }) {
     memory.en ? ["EN", memory.en] : null,
   ].filter(Boolean);
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
+  const savedFactCount = Number(action.result?.savedFactCount || 0);
   return (
     <>
       {previews.length > 0 && (
@@ -2135,16 +2069,18 @@ function MemoryActionDetails({ action, t }) {
           </div>
         </ActionDetailSection>
       )}
-      {(savedLanguages.length > 0 || action.error) && (
+      {(savedFactCount > 0 || savedLanguages.length > 0 || action.error) && (
         <ActionDetailSection title={t("coach.agent_actions_result")}>
           <div style={{ color: action.error ? "var(--danger)" : "var(--ink-2)", fontSize: 12, lineHeight: 1.45 }}>
             {action.error
               ? t("coach.agent_action_error", { msg: action.error })
-              : t("coach.agent_action_memory_saved", { langs: savedLanguages.join(" / ") })}
+              : savedFactCount > 0
+                ? t("coach.agent_action_memory_facts_saved", { count: savedFactCount })
+                : t("coach.agent_action_memory_saved", { langs: savedLanguages.join(" / ") })}
           </div>
         </ActionDetailSection>
       )}
-      {!previews.length && !savedLanguages.length && !action.error && (
+      {!previews.length && !savedFactCount && !savedLanguages.length && !action.error && (
         <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>
       )}
     </>
@@ -2324,10 +2260,12 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
   const updatedCount = Number(action.result?.updatedPlanCount || changes.length || 0);
   const restDates = Array.isArray(action.result?.plannedRestDates) ? action.result.plannedRestDates : [];
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
+  const savedFactCount = Number(action.result?.savedFactCount || 0);
   if (createdCount > 0) resultBits.push(zh ? `创建计划 ${createdCount} 条` : `created ${createdCount} planned item(s)`);
   if (updatedCount > 0) resultBits.push(zh ? `修改计划 ${updatedCount} 条` : `updated ${updatedCount} existing plan(s)`);
   if (restDates.length) resultBits.push(zh ? `计划休息日：${restDates.join(", ")}` : `planned rest: ${restDates.join(", ")}`);
-  if (savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
+  if (savedFactCount > 0) resultBits.push(zh ? `已启用记忆事实 ${savedFactCount} 条` : `activated ${savedFactCount} memory fact(s)`);
+  else if (savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
   if (resultBits.length) lines.push("", `${zh ? "执行结果" : "Execution result"}：${resultBits.join(zh ? "；" : "; ")}`);
   lines.push("", zh
     ? "请告诉我：这条动作是否合理？接下来我应该继续、调整，还是撤回/手动修正？如果需要调整，请给出明确建议。"
@@ -2343,6 +2281,7 @@ function summarizeAgentAction(action, t) {
   const createdCount = Number(action.result?.createdWorkoutCount ?? action.result?.createdCount ?? 0);
   const memory = action.payload?.memory && typeof action.payload.memory === "object" ? action.payload.memory : null;
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
+  const savedFactCount = Number(action.result?.savedFactCount || 0);
 
   const typeLabel = action.type === "create_plans"
     ? t("coach.agent_action_type_create_plans")
@@ -2359,7 +2298,7 @@ function summarizeAgentAction(action, t) {
       })
     : action.type === "memory_update"
       ? t("coach.agent_action_memory_detail", {
-          count: savedLanguages.length || [memory?.en, memory?.zh].filter(v => String(v || "").trim()).length || 0,
+          count: savedFactCount || savedLanguages.length || [memory?.en, memory?.zh].filter(v => String(v || "").trim()).length || 0,
         })
       : "";
   const when = formatActionTime(action.createdAt);
@@ -2379,18 +2318,22 @@ function formatActionTime(value) {
   return `${mm}-${dd} ${hh}:${mi}`;
 }
 
-function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, onReject, t }) {
+function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, onReject, t }) {
   const splitLines = (str) => (str || "").split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim());
   const enLines = splitLines(proposal.en);
   const zhLines = splitLines(proposal.zh);
   const action = proposal.action || null;
   const aligned = enLines.length === zhLines.length && enLines.length > 0;
   const displayLines = displayLang === "zh" ? (zhLines.length ? zhLines : enLines) : (enLines.length ? enLines : zhLines);
-  const oldLower = ((displayLang === "zh" ? oldZh : oldEn) || "").toLowerCase();
+  const oldFactText = oldFacts
+    .filter(f => f?.status === "active")
+    .map(f => displayLang === "zh" ? (f.contentZh || f.contentEn || "") : (f.contentEn || f.contentZh || ""))
+    .join("\n")
+    .toLowerCase();
   const [kept, setKept] = useState(() => new Set(displayLines.map((_, i) => i)));
   const isNew = (line) => {
     const probe = line.trim().toLowerCase();
-    return probe.length > 0 && !oldLower.includes(probe.slice(0, Math.min(probe.length, 30)));
+    return probe.length > 0 && !oldFactText.includes(probe.slice(0, Math.min(probe.length, 30)));
   };
   function toggle(i) {
     if (isMemorySectionHeading(displayLines[i])) return;
@@ -2474,25 +2417,5 @@ function MemoryProposalReview({ proposal, displayLang, oldEn, oldZh, onAccept, o
         <button onClick={onReject} style={s.btnGhost}>{t("coach.memory_reject")}</button>
       </div>
     </>
-  );
-}
-
-// EN / 中 segmented toggle for the memory view (mirrors the prompt-preview
-// toggle). Picks which stored language version (coach_memory / coach_memory_zh)
-// the memory pane shows + edits.
-function MemoryLangToggle({ memoryLang, setMemoryLang }) {
-  return (
-    <div style={{ marginLeft: "auto", display: "flex", border: "1px solid var(--rule)", borderRadius: 4, overflow: "hidden" }}>
-      {["en", "zh"].map((lg) => (
-        <button key={lg} type="button" onClick={() => setMemoryLang(lg)}
-          style={{
-            padding: "4px 10px", fontSize: 11, border: "none", cursor: "pointer", minHeight: 0,
-            background: memoryLang === lg ? "var(--accent-soft)" : "transparent",
-            color: memoryLang === lg ? "var(--accent-dark)" : "var(--ink-2)",
-          }}>
-          {lg === "en" ? "EN" : "中"}
-        </button>
-      ))}
-    </div>
   );
 }

@@ -66,10 +66,10 @@ Rules:
 - Skip vague advice, past references, analysis-only text. Rest days get NO entry.
 - Output the JSON array ONLY. No prose, no fences.`;
 
-const MEMORY_DISTILL = `You are updating a long-term memory file about a runner. The memory captures DURABLE, repeatedly-useful facts about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
+const MEMORY_DISTILL = `You are updating reviewed long-term Memory fact cards about a runner. The facts capture DURABLE, repeatedly-useful information about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
-Current memory (English):
-{现有记忆}
+Existing active Memory facts:
+{当前已启用 facts}
 
 Recent conversation:
 {[role] 内容 …整段对话}
@@ -80,9 +80,9 @@ Guidelines:
 - DROP session-specific things (today's specific question, one-off advice).
 - Don't repeat what's already in the user's profile (age, location, basic stats).
 - Maximum ~500 words. Trim older entries if needed.
-- If nothing meaningful to add or update, return the existing memory unchanged.
+- If nothing meaningful should change, return the existing facts unchanged, but normalize them into the section structure when useful.
 
-Output the updated memory in BOTH English and Simplified Chinese — SAME facts, SAME order, line-by-line — using EXACTLY:
+Output the updated Memory facts in BOTH English and Simplified Chinese — SAME facts, SAME order, line-by-line — using EXACTLY:
 ===EN===
 <english memory, one fact per line>
 ===ZH===

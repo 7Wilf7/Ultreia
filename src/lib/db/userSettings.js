@@ -7,8 +7,8 @@ const FIELD_MAP = {
   apiProvider:   'api_provider',      // legacy provider column
   claudeApiKey:  'claude_api_key',    // legacy personal API key column
   coachConfig:   'coach_config',      // jsonb — pass plain object, do NOT JSON.stringify
-  coachMemory:   'coach_memory',      // canonical (English), sent to the LLM
-  coachMemoryZh: 'coach_memory_zh',    // Chinese mirror, display-only (EN/中 toggle)
+  coachMemory:   'coach_memory',      // legacy free-text memory; no longer sent to the LLM
+  coachMemoryZh: 'coach_memory_zh',    // legacy free-text memory mirror; kept for one-off cleanup/back-compat
   lang:          'lang',
   // Default coordinates for weather fetch when device geolocation is unavailable
   // (denied, offline, or APK without permission). WGS84, same as Caiyun expects.

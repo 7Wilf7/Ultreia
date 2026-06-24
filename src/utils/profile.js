@@ -176,25 +176,18 @@ ${L_.outputLen}: ${lengthLabel}
 ${L_.riskReminders}: ${interventionLabel}`;
 }
 
-function memoryBlock(memory, lang = "en") {
-  if (!memory || !memory.trim()) return "";
-  const L_ = L[lang] || L.en;
-  return `${L_.memoryTitle}\n${L_.memoryHint}\n\n${memory.trim()}`;
-}
-
 /**
  * Assemble the full system prompt. `lang` controls the language of the static
  * scaffold (labels + fixed instructions). The dynamic `dataBlock` is built by
- * the caller and passed in as-is. The user-provided memory text is appended
- * verbatim — it's whatever the user (or LLM) wrote in.
+ * the caller and passed in as-is. Long-term memory now lives in the structured
+ * Memory facts section inside `dataBlock`; legacy free-text memory is ignored.
  */
-export function buildSystemPrompt({ profile, coachConfig, coachMemory, dataBlock, lang = "en" }) {
+export function buildSystemPrompt({ profile, coachConfig, dataBlock, lang = "en" }) {
   const fixed = lang === "zh" ? FIXED_SYSTEM_PROMPT_ZH : FIXED_SYSTEM_PROMPT;
   return [
     fixed,
     profileBlock(profile, lang),
     coachConfigBlock(coachConfig, lang),
-    memoryBlock(coachMemory, lang),
     dataBlock || "",
   ].filter(Boolean).join("\n\n");
 }

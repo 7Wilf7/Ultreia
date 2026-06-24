@@ -61,9 +61,16 @@ describe("extractMemoryFacts", () => {
 });
 
 describe("buildMemoryUpdatePrompt", () => {
-  it("asks the model to keep memory grouped under stable sections", () => {
+  it("asks the model to update reviewed facts under stable sections", () => {
     const prompt = buildMemoryUpdatePrompt({
-      coachMemory: "- Prefers short replies",
+      memoryFacts: [
+        {
+          category: "coaching_style",
+          status: "active",
+          contentEn: "Prefers short replies.",
+          contentZh: "偏好简短回复。",
+        },
+      ],
       chatTranscript: "[user]\nMy knee still feels sensitive on descents.",
     });
 
@@ -71,6 +78,8 @@ describe("buildMemoryUpdatePrompt", () => {
       expect(prompt).toContain(section.en);
       expect(prompt).toContain(section.zh);
     }
+    expect(prompt).toContain("Existing active Memory facts:");
+    expect(prompt).toContain("Prefers short replies.");
     expect(prompt).toContain("Under each heading, write one short fact per line as \"- ...\".");
     expect(prompt).toContain("My knee still feels sensitive on descents.");
   });

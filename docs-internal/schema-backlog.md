@@ -70,15 +70,15 @@
 
 现状：
 
-- 长期记忆仍是一段分区文本，存在 profile/settings 字段里。
-- 自动更新是覆盖式，缺少事实级时间戳、主题、来源和撤销能力。
-- Phase 4.1 已决定先做旁路事实层，不迁移旧 `coach_memory`，也不立刻替代 AI Coach prompt 主记忆。
+- 长期记忆已切到 `coach_memory_facts` 事实卡片，AI Coach / 周报只读取 active facts。
+- 旧 `coach_memory` / `coach_memory_zh` 字段仅作为历史兼容字段保留；Wilf 迁移完成后可用一次性 SQL 清空个人账号旧文本。
+- 自动更新通过 Action Card 审核后启用事实，具备主题、来源、归档和恢复能力。
 
 建议方向：
 
 - 一条事实一行，字段包括 `category`、`content_en`、`content_zh`、`source`、`source_ref_type`、`source_ref_id`、`confidence`、`status`、`created_at`、`accepted_at`、`archived_at`。
 - 第一版状态为 `proposed` / `active` / `rejected` / `archived`。
-- 先用于 Memory 面板查看、审核和归档；稳定后再决定是否把 active facts 摘要插入 prompt。
+- 用于 Memory 面板查看、审核和归档；active facts 已作为长期记忆进入 prompt。
 
 建表 SQL：
 

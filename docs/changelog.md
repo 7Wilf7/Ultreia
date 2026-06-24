@@ -4,9 +4,10 @@
 
 ## 2026-06-24
 
-- **Memory facts 旁路事实层**：接受 AI Coach 的 Memory 自动更新后，会把已保留条目拆成可查看的事实卡片，按伤病 / 健康、目标 / 比赛、训练偏好、教练风格和长期模式分类；事实可在 Memory 面板中查看、归档、恢复，现阶段不替代上方整段长期记忆。
-- **Memory facts 进入教练上下文**：Current facts 会作为结构化长期记忆补充进入 AI Coach 和 AI 周复盘；Archived facts 不再进入上下文，上方整段 Memory 继续作为可读总览和 fallback。
-- **夜间记忆审核**：AI Coach 的 Memory 设置里新增夜间记忆审核开关；开启后，如果当天有新的教练对话，后台会在夜间生成待审核的 Memory Action Card，第二天打开 App 后再由用户确认保存，不会自动写入长期记忆。
+- **Memory facts 成为长期记忆主线**：接受 AI Coach 的 Memory 自动更新后，会把已保留条目拆成可查看的事实卡片，按伤病 / 健康、目标 / 比赛、训练偏好、教练风格和长期模式分类；事实可在 Memory 面板中查看、归档、恢复。
+- **旧文本 Memory 退出教练上下文**：AI Coach 和 AI 周复盘只读取 Current Memory facts；Archived facts 和旧的整段 Memory 文本不再进入 Prompt。
+- **旧 Memory 清理 SQL**：新增一次性清理脚本，用于在确认迁移完成后清空账号里的旧文本 Memory 字段，不影响 Memory facts、聊天、动作记录或训练数据。
+- **夜间记忆审核**：AI Coach 的 Memory 设置里新增夜间记忆审核开关；开启后，如果当天有新的教练对话，后台会在夜间生成待审核的 Memory Action Card，第二天打开 App 后再由用户确认启用事实，不会自动写入长期记忆。
 - **移动端显示细节修复**：Training 顶部 Distance / Ascent 统计不再显示千位逗号，ACWR 负荷条保持单行；Settings 版本号移到 Version 标题后方，字体回到原来的 Outfit，并取消 Training 内 Activities / Charts 切换时的轻微抖动。
 - **深色界面高级感增强**：主色压暗为深苔绿，加入柔和动态流光、微噪点、细线微光和按钮 / 输入框微交互；比赛 tag 改成暗底描边，不再使用亮色底配白字。
 - **深色界面颜色修正**：主色从蓝紫调整为更贴近当前 logo 的深苔绿 / olive；Training、Races、Settings、天气设置和 AI Coach 里的选中态修复为深色可读样式，不再出现白底浅字或按钮挤压。

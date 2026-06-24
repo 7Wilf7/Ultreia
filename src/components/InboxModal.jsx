@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import * as db from "../lib/db";
+import { useAppDialog } from "./AppDialogContext";
 
 // In-app inbox of delivered coach pushes. Rows are written server-side by the
 // daily-coach-dispatch Edge Function. `items` / `setItems` are lifted to
@@ -19,6 +20,7 @@ import * as db from "../lib/db";
 // safe proxy for "completely shown".
 export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const scrollRef = useRef(null);
   const ioRef = useRef(null);
   const rowEls = useRef(new Map()); // id -> row element, for (re)observing
@@ -97,7 +99,7 @@ export function InboxModal({ items, setItems, onClose, onGoToPushSettings }) {
 
   async function handleClearAll() {
     if (!items.length) return;
-    if (!window.confirm(t("inbox.clear_confirm"))) return;
+    if (!await appDialog.confirm(t("inbox.clear_confirm"), { danger: true, confirmLabel: t("common.delete") })) return;
     const snapshot = items;
     setItems([]);
     try {

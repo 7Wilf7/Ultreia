@@ -8,6 +8,7 @@ import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, getP
 import { planFields } from "./CalendarDayModal";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
+import { useAppDialog } from "./AppDialogContext";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
@@ -76,6 +77,7 @@ function planSummary(it, t) {
 
 export function CoachPlanImportModal({ plans = [], action = null, existingPlans = [], onConfirm, onCancel, onReject, onReExtract }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const agentAction = action || buildCreatePlansAction(plans);
   const actionPlans = getCreatePlans(agentAction);
@@ -109,7 +111,7 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
     const selected = items.filter(it => it._selected);
     for (const it of selected) {
       if (!it.date || !/^\d{4}-\d{2}-\d{2}$/.test(it.date)) {
-        alert(t("coach.import_invalid_date", { date: it.date || "(empty)" }));
+        appDialog.alert(t("coach.import_invalid_date", { date: it.date || "(empty)" }));
         return;
       }
     }

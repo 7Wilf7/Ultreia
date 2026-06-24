@@ -15,6 +15,7 @@ import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
 import { ItemActionModal } from "./ItemActionModal";
+import { useAppDialog } from "./AppDialogContext";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -1762,6 +1763,7 @@ function MemoryReviewSetting({ enabled, onToggle, t }) {
 }
 
 function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
+  const appDialog = useAppDialog();
   const [view, setView] = useState("current");
   const visibleFacts = useMemo(() => {
     const statuses = view === "archived" ? ["archived"] : ["active", "proposed"];
@@ -1843,8 +1845,8 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
                 {fact.status === "active" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (window.confirm(t("coach.memory_fact_archive_confirm"))) {
+                    onClick={async () => {
+                      if (await appDialog.confirm(t("coach.memory_fact_archive_confirm"))) {
                         onStatus?.(fact, "archived");
                       }
                     }}

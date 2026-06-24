@@ -14,6 +14,7 @@
 - **安卓常驻通知统计口径修正**：本月 Distance 和 Training 顶部本月 Distance 保持一致，只统计 Road Run / Trail Run / Hiking / Floor Climbing 的距离，不再把 HIIT / Strength 里可能残留的距离算进去。
 - **安卓常驻通知对齐优化**：通知栏本月统计改成固定宽度的两行显示，让 Sessions / Time 和 Distance / Ascent 的分隔点、右侧字段更稳定对齐。
 - **Recent Agent Actions 更直观**：展开计划修改记录时按日期展示「原计划 / 新计划」，不再露出内部计划编号；执行结果改成更短的摘要标签。
+- **系统弹窗收敛为应用内提示**：AI / Memory 更新错误、表单校验、放弃未保存修改、收件箱清空和 Memory facts 归档确认改为 Ultreia 自己的应用内弹窗，不再出现浏览器 / PWA 的系统级 "www.ultreia.run says" 提示。
 
 ## 2026-06-23
 

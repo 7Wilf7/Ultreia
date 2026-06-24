@@ -43,6 +43,8 @@ import { ModalRoot } from "./components/ModalRoot";
 import { WalletModal } from "./components/WalletModal";
 import { WeatherSettingsModal } from "./components/WeatherSettingsModal";
 import { WeeklyReportSettingsModal } from "./components/WeeklyReportSettingsModal";
+import { AppDialogProvider } from "./components/AppDialog";
+import { useAppDialog } from "./components/AppDialogContext";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
@@ -1079,40 +1081,44 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     }]);
   }
 
-  if (dataLoading) return <LoadingScreen userId={user?.id} />;
-
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
-      <AppShell
-        user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount}
-        logs={logs} refreshLogs={refreshLogs} refresh={refresh} refreshing={refreshing}
-        addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
-        races={races}
-        addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
-        chatMessages={chatMessages}
-        agentActions={agentActions}
-        setAgentActions={setAgentActions}
-        memoryFacts={memoryFacts}
-        setMemoryFacts={setMemoryFacts}
-        setChatMessages={setChatMessages}
-        appendLocalChatMessage={appendLocalChatMessage}
-        clearAllChatMessages={clearAllChatMessages}
-        dailyNotes={dailyNotes} setDailyTags={setDailyTags} setReadiness={setReadiness}
-        itraPI={itraPI} setItraPI={setItraPI}
-        profile={profile} setProfile={setProfile}
-        coachConfig={coachConfig} setCoachConfig={setCoachConfig}
-        coachMemory={coachMemory} setCoachMemory={setCoachMemory}
-        coachMemoryZh={coachMemoryZh} setCoachMemoryZh={setCoachMemoryZh} setCoachMemoryBoth={setCoachMemoryBoth}
-        lang={lang} setLang={setLang}
-        defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
-        wallet={wallet} setWallet={setWallet}
-        pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
-        weeklyReportEnabled={weeklyReportEnabled}
-        weeklyReportWeekday={weeklyReportWeekday}
-        weeklyReportTime={weeklyReportTime}
-        weeklyReportAfterSundayImport={weeklyReportAfterSundayImport}
-        setWeeklyReportSettings={setWeeklyReportSettings}
-      />
+      <AppDialogProvider>
+        {dataLoading ? (
+          <LoadingScreen userId={user?.id} />
+        ) : (
+          <AppShell
+            user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount}
+            logs={logs} refreshLogs={refreshLogs} refresh={refresh} refreshing={refreshing}
+            addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
+            races={races}
+            addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
+            chatMessages={chatMessages}
+            agentActions={agentActions}
+            setAgentActions={setAgentActions}
+            memoryFacts={memoryFacts}
+            setMemoryFacts={setMemoryFacts}
+            setChatMessages={setChatMessages}
+            appendLocalChatMessage={appendLocalChatMessage}
+            clearAllChatMessages={clearAllChatMessages}
+            dailyNotes={dailyNotes} setDailyTags={setDailyTags} setReadiness={setReadiness}
+            itraPI={itraPI} setItraPI={setItraPI}
+            profile={profile} setProfile={setProfile}
+            coachConfig={coachConfig} setCoachConfig={setCoachConfig}
+            coachMemory={coachMemory} setCoachMemory={setCoachMemory}
+            coachMemoryZh={coachMemoryZh} setCoachMemoryZh={setCoachMemoryZh} setCoachMemoryBoth={setCoachMemoryBoth}
+            lang={lang} setLang={setLang}
+            defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
+            wallet={wallet} setWallet={setWallet}
+            pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
+            weeklyReportEnabled={weeklyReportEnabled}
+            weeklyReportWeekday={weeklyReportWeekday}
+            weeklyReportTime={weeklyReportTime}
+            weeklyReportAfterSundayImport={weeklyReportAfterSundayImport}
+            setWeeklyReportSettings={setWeeklyReportSettings}
+          />
+        )}
+      </AppDialogProvider>
     </LanguageProvider>
   );
 }
@@ -1134,6 +1140,7 @@ function AppShell({
   weeklyReportAfterSundayImport, setWeeklyReportSettings,
 }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const isNarrow = useIsNarrow();
   const [tab, setTab] = useState(0);
@@ -1396,7 +1403,7 @@ function AppShell({
     } catch (err) {
       console.warn("[memory_facts] status update failed:", err);
       setMemoryFacts(prev => mergeMemoryFactList(prev, fact));
-      window.alert(t("coach.memory_fact_update_failed", { msg: err?.message || String(err) }));
+      appDialog.alert(t("coach.memory_fact_update_failed", { msg: err?.message || String(err) }));
     }
   }
   async function deleteAgentAction(action) {
@@ -1425,7 +1432,7 @@ function AppShell({
           },
         }));
       }
-      window.alert(t("coach.agent_action_delete_failed", { msg: err?.message || String(err) }));
+      appDialog.alert(t("coach.agent_action_delete_failed", { msg: err?.message || String(err) }));
     }
   }
   function updatePlanImportAction(msgId, transform) {
@@ -1524,7 +1531,7 @@ function AppShell({
   // mid-request doesn't drop the result. Errors surface via alert; success
   // sets memoryProposal, which both the Memory modal and the top banner react to.
   async function proposeMemoryUpdate() {
-    if (!chatMessages.length) { window.alert(t("coach.memory_need_chat")); return; }
+    if (!chatMessages.length) { appDialog.alert(t("coach.memory_need_chat")); return; }
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
     const memoryPrompt = buildMemoryUpdatePrompt({ coachMemory, chatTranscript });
     setMemoryUpdating(true);
@@ -1536,7 +1543,7 @@ function AppShell({
       });
       if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      if (!text.trim()) { window.alert(t("coach.memory_empty_response")); return; }
+      if (!text.trim()) { appDialog.alert(t("coach.memory_empty_response")); return; }
       const parsedMemory = parseBilingualMemory(text);
       const action = buildMemoryUpdateAction(parsedMemory, { sourceMessageCount: chatMessages.length });
       const candidateFacts = extractMemoryFacts(parsedMemory, {
@@ -1557,11 +1564,11 @@ function AppShell({
     } catch (err) {
       console.error("[AI Coach] Memory update error:", err);
       if (err?.code === "insufficient_balance") {
-        window.alert(t("wallet.insufficient_ai"));
+        appDialog.alert(t("wallet.insufficient_ai"));
         openWalletSurface();
         refreshWallet().catch(() => {});
       } else {
-        window.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+        appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       }
     } finally {
       setMemoryUpdating(false);
@@ -1748,9 +1755,9 @@ function AppShell({
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      window.alert(t("settings.export_backup_done"));
+      appDialog.alert(t("settings.export_backup_done"));
     } catch (err) {
-      window.alert(t("settings.export_backup_failed", { msg: err?.message || String(err) }));
+      appDialog.alert(t("settings.export_backup_failed", { msg: err?.message || String(err) }));
     }
   }
 
@@ -1983,7 +1990,7 @@ Rules:
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
       if (plans.length === 0) {
-        alert(t("coach.import_no_plans"));
+        appDialog.alert(t("coach.import_no_plans"));
         return;
       }
       const action = buildCreatePlansAction(plans, { sourceMessageId: msgId });
@@ -1994,11 +2001,11 @@ Rules:
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== extractRunRef.current) return;
       console.error("[AI Coach] Plan-extract error:", err);
       if (err?.code === "insufficient_balance") {
-        alert(t("wallet.insufficient_ai"));
+        appDialog.alert(t("wallet.insufficient_ai"));
         openWalletSurface();
         refreshWallet().catch(() => {});
       } else {
-        alert(t("coach.api_error", { msg: err?.message || String(err) }));
+        appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       }
     } finally {
       if (runId === extractRunRef.current) {

@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useClickOutside } from "../utils/useClickOutside";
+import { useAppDialog } from "./AppDialogContext";
 
 function resultSeconds(r) {
   const h = parseInt(r.resultH) || 0;
@@ -34,6 +35,7 @@ function formatHMS(sec) {
 
 export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const [itraDraft, setItraDraft] = useState(itraPI ?? "");
   // Card mode while a value is saved; switches to edit form on click. First-time
   // fill (no value yet) shows the form immediately so the user has something to do.
@@ -102,8 +104,8 @@ export function PersonalRecordsTab({ races, itraPI, setItraPI }) {
   // when there's already a saved value (first-time fill has no card to fall
   // back to, so we never auto-dismiss the initial entry).
   const itraDirty = () => (itraDraft.trim() !== (itraPI ?? ""));
-  const itraEditRef = useClickOutside(() => {
-    if (!itraDirty() || window.confirm(t("form.discard_confirm"))) cancelEditItra();
+  const itraEditRef = useClickOutside(async () => {
+    if (!itraDirty() || await appDialog.confirm(t("form.discard_confirm"))) cancelEditItra();
   }, itraEditing && !!itraPI);
 
   return (

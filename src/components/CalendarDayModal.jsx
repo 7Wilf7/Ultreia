@@ -58,6 +58,7 @@ import { skyconMeta } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 import { ItemActionModal } from "./ItemActionModal";
 import { Dropdown } from "./Dropdown";
+import { useAppDialog } from "./AppDialogContext";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
 export function formatHeaderDate(yyyy_mm_dd, lang) {
@@ -123,6 +124,7 @@ export function CalendarDayModal({
   addLog, updateLog, setConfirmDelete, setDailyTags, setReadiness,
 }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   const isPast = !isFuture && !isToday;
@@ -242,10 +244,10 @@ export function CalendarDayModal({
     // least one target so the plan means something.
     const hasTarget = distNum > 0 || ascNum > 0 || speedNum > 0 || durSec > 0 || subTypes.length > 0;
     if (planType !== "HIIT" && !hasTarget) {
-      alert(t("calendar.plan_empty_warning"));
+      appDialog.alert(t("calendar.plan_empty_warning"));
       return;
     }
-    if (needsBackfillConfirm() && !window.confirm(t("calendar.plan_backfill_confirm"))) return;
+    if (needsBackfillConfirm() && !await appDialog.confirm(t("calendar.plan_backfill_confirm"))) return;
     const payload = {
       type: planType,
       subTypes,

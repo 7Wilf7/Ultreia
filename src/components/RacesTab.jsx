@@ -10,6 +10,7 @@ import { ModalRoot } from "./ModalRoot";
 import { ItemActionModal } from "./ItemActionModal";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
 import { Dropdown } from "./Dropdown";
+import { useAppDialog } from "./AppDialogContext";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
 // the Target and History sections so every column lines up across both lists.
@@ -77,6 +78,7 @@ export function RacesTab({
   mobileTopTab, setMobileTopTab, mobileSubTab, setMobileSubTab,
 }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
@@ -349,8 +351,8 @@ export function RacesTab({
     if (!original) return false;
     return JSON.stringify(newRace) !== JSON.stringify(raceToForm(original));
   }
-  function attemptCloseEdit() {
-    if (!isEditFormDirty() || window.confirm(t("form.discard_confirm"))) cancelEdit();
+  async function attemptCloseEdit() {
+    if (!isEditFormDirty() || await appDialog.confirm(t("form.discard_confirm"))) cancelEdit();
   }
 
   // Add form is also a blurred modal now (was inline on the page). Same
@@ -360,8 +362,8 @@ export function RacesTab({
     if (!addingMode) return false;
     return JSON.stringify(newRace) !== JSON.stringify(EMPTY_RACE(addingMode === "target"));
   }
-  function attemptCloseAdd() {
-    if (!isAddFormDirty() || window.confirm(t("form.discard_confirm"))) cancelAdd();
+  async function attemptCloseAdd() {
+    if (!isAddFormDirty() || await appDialog.confirm(t("form.discard_confirm"))) cancelAdd();
   }
 
   function deleteRace(id) {

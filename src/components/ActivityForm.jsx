@@ -7,6 +7,7 @@ import { recommendRunType } from "../utils/format";
 import { useClickOutside } from "../utils/useClickOutside";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { weatherWindowEligible } from "../lib/weather";
+import { useAppDialog } from "./AppDialogContext";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -87,6 +88,7 @@ function LabeledInput({ label, unit, value, onChange, placeholder, type = "numbe
 
 export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
   // Snapshot of the form's initial state — used to detect unsaved changes when
@@ -108,8 +110,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
 
   // Click-outside cancels edit; warn first if there are unsaved changes.
   const isDirty = () => JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
-  const rootRef = useClickOutside(() => {
-    if (!isDirty() || window.confirm(t("form.discard_confirm"))) onCancel();
+  const rootRef = useClickOutside(async () => {
+    if (!isDirty() || await appDialog.confirm(t("form.discard_confirm"))) onCancel();
   }, mode === "edit");
 
   const isRun = RUN_GROUP_TYPES.includes(form.type);
@@ -178,15 +180,15 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   }
 
   function handleSave() {
-    if (!form.date) { alert(t("form.alert_date")); return; }
+    if (!form.date) { appDialog.alert(t("form.alert_date")); return; }
     const dur = formDurationSec;
-    if (!dur) { alert(t("form.alert_duration")); return; }
+    if (!dur) { appDialog.alert(t("form.alert_duration")); return; }
     if (form.type === "Strength" && form.subTypes.length === 0) {
-      alert(t("form.alert_body"));
+      appDialog.alert(t("form.alert_body"));
       return;
     }
     if (form.type === "Road Run" && !isRace && !pickedPace) {
-      alert(t("form.alert_run"));
+      appDialog.alert(t("form.alert_run"));
       return;
     }
     // Swimming input is in meters → convert back to km for storage.

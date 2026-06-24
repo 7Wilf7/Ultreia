@@ -10,6 +10,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { getCurrentLocation, reverseGeocode } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
+import { useAppDialog } from "./AppDialogContext";
 
 // `defaultLocation` / `setDefaultLocation` are the weather coordinates (stored
 // in user_settings). Location now lives ONLY here in the profile: the address
@@ -17,6 +18,7 @@ import { Dropdown } from "./Dropdown";
 // old standalone Settings → Default location entry was removed.
 export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", defaultLocation, setDefaultLocation }) {
   const t = useT();
+  const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
   // Backfill any missing fields with defaults so the form is robust against older saved data
@@ -44,8 +46,8 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit", def
 
   // Guard close attempts (overlay click / X / Android back). Save() bypasses
   // this and calls onClose directly. Setup mode can't be dismissed at all.
-  function attemptClose() {
-    if (!isDirty() || window.confirm(t("form.discard_confirm"))) onClose();
+  async function attemptClose() {
+    if (!isDirty() || await appDialog.confirm(t("form.discard_confirm"))) onClose();
   }
 
   // GPS → coords → reverse-geocode → fill the address text. One tap, no typing.

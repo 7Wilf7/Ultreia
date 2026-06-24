@@ -300,6 +300,7 @@ const dict = {
 
   // ===== Common =====
   "common.cancel":        { en: "Cancel",                   zh: "取消" },
+  "common.ok":            { en: "OK",                       zh: "确定" },
   "common.save":          { en: "Save",                     zh: "保存" },
   "common.save_changes":  { en: "Save Changes",             zh: "保存修改" },
   "common.delete":        { en: "Delete",                   zh: "删除" },
@@ -357,6 +358,8 @@ const dict = {
   "login.err_register":   { en: "Registration failed. Please try again.", zh: "注册失败，请重试。" },
   "common.optional":      { en: "(optional)",               zh: "（可选）" },
   "common.saving":        { en: "Saving…",                  zh: "保存中…" },
+  "dialog.notice":        { en: "Notice",                   zh: "提示" },
+  "dialog.confirm":       { en: "Confirm",                  zh: "确认" },
 
   // ===== Default location (weather) =====
   "location.title":          { en: "Default location for weather", zh: "天气默认位置" },

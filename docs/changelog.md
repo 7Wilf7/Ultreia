@@ -2,6 +2,10 @@
 
 > Ultreia 的"装修日志" —— 从 2026-05-13 闲来无事点了下 artifacts 开始，到今天每一天加了什么、改了什么、拆了什么。
 
+## 2026-06-25
+
+- **深苔藓绿动态光效增强**：移动端和桌面端外壳加入更可见但克制的 deep moss / olive ambient light，Training / Calendar / Races / AI Coach / Settings 五个移动端 tab 都能透出背景光效；active tab、按钮 hover 和输入 focus 增加低饱和 moss glow，不改业务逻辑。
+
 ## 2026-06-24
 
 - **Memory facts 成为长期记忆主线**：接受 AI Coach 的 Memory 自动更新后，会把已保留条目拆成可查看的事实卡片，按伤病 / 健康、目标 / 比赛、训练偏好、教练风格和长期模式分类；事实可在 Memory 面板中查看、归档、恢复。

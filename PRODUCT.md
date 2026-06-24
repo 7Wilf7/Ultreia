@@ -24,6 +24,8 @@ Focused, athletic, mature. The product should feel like a serious training tool 
 
 The live app UI follows the same Linear-inspired dark product system as Aevum: near-black backgrounds, translucent panels, precision hairlines, deep moss / olive focus states, subtle blurred light flow, micro-noise texture, low outer glow, and quiet micro-interactions. Ultreia should still feel more athletic and data-forward than Aevum, with dense mobile-first training surfaces instead of decorative landing-page composition.
 
+Ultreia's ambient light should read as deep moss / olive with a small amount of cyan-green trail energy: more athletic and data-forward than Aevum's silver-white system glow, but never bright fitness green or neon.
+
 Do not drift back toward the previous beige / paper / light moss-first app shell, and do not let the app become bright green. Moss is now a darker, lower-saturation brand accent inside a dark product system; it should support the black logo with controlled glow and fine edge states instead of turning the whole app into a green theme. The old moss token names may remain as implementation aliases, but visually the app chrome should read as dark, precise, futuristic, and professional. Exported posters may keep separate day / night palettes because they are shareable artifacts rather than the core app shell.
 
 ## Anti-references

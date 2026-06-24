@@ -220,8 +220,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       overflow: "hidden",
       display: "flex",
       flexDirection: "column",
-      background: "var(--bg)",
+      position: "relative",
+      isolation: "isolate",
+      background: "linear-gradient(180deg, oklch(0.105 0.008 145 / 0.82), oklch(0.074 0.008 145 / 0.72))",
     }}>
+      <div className="ultreia-ambient-layer" aria-hidden="true" />
       <main
         ref={mainRef}
         onTouchStart={onTouchStart}
@@ -231,7 +234,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           flex: 1, minHeight: 0,
           overflow: "hidden",
           position: "relative",
-          background: "var(--bg)",
+          zIndex: 1,
+          background: "transparent",
         }}>
         {/* Refresh indicator shown while a manual sync is running. */}
         {refreshing && (
@@ -276,7 +280,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   overscrollBehavior: "contain",
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-y",
-                  background: "var(--bg)",
+                  background: "linear-gradient(180deg, oklch(0.105 0.008 145 / 0.54), oklch(0.078 0.008 145 / 0.42))",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
@@ -292,11 +296,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       <nav style={{
         position: "fixed", left: 0, right: 0, bottom: 0,
         zIndex: 20,
-        background: "var(--panel)",
+        background: "linear-gradient(180deg, oklch(0.18 0.014 145 / 0.88), oklch(0.125 0.012 145 / 0.92))",
         borderTop: "1px solid var(--rule)",
-        boxShadow: "0 -12px 36px oklch(0 0 0 / 0.28)",
-        backdropFilter: "blur(16px)",
-        WebkitBackdropFilter: "blur(16px)",
+        boxShadow: "0 -14px 38px oklch(0 0 0 / 0.32), 0 -1px 22px oklch(0.38 0.060 138 / 0.12)",
+        backdropFilter: "blur(18px) saturate(1.14)",
+        WebkitBackdropFilter: "blur(18px) saturate(1.14)",
         paddingBottom: "env(safe-area-inset-bottom)",
         display: "grid",
         gridTemplateColumns: "repeat(5, 1fr)",
@@ -340,11 +344,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 width: 38,
                 height: 28,
                 borderRadius: 999,
-                background: active ? "var(--accent-soft)" : "transparent",
+                background: active
+                  ? "linear-gradient(180deg, oklch(0.27 0.045 138 / 0.90), var(--accent-soft))"
+                  : "transparent",
                 border: active ? "1px solid var(--accent)" : "1px solid transparent",
                 color: active ? "var(--accent-dark)" : "var(--ink-3)",
                 transform: active ? "translateY(-1px)" : "none",
-                transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out), color 160ms var(--ease-out)",
+                boxShadow: active ? "0 0 0 1px oklch(0.54 0.055 138 / 0.13), 0 0 22px oklch(0.38 0.060 138 / 0.18)" : "none",
+                transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out)",
               }}>
                 <Icon size={20} />
                 {showSpinner && (

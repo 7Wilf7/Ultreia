@@ -2333,7 +2333,7 @@ Rules:
   const headerCell = {
     border: "1px solid var(--rule)",
     borderRight: "none",
-    background: "var(--panel)",
+    background: "oklch(0.17 0.012 145 / 0.70)",
     height: 32,
     padding: "0 11px",
     fontSize: 13,
@@ -2345,6 +2345,9 @@ Rules:
     justifyContent: "center",
     gap: 6,
     textDecoration: "none",
+    backdropFilter: "blur(14px) saturate(1.10)",
+    WebkitBackdropFilter: "blur(14px) saturate(1.10)",
+    boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.035)",
   };
 
   // Keep the browser tab title in sync with the displayed page title
@@ -2832,7 +2835,9 @@ Rules:
       maxWidth: 1280, margin: "0 auto",
       padding: isMobile ? "1rem 1rem 1.5rem" : "1.1rem 1.75rem 2rem",
       fontFamily: "var(--font-sans)", color: "var(--ink-1)", position: "relative",
+      isolation: "isolate",
     }}>
+      <div className="ultreia-ambient-layer" aria-hidden="true" />
 
       {/* Top instrument bar — desktop runs a 3-column grid; narrow stacks the
           three sections vertically with the title on top (the most important
@@ -2942,10 +2947,11 @@ Rules:
         marginBottom: isMobile ? 20 : 18,
         border: "1px solid var(--rule)",
         borderRadius: 12,
-        background: "var(--panel)",
+        background: "linear-gradient(180deg, oklch(0.18 0.014 145 / 0.72), oklch(0.12 0.010 145 / 0.64))",
         padding: 4,
-        backdropFilter: "blur(14px)",
-        WebkitBackdropFilter: "blur(14px)",
+        boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.035), 0 0 28px oklch(0.36 0.060 138 / 0.09)",
+        backdropFilter: "blur(16px) saturate(1.12)",
+        WebkitBackdropFilter: "blur(16px) saturate(1.12)",
         overflowX: "auto", WebkitOverflowScrolling: "touch",
       }}>
         {desktopTabs.map(({ label, key, Icon }, i) => {
@@ -2954,7 +2960,7 @@ Rules:
           return (
             <button key={label} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
-              background: active ? "var(--accent-soft)" : "transparent",
+              background: active ? "linear-gradient(180deg, oklch(0.27 0.045 138 / 0.92), var(--accent-soft))" : "transparent",
               border: active ? "1px solid var(--accent)" : "1px solid transparent",
               borderRadius: 9,
               padding: isMobile ? "10px 8px 12px" : "9px 18px 11px",
@@ -2964,7 +2970,8 @@ Rules:
               color: active ? "var(--accent-dark)" : "var(--ink-3)",
               cursor: "pointer", whiteSpace: "nowrap",
               position: "relative",
-              transition: "color 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out)",
+              boxShadow: active ? "0 0 0 1px oklch(0.54 0.055 138 / 0.12), 0 0 26px oklch(0.38 0.060 138 / 0.18)" : "none",
+              transition: "color 160ms var(--ease-out), background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out)",
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
             }}>
               <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>

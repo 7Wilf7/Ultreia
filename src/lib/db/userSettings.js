@@ -26,8 +26,9 @@ const FIELD_MAP = {
   pushHours:     'push_hours',     // int[] — LEGACY whole-hour list, kept for back-compat
   pushTimes:     'push_times',     // text[] — "HH:MM" half-hour slots, e.g. ["08:00","13:30"]
   pushTimezone:  'push_timezone',
-  // AI weekly report automation. Client-side trigger checks while the app is
-  // open / returning foreground; server cron can reuse these fields later.
+  // AI weekly report automation. The server cron reads these fields together
+  // with pushTimezone (shared IANA timezone) and generates the report even
+  // when the app is closed.
   weeklyReportEnabled: 'weekly_report_enabled',
   weeklyReportWeekday: 'weekly_report_weekday', // 0 Sunday ... 6 Saturday
   weeklyReportTime: 'weekly_report_time',       // "HH:MM"

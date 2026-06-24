@@ -102,15 +102,6 @@ function cleanWeeklyReportWeekday(value) {
   return Number.isInteger(n) && n >= 0 && n <= 6 ? n : 0;
 }
 
-function timeMinutes(value) {
-  const [h, m] = cleanWeeklyReportTime(value).split(":").map(Number);
-  return h * 60 + m;
-}
-
-function weeklyReportAutoKey(userId, rangeStart) {
-  return `ultreia.weeklyReportAuto.v1.${userId || "anon"}.${rangeStart}`;
-}
-
 const WEEKLY_REPORT_LIST_LIMIT = 50;
 
 function monthStartKey(now = new Date()) {
@@ -646,7 +637,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const setCoachConfig = (v) => updateSettings({ coachConfig: v });
   const setLang = (v) => updateSettings({ lang: v });
   const setPushSettings = (patch) => updateSettings(patch);
-  const setWeeklyReportSettings = (patch) => updateSettings(patch);
+  const setWeeklyReportSettings = (patch) => {
+    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || pushTimezone || "";
+    return updateSettings({ ...patch, pushTimezone: detectedTimezone });
+  };
   // Patch the local state immediately AND persist to Supabase. updateSettings()
   // doesn't refresh local state, so we do it eagerly here so the Settings page
   // and any new addLog calls see the latest values without waiting for a
@@ -1231,6 +1225,17 @@ function AppShell({
   }, [user?.id]);
 
   useEffect(() => {
+    if (!showWeeklyReport || !user?.id) return;
+    let cancelled = false;
+    db.coachReports.listMyReports({ limit: WEEKLY_REPORT_LIST_LIMIT })
+      .then((reports) => {
+        if (!cancelled) setWeeklyReports(reports);
+      })
+      .catch((err) => console.warn("[weekly report] refresh failed:", err));
+    return () => { cancelled = true; };
+  }, [showWeeklyReport, user?.id]);
+
+  useEffect(() => {
     const today = localDateKey(now);
     const note = dailyNotes.find(n => n.date === today);
     if (now.getHours() < 5 || readinessComplete(note?.readiness)) return;
@@ -1665,25 +1670,6 @@ function AppShell({
     weeklyReportLoading,
   ]);
 
-  useEffect(() => {
-    if (!weeklyReportEnabled || weeklyReportLoading || !user?.id) return;
-    const current = now || new Date();
-    const scheduledDay = cleanWeeklyReportWeekday(weeklyReportWeekday);
-    if (current.getDay() !== scheduledDay) return;
-    const currentMinutes = current.getHours() * 60 + current.getMinutes();
-    if (currentMinutes < timeMinutes(weeklyReportTime)) return;
-    const range = weekWindow(current, 0);
-    const key = weeklyReportAutoKey(user.id, range.start);
-    try {
-      if (localStorage.getItem(key) === "1") return;
-      localStorage.setItem(key, "1");
-    } catch {
-      return;
-    }
-    const timer = setTimeout(() => generateWeeklyReport(range, "this"), 0);
-    return () => clearTimeout(timer);
-  }, [generateWeeklyReport, weeklyReportEnabled, weeklyReportLoading, weeklyReportWeekday, weeklyReportTime, now, user?.id]);
-
   // ── Lifted sendChat — talks to the wallet-backed coach proxy.
   //    Takes the user's typed message; reads everything else from props/
   //    state in this scope. Streams the assistant turn locally, then persists
@@ -2089,12 +2075,41 @@ Rules:
     sendChat(text, { ensureLogs: reviewed });
   }
 
-  function requestWeeklyReportAfterImport(created, meta = {}) {
+  async function requestWeeklyReportAfterImport(created, meta = {}) {
     if (weeklyReportAfterSundayImport === false) return;
     if (meta.source !== "import") return;
     if (!Array.isArray(created) || created.length === 0) return;
     if (new Date().getDay() !== 0) return;
-    setWeeklyImportPrompt({ count: created.length });
+    const range = weekWindow(now || new Date(), 0);
+    let reports = weeklyReports;
+    try {
+      reports = await db.coachReports.listMyReports({ limit: WEEKLY_REPORT_LIST_LIMIT });
+      setWeeklyReports(reports);
+    } catch (err) {
+      console.warn("[weekly report] post-import freshness check failed:", err);
+    }
+    const latest = reports
+      .filter(report => report?.rangeMode === "this" && report?.start === range.start && report?.status === "ready")
+      .sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
+    if (weeklyReportEnabled && !latest) {
+      const current = now || new Date();
+      const [scheduledHour, scheduledMinute] = cleanWeeklyReportTime(weeklyReportTime).split(":").map(Number);
+      const scheduledMinutes = scheduledHour * 60 + scheduledMinute;
+      const currentMinutes = current.getHours() * 60 + current.getMinutes();
+      const scheduledToday = cleanWeeklyReportWeekday(weeklyReportWeekday) === current.getDay();
+      if (scheduledToday && currentMinutes < scheduledMinutes + 30) return;
+    }
+    const importedTimestamps = created
+      .map(workout => Date.parse(workout?.createdAt || workout?.updatedAt || ""))
+      .filter(Number.isFinite);
+    const newestImportedAt = importedTimestamps.length
+      ? Math.max(...importedTimestamps)
+      : Date.now();
+    if (latest && Date.parse(latest.generatedAt || latest.createdAt || "") >= newestImportedAt) return;
+    setWeeklyImportPrompt({
+      count: created.length,
+      mode: latest ? "refresh" : "generate",
+    });
   }
 
   function analyzeWeeklyReportFromPrompt() {
@@ -2596,17 +2611,25 @@ Rules:
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 650, margin: "0 0 6px" }}>
-                    {t("weekly_report.import_prompt_title")}
+                    {t(weeklyImportPrompt.mode === "refresh"
+                      ? "weekly_report.import_refresh_title"
+                      : "weekly_report.import_prompt_title")}
                   </h2>
                   <p style={{ ...s.muted, margin: 0, lineHeight: 1.55 }}>
-                    {t("weekly_report.import_prompt_body", { n: String(weeklyImportPrompt.count || 0) })}
+                    {t(weeklyImportPrompt.mode === "refresh"
+                      ? "weekly_report.import_refresh_body"
+                      : "weekly_report.import_prompt_body", {
+                      n: String(weeklyImportPrompt.count || 0),
+                    })}
                   </p>
                 </div>
                 <button onClick={() => setWeeklyImportPrompt(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={analyzeWeeklyReportFromPrompt} style={{ ...s.btn, flex: 1 }}>
-                  {t("weekly_report.import_prompt_analyze")}
+                  {t(weeklyImportPrompt.mode === "refresh"
+                    ? "weekly_report.import_prompt_refresh"
+                    : "weekly_report.import_prompt_analyze")}
                 </button>
                 <button onClick={() => setWeeklyImportPrompt(null)} style={{ ...s.btnGhost, flex: 1 }}>
                   {t("weekly_report.import_prompt_later")}

@@ -18,6 +18,9 @@
 - **安卓常驻通知统计口径修正**：本月 Distance 和 Training 顶部本月 Distance 保持一致，只统计 Road Run / Trail Run / Hiking / Floor Climbing 的距离，不再把 HIIT / Strength 里可能残留的距离算进去。
 - **安卓常驻通知对齐优化**：通知栏本月统计改成固定宽度的两行显示，让 Sessions / Time 和 Distance / Ascent 的分隔点、右侧字段更稳定对齐。
 - **安卓常驻通知列对齐修正**：常驻通知改用原生分列布局显示本月统计，让 Sessions / Distance 的数据列、两个分隔点、Time / Ascent 标签列和右侧数据列分别对齐。
+- **AI 周复盘改为服务端定时**：自动周报会按设置中的本地星期和时间在服务器后台生成，即使 App 没有打开也会运行；完整报告写入账号周报页，完成后发送系统通知和收件箱提醒。
+- **周日导入提示改为补漏**：本周周报生成后又导入新活动时会询问重新分析；预定时间已过但服务器仍未生成时也会提供手动兜底，时间未到则不重复打扰。
+- **后台 Coach 对齐 facts-only**：服务端周报、每日教练推送和夜间 Memory 审核都改为读取 Current Memory facts，不再依赖已退出 Prompt 的旧文本 Memory。
 - **Recent Agent Actions 更直观**：展开计划修改记录时按日期展示「原计划 / 新计划」，不再露出内部计划编号；执行结果改成更短的摘要标签。
 - **系统弹窗收敛为应用内提示**：AI / Memory 更新错误、表单校验、放弃未保存修改、收件箱清空和 Memory facts 归档确认改为 Ultreia 自己的应用内弹窗，不再出现浏览器 / PWA 的系统级 "www.ultreia.run says" 提示。
 

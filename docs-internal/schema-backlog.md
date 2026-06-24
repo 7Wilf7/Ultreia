@@ -35,7 +35,8 @@
 
 后续动作：
 
-- `daily-coach-dispatch` 自动周报写入 `coach_reports`，再发系统通知 / 收件箱提醒。
+- `daily-coach-dispatch` 自动周报已接入 `coach_reports`，并在保存完整报告后发送短系统通知 / 收件箱提醒。
+- 待在 Supabase Dashboard 执行 `docs-internal/supabase-weekly-report-cron.sql`，正式启用每 30 分钟的服务端调度检查。
 
 ## 已建表并接入
 

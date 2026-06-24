@@ -8,14 +8,16 @@
 //
 // Optional request body:
 //   { "mode": "weekly_recap", "force": true, "user_id": "..." }
-// runs the first agentization Phase 2 loop: a weekly recap written to inbox
-// and pushed to the phone. No calendar or Memory data is changed.
+// runs the Phase 2 weekly report loop: reads the user's configured local
+// weekday/time, writes the full report to coach_reports, then sends a short
+// inbox/system notification. No calendar or Memory data is changed.
 //   { "mode": "memory_update", "force": true, "user_id": "..." }
 // runs a nightly Memory review: if the user has opted in and has new coach
 // chat today, create a pending memory_update Action Card. It does NOT write
-// user_settings.coach_memory; the app opens the normal review UI next launch.
+// coach_memory_facts; the app opens the normal review UI next launch.
 // Daily dedup is enforced by push_log (unique on user_id + local date).
-// Weekly recap dedup is currently best-effort via same-week push_inbox title.
+// Weekly recap dedup is enforced by an existing ready auto report for the same
+// report period; failed/interrupted attempts remain retryable.
 //
 // Auth: this function runs with Verify JWT = OFF (it's called by cron, not a
 // logged-in user). It instead checks a shared header x-cron-secret == CRON_SECRET.
@@ -249,7 +251,7 @@ function buildPrompt(opts: {
 function buildWeeklyRecapPrompt(opts: {
   lang: string; today: string; weekStart: string; weekEnd: string; nextStart: string; nextEnd: string;
   completed: any[]; plannedThisWeek: any[]; plannedNextWeek: any[]; notes: any[];
-  targetRace: any | null; memory: string;
+  targetRace: any | null; memoryFacts: any[]; agentActions: any[]; coachConfig: Record<string, unknown>;
 }): { system: string; user: string } {
   const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
   const workoutLine = (w: any) => {
@@ -272,6 +274,26 @@ function buildWeeklyRecapPrompt(opts: {
   };
   const completedKm = opts.completed.reduce((sum, w) => sum + Number(w.distance || 0), 0);
   const completedAscent = opts.completed.reduce((sum, w) => sum + Number(w.ascent || 0), 0);
+  const memoryFacts = (opts.memoryFacts || [])
+    .filter((fact) => fact?.status === "active")
+    .slice(0, 12)
+    .map((fact) => {
+      const content = opts.lang === "zh"
+        ? (fact.content_zh || fact.content_en || "")
+        : (fact.content_en || fact.content_zh || "");
+      return content ? `- ${fact.category || "other"}: ${String(content).replace(/\s+/g, " ").trim()}` : "";
+    })
+    .filter(Boolean);
+  const agentActions = (opts.agentActions || []).slice(0, 6).map((action) => {
+    const parts = [action.type, action.status, action.source].filter(Boolean);
+    const affectedDates = Array.isArray(action.payload?.affectedDates) ? action.payload.affectedDates.slice(0, 5) : [];
+    if (affectedDates.length) parts.push(`dates=${affectedDates.join(",")}`);
+    if (Number.isFinite(Number(action.result?.createdWorkoutCount))) {
+      parts.push(`created=${Number(action.result.createdWorkoutCount)}`);
+    }
+    if (action.error) parts.push(`error=${String(action.error).replace(/\s+/g, " ").slice(0, 120)}`);
+    return parts.length ? `- ${parts.join(" · ")}` : "";
+  }).filter(Boolean);
   const system =
     `You are this runner's coach. Write a detailed weekly training report for a full in-app report page. ` +
     `LANGUAGE (most important): write the ENTIRE recap in ${langName}, and ONLY ${langName}. ` +
@@ -296,7 +318,9 @@ function buildWeeklyRecapPrompt(opts: {
     `[Next week planned rows]\n${opts.plannedNextWeek.length ? opts.plannedNextWeek.map(workoutLine).join("\n") : "none"}\n` +
     `[Daily notes]\n${opts.notes.length ? opts.notes.map(noteLine).join("\n") : "none"}\n` +
     `[Target race] ${race}\n` +
-    (opts.memory ? `[Notes about this runner] ${opts.memory.slice(0, 800)}\n` : "");
+    `[Coach preference]\n${JSON.stringify(opts.coachConfig || {})}\n` +
+    `[Memory facts — reviewed durable facts only]\n${memoryFacts.length ? memoryFacts.join("\n") : "none"}\n` +
+    `[Recent agent actions — use as runner feedback]\n${agentActions.length ? agentActions.join("\n") : "none"}\n`;
   return { system, user };
 }
 
@@ -414,10 +438,49 @@ async function dispatchCoachMessage(opts: {
     inbox: boolean;
   };
 }> {
-  const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(opts.usage);
+  const charge = await chargeAiUsage({
+    supabase: opts.supabase,
+    userId: opts.userId,
+    usage: opts.usage,
+    upstreamId: opts.upstreamId,
+    requestPrefix: opts.requestPrefix,
+    metadataSource: opts.metadataSource,
+  });
+  const delivery = await sendPushAndInbox({
+    supabase: opts.supabase,
+    serviceAccount: opts.serviceAccount,
+    accessToken: opts.accessToken,
+    userId: opts.userId,
+    title: opts.title,
+    pushTitle: opts.pushTitle,
+    message: opts.message,
+  });
+
+  return {
+    accessToken: delivery.accessToken,
+    summary: {
+      sent: delivery.sent,
+      devices: delivery.devices,
+      fcmErrors: delivery.fcmErrors,
+      chargeCents: charge.chargeCents,
+      actualCostCents: charge.actualCostCents,
+      inbox: delivery.inbox,
+    },
+  };
+}
+
+async function chargeAiUsage(opts: {
+  supabase: any;
+  userId: string;
+  usage: unknown;
+  upstreamId: string;
+  requestPrefix: string;
+  metadataSource: string;
+}): Promise<ReturnType<typeof calcChargeCents>> {
+  const charge = calcChargeCents(opts.usage);
   const { error: debitErr } = await opts.supabase.rpc("wallet_debit", {
     p_user_id: opts.userId,
-    p_amount_cents: chargeCents,
+    p_amount_cents: charge.chargeCents,
     p_kind: "ai_charge",
     p_provider: "deepseek",
     p_request_id: opts.upstreamId ? `${opts.requestPrefix}:${opts.upstreamId}` : `${opts.requestPrefix}:${opts.userId}:${Date.now()}`,
@@ -425,8 +488,8 @@ async function dispatchCoachMessage(opts: {
       source: opts.metadataSource,
       model: DEEPSEEK_MODEL,
       usage: opts.usage,
-      billable_usage: billableUsage,
-      actual_cost_cents: actualCostCents,
+      billable_usage: charge.billableUsage,
+      actual_cost_cents: charge.actualCostCents,
       charge_policy: AI_CHARGE_POLICY,
     },
   });
@@ -434,7 +497,24 @@ async function dispatchCoachMessage(opts: {
     const insufficient = String(debitErr.message || "").includes("insufficient_balance");
     throw new Error(insufficient ? "insufficient_balance" : "wallet_debit_failed");
   }
+  return charge;
+}
 
+async function sendPushAndInbox(opts: {
+  supabase: any;
+  serviceAccount: { project_id: string; client_email: string; private_key: string; token_uri: string };
+  accessToken: string | null;
+  userId: string;
+  title?: string;
+  pushTitle?: string;
+  message: string;
+}): Promise<{
+  accessToken: string | null;
+  sent: number;
+  devices: number;
+  fcmErrors: any[];
+  inbox: boolean;
+}> {
   const { data: subs } = await opts.supabase
     .from("push_subscriptions").select("fcm_token").eq("user_id", opts.userId);
 
@@ -456,14 +536,10 @@ async function dispatchCoachMessage(opts: {
 
   return {
     accessToken,
-    summary: {
-      sent,
-      devices: subs?.length || 0,
-      fcmErrors,
-      chargeCents,
-      actualCostCents,
-      inbox: !inboxErr,
-    },
+    sent,
+    devices: subs?.length || 0,
+    fcmErrors,
+    inbox: !inboxErr,
   };
 }
 
@@ -493,11 +569,13 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Everyone with the relevant automation enabled; we filter by local
-    // half-hour slot in JS for daily push, and by coach_config for Memory.
+    // half-hour slot in JS for daily push / weekly reports, and by
+    // coach_config for Memory.
     let settingsQuery = supabase
       .from("user_settings")
-      .select("user_id, push_enabled, push_hours, push_times, push_timezone, coach_memory, lang, coach_config");
+      .select("user_id, push_enabled, push_hours, push_times, push_timezone, lang, coach_config, weekly_report_enabled, weekly_report_weekday, weekly_report_time");
     if (mode === "daily_checkin") settingsQuery = settingsQuery.eq("push_enabled", true);
+    if (mode === "weekly_recap") settingsQuery = settingsQuery.eq("weekly_report_enabled", true);
     if (body.user_id) settingsQuery = settingsQuery.eq("user_id", body.user_id);
     const { data: settings, error: sErr } = await settingsQuery;
     if (sErr) return json({ error: sErr.message }, 500);
@@ -506,7 +584,7 @@ Deno.serve(async (req) => {
     const summary: any[] = [];
 
     for (const u of settings || []) {
-      const tz = u.push_timezone || "UTC";
+      const tz = u.push_timezone || "Asia/Shanghai";
       const parts = localParts(tz);
       const date = body.date || parts.date;
       if (mode === "memory_update") {
@@ -556,9 +634,22 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        const { data: activeFacts, error: factsErr } = await supabase
+          .from("coach_memory_facts")
+          .select("category, content_en, content_zh, status, updated_at")
+          .eq("user_id", u.user_id)
+          .eq("status", "active")
+          .order("updated_at", { ascending: false })
+          .limit(30);
+        if (factsErr) { summary.push({ user: u.user_id, error: `memory_facts: ${factsErr.message}` }); continue; }
+        const currentFacts = (activeFacts || []).map((fact: any) => {
+          const category = fact.category || "other";
+          return `- [${category}] EN: ${fact.content_en || ""}\n  ZH: ${fact.content_zh || ""}`;
+        }).join("\n");
+
         const { system, user } = buildMemoryUpdatePrompt({
           lang: u.lang || "en",
-          memory: u.coach_memory || "",
+          memory: currentFacts,
           chatRows: chatRows || [],
         });
 
@@ -646,15 +737,28 @@ Deno.serve(async (req) => {
       }
 
       if (mode === "weekly_recap") {
+        if (!body.force) {
+          const scheduledWeekday = Number.isInteger(Number(u.weekly_report_weekday))
+            ? Number(u.weekly_report_weekday)
+            : 0;
+          const scheduledTime = typeof u.weekly_report_time === "string" && /^\d{2}:\d{2}$/.test(u.weekly_report_time)
+            ? u.weekly_report_time
+            : "20:00";
+          const localWeekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+          const localSlot = `${String(parts.hour).padStart(2, "0")}:${parts.minute < 30 ? "00" : "30"}`;
+          if (localWeekday !== scheduledWeekday || localSlot !== scheduledTime) continue;
+        }
+
         const { start, end, nextStart, nextEnd } = weekWindow(date);
         if (!body.force) {
           const { data: logged } = await supabase
-            .from("push_inbox")
+            .from("coach_reports")
             .select("id")
             .eq("user_id", u.user_id)
-            .eq("title", u.lang === "zh" ? "AI 周复盘" : "AI weekly recap")
-            .gte("created_at", `${start}T00:00:00Z`)
-            .lt("created_at", `${nextStart}T00:00:00Z`)
+            .eq("period_start", start)
+            .eq("period_end", end)
+            .eq("source", "auto")
+            .eq("status", "ready")
             .limit(1)
             .maybeSingle();
           if (logged) continue;
@@ -675,45 +779,123 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const { data: completed } = await supabase
-          .from("workouts")
-          .select("date, type, distance, duration, ascent, hr, rpe, note")
-          .eq("user_id", u.user_id).eq("is_planned", false)
-          .gte("date", start).lte("date", end)
-          .order("date", { ascending: true });
-        const { data: plannedThisWeek } = await supabase
-          .from("workouts")
-          .select("date, type, distance, duration, ascent, plan_status, note")
-          .eq("user_id", u.user_id).eq("is_planned", true)
-          .gte("date", start).lte("date", end)
-          .order("date", { ascending: true });
-        const { data: plannedNextWeek } = await supabase
-          .from("workouts")
-          .select("date, type, distance, duration, ascent, plan_status, note")
-          .eq("user_id", u.user_id).eq("is_planned", true)
-          .gte("date", nextStart).lte("date", nextEnd)
-          .order("date", { ascending: true });
-        const { data: notes } = await supabase
-          .from("daily_notes")
-          .select("date, tags, readiness_sleep, readiness_legs, readiness_energy")
-          .eq("user_id", u.user_id)
-          .gte("date", start).lte("date", end)
-          .order("date", { ascending: true });
-        const { data: races } = await supabase
-          .from("races").select("name, date")
-          .eq("user_id", u.user_id).eq("is_target", true)
-          .order("date", { ascending: true });
+        const reportTitle = u.lang === "zh" ? "AI 周复盘" : "AI weekly report";
+        const { data: reportRow, error: reportCreateErr } = await supabase
+          .from("coach_reports")
+          .insert({
+            user_id: u.user_id,
+            period_start: start,
+            period_end: end,
+            next_start: nextStart,
+            next_end: nextEnd,
+            range_mode: "this",
+            source: "auto",
+            status: "running",
+            title: reportTitle,
+            body: "",
+            model: DEEPSEEK_MODEL,
+            metadata: {
+              trigger: "server_cron",
+              timezone: tz,
+              scheduled_weekday: u.weekly_report_weekday ?? 0,
+              scheduled_time: u.weekly_report_time || "20:00",
+            },
+          })
+          .select("id")
+          .single();
+        if (reportCreateErr || !reportRow?.id) {
+          summary.push({ user: u.user_id, error: `coach_report_create: ${reportCreateErr?.message || "missing id"}` });
+          continue;
+        }
+
+        const reportId = reportRow.id;
+        const [
+          completedResult,
+          plannedThisResult,
+          plannedNextResult,
+          notesResult,
+          racesResult,
+          memoryFactsResult,
+          agentActionsResult,
+        ] = await Promise.all([
+          supabase
+            .from("workouts")
+            .select("date, type, sub_types, distance, duration, pace, ascent, hr, max_hr, rpe, aerobic_te, note")
+            .eq("user_id", u.user_id).eq("is_planned", false)
+            .gte("date", start).lte("date", end)
+            .order("date", { ascending: true }),
+          supabase
+            .from("workouts")
+            .select("date, type, sub_types, distance, duration, ascent, plan_status, note")
+            .eq("user_id", u.user_id).eq("is_planned", true)
+            .gte("date", start).lte("date", end)
+            .order("date", { ascending: true }),
+          supabase
+            .from("workouts")
+            .select("date, type, sub_types, distance, duration, ascent, plan_status, note")
+            .eq("user_id", u.user_id).eq("is_planned", true)
+            .gte("date", nextStart).lte("date", nextEnd)
+            .order("date", { ascending: true }),
+          supabase
+            .from("daily_notes")
+            .select("date, tags, readiness_sleep, readiness_legs, readiness_energy")
+            .eq("user_id", u.user_id)
+            .gte("date", start).lte("date", end)
+            .order("date", { ascending: true }),
+          supabase
+            .from("races")
+            .select("name, date, category, priority, distance, ascent")
+            .eq("user_id", u.user_id).eq("is_target", true)
+            .order("date", { ascending: true }),
+          supabase
+            .from("coach_memory_facts")
+            .select("category, content_en, content_zh, status, updated_at")
+            .eq("user_id", u.user_id).eq("status", "active")
+            .order("updated_at", { ascending: false })
+            .limit(12),
+          supabase
+            .from("agent_actions")
+            .select("type, status, source, payload, result, error, updated_at")
+            .eq("user_id", u.user_id)
+            .order("updated_at", { ascending: false })
+            .limit(6),
+        ]);
+        const dataError = [
+          completedResult.error,
+          plannedThisResult.error,
+          plannedNextResult.error,
+          notesResult.error,
+          racesResult.error,
+          memoryFactsResult.error,
+          agentActionsResult.error,
+        ].find(Boolean);
+        if (dataError) {
+          await supabase.from("coach_reports").update({
+            status: "failed",
+            error: dataError.message,
+          }).eq("id", reportId);
+          summary.push({ user: u.user_id, error: `weekly_data: ${dataError.message}` });
+          continue;
+        }
+
+        const completed = completedResult.data || [];
+        const plannedThisWeek = plannedThisResult.data || [];
+        const plannedNextWeek = plannedNextResult.data || [];
+        const notes = notesResult.data || [];
+        const races = racesResult.data || [];
         const targetRace = (races || []).find((r) => r.date && r.date >= date) || (races || [])[0] || null;
 
         const { system, user } = buildWeeklyRecapPrompt({
           lang: u.lang || "en", today: date,
           weekStart: start, weekEnd: end, nextStart, nextEnd,
-          completed: completed || [],
-          plannedThisWeek: plannedThisWeek || [],
-          plannedNextWeek: plannedNextWeek || [],
-          notes: notes || [],
+          completed,
+          plannedThisWeek,
+          plannedNextWeek,
+          notes,
           targetRace,
-          memory: u.coach_memory || "",
+          memoryFacts: memoryFactsResult.data || [],
+          agentActions: agentActionsResult.data || [],
+          coachConfig: u.coach_config || {},
         });
 
         let message = "";
@@ -725,28 +907,95 @@ Deno.serve(async (req) => {
           usage = llm.usage;
           upstreamId = llm.id;
         } catch (e) {
+          await supabase.from("coach_reports").update({
+            status: "failed",
+            error: String(e).slice(0, 500),
+          }).eq("id", reportId);
           summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
           continue;
         }
-        if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+        if (!message) {
+          await supabase.from("coach_reports").update({
+            status: "failed",
+            error: "empty llm reply",
+          }).eq("id", reportId);
+          summary.push({ user: u.user_id, error: "empty llm reply" });
+          continue;
+        }
 
+        let weeklyCharge: ReturnType<typeof calcChargeCents>;
         try {
-          const result = await dispatchCoachMessage({
+          weeklyCharge = await chargeAiUsage({
             supabase,
-            serviceAccount: sa,
-            accessToken: fcmAccessToken,
             userId: u.user_id,
-            title: u.lang === "zh" ? "AI 周复盘" : "AI weekly recap",
-            message,
             usage,
             upstreamId,
             requestPrefix: "weekly-recap",
             metadataSource: "weekly_recap_dispatch",
           });
-          fcmAccessToken = result.accessToken;
-          summary.push({ user: u.user_id, mode, week: `${start}..${end}`, ...result.summary, message });
+          const { error: reportReadyErr } = await supabase
+            .from("coach_reports")
+            .update({
+              status: "ready",
+              body: message,
+              error: null,
+              wallet_charge_cents: weeklyCharge.chargeCents,
+              model: DEEPSEEK_MODEL,
+              metadata: {
+                trigger: "server_cron",
+                timezone: tz,
+                scheduled_weekday: u.weekly_report_weekday ?? 0,
+                scheduled_time: u.weekly_report_time || "20:00",
+                upstream_id: upstreamId || null,
+                usage,
+                actual_cost_cents: weeklyCharge.actualCostCents,
+              },
+            })
+            .eq("id", reportId);
+          if (reportReadyErr) throw new Error(`coach_report_ready: ${reportReadyErr.message}`);
         } catch (e) {
+          await supabase.from("coach_reports").update({
+            status: "failed",
+            error: String(e).slice(0, 500),
+          }).eq("id", reportId);
           summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
+          continue;
+        }
+
+        const notificationTitle = u.lang === "zh" ? "AI 周复盘已完成" : "Weekly report ready";
+        const notificationMessage = u.lang === "zh"
+          ? "打开 Ultreia 查看本周周报，并可审核接下来的训练计划。"
+          : "Open Ultreia to review this week's report and the next training plan.";
+        try {
+          const delivery = await sendPushAndInbox({
+            supabase,
+            serviceAccount: sa,
+            accessToken: fcmAccessToken,
+            userId: u.user_id,
+            title: notificationTitle,
+            message: notificationMessage,
+          });
+          fcmAccessToken = delivery.accessToken;
+          summary.push({
+            user: u.user_id,
+            mode,
+            reportId,
+            week: `${start}..${end}`,
+            chargeCents: weeklyCharge.chargeCents,
+            actualCostCents: weeklyCharge.actualCostCents,
+            sent: delivery.sent,
+            devices: delivery.devices,
+            inbox: delivery.inbox,
+          });
+        } catch (e) {
+          summary.push({
+            user: u.user_id,
+            mode,
+            reportId,
+            week: `${start}..${end}`,
+            chargeCents: weeklyCharge.chargeCents,
+            notificationError: String(e).slice(0, 120),
+          });
         }
         continue;
       }
@@ -813,10 +1062,23 @@ Deno.serve(async (req) => {
         .order("created_at", { ascending: false })
         .limit(8);
       const recentChat = (chatRows || []).reverse();
+      const { data: activeFacts } = await supabase
+        .from("coach_memory_facts")
+        .select("category, content_en, content_zh")
+        .eq("user_id", u.user_id)
+        .eq("status", "active")
+        .order("updated_at", { ascending: false })
+        .limit(12);
+      const memory = (activeFacts || []).map((fact: any) => {
+        const content = u.lang === "zh"
+          ? (fact.content_zh || fact.content_en || "")
+          : (fact.content_en || fact.content_zh || "");
+        return content ? `${fact.category || "other"}: ${content}` : "";
+      }).filter(Boolean).join("; ");
 
       const { system, user } = buildPrompt({
         lang: u.lang || "en", name: "", today: date,
-        workouts: workouts || [], targetRace, memory: u.coach_memory || "",
+        workouts: workouts || [], targetRace, memory,
         recentChat,
       });
 

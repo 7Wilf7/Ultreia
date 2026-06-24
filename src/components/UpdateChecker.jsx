@@ -274,9 +274,9 @@ export function UpdateChecker() {
   return (
     <div style={cellStyle}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", width: "100%", gap: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8 }}>
           <div style={primaryStyle}>{t("settings.version")}</div>
-          <div style={secondaryStyle}>v{currentVersion}</div>
+          <div style={{ ...secondaryStyle, marginTop: 0 }}>v{currentVersion}</div>
         </div>
         <div style={{
           display: "grid",

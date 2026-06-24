@@ -155,8 +155,6 @@ function shouldSkipSectionSwipe(target) {
   return !!target?.closest?.("button,input,textarea,select,a,[role='button'],[data-dropdown-menu]");
 }
 
-const TRAINING_VIEW_ORDER = { activities: 0, charts: 1 };
-
 export function TrainingTab({
   logs, addLog, updateLog, bulkAddLogs,
   filter, setFilter,
@@ -169,7 +167,6 @@ export function TrainingTab({
   const isMobile = useIsMobile();
   const sectionTouch = useRef(null);
   const viewDragX = useRef(0);
-  const [viewMotion, setViewMotion] = useState({ dir: 0, seq: 0 });
   const [viewDrag, setViewDrag] = useState({ x: 0, active: false });
 
   function setViewDragX(x, active = true) {
@@ -180,10 +177,6 @@ export function TrainingTab({
   function changeView(nextView) {
     if (nextView === view) return;
     setViewDragX(0, false);
-    setViewMotion(prev => ({
-      dir: TRAINING_VIEW_ORDER[nextView] > TRAINING_VIEW_ORDER[view] ? 1 : -1,
-      seq: prev.seq + 1,
-    }));
     setView(nextView);
   }
 
@@ -278,16 +271,16 @@ export function TrainingTab({
   // toolbar and the list) so it pins with the stats and doesn't scroll away.
   const loadChipEl = load ? (
     <div title={t("training.load_hint")}
-      style={{ display: "flex", alignItems: "center", gap: 8, padding: isMobile ? "7px 2px 3px" : "8px 2px 4px", fontSize: 12.5, flexWrap: "wrap", borderTop: "1px solid var(--rule)" }}>
-      <span style={{ ...s.muted, letterSpacing: "0.06em", fontSize: 11 }}>{t("training.load_label")}</span>
+      style={{ display: "flex", alignItems: "center", gap: 6, padding: isMobile ? "7px 2px 3px" : "8px 2px 4px", fontSize: 12.5, flexWrap: "nowrap", borderTop: "1px solid var(--rule)", whiteSpace: "nowrap", overflow: "hidden" }}>
+      <span style={{ ...s.muted, letterSpacing: "0.04em", fontSize: 11, flexShrink: 0 }}>{t("training.load_label")}</span>
       {load.building || load.acwr == null ? (
         <span style={{ ...s.muted }}>{t("training.load_building")}</span>
       ) : (
         <>
           <span style={{ width: 9, height: 9, borderRadius: "50%", background: RAMP_COLOR[load.ramp], flexShrink: 0 }} />
-          <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)" }}>ACWR {load.acwr.toFixed(2)}</span>
-          <span style={{ ...s.muted }}>· {t(`training.ramp_${load.ramp}`)}</span>
-          <span style={{ ...s.muted, marginLeft: "auto", fontSize: 11, fontFamily: "var(--font-mono)" }}>
+          <span style={{ fontFamily: "var(--font-mono)", color: "var(--ink-1)", flexShrink: 0 }}>ACWR {load.acwr.toFixed(2)}</span>
+          <span style={{ ...s.muted, flexShrink: 0 }}>· {t(`training.ramp_${load.ramp}`)}</span>
+          <span style={{ ...s.muted, marginLeft: "auto", fontSize: 11, fontFamily: "var(--font-mono)", flexShrink: 0 }}>
             {t("training.load_ac", { a: load.acute, c: load.chronicWeekly })}
           </span>
         </>
@@ -324,8 +317,8 @@ export function TrainingTab({
   const statItems = [
     { key: "sessions", label: t("training.sessions"), val: String(periodSessions), unit: "" },
     { key: "time", label: t("training.total_time"), val: isMobile ? mobileTimeStat.val : (periodDurationSec ? formatDuration(periodDurationSec) : t("common.no_data")), unit: isMobile ? mobileTimeStat.unit : "" },
-    { key: "distance", label: t("training.total_distance"), val: isMobile ? Math.round(periodKm).toLocaleString() : periodKm.toFixed(1), unit: "km" },
-    { key: "ascent", label: t("training.total_ascent"), val: periodAscent.toLocaleString(), unit: "m" },
+    { key: "distance", label: t("training.total_distance"), val: isMobile ? String(Math.round(periodKm)) : periodKm.toFixed(1), unit: "km" },
+    { key: "ascent", label: t("training.total_ascent"), val: String(periodAscent), unit: "m" },
   ];
 
   // Sticky header for the three navigation rows: All activities ▼ /
@@ -414,14 +407,8 @@ export function TrainingTab({
     </>
   );
 
-  const viewMotionClass = isMobile
-    ? (viewMotion.dir > 0 ? "ultreia-tab-in-right" : viewMotion.dir < 0 ? "ultreia-tab-in-left" : undefined)
-    : undefined;
-
   return (
     <div
-      key={`${view}-${viewMotion.seq}`}
-      className={viewMotionClass}
       onTouchStart={onSectionTouchStart}
       onTouchMove={onSectionTouchMove}
       onTouchEnd={onSectionTouchEnd}

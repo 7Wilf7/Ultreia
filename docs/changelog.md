@@ -4,6 +4,7 @@
 
 ## 2026-06-24
 
+- **移动端显示细节修复**：Training 顶部 Distance / Ascent 统计不再显示千位逗号，ACWR 负荷条保持单行；Settings 版本号移到 Version 标题后方，字体回到原来的 Outfit，并取消 Training 内 Activities / Charts 切换时的轻微抖动。
 - **深色界面高级感增强**：主色压暗为深苔绿，加入柔和动态流光、微噪点、细线微光和按钮 / 输入框微交互；比赛 tag 改成暗底描边，不再使用亮色底配白字。
 - **深色界面颜色修正**：主色从蓝紫调整为更贴近当前 logo 的深苔绿 / olive；Training、Races、Settings、天气设置和 AI Coach 里的选中态修复为深色可读样式，不再出现白底浅字或按钮挤压。
 - **全局界面风格调整**：App shell 改为接近 Aevum 的 Linear-inspired 深色产品界面，使用暗色半透明面板、细边线和克制的深苔绿 / olive 焦点色；活动列表、导入预览、设置弹窗、删除确认和底部导航同步收敛到新风格。

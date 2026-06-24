@@ -21,8 +21,9 @@ function ViewToggle({ view, setView, t, style }) {
     <div style={{
       display: "flex",
       border: "1px solid var(--rule)",
-      borderRadius: 2,
-      background: "var(--bg-elevated)",
+      borderRadius: 8,
+      background: "var(--panel)",
+      overflow: "hidden",
       ...style,
     }}>
       {[
@@ -34,8 +35,8 @@ function ViewToggle({ view, setView, t, style }) {
           <button key={tab.id} onClick={() => setView(tab.id)}
             style={{
               flex: 1, minHeight: 36, padding: "0 14px",
-              background: active ? "var(--ink-1)" : "transparent",
-              color: active ? "var(--ink-inv)" : "var(--ink-2)",
+              background: active ? "var(--accent-soft)" : "transparent",
+              color: active ? "var(--accent-dark)" : "var(--ink-2)",
               border: "none",
               borderRight: i === 0 ? "1px solid var(--rule)" : "none",
               fontFamily: "var(--font-sans)", fontSize: 13,
@@ -70,8 +71,8 @@ function StatTile({ label, val, unit, isMobile }) {
       minWidth: 0,
       boxSizing: "border-box",
       ...(isMobile ? {
-        border: "1px solid rgba(74,92,55,0.2)",
-        background: "var(--moss-bg)",
+        border: "1px solid var(--accent)",
+        background: "var(--accent-soft)",
         borderRadius: 8,
       } : CONTOUR_BG),
     }}>

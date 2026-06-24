@@ -87,9 +87,9 @@ export function ApiSettingsModal({
               style={{
                 width: 20, height: 20, minHeight: 0, minWidth: 0,
                 borderRadius: "50%", boxSizing: "border-box",
-                border: `1px solid ${pricingOpen ? "var(--ink-1)" : "var(--ink-3)"}`,
-                background: pricingOpen ? "var(--ink-1)" : "transparent",
-                color: pricingOpen ? "var(--ink-inv)" : "var(--ink-3)",
+                border: `1px solid ${pricingOpen ? "var(--accent)" : "var(--ink-3)"}`,
+                background: pricingOpen ? "var(--accent)" : "transparent",
+                color: pricingOpen ? "var(--bg-deep)" : "var(--ink-3)",
                 fontSize: 12, fontWeight: 700, fontFamily: "var(--font-mono)",
                 cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",
@@ -101,7 +101,8 @@ export function ApiSettingsModal({
             {showHint && (
               <div onClick={() => setShowHint(false)} style={{
                 position: "absolute", top: "calc(100% + 6px)", left: 0,
-                background: "var(--ink-1)", color: "var(--ink-inv)",
+                background: "var(--panel)", color: "var(--ink-1)",
+                border: "1px solid var(--rule)",
                 fontSize: 11, lineHeight: 1.4, padding: "6px 9px", borderRadius: 6,
                 maxWidth: 200, zIndex: 5, boxShadow: "0 4px 14px rgba(0,0,0,0.2)",
               }}>

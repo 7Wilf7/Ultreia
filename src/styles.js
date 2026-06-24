@@ -3,7 +3,7 @@ import { TYPE_COLOR } from "./constants";
 /**
  * Inline style tokens — kept centralized here so the whole UI shares one
  * vocabulary. Aesthetic: Linear-inspired dark product UI — precise hairlines,
- * translucent panels, restrained violet-blue focus, dense training data.
+ * translucent panels, restrained logo-moss focus, dense training data.
  */
 export const s = {
   // --- Containers ---

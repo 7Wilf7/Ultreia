@@ -398,8 +398,8 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
 
   function langSeg(active) {
     return {
-      background: active ? "var(--ink-1)" : "transparent",
-      color: active ? "var(--ink-inv)" : "var(--ink-3)",
+      background: active ? "var(--accent-soft)" : "transparent",
+      color: active ? "var(--accent-dark)" : "var(--ink-3)",
       border: "none", borderRadius: 0,
       padding: "0 10px", height: 26, minHeight: 0,
       fontSize: active ? 13 : 11,

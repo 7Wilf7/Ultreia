@@ -204,18 +204,18 @@ export function SettingsMobileTab({
         display: "flex", alignItems: "center", gap: 14,
         width: "100%",
         textAlign: "left",
-        padding: "14px 14px",
+        padding: "12px 14px",
         border: "1px solid var(--rule)",
         background: "var(--bg-elevated)",
         borderRadius: 10,
         marginBottom: 10,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.65)",
+        boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.05)",
         cursor: "pointer",
         color: "var(--ink-1)",
         WebkitTapHighlightColor: "transparent",
       }}>
         <img src={productLogoUrl} alt="" aria-hidden="true"
-          style={{ width: 48, height: 48, borderRadius: 12, flexShrink: 0 }} />
+          style={{ width: 44, height: 44, borderRadius: 10, flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{
             fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 600,
@@ -348,9 +348,9 @@ function SectionChip({ active, onClick, children }) {
     <button type="button" onClick={onClick} style={{
       display: "inline-flex", alignItems: "center", gap: 6,
       padding: "8px 14px", minHeight: 0,
-      border: `1px solid ${active ? "var(--ink-1)" : "var(--rule)"}`,
-      background: active ? "var(--ink-1)" : "var(--bg-elevated)",
-      color: active ? "var(--ink-inv)" : "var(--ink-1)",
+      border: `1px solid ${active ? "var(--accent)" : "var(--rule)"}`,
+      background: active ? "var(--accent-soft)" : "var(--bg-elevated)",
+      color: active ? "var(--accent-dark)" : "var(--ink-1)",
       borderRadius: 999,
       fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600,
       cursor: "pointer", WebkitTapHighlightColor: "transparent",
@@ -380,19 +380,19 @@ function LangSwitch({ lang, onToggle }) {
       <div style={{
         position: "absolute", top: 2, left: isEn ? 38 : 2,
         width: 36, height: 24, borderRadius: 12,
-        background: "var(--ink-1)",
+        background: "var(--accent)",
         transition: "left 180ms cubic-bezier(0.2,0.7,0.3,1)",
       }} />
       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
         <span style={{
           flex: 1, textAlign: "center", fontSize: 13, fontFamily: "var(--font-sans)",
           fontWeight: 600, zIndex: 1, transition: "color 180ms",
-          color: !isEn ? "var(--ink-inv)" : "var(--ink-3)",
+          color: !isEn ? "var(--bg-deep)" : "var(--ink-3)",
         }}>中</span>
         <span style={{
           flex: 1, textAlign: "center", fontSize: 11, fontFamily: "var(--font-mono)",
           fontWeight: 600, zIndex: 1, letterSpacing: "0.04em", transition: "color 180ms",
-          color: isEn ? "var(--ink-inv)" : "var(--ink-3)",
+          color: isEn ? "var(--bg-deep)" : "var(--ink-3)",
         }}>EN</span>
       </div>
     </div>

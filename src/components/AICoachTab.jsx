@@ -776,14 +776,14 @@ export function AICoachTab({
                   <button onClick={() => setPreviewLang("en")}
                     style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
                       borderRight: "none",
-                      background: previewLang === "en" ? "var(--ink-1)" : "transparent",
-                      color: previewLang === "en" ? "var(--ink-inv)" : "var(--ink-2)" }}>
+                      background: previewLang === "en" ? "var(--accent-soft)" : "transparent",
+                      color: previewLang === "en" ? "var(--accent-dark)" : "var(--ink-2)" }}>
                     EN
                   </button>
                   <button onClick={() => setPreviewLang("zh")}
                     style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                      background: previewLang === "zh" ? "var(--ink-1)" : "transparent",
-                      color: previewLang === "zh" ? "var(--ink-inv)" : "var(--ink-2)" }}>
+                      background: previewLang === "zh" ? "var(--accent-soft)" : "transparent",
+                      color: previewLang === "zh" ? "var(--accent-dark)" : "var(--ink-2)" }}>
                     中
                   </button>
                 </div>
@@ -1078,9 +1078,9 @@ export function AICoachTab({
                       // `.selectable` re-enables long-press select + copy (the
                       // app disables text selection globally) so the runner can
                       // copy the coach's advice.
-                      background: isUser ? "var(--ink-1)" : "var(--bg-sunken)",
-                      color: isUser ? "var(--ink-inv)" : "var(--ink-1)",
-                      border: `1px solid ${isUser ? "var(--ink-1)" : "var(--rule)"}`,
+                      background: isUser ? "var(--accent-soft)" : "var(--bg-sunken)",
+                      color: isUser ? "var(--ink-1)" : "var(--ink-1)",
+                      border: `1px solid ${isUser ? "var(--accent)" : "var(--rule)"}`,
                       borderRadius: 10, padding: "10px 14px",
                       fontSize: 13, lineHeight: 1.7,
                       minWidth: 0, maxWidth: "100%",
@@ -1609,12 +1609,12 @@ export function AICoachTab({
                         <div style={{ display: "flex", gap: 0 }}>
                           <button onClick={() => setPreviewLang("en")}
                             style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px", borderRight: "none",
-                              background: previewLang === "en" ? "var(--ink-1)" : "transparent",
-                              color: previewLang === "en" ? "var(--ink-inv)" : "var(--ink-2)" }}>EN</button>
+                              background: previewLang === "en" ? "var(--accent-soft)" : "transparent",
+                              color: previewLang === "en" ? "var(--accent-dark)" : "var(--ink-2)" }}>EN</button>
                           <button onClick={() => setPreviewLang("zh")}
                             style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                              background: previewLang === "zh" ? "var(--ink-1)" : "transparent",
-                              color: previewLang === "zh" ? "var(--ink-inv)" : "var(--ink-2)" }}>中</button>
+                              background: previewLang === "zh" ? "var(--accent-soft)" : "transparent",
+                              color: previewLang === "zh" ? "var(--accent-dark)" : "var(--ink-2)" }}>中</button>
                         </div>
                       </div>
                       <pre style={{
@@ -2279,8 +2279,8 @@ function MemoryLangToggle({ memoryLang, setMemoryLang }) {
         <button key={lg} type="button" onClick={() => setMemoryLang(lg)}
           style={{
             padding: "4px 10px", fontSize: 11, border: "none", cursor: "pointer", minHeight: 0,
-            background: memoryLang === lg ? "var(--ink-1)" : "transparent",
-            color: memoryLang === lg ? "var(--ink-inv)" : "var(--ink-2)",
+            background: memoryLang === lg ? "var(--accent-soft)" : "transparent",
+            color: memoryLang === lg ? "var(--accent-dark)" : "var(--ink-2)",
           }}>
           {lg === "en" ? "EN" : "中"}
         </button>

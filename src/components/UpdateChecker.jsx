@@ -273,12 +273,18 @@ export function UpdateChecker() {
 
   return (
     <div style={cellStyle}>
-      <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", width: "100%", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={primaryStyle}>{t("settings.version")}</div>
           <div style={secondaryStyle}>v{currentVersion}</div>
         </div>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: status === "latest" && release ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
+          gap: 6,
+          alignItems: "center",
+          minWidth: 0,
+        }}>
           {status === "latest" && release && (
             <button onClick={() => setShowNotes(o => !o)} style={btnStyle}>
               {t("settings.view_recent")}
@@ -403,11 +409,16 @@ const btnStyle = {
   background: "var(--bg)",
   border: "1px solid var(--rule)",
   borderRadius: 6,
-  padding: "6px 10px",
+  padding: "7px 8px",
+  minWidth: 0,
+  minHeight: 34,
   fontFamily: "var(--font-mono)",
   fontSize: 11,
   color: "var(--ink-1)",
   cursor: "pointer",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
   WebkitTapHighlightColor: "transparent",
 };
 

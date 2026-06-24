@@ -177,7 +177,7 @@ export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
             {steps.map((_, idx) => (
               <span key={idx} style={{
                 width: idx === i ? 18 : 6, height: 6, borderRadius: 3,
-                background: idx === i ? "var(--ink-1)" : "var(--rule)",
+                background: idx === i ? "var(--accent)" : "var(--rule)",
                 transition: "width 200ms, background 200ms",
               }} />
             ))}

@@ -14,8 +14,8 @@ function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownConte
           display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
           width: "100%", minHeight: 36,
           padding: dense ? "8px 4px" : "8px 6px",
-          background: active ? "var(--ink-1)" : "transparent",
-          color: active ? "var(--ink-inv)" : "var(--ink-2)",
+          background: active ? "var(--accent-soft)" : "transparent",
+          color: active ? "var(--accent-dark)" : "var(--ink-2)",
           border: "none",
           // No right divider on the rightmost cell (Year).
           borderRight: kind !== "year" ? "1px solid var(--rule)" : "none",
@@ -30,10 +30,10 @@ function Cell({ kind, active, label, onClick, hasDropdown, isOpen, dropdownConte
       {isOpen && (
         <div style={{
           position: "absolute", top: "100%", left: 0, right: 0, marginTop: 2,
-          background: "var(--bg-elevated)",
-          border: "1px solid var(--rule)", borderRadius: 2,
+          background: "var(--panel)",
+          border: "1px solid var(--rule)", borderRadius: 8,
           maxHeight: 300, overflowY: "auto",
-          boxShadow: "0 8px 24px rgba(20,20,19,0.08)",
+          boxShadow: "var(--shadow-soft)",
           zIndex: 50, minWidth: 140,
         }}>
           {dropdownContent}
@@ -70,9 +70,9 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
       display: compact ? "inline-flex" : "flex",
       marginBottom: compact ? 0 : 14,
       border: "1px solid var(--rule)",
-      borderRadius: 2,
+      borderRadius: 8,
       overflow: "visible",
-      background: "var(--bg-elevated)",
+      background: "var(--panel)",
       ...style,
     }}>
       <Cell

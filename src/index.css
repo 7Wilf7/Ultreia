@@ -1,6 +1,6 @@
 /* ============================================================
    Ultreia - Linear-inspired training cockpit
-   Dark, precise, thin-lined surfaces with restrained violet-blue focus.
+   Dark, precise, thin-lined surfaces with restrained logo-moss focus.
    ============================================================ */
 
 :root {
@@ -33,13 +33,13 @@
   --rule-strong:  oklch(0.67 0.042 274 / 0.62);
   --rule-ink:     oklch(0.88 0.02 274 / 0.72);
 
-  /* ---- Accent: kept as moss aliases for existing code ---- */
-  --accent:       oklch(0.78 0.11 292);
-  --accent-dark:  oklch(0.91 0.055 292);
-  --accent-soft:  oklch(0.31 0.045 292 / 0.62);
-  --aura-blue:    oklch(0.68 0.11 236);
-  --aura-violet:  oklch(0.74 0.13 306);
-  --aura-cyan:    oklch(0.79 0.095 210);
+  /* ---- Accent: logo-adjacent moss / olive, not Aevum violet ---- */
+  --accent:       oklch(0.70 0.085 132);
+  --accent-dark:  oklch(0.87 0.060 132);
+  --accent-soft:  oklch(0.285 0.042 132 / 0.72);
+  --aura-blue:    oklch(0.66 0.075 184);
+  --aura-violet:  oklch(0.62 0.075 132);
+  --aura-cyan:    oklch(0.76 0.085 166);
   --moss:         var(--accent);
   --moss-light:   var(--accent-dark);
   --moss-deep:    var(--accent-dark);
@@ -57,7 +57,7 @@
   /* ---- Effects ---- */
   --shadow:      0 18px 58px oklch(0 0 0 / 0.34);
   --shadow-soft: 0 10px 30px oklch(0 0 0 / 0.20);
-  --glow:        0 0 0 1px oklch(0.82 0.075 292 / 0.18), 0 16px 54px oklch(0.58 0.12 292 / 0.16);
+  --glow:        0 0 0 1px oklch(0.78 0.070 132 / 0.18), 0 16px 54px oklch(0.55 0.10 132 / 0.16);
   --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
   --r-sm:        8px;
   --r-md:        12px;
@@ -101,8 +101,8 @@ body {
   position: relative;
   overflow-x: hidden;
   background:
-    radial-gradient(circle at 18% -10%, oklch(0.55 0.13 292 / 0.13), transparent 34%),
-    radial-gradient(circle at 112% 8%, oklch(0.60 0.11 236 / 0.11), transparent 38%),
+    radial-gradient(circle at 18% -10%, oklch(0.50 0.10 132 / 0.11), transparent 34%),
+    radial-gradient(circle at 112% 8%, oklch(0.55 0.085 166 / 0.09), transparent 38%),
     linear-gradient(180deg, oklch(0.13 0.006 274) 0%, var(--bg) 44%, oklch(0.095 0.006 274) 100%);
   background-attachment: fixed;
 }
@@ -118,7 +118,7 @@ body::after {
 body::before {
   z-index: 0;
   background:
-    linear-gradient(110deg, transparent 0%, oklch(0.65 0.09 292 / 0.06) 35%, transparent 62%),
+    linear-gradient(110deg, transparent 0%, oklch(0.58 0.075 132 / 0.055) 35%, transparent 62%),
     linear-gradient(180deg, oklch(1 0 0 / 0.035), transparent 22%);
   transform-origin: center;
   animation: ultreia-ambient-flow 18s var(--ease-out) infinite alternate;
@@ -221,8 +221,8 @@ summary::-webkit-details-marker { display: none; }
    (e.g. AI Coach weather pill → the calendar's today weather card). Works on
    any background, unlike ultreia-flash which swaps the bg. */
 @keyframes ultreia-flash-ring {
-  0%, 100% { box-shadow: 0 0 0 0 oklch(0.78 0.11 292 / 0); }
-  30%, 70% { box-shadow: 0 0 0 3px oklch(0.78 0.11 292 / 0.62); }
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.70 0.085 132 / 0); }
+  30%, 70% { box-shadow: 0 0 0 3px oklch(0.70 0.085 132 / 0.62); }
 }
 .ultreia-flash-ring {
   animation: ultreia-flash-ring 0.7s ease-in-out 3;

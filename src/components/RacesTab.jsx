@@ -719,7 +719,7 @@ export function RacesTab({
                   padding: "12px 8px",
                   fontSize: 14, fontWeight: active ? 600 : 500,
                   color: active ? "var(--ink-1)" : "var(--ink-3)",
-                  borderBottom: active ? "2px solid var(--ink-1)" : "2px solid transparent",
+                  borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
                   marginBottom: -1,
                   borderRadius: 0,
                 }}>
@@ -736,8 +736,9 @@ export function RacesTab({
             display: "flex",
             marginBottom: 12,
             border: "1px solid var(--rule)",
-            borderRadius: 2,
-            background: "var(--bg-elevated)",
+            borderRadius: 8,
+            background: "var(--panel)",
+            overflow: "hidden",
           }}>
             {[
               { id: "target",  label: t("races.section_target"),  count: targetRacesAll.length },
@@ -748,8 +749,8 @@ export function RacesTab({
                 <button key={tab.id} onClick={() => changeMobileSubTab(tab.id)}
                   style={{
                     flex: 1, minHeight: 36, padding: "8px 10px",
-                    background: active ? "var(--ink-1)" : "transparent",
-                    color: active ? "var(--ink-inv)" : "var(--ink-2)",
+                    background: active ? "var(--accent-soft)" : "transparent",
+                    color: active ? "var(--accent-dark)" : "var(--ink-2)",
                     border: "none",
                     borderRight: i === 0 ? "1px solid var(--rule)" : "none",
                     fontFamily: "var(--font-sans)", fontSize: 13,
@@ -894,9 +895,9 @@ export function RacesTab({
             {r.isTarget && r.priority && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
-                color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
-                background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
-                border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+                color: r.priority === "A" ? "var(--bg-deep)" : "var(--ink-1)",
+                background: r.priority === "A" ? "var(--accent)" : r.priority === "B" ? "var(--accent-soft)" : "transparent",
+                border: "1px solid " + (r.priority === "A" ? "var(--accent)" : "var(--rule)"),
                 padding: "2px 7px", flexShrink: 0,
               }}>▲ {r.priority}</span>
             )}
@@ -985,9 +986,9 @@ export function RacesTab({
           {r.isTarget && r.priority && (
             <span style={{
               fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 600,
-              color: r.priority === "A" ? "var(--ink-inv)" : "var(--ink-1)",
-              background: r.priority === "A" ? "var(--ink-1)" : r.priority === "B" ? "var(--moss-bg)" : "transparent",
-              border: "1px solid " + (r.priority === "A" ? "var(--ink-1)" : "var(--rule)"),
+              color: r.priority === "A" ? "var(--bg-deep)" : "var(--ink-1)",
+              background: r.priority === "A" ? "var(--accent)" : r.priority === "B" ? "var(--accent-soft)" : "transparent",
+              border: "1px solid " + (r.priority === "A" ? "var(--accent)" : "var(--rule)"),
               padding: "2px 8px",
               whiteSpace: "nowrap",
             }}>▲ {r.priority}</span>

@@ -4,12 +4,10 @@
 
 const BASE_GREETINGS = [
   { en: "Every kilometer counts.", zh: "每一公里都算数。" },
-  { en: "Today's easy run is tomorrow's PR.", zh: "今天的轻松跑，明天的 PR。" },
   { en: "Lace up. The road's waiting.", zh: "系好鞋带，路在等你。" },
   { en: "Recovery is training too.", zh: "恢复也是训练。" },
   { en: "Trust the process, not the weather.", zh: "相信训练，别信天气。" },
   { en: "Slow is smooth, smooth is fast.", zh: "慢即稳，稳即快。" },
-  { en: "Zone 2 today, podium someday.", zh: "今天 Z2，终有一天上领奖台。" },
   { en: "The hills don't get easier, you get stronger.", zh: "坡没变缓，是你变强了。" },
   { en: "Consistency beats intensity.", zh: "坚持胜过猛练。" },
   { en: "One more rep.", zh: "再来一组。" },
@@ -22,9 +20,7 @@ const BASE_GREETINGS = [
   { en: "Miles make the runner.", zh: "跑量造就跑者。" },
   { en: "Show up. That's half of it.", zh: "先出门，就成功了一半。" },
   { en: "Strong legs, calm mind.", zh: "腿要稳，心要静。" },
-  { en: "The taper is working.", zh: "减量期在起效。" },
   { en: "Embrace the suck.", zh: "拥抱那点难受。" },
-  { en: "Easy days easy, hard days hard.", zh: "轻松日要轻松，强度日要狠。" },
   { en: "Run your own race.", zh: "跑你自己的比赛。" },
   { en: "Mileage is money in the bank.", zh: "跑量是存进银行的钱。" },
   { en: "Sweat now, shine on race day.", zh: "平时流汗，赛日发光。" },
@@ -35,10 +31,8 @@ const BASE_GREETINGS = [
   { en: "The first kilometer is always a liar.", zh: "第一公里总在骗你。" },
   { en: "Train smart, race brave.", zh: "聪明地练，勇敢地赛。" },
   { en: "Your future self is watching.", zh: "未来的你在看着。" },
-  { en: "Rest day? Earned it.", zh: "休息日？你配得上。" },
   { en: "Chase the sunrise.", zh: "去追日出。" },
   { en: "The finish line is a state of mind.", zh: "终点线是一种心态。" },
-  { en: "Keep the streak alive.", zh: "别断了连胜。" },
   { en: "Trust your training.", zh: "相信你的训练。" },
   { en: "Stronger than yesterday.", zh: "比昨天更强。" },
   { en: "Swim, bike, run, repeat.", zh: "游、骑、跑，循环。" },
@@ -71,6 +65,36 @@ const BASE_GREETINGS = [
   { en: "The road remembers.", zh: "路会记得。" },
   { en: "Go long, go strong.", zh: "跑得久，跑得稳。" },
   { en: "Earn your endorphins.", zh: "挣来你的内啡肽。" },
+  { en: "Forward is a direction, not a speed.", zh: "向前是一种方向，不是一种速度。" },
+  { en: "Keep moving toward the mountain.", zh: "继续向山的方向走。" },
+  { en: "Endurance is built in quiet minutes.", zh: "耐力长在安静的分钟里。" },
+  { en: "Let the route teach you.", zh: "让路线教你。" },
+  { en: "Leave a clean line behind you.", zh: "在身后留下一条干净的线。" },
+  { en: "The work knows your name.", zh: "努力记得你的名字。" },
+  { en: "Keep the compass steady.", zh: "把指南针稳住。" },
+  { en: "Quiet effort travels far.", zh: "安静的努力走得很远。" },
+  { en: "The next step is enough.", zh: "下一步就够了。" },
+  { en: "Make the mountain smaller by moving.", zh: "动起来，山就会变小。" },
+  { en: "Strength likes repetition.", zh: "力量喜欢重复。" },
+  { en: "Carry the calm into the climb.", zh: "带着平静上坡。" },
+  { en: "Find the line and follow it.", zh: "找到那条线，然后跟上它。" },
+  { en: "Durability beats drama.", zh: "耐用胜过戏剧性。" },
+  { en: "The trail rewards patience.", zh: "路会奖励耐心。" },
+  { en: "Make effort look simple.", zh: "把努力练到看起来简单。" },
+  { en: "Keep the engine honest.", zh: "让发动机保持诚实。" },
+  { en: "Precision is a kind of courage.", zh: "精准也是一种勇气。" },
+  { en: "Let the body learn the way.", zh: "让身体记住路。" },
+  { en: "Small discipline, long horizon.", zh: "小小纪律，长长远方。" },
+  { en: "The climb starts inside.", zh: "爬升从心里开始。" },
+  { en: "Stay patient. Stay pointed.", zh: "保持耐心，保持方向。" },
+  { en: "Build something your legs can trust.", zh: "练出一副腿能相信的身体。" },
+  { en: "The horizon is not in a hurry.", zh: "地平线从不着急。" },
+  { en: "Move with intent.", zh: "带着意图前进。" },
+  { en: "Good work leaves tracks.", zh: "好的努力会留下轨迹。" },
+  { en: "The route opens one step at a time.", zh: "路是一点点打开的。" },
+  { en: "Make the hard thing familiar.", zh: "把困难练成熟人。" },
+  { en: "There is power in staying steady.", zh: "稳定本身就有力量。" },
+  { en: "Go further, quietly.", zh: "安静地，向更远处去。" },
 ];
 
 const GREETING_ACTIONS = [
@@ -89,8 +113,6 @@ const GREETING_ACTIONS = [
   { en: "Keep the breathing quiet", zh: "把呼吸放轻" },
   { en: "Run tall", zh: "把身体跑高一点" },
   { en: "Save the sprint for later", zh: "把冲刺留到后面" },
-  { en: "Make the easy day useful", zh: "把轻松日练得有用" },
-  { en: "Make the hard day honest", zh: "把强度日练得诚实" },
   { en: "Listen to the legs", zh: "听听腿怎么说" },
   { en: "Check the ego at the door", zh: "把逞强留在门口" },
   { en: "Stack another calm rep", zh: "再叠一组稳定输出" },
@@ -104,7 +126,6 @@ const GREETING_ACTIONS = [
   { en: "Finish with form", zh: "带着动作质量收尾" },
   { en: "Keep one promise to yourself", zh: "兑现一个给自己的承诺" },
   { en: "Win the boring minutes", zh: "赢下那些无聊的分钟" },
-  { en: "Respect the plan", zh: "尊重计划" },
   { en: "Adjust without drama", zh: "该调整就调整" },
   { en: "Use patience as pace", zh: "把耐心当配速" },
   { en: "Keep the stride light", zh: "让步子轻一点" },
@@ -114,6 +135,14 @@ const GREETING_ACTIONS = [
   { en: "Keep the long view", zh: "把眼光放长" },
   { en: "Do the next right thing", zh: "做好下一件对的事" },
   { en: "Close the loop", zh: "把今天这环扣上" },
+  { en: "Carry the quiet effort", zh: "带着安静的努力" },
+  { en: "Hold your direction", zh: "守住方向" },
+  { en: "Let the mountain wait", zh: "让山在前面等着" },
+  { en: "Make the next step clean", zh: "把下一步走干净" },
+  { en: "Keep the engine warm", zh: "让发动机保持温度" },
+  { en: "Leave the noise behind", zh: "把噪音留在身后" },
+  { en: "Choose the steady line", zh: "选择稳定的线" },
+  { en: "Practice the durable version", zh: "练那个更耐用的自己" },
 ];
 
 const GREETING_CONTEXTS = [
@@ -136,7 +165,7 @@ const GENERATED_GREETINGS = GREETING_ACTIONS.flatMap(action =>
 
 export const GREETINGS = [...BASE_GREETINGS, ...GENERATED_GREETINGS];
 
-const RECENT_GREETING_LIMIT = 40;
+const GREETING_POOL_VERSION = 2;
 
 function dayOfYear(date) {
   const localDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
@@ -155,19 +184,43 @@ function randomIndex(max) {
   }
 }
 
+function shuffleIndices(length) {
+  const arr = Array.from({ length }, (_, idx) => idx);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = randomIndex(i + 1);
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function cleanDeck(deck) {
+  if (!Array.isArray(deck)) return [];
+  const seen = new Set();
+  return deck.filter(idx => {
+    if (!Number.isInteger(idx)) return false;
+    if (idx < 0 || idx >= GREETINGS.length) return false;
+    if (seen.has(idx)) return false;
+    seen.add(idx);
+    return true;
+  });
+}
+
 export function pickGreeting(date = new Date(), scope = "default") {
-  const storageKey = `ultreia.recentGreetings.${scope || "default"}`;
+  const safeScope = scope || "default";
+  const deckKey = `ultreia.greetingDeck.v${GREETING_POOL_VERSION}.${safeScope}`;
+  const lastKey = `ultreia.lastGreeting.v${GREETING_POOL_VERSION}.${safeScope}`;
   try {
-    const recent = JSON.parse(localStorage.getItem(storageKey) || "[]")
-      .filter(Number.isInteger);
-    const blocked = new Set(recent);
-    let candidates = GREETINGS
-      .map((_, idx) => idx)
-      .filter(idx => !blocked.has(idx));
-    if (!candidates.length) candidates = GREETINGS.map((_, idx) => idx);
-    const idx = candidates[randomIndex(candidates.length)];
-    const nextRecent = [idx, ...recent.filter(v => v !== idx)].slice(0, RECENT_GREETING_LIMIT);
-    localStorage.setItem(storageKey, JSON.stringify(nextRecent));
+    let deck = cleanDeck(JSON.parse(localStorage.getItem(deckKey) || "[]"));
+    const lastIdx = Number(localStorage.getItem(lastKey));
+    if (!deck.length) {
+      deck = shuffleIndices(GREETINGS.length);
+      if (deck.length > 1 && deck[0] === lastIdx) {
+        [deck[0], deck[1]] = [deck[1], deck[0]];
+      }
+    }
+    const idx = deck.shift();
+    localStorage.setItem(deckKey, JSON.stringify(deck));
+    localStorage.setItem(lastKey, String(idx));
     return GREETINGS[idx];
   } catch {
     const yearOffset = date.getFullYear() * 37;

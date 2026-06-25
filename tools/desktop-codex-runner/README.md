@@ -49,6 +49,14 @@ the extra latency and quota usage.
 The company Mac mini may use a third-party API-key Codex provider configured in
 the local Codex config. Do not switch accounts, and do not bypass the user config.
 
+For convenience on the company Mac mini, a local double-click launcher can live
+on the Desktop as `Start Ultreia Codex Runner.command`. It should only export the
+non-secret runner settings above, read the Supabase `service_role` key from the
+machine's logged-in Supabase CLI session at runtime, and then run `npm run start`
+from this folder. Do not write the service role key into the Desktop launcher.
+Keep the Terminal window open while the runner should stay online; closing it
+stops the runner.
+
 If you want to hand this to Codex on the company Mac, run `git pull` first and
 then ask Codex:
 

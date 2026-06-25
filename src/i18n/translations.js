@@ -1113,6 +1113,7 @@ const dict = {
   "coach.agent_action_source_coach": { en: "AI Coach reply", zh: "AI Coach 回复" },
   "coach.agent_action_source_report": { en: "Weekly report", zh: "周报" },
   "coach.agent_action_source_plan_rescue": { en: "Plan rescue", zh: "计划偏差补救" },
+  "coach.agent_action_source_recovery_guard": { en: "Recovery guard", zh: "恢复负荷守门" },
   "coach.agent_action_plan_detail": { en: "{count} item(s) · {dates}", zh: "{count} 条 · {dates}" },
   "coach.agent_action_memory_detail": { en: "{count} memory fact(s)", zh: "{count} 条记忆事实" },
   "coach.agent_action_error": { en: "Failed: {msg}", zh: "失败原因：{msg}" },
@@ -1179,6 +1180,13 @@ const dict = {
   "coach.plan_rescue_dismiss": { en: "Not now",              zh: "暂不处理" },
   "coach.plan_rescue_no_deviation": { en: "No recent plan deviation needs an adjustment right now.", zh: "目前没有需要调整的近期计划偏差。" },
   "coach.plan_rescue_no_plans": { en: "The coach did not find a safe concrete adjustment. Nothing was changed.", zh: "教练没有整理出足够安全、具体的调整建议。没有改动任何数据。" },
+  "coach.recovery_guard_title": { en: "Recovery check suggested", zh: "建议看看恢复安排" },
+  "coach.recovery_guard_body": { en: "{signals} recovery/load signal(s) are active, with {plans} upcoming plan(s) to review ({hard} harder item(s)). The coach can prepare a small backing-off suggestion; Calendar changes still require your confirmation.", zh: "当前有 {signals} 个恢复 / 负荷信号，未来 {plans} 条计划可检查（其中 {hard} 条偏硬）。可以让教练整理一份小调整建议；确认前不会改动日历。" },
+  "coach.recovery_guard_primary": { en: "Prepare recovery suggestion", zh: "生成恢复建议" },
+  "coach.recovery_guard_generating": { en: "Generating…", zh: "生成中……" },
+  "coach.recovery_guard_dismiss": { en: "Not now", zh: "暂不处理" },
+  "coach.recovery_guard_no_signal": { en: "No recovery/load guard signal needs an adjustment right now.", zh: "目前没有需要调整的恢复 / 负荷风险信号。" },
+  "coach.recovery_guard_no_plans": { en: "The coach did not find a safe concrete recovery adjustment. Nothing was changed.", zh: "教练没有整理出足够安全、具体的恢复调整建议。没有改动任何数据。" },
 
   // ===== AI Coach → Calendar import =====
   "coach.import_button":      { en: "View calendar suggestion", zh: "看看日历建议" },

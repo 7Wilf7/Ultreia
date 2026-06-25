@@ -203,6 +203,7 @@ function makeMdComponents(isMobile) {
 // 40 (~20 exchanges) keeps the nudge from firing on every short session.
 const LONG_CHAT_HINT_THRESHOLD = 40;
 const PLAN_RESCUE_DISMISS_KEY = "ultreia.planRescue.dismissedSignature";
+const RECOVERY_GUARD_DISMISS_KEY = "ultreia.recoveryGuard.dismissedSignature";
 
 function formatProviderMeta(meta, lang) {
   if (!meta?.provider) return "";
@@ -257,6 +258,7 @@ export function AICoachTab({
   chatLoading, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   codexRunnerStatus = null,
   planDeviationSummary = null, planRescueLoading = false, onPlanRescueRequest,
+  recoveryGuardSummary = null, recoveryGuardLoading = false, onRecoveryGuardRequest,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
@@ -334,10 +336,32 @@ export function AICoachTab({
     const generated = await onPlanRescueRequest?.();
     if (generated && signature) dismissPlanRescueSignature(signature);
   }, [dismissPlanRescueSignature, onPlanRescueRequest, planDeviationSummary?.signature]);
+  const [dismissedRecoveryGuardSignature, setDismissedRecoveryGuardSignature] = useState(() => {
+    try { return localStorage.getItem(RECOVERY_GUARD_DISMISS_KEY) || ""; }
+    catch { return ""; }
+  });
+  const dismissRecoveryGuardSignature = useCallback((signature) => {
+    const next = signature || "";
+    setDismissedRecoveryGuardSignature(next);
+    try {
+      if (next) localStorage.setItem(RECOVERY_GUARD_DISMISS_KEY, next);
+      else localStorage.removeItem(RECOVERY_GUARD_DISMISS_KEY);
+    } catch { /* private mode */ }
+  }, []);
+  const handleRecoveryGuardRequest = useCallback(async () => {
+    const signature = recoveryGuardSummary?.signature || "";
+    const generated = await onRecoveryGuardRequest?.();
+    if (generated && signature) dismissRecoveryGuardSignature(signature);
+  }, [dismissRecoveryGuardSignature, onRecoveryGuardRequest, recoveryGuardSummary?.signature]);
   const showPlanRescue = !!(
     planDeviationSummary?.affectedCount > 0
     && dismissedPlanRescueSignature !== planDeviationSummary.signature
     && typeof onPlanRescueRequest === "function"
+  );
+  const showRecoveryGuard = !!(
+    recoveryGuardSummary?.signalCount > 0
+    && dismissedRecoveryGuardSignature !== recoveryGuardSummary.signature
+    && typeof onRecoveryGuardRequest === "function"
   );
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
@@ -1178,6 +1202,68 @@ export function AICoachTab({
                 opacity: planRescueLoading ? 0.6 : 1,
               }}>
               {t("coach.plan_rescue_dismiss")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showRecoveryGuard && (
+        <div style={{
+          marginBottom: 12,
+          padding: isMobile ? "9px 10px" : "10px 12px",
+          border: "1px solid var(--rule)",
+          background: "var(--bg-elevated)",
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}>
+          <div style={{ flex: 1, minWidth: isMobile ? 180 : 260, lineHeight: 1.5 }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 12,
+              fontWeight: 650,
+              color: "var(--ink-1)",
+              marginBottom: 2,
+            }}>
+              <span style={{ color: "var(--warn)" }}>⚠</span>
+              <span>{t("coach.recovery_guard_title")}</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
+              {t("coach.recovery_guard_body", {
+                signals: recoveryGuardSummary.signalCount,
+                plans: recoveryGuardSummary.futurePlanCount,
+                hard: recoveryGuardSummary.hardFuturePlanCount,
+              })}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={handleRecoveryGuardRequest}
+              disabled={recoveryGuardLoading}
+              style={{
+                ...s.btn,
+                fontSize: 12,
+                padding: "6px 10px",
+                opacity: recoveryGuardLoading ? 0.65 : 1,
+                cursor: recoveryGuardLoading ? "default" : "pointer",
+              }}>
+              {recoveryGuardLoading ? t("coach.recovery_guard_generating") : t("coach.recovery_guard_primary")}
+            </button>
+            <button
+              type="button"
+              onClick={() => dismissRecoveryGuardSignature(recoveryGuardSummary.signature)}
+              disabled={recoveryGuardLoading}
+              style={{
+                ...s.btnGhost,
+                fontSize: 12,
+                padding: "6px 10px",
+                opacity: recoveryGuardLoading ? 0.6 : 1,
+              }}>
+              {t("coach.recovery_guard_dismiss")}
             </button>
           </div>
         </div>
@@ -2638,6 +2724,8 @@ function summarizeAgentAction(action, t) {
     ? t("coach.agent_action_source_report")
     : action.source === "plan_deviation_rescue"
       ? t("coach.agent_action_source_plan_rescue")
+      : action.source === "recovery_load_guard"
+        ? t("coach.agent_action_source_recovery_guard")
       : t("coach.agent_action_source_coach");
   const detail = action.type === "create_plans"
     ? t("coach.agent_action_plan_detail", {

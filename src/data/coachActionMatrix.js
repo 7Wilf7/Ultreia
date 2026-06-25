@@ -25,7 +25,7 @@ export const COACH_ACTION_MATRIX = [
     id: "recovery_load_guard",
     phase: "Phase 6",
     rank: 2,
-    status: "next",
+    status: "observing",
     title: {
       en: "Recovery and load guard",
       zh: "恢复风险 / 负荷守门",
@@ -39,8 +39,8 @@ export const COACH_ACTION_MATRIX = [
       zh: "建议恢复日、降强度，或避免继续叠加强度课。",
     },
     boundary: {
-      en: "Training guidance only, not diagnosis. Any plan change still requires confirmation.",
-      zh: "只做训练安排建议，不做诊断；所有计划修改仍需确认。",
+      en: "Live in first version. Training guidance only, not diagnosis. Any plan change still requires confirmation.",
+      zh: "第一版已上线观察；只做训练安排建议，不做诊断；所有计划修改仍需确认。",
     },
   },
   {

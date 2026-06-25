@@ -10,6 +10,7 @@ import {
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
 import { buildPlanDeviationRescuePrompt, summarizePlanDeviation } from "./utils/planDeviation";
+import { buildRecoveryGuardPrompt, summarizeRecoveryGuard } from "./utils/recoveryGuard";
 import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
@@ -1164,6 +1165,10 @@ function AppShell({
     () => summarizePlanDeviation(logs, new Date(`${planDeviationTodayKey}T12:00:00`)),
     [logs, planDeviationTodayKey],
   );
+  const recoveryGuardSummary = useMemo(
+    () => summarizeRecoveryGuard(logs, dailyNotes, new Date(`${planDeviationTodayKey}T12:00:00`)),
+    [dailyNotes, logs, planDeviationTodayKey],
+  );
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showWallet, setShowWallet] = useState(false);
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
@@ -1350,6 +1355,7 @@ function AppShell({
   const [codexRunnerStatus, setCodexRunnerStatus] = useState({ state: "loading", provider: "desktop_codex" });
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
+  const [recoveryGuardLoading, setRecoveryGuardLoading] = useState(false);
   const [planProposal, setPlanProposal] = useState(null);
   const [planImportCache, setPlanImportCache] = useState(() => {
     try {
@@ -2119,6 +2125,87 @@ Rules:
     }
   }
 
+  async function proposeRecoveryGuard() {
+    if (recoveryGuardLoading) return false;
+    setRecoveryGuardLoading(true);
+    try {
+      let freshLogs = logs;
+      try {
+        freshLogs = await refreshLogs();
+      } catch (err) {
+        console.warn("[AI Coach] refreshLogs failed before recovery guard, using cached state:", err);
+      }
+
+      const summary = summarizeRecoveryGuard(freshLogs, dailyNotes, now || new Date());
+      if (!summary) {
+        appDialog.alert(t("coach.recovery_guard_no_signal"));
+        return false;
+      }
+
+      const dataBlock = buildDataBlock({
+        logs: freshLogs,
+        races,
+        now: now || new Date(),
+        lang: "en",
+        currentWeather: weatherCtx.currentWeather,
+        forecastByDate: weatherCtx.forecastByDate,
+        dailyNotes,
+        raceDayWeather: null,
+        agentActions,
+        memoryFacts,
+      });
+      const prompt = buildRecoveryGuardPrompt({
+        summary,
+        dataBlock,
+        now: now || new Date(),
+      });
+      const data = await db.usage.coachProxy({
+        kind: "plan_deviation_rescue",
+        system: "",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 8000,
+      });
+      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      const plans = parsePlansFromLLM(text);
+      if (plans.length === 0) {
+        appDialog.alert(t("coach.recovery_guard_no_plans"));
+        return false;
+      }
+      const baseAction = buildCreatePlansAction(plans, {
+        id: `recovery-guard-${Date.now()}`,
+        source: "recovery_load_guard",
+        risk: summary.severity === "watch" ? "low" : "medium",
+      });
+      const action = {
+        ...baseAction,
+        title: "Protect recovery and load",
+        reason: "Recent load, RPE, readiness, or fatigue signals suggest reviewing upcoming training before adding more stress.",
+        payload: {
+          ...baseAction.payload,
+          recoveryGuard: {
+            severity: summary.severity,
+            score: summary.score,
+            signalCount: summary.signalCount,
+            futurePlanCount: summary.futurePlanCount,
+            hardFuturePlanCount: summary.hardFuturePlanCount,
+            signals: summary.signals.slice(0, 8),
+            trainingLoad: summary.trainingLoad,
+            signature: summary.signature,
+          },
+        },
+      };
+      saveAgentAction(action);
+      setPlanProposal({ msgId: null, assistantContent: "", action });
+      return true;
+    } catch (err) {
+      console.error("[AI Coach] Recovery guard error:", err);
+      appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      return false;
+    } finally {
+      setRecoveryGuardLoading(false);
+    }
+  }
+
   function applyPlanRestTags(restDates = [], workoutDates = []) {
     const workoutDateSet = new Set(workoutDates.filter(Boolean));
     const addRestDates = [...new Set(restDates.filter(Boolean))].filter(date => !workoutDateSet.has(date));
@@ -2486,6 +2573,9 @@ Rules:
           planDeviationSummary={planDeviationSummary}
           planRescueLoading={planRescueLoading}
           onPlanRescueRequest={proposePlanDeviationRescue}
+          recoveryGuardSummary={recoveryGuardSummary}
+          recoveryGuardLoading={recoveryGuardLoading}
+          onRecoveryGuardRequest={proposeRecoveryGuard}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           /* "need location" weather pill now routes to the profile editor,

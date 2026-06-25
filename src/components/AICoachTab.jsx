@@ -6,6 +6,7 @@ import {
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
   DEFAULT_COACH_CONFIG,
 } from "../constants";
+import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
@@ -287,6 +288,7 @@ export function AICoachTab({
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showAgentActions, setShowAgentActions] = useState(false);
+  const [showActionMatrix, setShowActionMatrix] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
   // Preview language is independent of UI language — defaults to UI language
   // but the user can flip it to read the prompt in the other language.
@@ -821,6 +823,27 @@ export function AICoachTab({
                   setShowAgentActions(false);
                 }}
               />
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
+      {showActionMatrix && (
+        <ModalRoot onClose={() => setShowActionMatrix(false)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowActionMatrix(false)}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                ...s.modalCard(isMobile, { maxWidth: 560, float: true }),
+                maxHeight: isMobile ? "min(74dvh, 580px)" : "min(74vh, 620px)",
+                overflowY: "auto",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.action_matrix_title")}</h2>
+                <button onClick={() => setShowActionMatrix(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <CoachActionMatrix matrix={COACH_ACTION_MATRIX} lang={lang} t={t} />
             </div>
           </div>
         </ModalRoot>
@@ -1568,6 +1591,7 @@ export function AICoachTab({
 
                 {/* Agent group */}
                 {groupHeader(t("coach.group_agent"))}
+                {sub(t("coach.action_matrix_title"), () => openSub(() => setShowActionMatrix(true)))}
                 {sub(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)), agentActions.length > 0)}
 
                 {/* Chat group */}
@@ -1624,7 +1648,8 @@ export function AICoachTab({
                   padding: "10px 0",
                 }}>
                   {/* Grouped: "Prompt" (preview parent + the three inputs that
-                      shape it) then "Chat" (calendar toggle + clear). */}
+                      shape it), "Agent" (matrix + recent suggestions), then
+                      "Chat" (calendar toggle + clear). */}
                   {[
                     { header: t("coach.group_prompt"), items: [
                       { id: "prompt",  label: t("coach.preview_prompt"), parent: true },
@@ -1632,9 +1657,12 @@ export function AICoachTab({
                       { id: "config",  label: t("coach.show_config"), indent: true },
                       { id: "memory",  label: t("coach.show_memory") + (memoryReady ? " ●" : ""), indent: true },
                     ] },
+                    { header: t("coach.group_agent"), items: [
+                      { id: "matrix", label: t("coach.action_matrix_title") },
+                      { id: "actions", label: t("coach.recent_agent_actions") },
+                    ] },
                     { header: t("coach.group_chat"), items: [
                       { id: "calendar", label: t("coach.calendar_btn_label") },
-                      { id: "actions", label: t("coach.recent_agent_actions") },
                       { id: "clear",    label: t("coach.clear_chat") },
                     ] },
                   ].map((group, gi) => (
@@ -1748,6 +1776,10 @@ export function AICoachTab({
                         setShowCoachHub(false);
                       }}
                     />
+                  )}
+
+                  {coachHubTab === "matrix" && (
+                    <CoachActionMatrix matrix={COACH_ACTION_MATRIX} lang={lang} t={t} />
                   )}
 
                   {coachHubTab === "memory" && (
@@ -2037,6 +2069,97 @@ const memoryFactButtonStyle = {
   padding: "4px 8px",
   fontSize: 11,
 };
+
+function CoachActionMatrix({ matrix = [], lang = "zh", t }) {
+  const rows = [...matrix].sort((a, b) => (a.rank || 0) - (b.rank || 0));
+  return (
+    <div>
+      <div style={{ ...s.muted, lineHeight: 1.55, margin: "0 0 12px" }}>
+        {t("coach.action_matrix_hint")}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.map(card => (
+          <div key={card.id} style={{
+            border: "1px solid var(--rule)",
+            borderRadius: 6,
+            background: "var(--bg-elevated)",
+            padding: "11px 12px",
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 650, color: "var(--ink-1)", lineHeight: 1.35 }}>
+                  {card.rank}. {matrixText(card.title, lang)}
+                </div>
+                <div style={{ marginTop: 3, fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
+                  {card.phase}
+                </div>
+              </div>
+              <span style={actionMatrixStatusStyle(card.status)}>
+                {t(`coach.action_matrix_status_${card.status}`)}
+              </span>
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <ActionMatrixLine label={t("coach.action_matrix_trigger")} text={matrixText(card.trigger, lang)} />
+              <ActionMatrixLine label={t("coach.action_matrix_suggestion")} text={matrixText(card.suggestion, lang)} />
+              <ActionMatrixLine label={t("coach.action_matrix_boundary")} text={matrixText(card.boundary, lang)} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ActionMatrixLine({ label, text }) {
+  return (
+    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-2)" }}>
+      <span style={{ color: "var(--ink-3)", marginRight: 6 }}>{label}</span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+function matrixText(value, lang) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  return value[lang] || value.zh || value.en || "";
+}
+
+function actionMatrixStatusStyle(status) {
+  const base = {
+    display: "inline-flex",
+    alignItems: "center",
+    flexShrink: 0,
+    minHeight: 0,
+    border: "1px solid var(--rule)",
+    borderRadius: 999,
+    padding: "3px 8px",
+    fontSize: 11,
+    lineHeight: 1.2,
+    whiteSpace: "nowrap",
+  };
+  if (status === "observing") {
+    return {
+      ...base,
+      color: "var(--moss-deep)",
+      background: "var(--moss-bg)",
+      borderColor: "var(--moss)",
+    };
+  }
+  if (status === "next") {
+    return {
+      ...base,
+      color: "var(--accent-dark)",
+      background: "var(--accent-soft)",
+      borderColor: "var(--accent)",
+    };
+  }
+  return {
+    ...base,
+    color: "var(--ink-2)",
+    background: "var(--paper-2)",
+  };
+}
 
 function RecentAgentActions({ actions = [], t, onDelete, onAskCoach }) {
   const recent = useMemo(() => {

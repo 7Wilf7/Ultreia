@@ -1,16 +1,15 @@
-// Extract the logo's line-art (the bold double-peak mountain + the two dots +
-// the green path-tick) from the master logo into two THEMED, transparent marks
+// Extract the logo's mark (mountain / route strokes + topographic lines) from
+// the master logo into two THEMED, transparent marks
 // the share poster uses as its background:
 //   resources/poster-mark-day.webp   — dark ink lines (for the cream day paper)
 //   resources/poster-mark-night.webp — cream lines    (for the night ground)
-// The green tick stays green in both. The logo's faint topographic contour
-// lines are deliberately dropped (luma threshold) — the poster only wants the
-// mark itself, not the contour field.
+// Green contour strokes stay green in both. The baked dark tile is dropped so
+// the poster can place the mark directly on its own day / night backgrounds.
 //
 // Why extract instead of recolouring the PNG live: the logo is a raster with a
 // baked dark square, so it can't be themed (day needs DARK lines) without
 // inverting — which would flip the green. Splitting it once, offline, gives
-// clean per-theme line-art with the green preserved. Re-run after a logo change.
+// clean per-theme marks with the green preserved. Re-run after a logo change.
 import sharp from 'sharp';
 
 const SRC = 'resources/brand/ultreia-original.png';

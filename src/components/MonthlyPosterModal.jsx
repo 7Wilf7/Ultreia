@@ -51,10 +51,10 @@ const RATIOS = {
 const RATIO_KEYS = ["portrait", "square", "story"];
 
 // Day / Night finishes. Restraint: paper/ink base + ONE muted moss accent.
-// The background is the brand mark — the twin-peak mountain (bold strokes), the
-// two dots, and the green tick — redrawn as vector at `markOpacity` so it themes
-// per finish (dark mark on the cream day paper, cream mark on the night ground)
-// while the green tick stays green.
+// The background is the current brand mark — glowing route, mountain ridges
+// and topographic lines — extracted at build time so it can theme per finish
+// (dark mark on the cream day paper, cream mark on the night ground) while the
+// moss / olive light stays green.
 const THEMES = {
   day: {
     bg: "#f1ede1",
@@ -477,8 +477,8 @@ function buildPRStats(races, rangeId, t) {
 }
 
 // ── The poster ──────────────────────────────────────────────────────────────
-// The themed line-art mark (the logo's actual mountain + dots + green tick,
-// extracted per theme by scripts/make-poster-mark.mjs). It's a square; place it
+// The themed logo mark (route + ridges + contour lines, extracted per theme by
+// scripts/make-poster-mark.mjs). It's a square; place it
 // centred with its foot near mid-height so it reads as a watermark behind the
 // content across crop ratios.
 function PosterBackground({ W, H, pal, markSrc }) {

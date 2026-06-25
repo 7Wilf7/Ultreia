@@ -17,7 +17,7 @@ const STEPS = [
     },
     bullets: [
       { zh: "这个工具不是普通打卡本。记录是原材料，复盘、计划和 AI 教练建议才是闭环。", en: "This is not just a logbook. Logs are raw material; review, planning and AI coaching close the loop." },
-      { zh: "logo 的山线、等高线和绿色短线，都来自路线、地形和「下一段路」这个设计思路。", en: "The mountain mark, contour lines and small green stroke come from routes, terrain and the next section of road." },
+      { zh: "logo 里的发光山路、山脊和等高线，来自路线、地形和「继续向前」这个设计思路。", en: "The glowing route, mountain ridges and contour lines come from routes, terrain and the idea of continuing forward." },
       { zh: "详细由来在设置里的「使用手册 → 总览」。下面 5 步先带你看主要功能。", en: "The full story lives in Settings → Guide → Overview. The next 5 steps cover the main features." },
     ],
   },

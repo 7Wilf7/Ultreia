@@ -1,6 +1,6 @@
 # Ultreia Rebrand Status
 
-> Internal handoff note. Current as of 2026-06-12.
+> Internal handoff note. Current as of 2026-06-25.
 
 ## Current Source Of Truth
 
@@ -22,8 +22,9 @@ quiet persistence rather than a generic fitness tracker.
 The logo system uses three ideas:
 
 - mountain ridges for long-distance effort and ascent
-- topographic contour lines for outdoor routes and accumulated history
-- the two cream dots as a nod to the diaeresis in `Ultreia` / `Ultreia` variants
+- a winding route for day-to-day training choices and forward motion
+- topographic contour lines for outdoor routes, data layers, and accumulated history
+- deep moss / olive light on a near-black tile, avoiding bright fitness green
 
 ## Completed
 

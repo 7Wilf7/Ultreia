@@ -91,7 +91,7 @@ export function buildRaceBriefingAction({ race, summary, briefingMarkdown, raceD
     id: opts.id || `race-briefing-${race?.id || race?.date || Date.now()}`,
     type: AGENT_ACTION_TYPES.RACE_BRIEFING,
     title: "Race briefing checklist",
-    reason: "An A-race is inside the 14-day window. The coach prepared a race briefing and checklist to review before race week.",
+    reason: "A target race is inside the 14-day window. The coach prepared a race briefing and checklist to review before race week.",
     payload: {
       raceBriefing: {
         raceId: race?.id || null,

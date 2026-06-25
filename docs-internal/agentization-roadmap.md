@@ -291,7 +291,7 @@ archived_at
 - 计划偏差和恢复风险同时出现时，生成一份 `combined_training_adjustment` 综合建议；恢复 / 负荷保护优先，避免“补漏练”和“降负荷”两张卡互相冲突。
 - 执行仍复用 `create_plans` Action Card：可新增计划、安排明确休息日，或在能定位到未来计划时修改单条计划。
 - 状态会写入 Agent Action Log，来源标记为“计划偏差补救”“恢复负荷守门”或“综合调整建议”，可在 Recent Agent Actions 中回看。
-- **赛前简报 / 装备检查**：A 级目标赛进入 14 天窗口且上下文足够时，AI Coach 会在对话上方自动生成一份 `race_briefing` 简报，包含比赛日重点、配速 / 强度策略、补给喝水、装备检查、出发前流程和本周不要做的事；室外赛结合地点 / 天气，室内 Hyrox 不依赖天气。
+- **赛前简报 / 装备检查**：目标赛进入 14 天窗口且上下文足够时，AI Coach 会在对话上方自动生成一份 `race_briefing` 简报，包含比赛日重点、配速 / 强度策略、补给喝水、装备检查、出发前流程和本周不要做的事；A / B / C 都触发，同一天多场时才按 A > B > C 排优先级；室外赛结合地点 / 天气，室内 Hyrox 不依赖天气。
 - 赛前简报写入 Agent Action Log，作为只读 briefing / checklist 回看和追问，不自动改 Calendar。
 
 第一版边界：
@@ -314,7 +314,7 @@ archived_at
 |---|---|---|---|---|
 | 1 | 计划偏差补救 | 最近 7–14 天漏练 / 部分完成 | 自动生成接下来 3–7 天调整建议 | 已落地自动生成；写日历仍需确认 |
 | 2 | 恢复风险 / 负荷守门 | ACWR high / danger、RPE 偏高、晨间状态差、疼痛 / 疲劳备注 | 自动生成恢复日、降强度或暂停叠加强度课建议 | 已落地自动生成；不诊断，所有改计划都确认后执行 |
-| 3 | 赛前简报 / 装备检查 | A 级目标赛进入 14 天窗口，地点 / 天气可用；Hyrox 可无天气 | 自动生成 briefing 和 checklist；可在最近建议里回看和追问 | 第一版已落地；只报告 / checklist，不自动改训练 |
+| 3 | 赛前简报 / 装备检查 | 目标赛进入 14 天窗口，地点 / 天气可用；Hyrox 可无天气 | 自动生成 briefing 和 checklist；可在最近建议里回看和追问 | 第一版已落地；只报告 / checklist，不自动改训练 |
 | 暂缓 | 天气驱动计划调整 | 未来 7 天强度 / 长距离遇到高温高湿、强风、污染或大雨 | 暂不作为改日历卡片；最多做提醒 / checklist | 天气预报置信度不够时，不应打乱原计划 |
 
 数据质量补全助手不再作为单独 Phase 6 Action Card 推进。RPE 缺失、导入备注缺失这类问题先通过产品约束解决：新增 / 编辑 / 导入训练强制填写 RPE；导入弹窗的主观感受会在 AI Coach 点评完成后写回训练备注。这样能提升训练负荷和 Coach 上下文质量，同时避免为了“补全”再制造一条额外流程。
@@ -340,10 +340,10 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
    - 状态：第一版已落地。`summarizeRecoveryGuard` 先做非 AI 风险检测，只有存在未来计划且恢复 / 负荷信号明确时才在 AI Coach 上方提示并自动生成来源为 `recovery_load_guard` 的 `create_plans` Action Card，结果写入 Agent Action Log。若它和计划偏差同时触发，则生成来源为 `combined_training_adjustment` 的综合建议。
 
 3. **赛前简报 / 装备检查**
-   - 触发：A 级目标赛进入 14 天窗口，且已填写地点 / 天气可用。
+   - 触发：目标赛进入 14 天窗口，且已填写地点 / 天气可用；Hyrox 可无天气。A / B / C 都触发，同一天多场时才按 A > B > C 排优先级。
    - 动作：生成赛前 briefing（天气、补给、装备、减量重点、风险提醒），并可把“需要确认的准备事项”做成 checklist。
    - 边界：第一版只生成报告 / checklist，不自动改训练计划；如要调整减量计划，再走 Action Card。
-   - 状态：第一版已落地。`summarizeRaceBriefingTarget` 选择 14 天内最近的 A 级目标赛；`buildRaceBriefingAction` 保存 `race_briefing` 到 Agent Action Log；AI Coach 顶部自动生成并支持 3 天静默，Recent Agent Actions 可查看完整简报和继续追问。
+   - 状态：第一版已落地。`summarizeRaceBriefingTarget` 选择 14 天内最近的目标赛；`buildRaceBriefingAction` 保存 `race_briefing` 到 Agent Action Log；AI Coach 顶部自动生成并支持 3 天静默，Recent Agent Actions 可查看完整简报和继续追问。
 
 5. **天气驱动的计划调整 Action Card（暂缓）**
    - 原因：天气预报对具体训练日和越野场景的置信度不够，容易错误打乱原计划。
@@ -418,4 +418,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-25：Action Card 用户文案收敛：内部继续使用 `Action Card` / `agent_actions` 表示可确认动作链路，面向用户的按钮和记录改为“日历建议”“教练建议”“加入日历”“保存结果”，减少审核 / 执行感，同时保持确认前不改数据的边界。
 - 2026-06-25：数据质量补全助手不再作为独立 Action Card 推进。改用更直接的产品约束：手动新增 / 编辑 / 导入训练强制 RPE；导入弹窗里的主观感受在 AI Coach 点评完成后写回训练备注；训练卡和日历详情显示备注。Phase 6 下一梯队前移为赛前简报 / 装备检查。
 - 2026-06-25：计划偏差补救和恢复负荷守门从“用户点击后生成”改为“命中后自动生成建议草案”；两类信号同时存在时合并成 `combined_training_adjustment`，恢复 / 负荷保护优先。自动提醒支持 3 天静默，避免晨间状态 / 备注每日更新导致反复弹；AI Coach 顶部保留“一键综合调整”主动入口；写入 Calendar 仍需用户确认。
-- 2026-06-25：赛前简报 / 装备检查第一版落地。A 级目标赛进入 14 天窗口且地点 / 天气上下文足够时，AI Coach 顶部会自动生成 `race_briefing` 简报并写入 Agent Action Log；Hyrox 可无天气生成；简报可从顶部卡片和 Recent Agent Actions 查看、继续追问，支持 3 天静默，第一版不自动改 Calendar。
+- 2026-06-25：赛前简报 / 装备检查第一版落地。目标赛进入 14 天窗口且地点 / 天气上下文足够时，AI Coach 顶部会自动生成 `race_briefing` 简报并写入 Agent Action Log；A / B / C 都触发，同一天多场时才按 A > B > C 排优先级；Hyrox 可无天气生成；简报可从顶部卡片和 Recent Agent Actions 查看、继续追问，支持 3 天静默，第一版不自动改 Calendar。

@@ -1216,7 +1216,7 @@ const dict = {
   "coach.race_briefing_generate": { en: "Generate briefing", zh: "生成简报" },
   "coach.race_briefing_generating": { en: "Generating…", zh: "生成中……" },
   "coach.race_briefing_open": { en: "View briefing", zh: "查看简报" },
-  "coach.race_briefing_no_target": { en: "No A-priority target race inside the 14-day briefing window.", zh: "目前没有进入 14 天简报窗口的 A 级目标赛。" },
+  "coach.race_briefing_no_target": { en: "No target race inside the 14-day briefing window.", zh: "目前没有进入 14 天简报窗口的目标赛。" },
   "coach.race_briefing_no_content": { en: "The coach did not return a race briefing. Nothing was changed.", zh: "教练没有返回赛前简报。没有改动任何数据。" },
   "coach.race_briefing_modal_eyebrow": { en: "Race checklist", zh: "赛前检查清单" },
   "coach.race_briefing_days": { en: "{days} day(s) out", zh: "还有 {days} 天" },

@@ -29,6 +29,13 @@ function hasRaceContext(race) {
   return Number.isFinite(Number(race?.locationLat)) && Number.isFinite(Number(race?.locationLng));
 }
 
+function priorityRank(priority) {
+  const p = compact(priority || "C").toUpperCase();
+  if (p === "A") return 0;
+  if (p === "B") return 1;
+  return 2;
+}
+
 export function daysUntilRace(race, now = new Date()) {
   const raceMs = dateKeyNoonMs(race?.date);
   const todayMs = dateKeyNoonMs(localDateKey(now));
@@ -66,11 +73,15 @@ export function raceBriefingSignature(summary, raceDayWeather = null) {
 
 export function summarizeRaceBriefingTarget(races = [], now = new Date(), raceDayWeather = null) {
   const candidates = (Array.isArray(races) ? races : [])
-    .filter(race => race?.isTarget && compact(race.priority || "C") === "A" && race?.date)
+    .filter(race => race?.isTarget && race?.date)
     .map(race => ({ race, daysToRace: daysUntilRace(race, now) }))
     .filter(item => item.daysToRace !== null && item.daysToRace >= 0 && item.daysToRace <= 14)
     .filter(item => hasRaceContext(item.race))
-    .sort((a, b) => a.daysToRace - b.daysToRace || String(a.race.date).localeCompare(String(b.race.date)));
+    .sort((a, b) => (
+      a.daysToRace - b.daysToRace
+      || String(a.race.date).localeCompare(String(b.race.date))
+      || priorityRank(a.race.priority) - priorityRank(b.race.priority)
+    ));
   const picked = candidates[0];
   if (!picked) return null;
   return {

@@ -53,8 +53,8 @@ export const COACH_ACTION_MATRIX = [
       zh: "赛前简报 / 装备检查",
     },
     trigger: {
-      en: "An A-race enters the 14-day window and race location or weather context is available.",
-      zh: "A 级目标赛进入 14 天窗口，且地点或天气上下文可用。",
+      en: "A target race enters the 14-day window and race location or weather context is available.",
+      zh: "目标赛进入 14 天窗口，且地点或天气上下文可用。",
     },
     suggestion: {
       en: "Generate a race briefing and checklist; only suggest plan changes when needed.",

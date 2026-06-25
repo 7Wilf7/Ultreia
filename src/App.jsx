@@ -11,6 +11,12 @@ import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
 import { buildPlanDeviationRescuePrompt, summarizePlanDeviation } from "./utils/planDeviation";
 import { buildRecoveryGuardPrompt, summarizeRecoveryGuard } from "./utils/recoveryGuard";
+import {
+  buildCombinedTrainingAdjustmentPrompt,
+  planAdjustmentSignature,
+  recoveryAdjustmentSignature,
+  trainingAdjustmentSignature,
+} from "./utils/proactiveTrainingAdjustment";
 import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
@@ -86,6 +92,18 @@ function localDateKey(d = new Date()) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function planSummarySignature(summary) {
+  return planAdjustmentSignature(summary);
+}
+
+function recoverySummarySignature(summary) {
+  return recoveryAdjustmentSignature(summary);
+}
+
+function combinedAdjustmentSignature(planSummary, recoverySummary) {
+  return trainingAdjustmentSignature(planSummary, recoverySummary);
 }
 
 function withTimeout(promise, label, ms = 15000) {
@@ -1521,6 +1539,7 @@ function AppShell({
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [recoveryGuardLoading, setRecoveryGuardLoading] = useState(false);
+  const proactiveAdjustmentLoading = planRescueLoading || recoveryGuardLoading;
   const [planProposal, setPlanProposal] = useState(null);
   const [planImportCache, setPlanImportCache] = useState(() => {
     try {
@@ -2212,7 +2231,42 @@ Rules:
     }
   }
 
-  async function proposePlanDeviationRescue() {
+  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, openProposal = true }) {
+    const data = plans
+      ? null
+      : await db.usage.coachProxy({
+        kind,
+        system: "",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 8000,
+      });
+    const parsedPlans = plans || parsePlansFromLLM(
+      data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "",
+    );
+    if (parsedPlans.length === 0) return null;
+    const baseAction = buildCreatePlansAction(parsedPlans, {
+      id: `${source}-${Date.now()}`,
+      source,
+      risk: actionMeta.risk || "medium",
+    });
+    const action = {
+      ...baseAction,
+      title: actionMeta.title || baseAction.title,
+      reason: actionMeta.reason || baseAction.reason,
+      payload: {
+        ...baseAction.payload,
+        ...actionMeta.payload,
+      },
+    };
+    saveAgentAction(action);
+    if (openProposal) {
+      setPlanProposal({ msgId: null, assistantContent: "", action });
+    }
+    return action;
+  }
+
+  async function proposePlanDeviationRescue(opts = {}) {
+    const quiet = opts.quiet === true;
     if (planRescueLoading) return false;
     setPlanRescueLoading(true);
     try {
@@ -2225,7 +2279,7 @@ Rules:
 
       const summary = summarizePlanDeviation(freshLogs, now || new Date());
       if (!summary) {
-        appDialog.alert(t("coach.plan_rescue_no_deviation"));
+        if (!quiet) appDialog.alert(t("coach.plan_rescue_no_deviation"));
         return false;
       }
 
@@ -2246,52 +2300,47 @@ Rules:
         dataBlock,
         now: now || new Date(),
       });
-      const data = await db.usage.coachProxy({
-        kind: "plan_deviation_rescue",
-        system: "",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 8000,
-      });
-      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      const plans = parsePlansFromLLM(text);
-      if (plans.length === 0) {
-        appDialog.alert(t("coach.plan_rescue_no_plans"));
-        return false;
-      }
-      const baseAction = buildCreatePlansAction(plans, {
-        id: `plan-rescue-${Date.now()}`,
+      const action = await generateProactivePlanAction({
         source: "plan_deviation_rescue",
-        risk: "medium",
-      });
-      const action = {
-        ...baseAction,
-        title: "Repair plan after missed sessions",
-        reason: "Recent planned sessions were missed or only partially completed. Review these calendar changes before applying them.",
-        payload: {
-          ...baseAction.payload,
-          planDeviation: {
-            lookbackDays: summary.lookbackDays,
-            missedCount: summary.missedCount,
-            partialCount: summary.partialCount,
-            affectedCount: summary.affectedCount,
-            items: summary.items.slice(0, 8),
-            signature: summary.signature,
+        kind: "plan_deviation_rescue",
+        prompt,
+        actionMeta: {
+          title: "Repair plan after missed sessions",
+          reason: "Recent planned sessions were missed or only partially completed. Review these calendar changes before applying them.",
+          risk: "medium",
+          payload: {
+            proactiveTrigger: {
+              kind: "plan_deviation_rescue",
+              signature: planSummarySignature(summary),
+            },
+            planDeviation: {
+              lookbackDays: summary.lookbackDays,
+              missedCount: summary.missedCount,
+              partialCount: summary.partialCount,
+              affectedCount: summary.affectedCount,
+              items: summary.items.slice(0, 8),
+              signature: summary.signature,
+            },
           },
         },
-      };
-      saveAgentAction(action);
-      setPlanProposal({ msgId: null, assistantContent: "", action });
+        openProposal: !quiet,
+      });
+      if (!action) {
+        if (!quiet) appDialog.alert(t("coach.plan_rescue_no_plans"));
+        return false;
+      }
       return true;
     } catch (err) {
       console.error("[AI Coach] Plan rescue error:", err);
-      appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       return false;
     } finally {
       setPlanRescueLoading(false);
     }
   }
 
-  async function proposeRecoveryGuard() {
+  async function proposeRecoveryGuard(opts = {}) {
+    const quiet = opts.quiet === true;
     if (recoveryGuardLoading) return false;
     setRecoveryGuardLoading(true);
     try {
@@ -2304,7 +2353,7 @@ Rules:
 
       const summary = summarizeRecoveryGuard(freshLogs, dailyNotes, now || new Date());
       if (!summary) {
-        appDialog.alert(t("coach.recovery_guard_no_signal"));
+        if (!quiet) appDialog.alert(t("coach.recovery_guard_no_signal"));
         return false;
       }
 
@@ -2325,51 +2374,145 @@ Rules:
         dataBlock,
         now: now || new Date(),
       });
-      const data = await db.usage.coachProxy({
-        kind: "plan_deviation_rescue",
-        system: "",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 8000,
-      });
-      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      const plans = parsePlansFromLLM(text);
-      if (plans.length === 0) {
-        appDialog.alert(t("coach.recovery_guard_no_plans"));
-        return false;
-      }
-      const baseAction = buildCreatePlansAction(plans, {
-        id: `recovery-guard-${Date.now()}`,
+      const action = await generateProactivePlanAction({
         source: "recovery_load_guard",
-        risk: summary.severity === "watch" ? "low" : "medium",
-      });
-      const action = {
-        ...baseAction,
-        title: "Protect recovery and load",
-        reason: "Recent load, RPE, readiness, or fatigue signals suggest reviewing upcoming training before adding more stress.",
-        payload: {
-          ...baseAction.payload,
-          recoveryGuard: {
-            severity: summary.severity,
-            score: summary.score,
-            signalCount: summary.signalCount,
-            futurePlanCount: summary.futurePlanCount,
-            hardFuturePlanCount: summary.hardFuturePlanCount,
-            signals: summary.signals.slice(0, 8),
-            trainingLoad: summary.trainingLoad,
-            signature: summary.signature,
+        kind: "plan_deviation_rescue",
+        prompt,
+        actionMeta: {
+          title: "Protect recovery and load",
+          reason: "Recent load, RPE, readiness, or fatigue signals suggest reviewing upcoming training before adding more stress.",
+          risk: summary.severity === "watch" ? "low" : "medium",
+          payload: {
+            proactiveTrigger: {
+              kind: "recovery_load_guard",
+              signature: recoverySummarySignature(summary),
+            },
+            recoveryGuard: {
+              severity: summary.severity,
+              score: summary.score,
+              signalCount: summary.signalCount,
+              futurePlanCount: summary.futurePlanCount,
+              hardFuturePlanCount: summary.hardFuturePlanCount,
+              signals: summary.signals.slice(0, 8),
+              trainingLoad: summary.trainingLoad,
+              signature: summary.signature,
+            },
           },
         },
-      };
-      saveAgentAction(action);
-      setPlanProposal({ msgId: null, assistantContent: "", action });
+        openProposal: !quiet,
+      });
+      if (!action) {
+        if (!quiet) appDialog.alert(t("coach.recovery_guard_no_plans"));
+        return false;
+      }
       return true;
     } catch (err) {
       console.error("[AI Coach] Recovery guard error:", err);
-      appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       return false;
     } finally {
       setRecoveryGuardLoading(false);
     }
+  }
+
+  async function proposeCombinedTrainingAdjustment(opts = {}) {
+    const quiet = opts.quiet === true;
+    if (proactiveAdjustmentLoading) return false;
+    setPlanRescueLoading(true);
+    setRecoveryGuardLoading(true);
+    try {
+      let freshLogs = logs;
+      try {
+        freshLogs = await refreshLogs();
+      } catch (err) {
+        console.warn("[AI Coach] refreshLogs failed before combined adjustment, using cached state:", err);
+      }
+
+      const currentNow = now || new Date();
+      const planSummary = summarizePlanDeviation(freshLogs, currentNow);
+      const recoverySummary = summarizeRecoveryGuard(freshLogs, dailyNotes, currentNow);
+      if (!planSummary || !recoverySummary) return false;
+
+      const dataBlock = buildDataBlock({
+        logs: freshLogs,
+        races,
+        now: currentNow,
+        lang: "en",
+        currentWeather: weatherCtx.currentWeather,
+        forecastByDate: weatherCtx.forecastByDate,
+        dailyNotes,
+        raceDayWeather: null,
+        agentActions,
+        memoryFacts,
+      });
+      const prompt = buildCombinedTrainingAdjustmentPrompt({
+        planSummary,
+        recoverySummary,
+        dataBlock,
+        now: currentNow,
+      });
+      const action = await generateProactivePlanAction({
+        source: "combined_training_adjustment",
+        kind: "plan_deviation_rescue",
+        prompt,
+        actionMeta: {
+          title: "Balance plan rescue with recovery",
+          reason: "Recent plan deviation and recovery/load signals are both active. Review one combined adjustment before changing Calendar.",
+          risk: recoverySummary.severity === "watch" ? "medium" : "high",
+          payload: {
+            proactiveTrigger: {
+              kind: "combined_training_adjustment",
+              signature: combinedAdjustmentSignature(planSummary, recoverySummary),
+            },
+            planDeviation: {
+              lookbackDays: planSummary.lookbackDays,
+              missedCount: planSummary.missedCount,
+              partialCount: planSummary.partialCount,
+              affectedCount: planSummary.affectedCount,
+              items: planSummary.items.slice(0, 8),
+              signature: planSummary.signature,
+            },
+            recoveryGuard: {
+              severity: recoverySummary.severity,
+              score: recoverySummary.score,
+              signalCount: recoverySummary.signalCount,
+              futurePlanCount: recoverySummary.futurePlanCount,
+              hardFuturePlanCount: recoverySummary.hardFuturePlanCount,
+              signals: recoverySummary.signals.slice(0, 8),
+              trainingLoad: recoverySummary.trainingLoad,
+              signature: recoverySummary.signature,
+            },
+            combinedAdjustment: {
+              signature: combinedAdjustmentSignature(planSummary, recoverySummary),
+            },
+          },
+        },
+        openProposal: !quiet,
+      });
+      if (!action) {
+        if (!quiet) appDialog.alert(t("coach.proactive_no_plans"));
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("[AI Coach] Combined adjustment error:", err);
+      if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      return false;
+    } finally {
+      setPlanRescueLoading(false);
+      setRecoveryGuardLoading(false);
+    }
+  }
+
+  async function proposeProactiveTrainingAdjustment(kind, opts = {}) {
+    if (kind === "combined_training_adjustment") return proposeCombinedTrainingAdjustment(opts);
+    if (kind === "recovery_load_guard") return proposeRecoveryGuard(opts);
+    return proposePlanDeviationRescue(opts);
+  }
+
+  function openProactivePlanAction(action) {
+    if (!action?.id) return;
+    setPlanProposal({ msgId: null, assistantContent: "", action });
   }
 
   function applyPlanRestTags(restDates = [], workoutDates = []) {
@@ -2752,11 +2895,10 @@ Rules:
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}
           getPlanImportActionStatus={(msgId) => msgId ? (planImportCache[msgId]?.action?.status || null) : null}
           planDeviationSummary={planDeviationSummary}
-          planRescueLoading={planRescueLoading}
-          onPlanRescueRequest={proposePlanDeviationRescue}
           recoveryGuardSummary={recoveryGuardSummary}
-          recoveryGuardLoading={recoveryGuardLoading}
-          onRecoveryGuardRequest={proposeRecoveryGuard}
+          proactiveAdjustmentLoading={proactiveAdjustmentLoading}
+          onProactiveTrainingAdjustmentRequest={proposeProactiveTrainingAdjustment}
+          onOpenProactiveAction={openProactivePlanAction}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           /* "need location" weather pill now routes to the profile editor,

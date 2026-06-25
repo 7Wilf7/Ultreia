@@ -12,6 +12,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
+import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
@@ -202,8 +203,8 @@ function makeMdComponents(isMobile) {
 // older turns start competing with the system prompt for the model's focus.
 // 40 (~20 exchanges) keeps the nudge from firing on every short session.
 const LONG_CHAT_HINT_THRESHOLD = 40;
-const PLAN_RESCUE_DISMISS_KEY = "ultreia.planRescue.dismissedSignature";
-const RECOVERY_GUARD_DISMISS_KEY = "ultreia.recoveryGuard.dismissedSignature";
+const PROACTIVE_ADJUSTMENT_DISMISS_KEY = "ultreia.proactiveAdjustment.dismissedSignature";
+const PROACTIVE_ADJUSTMENT_ATTEMPT_KEY = "ultreia.proactiveAdjustment.attemptedSignature";
 
 function formatProviderMeta(meta, lang) {
   if (!meta?.provider) return "";
@@ -257,8 +258,9 @@ export function AICoachTab({
   // shows the model is working.
   chatLoading, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   codexRunnerStatus = null,
-  planDeviationSummary = null, planRescueLoading = false, onPlanRescueRequest,
-  recoveryGuardSummary = null, recoveryGuardLoading = false, onRecoveryGuardRequest,
+  planDeviationSummary = null,
+  recoveryGuardSummary = null,
+  proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onOpenProactiveAction,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
@@ -319,49 +321,101 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
-  const [dismissedPlanRescueSignature, setDismissedPlanRescueSignature] = useState(() => {
-    try { return localStorage.getItem(PLAN_RESCUE_DISMISS_KEY) || ""; }
+  const [dismissedProactiveAdjustmentSignature, setDismissedProactiveAdjustmentSignature] = useState(() => {
+    try { return localStorage.getItem(PROACTIVE_ADJUSTMENT_DISMISS_KEY) || ""; }
     catch { return ""; }
   });
-  const dismissPlanRescueSignature = useCallback((signature) => {
-    const next = signature || "";
-    setDismissedPlanRescueSignature(next);
-    try {
-      if (next) localStorage.setItem(PLAN_RESCUE_DISMISS_KEY, next);
-      else localStorage.removeItem(PLAN_RESCUE_DISMISS_KEY);
-    } catch { /* private mode */ }
-  }, []);
-  const handlePlanRescueRequest = useCallback(async () => {
-    const signature = planDeviationSummary?.signature || "";
-    const generated = await onPlanRescueRequest?.();
-    if (generated && signature) dismissPlanRescueSignature(signature);
-  }, [dismissPlanRescueSignature, onPlanRescueRequest, planDeviationSummary?.signature]);
-  const [dismissedRecoveryGuardSignature, setDismissedRecoveryGuardSignature] = useState(() => {
-    try { return localStorage.getItem(RECOVERY_GUARD_DISMISS_KEY) || ""; }
+  const [attemptedProactiveAdjustmentSignature, setAttemptedProactiveAdjustmentSignature] = useState(() => {
+    try { return localStorage.getItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY) || ""; }
     catch { return ""; }
   });
-  const dismissRecoveryGuardSignature = useCallback((signature) => {
+  const dismissProactiveAdjustmentSignature = useCallback((signature) => {
     const next = signature || "";
-    setDismissedRecoveryGuardSignature(next);
+    setDismissedProactiveAdjustmentSignature(next);
     try {
-      if (next) localStorage.setItem(RECOVERY_GUARD_DISMISS_KEY, next);
-      else localStorage.removeItem(RECOVERY_GUARD_DISMISS_KEY);
+      if (next) localStorage.setItem(PROACTIVE_ADJUSTMENT_DISMISS_KEY, next);
+      else localStorage.removeItem(PROACTIVE_ADJUSTMENT_DISMISS_KEY);
     } catch { /* private mode */ }
   }, []);
-  const handleRecoveryGuardRequest = useCallback(async () => {
-    const signature = recoveryGuardSummary?.signature || "";
-    const generated = await onRecoveryGuardRequest?.();
-    if (generated && signature) dismissRecoveryGuardSignature(signature);
-  }, [dismissRecoveryGuardSignature, onRecoveryGuardRequest, recoveryGuardSummary?.signature]);
-  const showPlanRescue = !!(
-    planDeviationSummary?.affectedCount > 0
-    && dismissedPlanRescueSignature !== planDeviationSummary.signature
-    && typeof onPlanRescueRequest === "function"
-  );
-  const showRecoveryGuard = !!(
-    recoveryGuardSummary?.signalCount > 0
-    && dismissedRecoveryGuardSignature !== recoveryGuardSummary.signature
-    && typeof onRecoveryGuardRequest === "function"
+  const markProactiveAdjustmentAttempted = useCallback((signature) => {
+    const next = signature || "";
+    setAttemptedProactiveAdjustmentSignature(next);
+    try {
+      if (next) localStorage.setItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY, next);
+      else localStorage.removeItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY);
+    } catch { /* private mode */ }
+  }, []);
+  const proactiveAdjustment = useMemo(() => {
+    const hasPlanDeviation = planDeviationSummary?.affectedCount > 0;
+    const hasRecoverySignal = recoveryGuardSummary?.signalCount > 0;
+    if (!hasPlanDeviation && !hasRecoverySignal) return null;
+    const kind = hasPlanDeviation && hasRecoverySignal
+      ? "combined_training_adjustment"
+      : hasRecoverySignal
+        ? "recovery_load_guard"
+        : "plan_deviation_rescue";
+    const signature = kind === "combined_training_adjustment"
+      ? trainingAdjustmentSignature(planDeviationSummary, recoveryGuardSummary)
+      : kind === "recovery_load_guard"
+        ? recoveryAdjustmentSignature(recoveryGuardSummary)
+        : planAdjustmentSignature(planDeviationSummary);
+    if (!signature) return null;
+    const relatedActions = (agentActions || []).filter(action => (
+      action?.type === "create_plans"
+      && action.payload?.proactiveTrigger?.signature === signature
+    ));
+    const existingAction = relatedActions.find(action => (
+      action.status !== AGENT_ACTION_STATUS.REJECTED
+      && action.status !== AGENT_ACTION_STATUS.CANCELLED
+    ));
+    const settledAction = relatedActions.find(action => (
+      action.status === AGENT_ACTION_STATUS.REJECTED
+      || action.status === AGENT_ACTION_STATUS.CANCELLED
+    ));
+    return { kind, signature, existingAction, settledAction };
+  }, [agentActions, planDeviationSummary, recoveryGuardSummary]);
+  const handleProactiveAdjustmentDismiss = useCallback(() => {
+    if (proactiveAdjustment?.signature) dismissProactiveAdjustmentSignature(proactiveAdjustment.signature);
+  }, [dismissProactiveAdjustmentSignature, proactiveAdjustment]);
+  const handleProactiveAdjustmentRequest = useCallback(async ({ quiet = false } = {}) => {
+    if (!proactiveAdjustment?.kind) return;
+    const generated = await onProactiveTrainingAdjustmentRequest?.(proactiveAdjustment.kind, { quiet });
+    if (proactiveAdjustment.signature) markProactiveAdjustmentAttempted(proactiveAdjustment.signature);
+    return generated;
+  }, [
+    markProactiveAdjustmentAttempted,
+    onProactiveTrainingAdjustmentRequest,
+    proactiveAdjustment,
+  ]);
+  useEffect(() => {
+    if (!proactiveAdjustment) return;
+    if (proactiveAdjustment.existingAction) return;
+    if (proactiveAdjustment.settledAction) return;
+    if (dismissedProactiveAdjustmentSignature === proactiveAdjustment.signature) return;
+    if (attemptedProactiveAdjustmentSignature === proactiveAdjustment.signature) return;
+    if (proactiveAdjustmentLoading) return;
+    if (typeof onProactiveTrainingAdjustmentRequest !== "function") return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) handleProactiveAdjustmentRequest({ quiet: true });
+    }, 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    attemptedProactiveAdjustmentSignature,
+    dismissedProactiveAdjustmentSignature,
+    handleProactiveAdjustmentRequest,
+    onProactiveTrainingAdjustmentRequest,
+    proactiveAdjustment,
+    proactiveAdjustmentLoading,
+  ]);
+  const showProactiveAdjustment = !!(
+    proactiveAdjustment
+    && !proactiveAdjustment.settledAction
+    && dismissedProactiveAdjustmentSignature !== proactiveAdjustment.signature
+    && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
   );
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
@@ -1144,7 +1198,7 @@ export function AICoachTab({
         )
       )}
 
-      {showPlanRescue && (
+      {showProactiveAdjustment && (
         <div style={{
           marginBottom: 12,
           padding: isMobile ? "9px 10px" : "10px 12px",
@@ -1166,104 +1220,69 @@ export function AICoachTab({
               marginBottom: 2,
             }}>
               <span style={{ color: "var(--warn)" }}>⚠</span>
-              <span>{t("coach.plan_rescue_title")}</span>
+              <span>{t(`coach.proactive_${proactiveAdjustment.kind}_title`)}</span>
             </div>
             <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
-              {t("coach.plan_rescue_body", {
-                lookback: planDeviationSummary.lookbackDays,
-                count: planDeviationSummary.affectedCount,
-                missed: planDeviationSummary.missedCount,
-                partial: planDeviationSummary.partialCount,
-              })}
+              {proactiveAdjustment.kind === "combined_training_adjustment"
+                ? t("coach.proactive_combined_training_adjustment_body", {
+                  count: planDeviationSummary.affectedCount,
+                  missed: planDeviationSummary.missedCount,
+                  partial: planDeviationSummary.partialCount,
+                  signals: recoveryGuardSummary.signalCount,
+                  plans: recoveryGuardSummary.futurePlanCount,
+                })
+                : proactiveAdjustment.kind === "recovery_load_guard"
+                  ? t("coach.proactive_recovery_load_guard_body", {
+                    signals: recoveryGuardSummary.signalCount,
+                    plans: recoveryGuardSummary.futurePlanCount,
+                    hard: recoveryGuardSummary.hardFuturePlanCount,
+                  })
+                  : t("coach.proactive_plan_deviation_rescue_body", {
+                    lookback: planDeviationSummary.lookbackDays,
+                    count: planDeviationSummary.affectedCount,
+                    missed: planDeviationSummary.missedCount,
+                    partial: planDeviationSummary.partialCount,
+                  })}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {proactiveAdjustment.existingAction ? (
+              <button
+                type="button"
+                onClick={() => onOpenProactiveAction?.(proactiveAdjustment.existingAction)}
+                style={{
+                  ...s.btn,
+                  fontSize: 12,
+                  padding: "6px 10px",
+                }}>
+                {t("coach.proactive_open")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleProactiveAdjustmentRequest}
+                disabled={proactiveAdjustmentLoading}
+                style={{
+                  ...s.btn,
+                  fontSize: 12,
+                  padding: "6px 10px",
+                  opacity: proactiveAdjustmentLoading ? 0.65 : 1,
+                  cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+                }}>
+                {proactiveAdjustmentLoading ? t("coach.proactive_generating") : t("coach.proactive_retry")}
+              </button>
+            )}
             <button
               type="button"
-              onClick={handlePlanRescueRequest}
-              disabled={planRescueLoading}
-              style={{
-                ...s.btn,
-                fontSize: 12,
-                padding: "6px 10px",
-                opacity: planRescueLoading ? 0.65 : 1,
-                cursor: planRescueLoading ? "default" : "pointer",
-              }}>
-              {planRescueLoading ? t("coach.plan_rescue_generating") : t("coach.plan_rescue_primary")}
-            </button>
-            <button
-              type="button"
-              onClick={() => dismissPlanRescueSignature(planDeviationSummary.signature)}
-              disabled={planRescueLoading}
+              onClick={handleProactiveAdjustmentDismiss}
+              disabled={proactiveAdjustmentLoading}
               style={{
                 ...s.btnGhost,
                 fontSize: 12,
                 padding: "6px 10px",
-                opacity: planRescueLoading ? 0.6 : 1,
+                opacity: proactiveAdjustmentLoading ? 0.6 : 1,
               }}>
-              {t("coach.plan_rescue_dismiss")}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {showRecoveryGuard && (
-        <div style={{
-          marginBottom: 12,
-          padding: isMobile ? "9px 10px" : "10px 12px",
-          border: "1px solid var(--rule)",
-          background: "var(--bg-elevated)",
-          display: "flex",
-          gap: 10,
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-        }}>
-          <div style={{ flex: 1, minWidth: isMobile ? 180 : 260, lineHeight: 1.5 }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              fontSize: 12,
-              fontWeight: 650,
-              color: "var(--ink-1)",
-              marginBottom: 2,
-            }}>
-              <span style={{ color: "var(--warn)" }}>⚠</span>
-              <span>{t("coach.recovery_guard_title")}</span>
-            </div>
-            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
-              {t("coach.recovery_guard_body", {
-                signals: recoveryGuardSummary.signalCount,
-                plans: recoveryGuardSummary.futurePlanCount,
-                hard: recoveryGuardSummary.hardFuturePlanCount,
-              })}
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={handleRecoveryGuardRequest}
-              disabled={recoveryGuardLoading}
-              style={{
-                ...s.btn,
-                fontSize: 12,
-                padding: "6px 10px",
-                opacity: recoveryGuardLoading ? 0.65 : 1,
-                cursor: recoveryGuardLoading ? "default" : "pointer",
-              }}>
-              {recoveryGuardLoading ? t("coach.recovery_guard_generating") : t("coach.recovery_guard_primary")}
-            </button>
-            <button
-              type="button"
-              onClick={() => dismissRecoveryGuardSignature(recoveryGuardSummary.signature)}
-              disabled={recoveryGuardLoading}
-              style={{
-                ...s.btnGhost,
-                fontSize: 12,
-                padding: "6px 10px",
-                opacity: recoveryGuardLoading ? 0.6 : 1,
-              }}>
-              {t("coach.recovery_guard_dismiss")}
+              {t("coach.proactive_dismiss")}
             </button>
           </div>
         </div>
@@ -2734,7 +2753,9 @@ function summarizeAgentAction(action, t) {
       ? t("coach.agent_action_source_plan_rescue")
       : action.source === "recovery_load_guard"
         ? t("coach.agent_action_source_recovery_guard")
-      : t("coach.agent_action_source_coach");
+        : action.source === "combined_training_adjustment"
+          ? t("coach.agent_action_source_combined_adjustment")
+          : t("coach.agent_action_source_coach");
   const detail = action.type === "create_plans"
     ? t("coach.agent_action_plan_detail", {
         dates: affectedDates.length ? affectedDates.slice(0, 4).join(", ") : "-",

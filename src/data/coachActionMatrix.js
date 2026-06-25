@@ -47,7 +47,7 @@ export const COACH_ACTION_MATRIX = [
     id: "race_briefing_checklist",
     phase: "Phase 6",
     rank: 3,
-    status: "planned",
+    status: "observing",
     title: {
       en: "Race briefing and gear checklist",
       zh: "赛前简报 / 装备检查",
@@ -61,8 +61,8 @@ export const COACH_ACTION_MATRIX = [
       zh: "生成赛前 briefing 和 checklist；必要时再提出计划调整。",
     },
     boundary: {
-      en: "First version is report/checklist only, without automatic training changes.",
-      zh: "第一版只做报告 / checklist，不自动修改训练。",
+      en: "Live in first version. It is report/checklist only and does not automatically change training.",
+      zh: "第一版已上线观察；只做报告 / checklist，不自动修改训练。",
     },
   },
   {

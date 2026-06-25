@@ -1,6 +1,7 @@
 export const AGENT_ACTION_TYPES = {
   CREATE_PLANS: "create_plans",
   MEMORY_UPDATE: "memory_update",
+  RACE_BRIEFING: "race_briefing",
 };
 
 export const AGENT_ACTION_STATUS = {
@@ -81,6 +82,44 @@ export function buildMemoryUpdateAction(memory, opts = {}) {
   };
 }
 
+export function buildRaceBriefingAction({ race, summary, briefingMarkdown, raceDayWeather = null }, opts = {}) {
+  const briefing = String(briefingMarkdown || "").trim();
+  const daysToRace = Number(summary?.daysToRace);
+  const createdAt = opts.createdAt || new Date().toISOString();
+  const status = opts.status || AGENT_ACTION_STATUS.EXECUTED;
+  return {
+    id: opts.id || `race-briefing-${race?.id || race?.date || Date.now()}`,
+    type: AGENT_ACTION_TYPES.RACE_BRIEFING,
+    title: "Race briefing checklist",
+    reason: "An A-race is inside the 14-day window. The coach prepared a race briefing and checklist to review before race week.",
+    payload: {
+      raceBriefing: {
+        raceId: race?.id || null,
+        name: race?.name || "",
+        date: race?.date || "",
+        priority: race?.priority || "",
+        category: race?.category || "",
+        subtype: race?.subtype || "",
+        distance: Number(race?.distance || 0) || 0,
+        ascent: Number(race?.ascent || 0) || 0,
+        locationName: race?.locationName || "",
+        daysToRace: Number.isFinite(daysToRace) ? daysToRace : null,
+        signature: summary?.signature || opts.signature || "",
+      },
+      briefingMarkdown: briefing,
+      raceDayWeather,
+    },
+    risk: "low",
+    requiresConfirmation: false,
+    source: opts.source || "race_briefing_checklist",
+    sourceMessageId: opts.sourceMessageId || null,
+    status,
+    createdAt,
+    decidedAt: opts.decidedAt || (status === AGENT_ACTION_STATUS.PROPOSED ? null : createdAt),
+    executedAt: opts.executedAt || (status === AGENT_ACTION_STATUS.EXECUTED ? createdAt : null),
+  };
+}
+
 export function markAgentActionStatus(action, status, now = new Date()) {
   if (!action || !status) return action;
   const timestamp = now instanceof Date ? now.toISOString() : String(now);
@@ -120,6 +159,10 @@ export function isMemoryUpdateAction(action) {
   return action?.type === AGENT_ACTION_TYPES.MEMORY_UPDATE;
 }
 
+export function isRaceBriefingAction(action) {
+  return action?.type === AGENT_ACTION_TYPES.RACE_BRIEFING;
+}
+
 export function getCreatePlans(action) {
   if (!isCreatePlansAction(action)) return [];
   return Array.isArray(action.payload?.plans) ? action.payload.plans : [];
@@ -130,6 +173,11 @@ export function getMemoryUpdate(action) {
   return action.payload?.memory && typeof action.payload.memory === "object"
     ? action.payload.memory
     : { en: "", zh: "" };
+}
+
+export function getRaceBriefing(action) {
+  if (!isRaceBriefingAction(action)) return "";
+  return String(action.payload?.briefingMarkdown || "").trim();
 }
 
 export function describeCreatePlansImpact(action, existingPlans = []) {

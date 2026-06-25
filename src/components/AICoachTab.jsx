@@ -11,7 +11,7 @@ import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
-import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
+import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
@@ -206,10 +206,25 @@ const LONG_CHAT_HINT_THRESHOLD = 40;
 const PROACTIVE_ADJUSTMENT_SNOOZE_KEY = "ultreia.proactiveAdjustment.snoozedUntil";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_KEY = "ultreia.proactiveAdjustment.attemptedSignature";
 const PROACTIVE_ADJUSTMENT_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
+const RACE_BRIEFING_SNOOZE_KEY = "ultreia.raceBriefing.snoozedUntil";
+const RACE_BRIEFING_ATTEMPT_KEY = "ultreia.raceBriefing.attemptedSignature";
+const RACE_BRIEFING_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
 
 function readProactiveAdjustmentSnooze() {
   try {
     const raw = localStorage.getItem(PROACTIVE_ADJUSTMENT_SNOOZE_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw);
+    const value = typeof parsed === "number" ? parsed : Number(parsed?.until || parsed?.untilMs || 0);
+    return Number.isFinite(value) && value > Date.now() ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function readRaceBriefingSnooze() {
+  try {
+    const raw = localStorage.getItem(RACE_BRIEFING_SNOOZE_KEY);
     if (!raw) return 0;
     const parsed = JSON.parse(raw);
     const value = typeof parsed === "number" ? parsed : Number(parsed?.until || parsed?.untilMs || 0);
@@ -273,7 +288,9 @@ export function AICoachTab({
   codexRunnerStatus = null,
   planDeviationSummary = null,
   recoveryGuardSummary = null,
+  raceBriefingSummary = null,
   proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onOpenProactiveAction,
+  raceBriefingLoading = false, onRaceBriefingRequest,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
   // Shared weather context — { currentWeather, forecastByDate, status,
@@ -335,11 +352,18 @@ export function AICoachTab({
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
+  const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
+  const [raceBriefingAction, setRaceBriefingAction] = useState(null);
   const [attemptedProactiveAdjustmentSignature, setAttemptedProactiveAdjustmentSignature] = useState(() => {
     try { return localStorage.getItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY) || ""; }
     catch { return ""; }
   });
+  const [attemptedRaceBriefingSignature, setAttemptedRaceBriefingSignature] = useState(() => {
+    try { return localStorage.getItem(RACE_BRIEFING_ATTEMPT_KEY) || ""; }
+    catch { return ""; }
+  });
   const proactiveAdjustmentSnoozed = proactiveAdjustmentSnoozedUntil > runnerNowMs;
+  const raceBriefingSnoozed = raceBriefingSnoozedUntil > runnerNowMs;
   const snoozeProactiveAdjustment = useCallback(() => {
     const until = Date.now() + PROACTIVE_ADJUSTMENT_SNOOZE_MS;
     setProactiveAdjustmentSnoozedUntil(until);
@@ -353,6 +377,21 @@ export function AICoachTab({
     try {
       if (next) localStorage.setItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY, next);
       else localStorage.removeItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY);
+    } catch { /* private mode */ }
+  }, []);
+  const snoozeRaceBriefing = useCallback(() => {
+    const until = Date.now() + RACE_BRIEFING_SNOOZE_MS;
+    setRaceBriefingSnoozedUntil(until);
+    try {
+      localStorage.setItem(RACE_BRIEFING_SNOOZE_KEY, JSON.stringify({ until }));
+    } catch { /* private mode */ }
+  }, []);
+  const markRaceBriefingAttempted = useCallback((signature) => {
+    const next = signature || "";
+    setAttemptedRaceBriefingSignature(next);
+    try {
+      if (next) localStorage.setItem(RACE_BRIEFING_ATTEMPT_KEY, next);
+      else localStorage.removeItem(RACE_BRIEFING_ATTEMPT_KEY);
     } catch { /* private mode */ }
   }, []);
   const proactiveAdjustment = useMemo(() => {
@@ -384,6 +423,37 @@ export function AICoachTab({
     ));
     return { kind, signature, existingAction, settledAction };
   }, [agentActions, planDeviationSummary, recoveryGuardSummary]);
+  const raceBriefing = useMemo(() => {
+    if (!raceBriefingSummary?.signature) return null;
+    const summaryRaceId = raceBriefingSummary.race?.id || null;
+    const summaryRaceDate = raceBriefingSummary.race?.date || "";
+    const relatedActions = (agentActions || []).filter(action => (
+      isRaceBriefingAction(action)
+      && (
+        action.payload?.raceBriefing?.signature === raceBriefingSummary.signature
+        || (
+          action.payload?.raceBriefing?.date === summaryRaceDate
+          && (
+            (summaryRaceId && action.payload?.raceBriefing?.raceId === summaryRaceId)
+            || (!summaryRaceId && action.payload?.raceBriefing?.name === raceBriefingSummary.race?.name)
+          )
+        )
+      )
+    )).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+    const existingAction = relatedActions.find(action => (
+      action.status !== AGENT_ACTION_STATUS.REJECTED
+      && action.status !== AGENT_ACTION_STATUS.CANCELLED
+    ));
+    const settledAction = relatedActions.find(action => (
+      action.status === AGENT_ACTION_STATUS.REJECTED
+      || action.status === AGENT_ACTION_STATUS.CANCELLED
+    ));
+    return {
+      ...raceBriefingSummary,
+      existingAction,
+      settledAction,
+    };
+  }, [agentActions, raceBriefingSummary]);
   const handleProactiveAdjustmentDismiss = useCallback(() => {
     snoozeProactiveAdjustment();
   }, [snoozeProactiveAdjustment]);
@@ -397,6 +467,16 @@ export function AICoachTab({
     onProactiveTrainingAdjustmentRequest,
     proactiveAdjustment,
   ]);
+  const handleRaceBriefingDismiss = useCallback(() => {
+    snoozeRaceBriefing();
+  }, [snoozeRaceBriefing]);
+  const handleRaceBriefingRequest = useCallback(async ({ quiet = false } = {}) => {
+    if (!raceBriefing?.signature) return null;
+    const action = await onRaceBriefingRequest?.({ quiet });
+    markRaceBriefingAttempted(raceBriefing.signature);
+    if (action && !quiet) setRaceBriefingAction(action);
+    return action;
+  }, [markRaceBriefingAttempted, onRaceBriefingRequest, raceBriefing]);
   useEffect(() => {
     if (!proactiveAdjustment) return;
     if (proactiveAdjustment.existingAction) return;
@@ -421,11 +501,41 @@ export function AICoachTab({
     proactiveAdjustmentLoading,
     proactiveAdjustmentSnoozed,
   ]);
+  useEffect(() => {
+    if (!raceBriefing) return;
+    if (raceBriefing.existingAction) return;
+    if (raceBriefing.settledAction) return;
+    if (raceBriefingSnoozed) return;
+    if (attemptedRaceBriefingSignature === raceBriefing.signature) return;
+    if (raceBriefingLoading) return;
+    if (typeof onRaceBriefingRequest !== "function") return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) handleRaceBriefingRequest({ quiet: true });
+    }, 700);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [
+    attemptedRaceBriefingSignature,
+    handleRaceBriefingRequest,
+    onRaceBriefingRequest,
+    raceBriefing,
+    raceBriefingLoading,
+    raceBriefingSnoozed,
+  ]);
   const showProactiveAdjustment = !!(
     proactiveAdjustment
     && !proactiveAdjustment.settledAction
     && !proactiveAdjustmentSnoozed
     && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
+  );
+  const showRaceBriefing = !!(
+    raceBriefing
+    && !raceBriefing.settledAction
+    && !raceBriefingSnoozed
+    && (raceBriefing.existingAction || typeof onRaceBriefingRequest === "function" || raceBriefingLoading)
   );
   const showManualAdjustmentShortcut = !!(
     proactiveAdjustment
@@ -918,6 +1028,7 @@ export function AICoachTab({
                 actions={agentActions}
                 t={t}
                 onDelete={onDeleteAgentAction}
+                onOpenRaceBriefing={setRaceBriefingAction}
                 onAskCoach={(action) => {
                   sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
                   setShowAgentActions(false);
@@ -926,6 +1037,16 @@ export function AICoachTab({
             </div>
           </div>
         </ModalRoot>
+      )}
+
+      {raceBriefingAction && (
+        <RaceBriefingModal
+          action={raceBriefingAction}
+          t={t}
+          isMobile={isMobile}
+          mdComponents={mdComponents}
+          onClose={() => setRaceBriefingAction(null)}
+        />
       )}
 
       {showActionMatrix && (
@@ -1326,6 +1447,80 @@ export function AICoachTab({
                 fontSize: 12,
                 padding: "6px 10px",
                 opacity: proactiveAdjustmentLoading ? 0.6 : 1,
+              }}>
+              {t("coach.proactive_dismiss")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showRaceBriefing && (
+        <div style={{
+          marginBottom: 12,
+          padding: isMobile ? "9px 10px" : "10px 12px",
+          border: "1px solid var(--rule)",
+          background: "var(--bg-elevated)",
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}>
+          <div style={{ flex: 1, minWidth: isMobile ? 180 : 260, lineHeight: 1.5 }}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 7,
+              fontSize: 12,
+              fontWeight: 650,
+              color: "var(--ink-1)",
+              marginBottom: 2,
+            }}>
+              <span style={{ color: "var(--moss)" }}>◆</span>
+              <span>{t("coach.race_briefing_title")}</span>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
+              {t("coach.race_briefing_body", {
+                name: raceBriefing.race?.name || t("coach.race_briefing_target"),
+                days: raceBriefing.daysToRace,
+              })}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {raceBriefing.existingAction ? (
+              <button
+                type="button"
+                onClick={() => setRaceBriefingAction(raceBriefing.existingAction)}
+                style={{
+                  ...s.btn,
+                  fontSize: 12,
+                  padding: "6px 10px",
+                }}>
+                {t("coach.race_briefing_open")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleRaceBriefingRequest()}
+                disabled={raceBriefingLoading}
+                style={{
+                  ...s.btn,
+                  fontSize: 12,
+                  padding: "6px 10px",
+                  opacity: raceBriefingLoading ? 0.65 : 1,
+                  cursor: raceBriefingLoading ? "default" : "pointer",
+                }}>
+                {raceBriefingLoading ? t("coach.race_briefing_generating") : t("coach.race_briefing_generate")}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleRaceBriefingDismiss}
+              disabled={raceBriefingLoading}
+              style={{
+                ...s.btnGhost,
+                fontSize: 12,
+                padding: "6px 10px",
+                opacity: raceBriefingLoading ? 0.6 : 1,
               }}>
               {t("coach.proactive_dismiss")}
             </button>
@@ -1921,6 +2116,7 @@ export function AICoachTab({
                       actions={agentActions}
                       t={t}
                       onDelete={onDeleteAgentAction}
+                      onOpenRaceBriefing={setRaceBriefingAction}
                       onAskCoach={(action) => {
                         sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
                         setShowCoachHub(false);
@@ -2041,6 +2237,57 @@ function MemoryActionStatus({ action, t }) {
     }}>
       {isExecuted ? t("coach.memory_action_executed") : t("coach.memory_action_rejected")}
     </div>
+  );
+}
+
+function RaceBriefingModal({ action, t, isMobile, mdComponents, onClose }) {
+  const race = action?.payload?.raceBriefing || {};
+  const markdown = String(action?.payload?.briefingMarkdown || "").trim();
+  return (
+    <ModalRoot onClose={onClose}>
+      <div style={s.modalOverlay(isMobile, { float: true })} onClick={onClose}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            ...s.modalCard(isMobile, { maxWidth: 680, float: true }),
+            maxHeight: isMobile ? "min(82dvh, 680px)" : "min(82vh, 720px)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...s.label, marginBottom: 5 }}>{t("coach.race_briefing_modal_eyebrow")}</div>
+              <h2 style={{ fontSize: 18, fontWeight: 650, lineHeight: 1.25, margin: 0, color: "var(--ink-1)" }}>
+                {race.name || t("coach.race_briefing_target")}
+              </h2>
+              <div style={{ marginTop: 6, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.45 }}>
+                {[race.date, t("coach.race_briefing_days", { days: race.daysToRace ?? "-" }), [race.category, race.subtype].filter(Boolean).join(" / ")].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+          </div>
+          <div style={{
+            borderTop: "1px solid var(--rule)",
+            paddingTop: 12,
+            color: "var(--ink-1)",
+            fontSize: 13,
+            lineHeight: 1.65,
+          }}>
+            {markdown ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
+                {markdown}
+              </ReactMarkdown>
+            ) : (
+              <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>
+            )}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
+            <button type="button" onClick={onClose} style={{ ...s.btn, fontSize: 12, padding: "7px 12px" }}>
+              {t("common.close")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </ModalRoot>
   );
 }
 
@@ -2319,7 +2566,7 @@ function actionMatrixStatusStyle(status) {
   };
 }
 
-function RecentAgentActions({ actions = [], t, onDelete, onAskCoach }) {
+function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceBriefing }) {
   const recent = useMemo(() => {
     return [...(actions || [])]
       .filter(Boolean)
@@ -2415,18 +2662,34 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach }) {
                 }}>
                   <AgentActionDetails action={action} t={t} />
                   {onAskCoach && (
-                    <button
-                      type="button"
-                      onClick={() => onAskCoach(action)}
-                      style={{
-                        ...s.btnGhost,
-                        justifySelf: "start",
-                        minHeight: 0,
-                        padding: "6px 10px",
-                        fontSize: 12,
-                      }}>
-                      {t("coach.agent_action_ask_coach")}
-                    </button>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {isRaceBriefingAction(action) && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenRaceBriefing?.(action)}
+                          style={{
+                            ...s.btn,
+                            justifySelf: "start",
+                            minHeight: 0,
+                            padding: "6px 10px",
+                            fontSize: 12,
+                          }}>
+                          {t("coach.race_briefing_open")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => onAskCoach(action)}
+                        style={{
+                          ...s.btnGhost,
+                          justifySelf: "start",
+                          minHeight: 0,
+                          padding: "6px 10px",
+                          fontSize: 12,
+                        }}>
+                        {t("coach.agent_action_ask_coach")}
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -2478,7 +2741,37 @@ function StatusPill({ status, t }) {
 function AgentActionDetails({ action, t }) {
   if (action.type === "create_plans") return <PlanActionDetails action={action} t={t} />;
   if (action.type === "memory_update") return <MemoryActionDetails action={action} t={t} />;
+  if (isRaceBriefingAction(action)) return <RaceBriefingActionDetails action={action} t={t} />;
   return <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>;
+}
+
+function RaceBriefingActionDetails({ action, t }) {
+  const race = action.payload?.raceBriefing || {};
+  const markdown = String(action.payload?.briefingMarkdown || "").trim();
+  const preview = markdown
+    .split(/\n+/)
+    .map(line => line.replace(/^#+\s*/, "").replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .join(" / ");
+  return (
+    <>
+      <ActionDetailSection title={t("coach.agent_action_race_briefing_detail_title")}>
+        <div style={detailChangeStyle}>
+          <div style={detailChangeDateStyle}>{[race.date, race.name].filter(Boolean).join(" · ") || "-"}</div>
+          <div>{t("coach.race_briefing_detail", {
+            days: race.daysToRace ?? "-",
+            category: [race.category, race.subtype].filter(Boolean).join(" / ") || "-",
+          })}</div>
+        </div>
+      </ActionDetailSection>
+      {preview && (
+        <ActionDetailSection title={t("coach.agent_actions_payload")}>
+          <div style={detailEmptyStyle}>{preview}</div>
+        </ActionDetailSection>
+      )}
+    </>
+  );
 }
 
 function PlanActionDetails({ action, t }) {
@@ -2737,6 +3030,7 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
   const summary = summarizeAgentAction(action, t);
   const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
   const changes = Array.isArray(action.result?.planChanges) ? action.result.planChanges : [];
+  const raceBriefingText = isRaceBriefingAction(action) ? String(action.payload?.briefingMarkdown || "").trim() : "";
   const zh = lang === "zh";
   const lines = [
     zh
@@ -2759,6 +3053,12 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
       lines.push(`- ${formatPlanActionBrief(change.before, t)} -> ${formatPlanActionBrief(change.after, t)}`);
     });
   }
+  if (raceBriefingText) {
+    const race = action.payload?.raceBriefing || {};
+    lines.push("", zh ? "赛前简报：" : "Race briefing:");
+    if (race.date || race.name) lines.push(`${[race.date, race.name].filter(Boolean).join(" · ")}`);
+    lines.push(raceBriefingText);
+  }
   const resultBits = [];
   const createdCount = Number(action.result?.createdWorkoutCount || action.result?.createdCount || 0);
   const updatedCount = Number(action.result?.updatedPlanCount || changes.length || 0);
@@ -2771,9 +3071,15 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
   if (savedFactCount > 0) resultBits.push(zh ? `已启用记忆事实 ${savedFactCount} 条` : `activated ${savedFactCount} memory fact(s)`);
   else if (savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
   if (resultBits.length) lines.push("", `${zh ? "保存结果" : "Saved result"}：${resultBits.join(zh ? "；" : "; ")}`);
-  lines.push("", zh
-    ? "请告诉我：这条建议是否合理？接下来我应该继续、调整，还是撤回/手动修正？如果需要调整，请给出明确建议。"
-    : "Tell me whether this suggestion was reasonable. Should I continue, adjust, or undo/manual-fix something next? If adjustment is needed, give a concrete recommendation.");
+  if (raceBriefingText) {
+    lines.push("", zh
+      ? "请基于这份赛前简报继续分析：还有哪些赛前风险、装备或执行细节需要我特别注意？如果有训练调整建议，只作为建议说明，不要直接改日历。"
+      : "Continue from this race briefing. What race-week risks, gear items, or execution details should I pay special attention to? If training changes are needed, explain them as advice only and do not change the calendar.");
+  } else {
+    lines.push("", zh
+      ? "请告诉我：这条建议是否合理？接下来我应该继续、调整，还是撤回/手动修正？如果需要调整，请给出明确建议。"
+      : "Tell me whether this suggestion was reasonable. Should I continue, adjust, or undo/manual-fix something next? If adjustment is needed, give a concrete recommendation.");
+  }
   return lines.join("\n");
 }
 
@@ -2786,12 +3092,15 @@ function summarizeAgentAction(action, t) {
   const memory = action.payload?.memory && typeof action.payload.memory === "object" ? action.payload.memory : null;
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
   const savedFactCount = Number(action.result?.savedFactCount || 0);
+  const race = action.payload?.raceBriefing || null;
 
   const typeLabel = action.type === "create_plans"
     ? t("coach.agent_action_type_create_plans")
     : action.type === "memory_update"
       ? t("coach.agent_action_type_memory_update")
-      : (action.title || action.type || t("coach.agent_action_type_unknown"));
+      : isRaceBriefingAction(action)
+        ? t("coach.agent_action_type_race_briefing")
+        : (action.title || action.type || t("coach.agent_action_type_unknown"));
   const sourceLabel = action.sourceReportId || action.source === "weekly_report"
     ? t("coach.agent_action_source_report")
     : action.source === "plan_deviation_rescue"
@@ -2800,7 +3109,9 @@ function summarizeAgentAction(action, t) {
         ? t("coach.agent_action_source_recovery_guard")
         : action.source === "combined_training_adjustment"
           ? t("coach.agent_action_source_combined_adjustment")
-          : t("coach.agent_action_source_coach");
+          : action.source === "race_briefing_checklist" || isRaceBriefingAction(action)
+            ? t("coach.agent_action_source_race_briefing")
+            : t("coach.agent_action_source_coach");
   const detail = action.type === "create_plans"
     ? t("coach.agent_action_plan_detail", {
         dates: affectedDates.length ? affectedDates.slice(0, 4).join(", ") : "-",
@@ -2810,7 +3121,12 @@ function summarizeAgentAction(action, t) {
       ? t("coach.agent_action_memory_detail", {
           count: savedFactCount || savedLanguages.length || [memory?.en, memory?.zh].filter(v => String(v || "").trim()).length || 0,
         })
-      : "";
+      : isRaceBriefingAction(action)
+        ? t("coach.agent_action_race_briefing_detail", {
+            name: race?.name || "-",
+            date: race?.date || "-",
+          })
+        : "";
   const when = formatActionTime(action.createdAt);
   const meta = [sourceLabel, detail, when].filter(Boolean).join(" · ");
   const error = action.error ? t("coach.agent_action_error", { msg: action.error }) : "";

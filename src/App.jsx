@@ -17,6 +17,7 @@ import {
   recoveryAdjustmentSignature,
   trainingAdjustmentSignature,
 } from "./utils/proactiveTrainingAdjustment";
+import { buildRaceBriefingPrompt, summarizeRaceBriefingTarget } from "./utils/raceBriefing";
 import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
 import { INITIAL_FILTER } from "./components/GlobalFilter";
@@ -81,7 +82,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
-import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
+import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
 import { buildImportFeelingNote, mergeImportFeelingNote } from "./utils/importReviewNotes";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
@@ -1351,6 +1352,10 @@ function AppShell({
     () => summarizeRecoveryGuard(logs, dailyNotes, new Date(`${planDeviationTodayKey}T12:00:00`)),
     [dailyNotes, logs, planDeviationTodayKey],
   );
+  const raceBriefingSummary = useMemo(
+    () => summarizeRaceBriefingTarget(races, new Date(`${planDeviationTodayKey}T12:00:00`)),
+    [races, planDeviationTodayKey],
+  );
   const [profileEditorMode, setProfileEditorMode] = useState(null);
   const [showWallet, setShowWallet] = useState(false);
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
@@ -1539,6 +1544,7 @@ function AppShell({
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [recoveryGuardLoading, setRecoveryGuardLoading] = useState(false);
+  const [raceBriefingLoading, setRaceBriefingLoading] = useState(false);
   const proactiveAdjustmentLoading = planRescueLoading || recoveryGuardLoading;
   const [planProposal, setPlanProposal] = useState(null);
   const [planImportCache, setPlanImportCache] = useState(() => {
@@ -2510,6 +2516,91 @@ Rules:
     return proposePlanDeviationRescue(opts);
   }
 
+  async function buildRaceDayWeatherForBriefing(race) {
+    if (!race || race.category === "Hyrox") return null;
+    if (!Number.isFinite(Number(race.locationLat)) || !Number.isFinite(Number(race.locationLng)) || !race.date) return null;
+    try {
+      const w = await fetchRaceDayWeather({
+        lat: Number(race.locationLat),
+        lng: Number(race.locationLng),
+        date: race.date,
+      });
+      return w ? { name: race.name, date: race.date, ...w } : null;
+    } catch (err) {
+      console.warn("[AI Coach] race briefing weather fetch failed:", err);
+      return null;
+    }
+  }
+
+  async function proposeRaceBriefing(opts = {}) {
+    const quiet = opts.quiet === true;
+    if (raceBriefingLoading) return null;
+    setRaceBriefingLoading(true);
+    try {
+      let freshLogs = logs;
+      try {
+        freshLogs = await refreshLogs();
+      } catch (err) {
+        console.warn("[AI Coach] refreshLogs failed before race briefing, using cached state:", err);
+      }
+
+      const currentNow = now || new Date();
+      const baseSummary = summarizeRaceBriefingTarget(races, currentNow);
+      if (!baseSummary) {
+        if (!quiet) appDialog.alert(t("coach.race_briefing_no_target"));
+        return null;
+      }
+
+      const raceDayWeather = await buildRaceDayWeatherForBriefing(baseSummary.race);
+      const summary = summarizeRaceBriefingTarget(races, currentNow, raceDayWeather) || baseSummary;
+      const dataBlock = buildDataBlock({
+        logs: freshLogs,
+        races,
+        now: currentNow,
+        lang: "en",
+        currentWeather: weatherCtx.currentWeather,
+        forecastByDate: weatherCtx.forecastByDate,
+        dailyNotes,
+        raceDayWeather,
+        agentActions,
+        memoryFacts,
+      });
+      const prompt = buildRaceBriefingPrompt({
+        summary,
+        dataBlock,
+        raceDayWeather,
+        now: currentNow,
+      });
+      const data = await db.usage.coachProxy({
+        kind: "coach_chat",
+        system: "",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 6000,
+      });
+      const briefingMarkdown = data?.content?.filter(b => b.type === "text").map(b => b.text).join("").trim() || "";
+      if (!briefingMarkdown) {
+        if (!quiet) appDialog.alert(t("coach.race_briefing_no_content"));
+        return null;
+      }
+      const action = buildRaceBriefingAction({
+        race: summary.race,
+        summary,
+        briefingMarkdown,
+        raceDayWeather,
+      }, {
+        id: `race-briefing-${summary.race?.id || summary.race?.date}-${Date.now()}`,
+      });
+      saveAgentAction(action);
+      return action;
+    } catch (err) {
+      console.error("[AI Coach] Race briefing error:", err);
+      if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
+      return null;
+    } finally {
+      setRaceBriefingLoading(false);
+    }
+  }
+
   function openProactivePlanAction(action) {
     if (!action?.id) return;
     setPlanProposal({ msgId: null, assistantContent: "", action });
@@ -2896,9 +2987,12 @@ Rules:
           getPlanImportActionStatus={(msgId) => msgId ? (planImportCache[msgId]?.action?.status || null) : null}
           planDeviationSummary={planDeviationSummary}
           recoveryGuardSummary={recoveryGuardSummary}
+          raceBriefingSummary={raceBriefingSummary}
           proactiveAdjustmentLoading={proactiveAdjustmentLoading}
           onProactiveTrainingAdjustmentRequest={proposeProactiveTrainingAdjustment}
           onOpenProactiveAction={openProactivePlanAction}
+          raceBriefingLoading={raceBriefingLoading}
+          onRaceBriefingRequest={proposeRaceBriefing}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           /* "need location" weather pill now routes to the profile editor,

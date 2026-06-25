@@ -10,7 +10,7 @@ import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
-import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading } from "../utils/memory";
+import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { ModalRoot } from "./ModalRoot";
@@ -1054,28 +1054,27 @@ export function AICoachTab({
                 margin: "0 auto",
               } : {}),
             }} onClick={(e) => e.stopPropagation()}>
-              <div style={{
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: 12,
-                marginBottom: 8,
-              }}>
-                <div style={{ minWidth: 0 }}>
+              <div style={{ marginBottom: 8 }}>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}>
                   <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
-                  <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                    {!memoryProposal && (
+                      <button onClick={proposeMemoryUpdate}
+                        disabled={memoryUpdating || chatMessages.length === 0}
+                        style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        {memoryUpdating && <Spinner size={11} thickness={1.4} />}
+                        {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
+                      </button>
+                    )}
+                    <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                  </div>
                 </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                  {!memoryProposal && (
-                    <button onClick={proposeMemoryUpdate}
-                      disabled={memoryUpdating || chatMessages.length === 0}
-                      style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                      {memoryUpdating && <Spinner size={11} thickness={1.4} />}
-                      {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
-                    </button>
-                  )}
-                  <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
-                </div>
+                <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.35, fontSize: 12 }}>{t("coach.memory_hint")}</div>
               </div>
               <MemoryReviewSetting
                 enabled={coachConfig.nightlyMemoryReview === true}
@@ -2091,22 +2090,16 @@ export function AICoachTab({
 
                   {coachHubTab === "memory" && (
                     <div>
-                      <div style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        marginBottom: 14,
-                      }}>
-                        <div style={{ ...s.muted, lineHeight: 1.5, flex: 1, minWidth: 0 }}>{t("coach.memory_hint")}</div>
+                      <div style={{ marginBottom: 14 }}>
                         {!memoryProposal && (
                           <button onClick={proposeMemoryUpdate}
                             disabled={memoryUpdating || chatMessages.length === 0}
-                            style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                            style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
                             {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                             {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                           </button>
                         )}
+                        <div style={{ ...s.muted, lineHeight: 1.35, fontSize: 12, marginTop: 8 }}>{t("coach.memory_hint")}</div>
                       </div>
                       <MemoryReviewSetting
                         enabled={coachConfig.nightlyMemoryReview === true}
@@ -2367,7 +2360,8 @@ function MemoryReviewSetting({ enabled, onToggle, t }) {
 function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
   const appDialog = useAppDialog();
   const [view, setView] = useState("current");
-  const visibleFacts = useMemo(() => {
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const baseFacts = useMemo(() => {
     const statuses = view === "archived" ? ["archived"] : ["active", "proposed"];
     return [...(facts || [])]
       .filter(f => statuses.includes(f?.status || "active"))
@@ -2376,24 +2370,40 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
         const byStatus = statusRank(a.status) - statusRank(b.status);
         if (byStatus) return byStatus;
         return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
-      })
-      .slice(0, 20);
+      });
   }, [facts, view]);
   const categorySummary = useMemo(() => {
     const counts = new Map();
-    for (const fact of visibleFacts) {
+    for (const fact of baseFacts) {
       const category = fact.category || "other";
       counts.set(category, (counts.get(category) || 0) + 1);
     }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
-  }, [visibleFacts]);
+    const categoryOrder = new Map(MEMORY_SECTIONS.map((section, index) => [section.key, index]));
+    return [...counts.entries()].sort((a, b) => {
+      const byOrder = (categoryOrder.get(a[0]) ?? 99) - (categoryOrder.get(b[0]) ?? 99);
+      if (byOrder) return byOrder;
+      return String(a[0]).localeCompare(String(b[0]));
+    });
+  }, [baseFacts]);
+  const categoryExists = categorySummary.some(([category]) => category === categoryFilter);
+  const selectedCategory = categoryFilter === "all" || categoryExists ? categoryFilter : "all";
+  const visibleFacts = useMemo(() => {
+    const filtered = selectedCategory === "all"
+      ? baseFacts
+      : baseFacts.filter(fact => (fact.category || "other") === selectedCategory);
+    return filtered.slice(0, 20);
+  }, [baseFacts, selectedCategory]);
+  const categoryOptions = useMemo(() => {
+    if (!baseFacts.length) return [];
+    return [["all", baseFacts.length], ...categorySummary];
+  }, [baseFacts.length, categorySummary]);
 
   return (
     <div style={{ marginTop: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
           <div style={{ ...s.label, margin: 0 }}>{t("coach.memory_facts_title")}</div>
-          <div style={{ color: "var(--ink-3)", fontSize: 11, marginTop: 3 }}>{t("coach.memory_facts_count", { count: visibleFacts.length })}</div>
+          <div style={{ color: "var(--ink-3)", fontSize: 11, whiteSpace: "nowrap" }}>{t("coach.memory_facts_count", { count: visibleFacts.length })}</div>
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
           {["current", "archived"].map(option => {
@@ -2416,13 +2426,26 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
           })}
         </div>
       </div>
-      {categorySummary.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-          {categorySummary.map(([category, count]) => (
-            <span key={category} style={memoryFactCategoryChipStyle}>
-              {t(`coach.memory_fact_category_${category}`)} · {count}
-            </span>
-          ))}
+      {categoryOptions.length > 0 && (
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap", marginBottom: 8 }}>
+          {categoryOptions.map(([category, count]) => {
+            const selected = selectedCategory === category;
+            return (
+              <button
+                key={category}
+                type="button"
+                onClick={() => setCategoryFilter(category)}
+                style={{
+                  ...memoryFactCategoryChipStyle,
+                  background: selected ? "var(--ink-1)" : "var(--bg-elevated)",
+                  color: selected ? "var(--paper)" : "var(--ink-2)",
+                  borderColor: selected ? "var(--ink-1)" : "var(--rule)",
+                }}
+              >
+                {t(`coach.memory_fact_category_${category}`)} · {count}
+              </button>
+            );
+          })}
         </div>
       )}
       <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.45, marginBottom: 8 }}>
@@ -2493,11 +2516,12 @@ const memoryFactCategoryChipStyle = {
   minHeight: 0,
   border: "1px solid var(--rule)",
   borderRadius: 999,
-  padding: "3px 8px",
-  fontSize: 11,
+  padding: "5px 10px",
+  fontSize: 12,
   lineHeight: 1.2,
   background: "var(--bg-elevated)",
   color: "var(--ink-2)",
+  cursor: "pointer",
 };
 
 const memoryFactButtonStyle = {

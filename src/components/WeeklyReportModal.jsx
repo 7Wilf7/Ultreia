@@ -86,14 +86,16 @@ export function WeeklyReportPage({
 
   return (
     <div style={{
-      height: "100%",
-      minHeight: "calc(100dvh - 92px)",
+      height: "calc(100% + 8px)",
+      minHeight: 0,
+      maxHeight: "calc(100% + 8px)",
       background: "var(--bg)",
       fontFamily: "var(--font-sans)",
       display: "flex",
       flexDirection: "column",
       margin: "-8px -14px 0",
       overflow: "hidden",
+      overscrollBehavior: "none",
     }}>
       <div style={{
         padding: "calc(max(env(safe-area-inset-top), 14px) + 4px) 18px 12px",
@@ -147,7 +149,14 @@ export function WeeklyReportPage({
         </div>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", WebkitOverflowScrolling: "touch", padding: "16px 18px 18px" }}>
+      <div style={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: "auto",
+        overscrollBehaviorY: "contain",
+        WebkitOverflowScrolling: "touch",
+        padding: "16px 18px 18px",
+      }}>
         <div style={{
           ...s.muted,
           fontSize: 12,

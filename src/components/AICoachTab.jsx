@@ -550,6 +550,24 @@ export function AICoachTab({
     }
     handleProactiveAdjustmentRequest();
   }, [handleProactiveAdjustmentRequest, onOpenProactiveAction, proactiveAdjustment]);
+  const manualAdjustmentLabel = proactiveAdjustment?.existingAction
+    ? t("coach.proactive_open")
+    : proactiveAdjustmentLoading
+      ? t("coach.proactive_generating")
+      : t("coach.proactive_manual");
+  const manualAdjustmentHint = proactiveAdjustment?.existingAction
+    ? t("coach.proactive_open")
+    : t("coach.proactive_manual_hint");
+  const handleManualAdjustmentFromMenu = useCallback(() => {
+    if (proactiveAdjustmentLoading) return;
+    setShowCoachMenu(false);
+    handleManualAdjustmentShortcut();
+  }, [handleManualAdjustmentShortcut, proactiveAdjustmentLoading]);
+  const handleManualAdjustmentFromHub = useCallback(() => {
+    if (proactiveAdjustmentLoading) return;
+    setShowCoachHub(false);
+    handleManualAdjustmentShortcut();
+  }, [handleManualAdjustmentShortcut, proactiveAdjustmentLoading]);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -1227,12 +1245,12 @@ export function AICoachTab({
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
 
         <span style={{ flex: 1, minWidth: 6 }} />
-        {showManualAdjustmentShortcut && (
+        {!isMobile && showManualAdjustmentShortcut && (
           <button
             type="button"
             onClick={handleManualAdjustmentShortcut}
             disabled={proactiveAdjustmentLoading}
-            title={proactiveAdjustment?.existingAction ? t("coach.proactive_open") : t("coach.proactive_manual_hint")}
+            title={manualAdjustmentHint}
             style={{
               ...s.btnGhost,
               minHeight: 26,
@@ -1243,11 +1261,7 @@ export function AICoachTab({
               opacity: proactiveAdjustmentLoading ? 0.65 : 1,
               cursor: proactiveAdjustmentLoading ? "default" : "pointer",
             }}>
-            {proactiveAdjustment?.existingAction
-              ? t("coach.proactive_open")
-              : proactiveAdjustmentLoading
-                ? t("coach.proactive_generating")
-                : t("coach.proactive_manual")}
+            {manualAdjustmentLabel}
           </button>
         )}
         {onOpenInbox && (
@@ -1922,6 +1936,27 @@ export function AICoachTab({
 
                 {/* Agent group */}
                 {groupHeader(t("coach.group_agent"))}
+                {showManualAdjustmentShortcut && (
+                  <button
+                    type="button"
+                    onClick={handleManualAdjustmentFromMenu}
+                    disabled={proactiveAdjustmentLoading}
+                    title={manualAdjustmentHint}
+                    style={{
+                      display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+                      background: "transparent", border: "none",
+                      borderTop: "1px solid var(--rule-soft)",
+                      padding: "13px 16px 13px 28px", minHeight: 50,
+                      fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--ink-1)",
+                      cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+                      borderRadius: 0,
+                      opacity: proactiveAdjustmentLoading ? 0.65 : 1,
+                      WebkitTapHighlightColor: "transparent",
+                    }}>
+                    <span style={{ flex: 1 }}>{manualAdjustmentLabel}</span>
+                    <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
+                  </button>
+                )}
                 {sub(t("coach.action_matrix_title"), () => openSub(() => setShowActionMatrix(true)))}
                 {sub(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)), agentActions.length > 0)}
 
@@ -1989,6 +2024,7 @@ export function AICoachTab({
                       { id: "memory",  label: t("coach.show_memory") + (memoryReady ? " ●" : ""), indent: true },
                     ] },
                     { header: t("coach.group_agent"), items: [
+                      ...(showManualAdjustmentShortcut ? [{ id: "adjust", label: manualAdjustmentLabel }] : []),
                       { id: "matrix", label: t("coach.action_matrix_title") },
                       { id: "actions", label: t("coach.recent_agent_actions") },
                     ] },
@@ -2082,6 +2118,25 @@ export function AICoachTab({
                         setShowCoachHub(false);
                       }}
                     />
+                  )}
+
+                  {coachHubTab === "adjust" && (
+                    <div>
+                      <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>
+                        {t("coach.proactive_manual_hint")}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleManualAdjustmentFromHub}
+                        disabled={proactiveAdjustmentLoading || !showManualAdjustmentShortcut}
+                        style={{
+                          ...s.btn,
+                          opacity: (proactiveAdjustmentLoading || !showManualAdjustmentShortcut) ? 0.65 : 1,
+                          cursor: (proactiveAdjustmentLoading || !showManualAdjustmentShortcut) ? "default" : "pointer",
+                        }}>
+                        {manualAdjustmentLabel}
+                      </button>
+                    </div>
                   )}
 
                   {coachHubTab === "matrix" && (

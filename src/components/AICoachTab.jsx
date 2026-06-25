@@ -219,6 +219,20 @@ function formatProviderMeta(meta, lang) {
   return providerLabel;
 }
 
+function formatRunnerClock(iso, lang) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(lang === "zh" ? "zh-CN" : "en", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  } catch {
+    return "";
+  }
+}
+
 export function AICoachTab({
   coachConfig, setCoachConfig,
   chatMessages,
@@ -234,6 +248,7 @@ export function AICoachTab({
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
   chatLoading, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  codexRunnerStatus = null,
   planDeviationSummary = null, planRescueLoading = false, onPlanRescueRequest,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
@@ -596,6 +611,44 @@ export function AICoachTab({
       : wStatus === 'error' ? 'error'
       : '—');
   const weatherActive = wStatus === 'ready';
+  const runnerState = codexRunnerStatus?.state || "loading";
+  const runnerCodexStatus = codexRunnerStatus?.codex_status || "unknown";
+  const runnerHealthy = runnerState === "online" && runnerCodexStatus !== "error";
+  const runnerChecking = runnerState === "loading";
+  const runnerLastSeen = formatRunnerClock(codexRunnerStatus?.last_seen_at || codexRunnerStatus?.checked_at, lang);
+  const runnerModel = codexRunnerStatus?.model || "Codex";
+  const runnerEffort = codexRunnerStatus?.reasoning_effort;
+  const runnerPrimary = lang === "zh"
+    ? (runnerHealthy ? "Codex 可用"
+      : runnerChecking ? "检查 Codex"
+      : runnerState === "error" ? "Codex 异常"
+      : runnerState === "stale" ? "Codex 连接不稳"
+      : "Codex 离线")
+    : (runnerHealthy ? "Codex ready"
+      : runnerChecking ? "Checking Codex"
+      : runnerState === "error" ? "Codex issue"
+      : runnerState === "stale" ? "Codex unstable"
+      : "Codex offline");
+  const runnerDetailParts = [
+    runnerModel,
+    runnerEffort,
+    runnerLastSeen ? (lang === "zh" ? `${runnerLastSeen} 在线` : `seen ${runnerLastSeen}`) : null,
+  ].filter(Boolean);
+  const runnerDetail = runnerDetailParts.join(" · ");
+  const runnerFallbackText = runnerHealthy
+    ? (lang === "zh" ? "优先调用" : "preferred")
+    : (lang === "zh" ? "会自动用 DeepSeek" : "DeepSeek fallback");
+  const runnerAccent = runnerHealthy
+    ? "var(--moss)"
+    : (runnerState === "offline" || runnerState === "error" || runnerCodexStatus === "error")
+      ? "var(--danger)"
+      : "var(--warn)";
+  const runnerTitle = [
+    runnerPrimary,
+    runnerDetail,
+    runnerFallbackText,
+    codexRunnerStatus?.last_error ? `${lang === "zh" ? "上次错误" : "Last error"}: ${codexRunnerStatus.last_error}` : null,
+  ].filter(Boolean).join(" · ");
   const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
@@ -844,6 +897,18 @@ export function AICoachTab({
         WebkitOverflowScrolling: "touch",
         scrollbarWidth: isMobile ? "none" : undefined,
       }}>
+        <span
+          title={runnerTitle}
+          aria-label={runnerTitle}
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: 999,
+            background: runnerAccent,
+            boxShadow: runnerHealthy ? "0 0 11px rgba(74,107,83,0.7)" : "none",
+            flex: "0 0 auto",
+          }}
+        />
         <span
           title={coachProviderFallback
             ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")

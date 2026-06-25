@@ -132,6 +132,29 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function publicErrorMessage(value: unknown): string | null {
+  const text = stringValue(value);
+  if (!text) return null;
+  return text.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 240);
+}
+
+function ageMsFromIso(value: unknown): number | null {
+  const text = stringValue(value);
+  if (!text) return null;
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) ? Math.max(0, Date.now() - ms) : null;
+}
+
+function runnerHeartbeatState(status: string, ageMs: number | null): "online" | "stale" | "offline" {
+  if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS) return "online";
+  if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS * 5) return "stale";
+  return "offline";
+}
+
 function desktopWallet(balanceCents: number) {
   return {
     balance_cents: balanceCents,
@@ -157,7 +180,7 @@ async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: 
   const cutoff = new Date(Date.now() - DESKTOP_RUNNER_FRESH_MS).toISOString();
   const { data, error } = await admin
     .from("ai_runners")
-    .select("id, last_seen_at")
+    .select("id, last_seen_at, metadata")
     .eq("provider", DESKTOP_CODEX.id)
     .eq("status", "online")
     .gte("last_seen_at", cutoff)
@@ -166,7 +189,77 @@ async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: 
     .maybeSingle();
   if (error) return { ok: false, reason: "desktop_schema_unavailable" };
   if (!data?.id) return { ok: false, reason: "desktop_runner_offline" };
+  const metadata = objectValue(data.metadata);
+  const lastCodexStatus = stringValue(metadata.lastCodexStatus);
+  const lastErrorAgeMs = ageMsFromIso(metadata.lastCodexErrorAt);
+  if (lastCodexStatus === "error" && (lastErrorAgeMs === null || lastErrorAgeMs <= DESKTOP_RUNNER_FRESH_MS * 5)) {
+    return { ok: false, reason: "desktop_codex_unhealthy" };
+  }
   return { ok: true, runnerId: String(data.id) };
+}
+
+async function readDesktopRunnerStatus(admin: any) {
+  const checkedAt = new Date().toISOString();
+  const { data, error } = await admin
+    .from("ai_runners")
+    .select("id, provider, status, last_seen_at, metadata")
+    .eq("provider", DESKTOP_CODEX.id)
+    .order("last_seen_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      provider: DESKTOP_CODEX.id,
+      state: "error",
+      runner_state: "offline",
+      codex_status: "unknown",
+      error: "desktop_schema_unavailable",
+      fresh_ms: DESKTOP_RUNNER_FRESH_MS,
+      checked_at: checkedAt,
+    };
+  }
+
+  if (!data?.id) {
+    return {
+      provider: DESKTOP_CODEX.id,
+      state: "offline",
+      runner_state: "offline",
+      codex_status: "unknown",
+      reason: "no_runner",
+      fresh_ms: DESKTOP_RUNNER_FRESH_MS,
+      checked_at: checkedAt,
+    };
+  }
+
+  const metadata = objectValue(data.metadata);
+  const status = String(data.status || "offline");
+  const ageMs = ageMsFromIso(data.last_seen_at);
+  const runnerState = runnerHeartbeatState(status, ageMs);
+  const rawCodexStatus = stringValue(metadata.lastCodexStatus);
+  const codexStatus = rawCodexStatus === "error" || rawCodexStatus === "ok" ? rawCodexStatus : "unknown";
+  const state = codexStatus === "error" ? "error" : runnerState;
+
+  return {
+    provider: DESKTOP_CODEX.id,
+    state,
+    runner_state: runnerState,
+    codex_status: codexStatus,
+    runner_id: String(data.id),
+    status,
+    last_seen_at: stringValue(data.last_seen_at),
+    age_ms: ageMs,
+    fresh_ms: DESKTOP_RUNNER_FRESH_MS,
+    model: stringValue(metadata.codexModel) || DESKTOP_CODEX.model,
+    reasoning_effort: stringValue(metadata.reasoningEffort),
+    codex_package: stringValue(metadata.codexPackage),
+    locked_down: metadata.lockedDown === true,
+    booted_at: stringValue(metadata.bootedAt),
+    last_ok_at: stringValue(metadata.lastCodexOkAt),
+    last_error_at: stringValue(metadata.lastCodexErrorAt),
+    last_error: publicErrorMessage(metadata.lastCodexError),
+    checked_at: checkedAt,
+  };
 }
 
 function desktopJobPayload(body: { system?: string; messages?: unknown; max_tokens?: number; stream?: boolean }) {
@@ -280,13 +373,18 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return json({ error: "unauthorized" }, 401);
 
-  let body: { system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
+  let body: { action?: string; system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
-  if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: { user }, error: whoErr } = await admin.auth.getUser(jwt);
   if (whoErr || !user) return json({ error: "unauthorized" }, 401);
+
+  if (body.action === "runner_status") {
+    return json(await readDesktopRunnerStatus(admin));
+  }
+
+  if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
   const uid = user.id;
 
   const { error: ensureErr } = await admin.rpc("wallet_ensure", {

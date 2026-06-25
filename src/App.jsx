@@ -1351,6 +1351,7 @@ function AppShell({
   const [chatLoading, setChatLoading] = useState(false);
   const [coachChatDraft, setCoachChatDraft] = useState("");
   const [lastCoachProvider, setLastCoachProvider] = useState({ id: "deepseek", label: "DeepSeek", fallback: null });
+  const [codexRunnerStatus, setCodexRunnerStatus] = useState({ state: "loading", provider: "desktop_codex" });
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [planProposal, setPlanProposal] = useState(null);
@@ -1366,12 +1367,50 @@ function AppShell({
   });
   const chatAbortRef = useRef(null);
   const chatRunRef = useRef(0);
+  const runnerStatusAbortRef = useRef(null);
   const extractAbortRef = useRef(null);
   const extractRunRef = useRef(0);
   const weeklyReportAbortRef = useRef(null);
   const weeklyReportRunRef = useRef(0);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
   const weeklyReportStatus = weeklyReportLoading ? "analyzing" : weeklyReportExtracting ? "extracting" : null;
+  const refreshCodexRunnerStatus = useCallback(async () => {
+    runnerStatusAbortRef.current?.abort();
+    const controller = new AbortController();
+    runnerStatusAbortRef.current = controller;
+    try {
+      const data = await db.usage.getRunnerStatus({ signal: controller.signal });
+      setCodexRunnerStatus(data || { state: "unknown", provider: "desktop_codex" });
+      return data;
+    } catch (err) {
+      if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted) return null;
+      setCodexRunnerStatus(prev => ({
+        ...prev,
+        provider: "desktop_codex",
+        state: "error",
+        runner_state: prev?.runner_state || "offline",
+        codex_status: prev?.codex_status || "unknown",
+        error: err?.message || String(err),
+        checked_at: new Date().toISOString(),
+      }));
+      return null;
+    } finally {
+      if (runnerStatusAbortRef.current === controller) runnerStatusAbortRef.current = null;
+    }
+  }, []);
+  useEffect(() => {
+    refreshCodexRunnerStatus();
+    const timer = setInterval(refreshCodexRunnerStatus, 30_000);
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") refreshCodexRunnerStatus();
+    };
+    document.addEventListener("visibilitychange", handleVisible);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisible);
+      runnerStatusAbortRef.current?.abort();
+    };
+  }, [refreshCodexRunnerStatus]);
   useEffect(() => {
     if (!(agentActions || []).some(a => a?.type === "create_plans" && a.sourceMessageId)) return undefined;
     const timer = setTimeout(() => {
@@ -1869,6 +1908,20 @@ function AppShell({
         label: coachProviderLabel(providerId, data.fallback || null),
         fallback: data.fallback || null,
       });
+      if (providerId === "desktop_codex") {
+        setCodexRunnerStatus(prev => ({
+          ...prev,
+          provider: "desktop_codex",
+          state: "online",
+          runner_state: "online",
+          codex_status: "ok",
+          model: data.model || prev?.model || "Codex",
+          last_ok_at: new Date().toISOString(),
+          checked_at: new Date().toISOString(),
+        }));
+      } else if (data.fallback?.from === "desktop_codex") {
+        refreshCodexRunnerStatus();
+      }
       const meta = buildCoachReplyMeta({
         providerId,
         model: data.model || DEFAULT_MODEL,
@@ -2465,6 +2518,7 @@ Rules:
           setChatInput={setCoachChatDraft}
           coachProviderLabel={lastCoachProvider.label}
           coachProviderFallback={lastCoachProvider.fallback}
+          codexRunnerStatus={codexRunnerStatus}
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}

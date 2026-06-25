@@ -36,6 +36,41 @@ export async function coachProxy({ system, messages, max_tokens, signal }) {
   return data;
 }
 
+export async function getRunnerStatus({ signal } = {}) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) {
+    const e = new Error('unauthorized');
+    e.code = 'unauthorized';
+    throw e;
+  }
+
+  const resp = await postJson({
+    url: supabaseFunctionUrl('coach-proxy'),
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: supabasePublicAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: { action: 'runner_status' },
+    signal,
+  });
+
+  const data = await resp.json().catch(() => null);
+  if (!resp.ok) {
+    const code = data?.error || data?.message || `HTTP ${resp.status}`;
+    const e = new Error(code);
+    e.code = data?.error || code;
+    throw e;
+  }
+  if (data && data.error && data.state !== 'error') {
+    const e = new Error(data.error);
+    e.code = data.error;
+    throw e;
+  }
+  return data;
+}
+
 export async function coachProxyStream({ system, messages, max_tokens, onToken, signal }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;

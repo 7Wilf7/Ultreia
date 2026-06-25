@@ -24,6 +24,8 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const bootedAt = new Date().toISOString();
+let runnerHealthMetadata = {};
 let stopping = false;
 process.on("SIGINT", () => { stopping = true; });
 process.on("SIGTERM", () => { stopping = true; });
@@ -35,13 +37,10 @@ main().catch(err => {
 
 async function main() {
   console.log(`[runner] starting ${RUNNER_ID}`);
-  const bootedAt = new Date().toISOString();
-  let bootReported = false;
 
   while (!stopping) {
     try {
-      await heartbeat(bootReported ? {} : { bootedAt });
-      bootReported = true;
+      await heartbeat();
       await supabase.rpc("expire_stale_ai_jobs");
       const job = await claimJob();
       if (job) {
@@ -95,10 +94,23 @@ async function heartbeat(extra = {}) {
         codexModel: CODEX_MODEL || null,
         reasoningEffort: CODEX_REASONING_EFFORT || null,
         lockedDown: true,
+        bootedAt,
+        ...runnerHealthMetadata,
         ...extra,
       },
     }, { onConflict: "id" });
   if (error) throw new Error(`heartbeat failed: ${error.message}`);
+}
+
+function publicErrorMessage(value) {
+  return String(value || "unknown_error")
+    .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
+    .slice(0, 500);
+}
+
+async function rememberCodexHealth(patch) {
+  runnerHealthMetadata = { ...runnerHealthMetadata, ...patch };
+  await heartbeat();
 }
 
 async function markOffline() {
@@ -147,17 +159,29 @@ async function processJob(job) {
       completed_at: new Date().toISOString(),
       heartbeat_at: new Date().toISOString(),
     });
+    await rememberCodexHealth({
+      lastCodexStatus: "ok",
+      lastCodexOkAt: new Date().toISOString(),
+      lastCodexErrorAt: null,
+      lastCodexError: null,
+    }).catch(err => console.warn("[runner] health update failed:", err.message));
     console.log(`[runner] completed ${job.id}`);
   } catch (err) {
     const message = err?.message || String(err);
+    const publicMessage = publicErrorMessage(message);
     await updateJob(job.id, {
       status: "failed",
       provider_actual: "desktop_codex",
-      error: message.slice(0, 1000),
+      error: publicMessage.slice(0, 1000),
       completed_at: new Date().toISOString(),
       heartbeat_at: new Date().toISOString(),
     });
-    console.error(`[runner] failed ${job.id}:`, message);
+    await rememberCodexHealth({
+      lastCodexStatus: "error",
+      lastCodexErrorAt: new Date().toISOString(),
+      lastCodexError: publicMessage,
+    }).catch(healthErr => console.warn("[runner] health update failed:", healthErr.message));
+    console.error(`[runner] failed ${job.id}:`, publicMessage);
   } finally {
     clearInterval(keepalive);
   }

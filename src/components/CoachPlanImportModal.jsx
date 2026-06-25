@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
-import { useT } from "../i18n/LanguageContext";
+import { useLanguage, useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
 import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, getPlanTargetId, isPlanUpdateItem, isRestPlanItem } from "../utils/agentActions";
@@ -75,6 +75,10 @@ function planSummary(it, t) {
   return bits.filter(Boolean).join(" · ");
 }
 
+function containsChinese(value) {
+  return /[\u3400-\u9FFF]/.test(String(value || ""));
+}
+
 function normalizeReasonLine(value) {
   return String(value || "")
     .replace(/^#{1,6}\s*/, "")
@@ -83,7 +87,7 @@ function normalizeReasonLine(value) {
     .trim();
 }
 
-function assistantAnalysisLines(assistantContent) {
+function assistantAnalysisLines(assistantContent, lang) {
   return String(assistantContent || "")
     .replace(/```[\s\S]*?```/g, " ")
     .split(/\n+/)
@@ -92,6 +96,7 @@ function assistantAnalysisLines(assistantContent) {
     .filter(line => !/^\{|\[|\]$/.test(line))
     .filter(line => !/^\d{4}-\d{2}-\d{2}\b/.test(line))
     .filter(line => !/^(Road Run|Trail Run|Hiking|Strength|HIIT|Rest)\b/i.test(line))
+    .filter(line => lang !== "zh" || containsChinese(line))
     .slice(0, 3);
 }
 
@@ -102,7 +107,66 @@ function localizedActionReason(action, t) {
   return translated === key ? t("coach.action_reason_source_default") : translated;
 }
 
-function coachReasonLines(action, selectedItems, assistantContent, t) {
+function planReasonLabel(it, t) {
+  if (isRestPlanItem(it)) return t("calendar.planned_rest_label");
+  const bits = [t(`enum.activity.${it.type}`)];
+  if (it.runType) bits.push(t(`enum.subtype.${it.runType}`));
+  if ((it.subTypes || []).length) bits.push(it.subTypes.map(st => t(`enum.subtype.${st}`)).join(" / "));
+  if (it.distance) bits.push(`${it.distance} km`);
+  if (it.ascent) bits.push(`+${it.ascent} m`);
+  if (it.speed) bits.push(`${it.speed} km/h`);
+  if (it.durationMin) bits.push(`${it.durationMin} ${t("form.minutes")}`);
+  return bits.filter(Boolean).join(" · ");
+}
+
+function noteFactors(note, t) {
+  const text = String(note || "").toLowerCase();
+  const factors = [];
+  const add = key => {
+    const value = t(key);
+    if (value && value !== key && !factors.includes(value)) factors.push(value);
+  };
+  if (/(poor|bad|short).*sleep|sleep/.test(text)) add("coach.action_factor_sleep");
+  if (/hot|humid|humidity/.test(text)) add("coach.action_factor_heat_humidity");
+  if (/rpe\s*8|rpe.*high|recent rpe/.test(text)) add("coach.action_factor_high_rpe");
+  if (/recover|recovery/.test(text)) add("coach.action_factor_recovery");
+  if (/missed|chasing|chase/.test(text)) add("coach.action_factor_missed_volume");
+  if (/lower-body|non-leg|leg-dominant|eccentric/.test(text)) add("coach.action_factor_lower_body");
+  if (/rain|wet/.test(text)) add("coach.action_factor_rain");
+  if (/downhill|footing/.test(text)) add("coach.action_factor_terrain");
+  if (/bail|earlier|flat|fresh/.test(text)) add("coach.action_factor_state_check");
+  return factors;
+}
+
+function fallbackItemReason(it, action, t) {
+  const plan = planReasonLabel(it, t);
+  const source = String(action?.source || "");
+  const baseKey = isRestPlanItem(it)
+    ? "coach.action_item_reason_rest"
+    : source === "recovery_load_guard"
+      ? "coach.action_item_reason_recovery"
+      : source === "plan_deviation_rescue"
+        ? "coach.action_item_reason_plan_deviation"
+        : source === "combined_training_adjustment"
+          ? "coach.action_item_reason_combined"
+          : isPlanUpdateItem(it)
+            ? "coach.action_item_reason_update"
+            : "coach.action_item_reason_default";
+  const base = t(baseKey, { plan });
+  const factors = noteFactors(it.notes, t);
+  return factors.length
+    ? `${base}${t("coach.action_item_reason_factors", { factors: factors.join("、") })}`
+    : base;
+}
+
+function displayItemReason(it, action, t, lang) {
+  const note = normalizeReasonLine(it.notes);
+  if (!note) return "";
+  if (lang !== "zh" || containsChinese(note)) return note;
+  return fallbackItemReason(it, action, t);
+}
+
+function coachReasonLines(action, selectedItems, assistantContent, t, lang) {
   const lines = [];
   const seen = new Set();
   const add = value => {
@@ -113,9 +177,9 @@ function coachReasonLines(action, selectedItems, assistantContent, t) {
     lines.push(line);
   };
 
-  assistantAnalysisLines(assistantContent).forEach(add);
+  assistantAnalysisLines(assistantContent, lang).forEach(add);
   if (lines.length === 0) add(localizedActionReason(action, t));
-  selectedItems.map(it => it.notes).forEach(add);
+  selectedItems.map(it => displayItemReason(it, action, t, lang)).forEach(add);
   return lines.slice(0, 4);
 }
 
@@ -123,21 +187,29 @@ function dateImpactText(row, t) {
   const date = compactDateLabel(row.date);
   if (row.dateWideReplace && row.existingPlanCount > 0) {
     if (row.restCount > 0 && row.createCount === 0) {
-      return t("coach.action_date_replace_rest", { date, count: row.existingPlanCount });
+      return row.existingPlanCount === 1
+        ? t("coach.action_date_replace_rest_single", { date })
+        : t("coach.action_date_replace_rest", { date, count: row.existingPlanCount });
     }
-    return t("coach.action_date_replace_plan", { date, count: row.existingPlanCount });
+    return row.existingPlanCount === 1
+      ? t("coach.action_date_replace_plan_single", { date })
+      : t("coach.action_date_replace_plan", { date, count: row.existingPlanCount });
   }
   if (row.dateWideReplace && row.restCount > 0 && row.createCount === 0) {
     return t("coach.action_date_add_rest", { date });
   }
   if (row.updateCount > 0) {
-    return t("coach.action_date_update_only", { date, n: row.updateCount });
+    const otherCount = Math.max(0, row.existingPlanCount - row.updateCount);
+    return otherCount > 0
+      ? t("coach.action_date_update_with_others", { date, n: row.updateCount, other: otherCount })
+      : t("coach.action_date_update_single", { date, n: row.updateCount });
   }
   return t("coach.action_date_add_plan", { date, n: row.createCount || row.itemCount });
 }
 
 export function CoachPlanImportModal({ plans = [], action = null, assistantContent = "", existingPlans = [], onConfirm, onCancel, onReject, onReExtract }) {
   const t = useT();
+  const { lang } = useLanguage();
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const agentAction = action || buildCreatePlansAction(plans);
@@ -166,7 +238,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const selectedUpdateCount = selectedItems.filter(isPlanUpdateItem).length;
   const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it) && !isPlanUpdateItem(it)).length;
   const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
-  const reasonLines = coachReasonLines(agentAction, selectedItems, assistantContent, t);
+  const reasonLines = coachReasonLines(agentAction, selectedItems, assistantContent, t, lang);
   const dateImpactRows = impact.dateImpacts || [];
 
   async function doImport() {
@@ -408,6 +480,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
               const isRest = isRestPlanItem(it);
               const color = isRest ? "var(--ink-3)" : (TYPE_COLOR[it.type] || "var(--ink-2)");
               const f = isRest ? {} : planFields(it.type);
+              const itemReason = displayItemReason(it, agentAction, t, lang);
               return (
                 <div key={it._id} style={{
                   border: "1px solid var(--rule)",
@@ -455,31 +528,20 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                       textTransform: "uppercase", letterSpacing: "0.06em", display: isMobile ? "none" : "block" }}>
                       {t("calendar.planned_badge")}
                     </div>
-                    {it.notes && (
-                      <div style={{ fontSize: 12, color: "var(--ink-2)", fontStyle: "italic",
-                        flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                        display: isMobile ? "none" : "block" }}>
-                        {it.notes}
-                      </div>
-                    )}
                     <button onClick={() => remove(it._id)}
                       style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
                         marginLeft: "auto", color: "var(--ink-3)" }}>
                       {t("common.delete")}
                     </button>
                   </div>
-                  {it.notes && isMobile && (
+                  {itemReason && (
                     <div style={{
                       marginBottom: 8,
                       fontSize: 12,
-                      lineHeight: 1.35,
+                      lineHeight: 1.45,
                       color: "var(--ink-2)",
-                      overflow: "hidden",
-                      display: "-webkit-box",
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: "vertical",
                     }}>
-                      {it.notes}
+                      {itemReason}
                     </div>
                   )}
 

@@ -1,5 +1,5 @@
 // Provider catalog — legacy API-settings metadata plus the current built-in
-// DeepSeek model label. Normal users now call AI through wallet-backed Edge
+// DeepSeek fallback label. Normal users now call AI through personal-mode Edge
 // Functions, so provider keys/endpoints are not configured in the UI.
 export const API_PROVIDERS = {
   deepseek: {
@@ -55,7 +55,7 @@ export const DEEPSEEK_SIGNUP_URL = API_PROVIDERS.deepseek.signupUrl;
 export const DEFAULT_MODEL = API_PROVIDERS.deepseek.defaultModel;
 
 // Personal mode for now: keep public-facing onboarding / wallet / admin
-// surfaces hidden while preserving the underlying implementation for later.
+// surfaces hidden while preserving dormant legacy implementation for later.
 export const PRODUCT_PUBLIC_FEATURES = false;
 
 // The one account allowed to mint invite codes. Checked client-side to show

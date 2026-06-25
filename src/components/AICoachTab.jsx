@@ -341,7 +341,7 @@ export function AICoachTab({
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
   // foreground / app resume, and the realtime cache TTL is now 3h — fresh
-  // enough while avoiding unnecessary wallet-backed weather calls.)
+  // enough while avoiding unnecessary weather calls.)
 
   // Chat scroll container + the two floating jump buttons. The buttons live
   // inside the (sticky) message window so the provider pills above and the
@@ -609,16 +609,14 @@ export function AICoachTab({
   const wStatus = weatherCtx?.status || 'idle';
   const wTemp = weatherCtx?.currentWeather?.apparentC ?? weatherCtx?.currentWeather?.tempC;
   const weatherLabel = lang === "zh"
-    ? (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
+      ? (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
       : wStatus === 'loading' ? '加载中'
       : wStatus === 'no_location' ? '需要位置'
-      : wStatus === 'insufficient_balance' ? '余额不足'
       : wStatus === 'error' ? '出错'
       : '—')
     : (wStatus === 'ready' && Number.isFinite(wTemp) ? `${Math.round(wTemp)}°C`
       : wStatus === 'loading' ? 'loading'
       : wStatus === 'no_location' ? 'need location'
-      : wStatus === 'insufficient_balance' ? 'low balance'
       : wStatus === 'error' ? 'error'
       : '—');
   const weatherActive = wStatus === 'ready';

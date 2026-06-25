@@ -1,16 +1,17 @@
-// Wallet-backed AI coach proxy.
+// Personal-mode AI coach proxy.
 //
 // The app owner's DeepSeek key stays in Edge Function secrets. Phase-1
 // desktop_codex support never receives Codex credentials: it only writes an
 // ai_jobs row and waits briefly for a local desktop runner to write back text.
-// If the runner is offline/missing/slow, this function falls back to DeepSeek
-// and debits the wallet only after a successful upstream reply.
+// If the runner is offline/missing/slow, this function falls back to DeepSeek.
+// AI calls do not check wallet balance or debit wallet records in personal mode.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
 //   npx supabase functions deploy coach-proxy
 //
 // Secrets: SHARED_DEEPSEEK_KEY (set in Dashboard → Edge Functions → Secrets).
-// Optional tuning: DESKTOP_CODEX_WAIT_MS, DESKTOP_CODEX_PREFER_WAIT_MS.
+// Optional tuning: DESKTOP_CODEX_WAIT_MS, DESKTOP_CODEX_TASK_WAIT_MS,
+// DESKTOP_CODEX_PREFER_WAIT_MS.
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -20,14 +21,11 @@ const DEEPSEEK = {
   url: "https://api.deepseek.com/anthropic/v1/messages",
   model: "deepseek-v4-pro",
   keyEnv: "SHARED_DEEPSEEK_KEY",
-  pricingCnyPerM: { input: 3.16, inputCacheHit: 0.026, output: 6.32 },
 } as const;
-const MIN_AI_CHARGE_CENTS = 1;
-const AI_CHARGE_POLICY = "actual_cost_min_1_cent";
+const AI_CHARGE_POLICY = "personal_mode_no_wallet_debit";
 const DESKTOP_CODEX = {
   id: "desktop_codex",
   model: "codex-cli",
-  chargePolicy: "chatgpt_codex_subscription_no_wallet_debit",
 } as const;
 const DESKTOP_RUNNER_FRESH_MS = 20_000;
 const DESKTOP_RUNNER_STALE_MS = 10_000;
@@ -35,6 +33,14 @@ const DESKTOP_CODEX_ERROR_COOLDOWN_MS = 5 * 60_000;
 const DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS = 24 * 60 * 60_000;
 const DESKTOP_JOB_TTL_MS = 2 * 60_000;
 const DESKTOP_POLL_MS = 1000;
+const AI_JOB_KINDS = new Set([
+  "coach_chat",
+  "weekly_report",
+  "memory_update",
+  "plan_extract",
+  "plan_deviation_rescue",
+  "daily_checkin",
+]);
 
 function tokenUsage(usage: unknown): {
   input: number;
@@ -70,22 +76,6 @@ function tokenUsage(usage: unknown): {
     inputCacheMiss: Number.isFinite(inputCacheMiss) ? inputCacheMiss : 0,
     inputCacheWrite: Number.isFinite(inputCacheWrite) ? inputCacheWrite : 0,
   };
-}
-
-function calcChargeCents(usage: unknown): {
-  actualCostCents: number;
-  chargeCents: number;
-  billableUsage: ReturnType<typeof tokenUsage>;
-} {
-  const tokens = tokenUsage(usage);
-  const pricing = DEEPSEEK.pricingCnyPerM;
-  const inputCny = (tokens.inputCacheHit / 1_000_000) * pricing.inputCacheHit
-    + (tokens.inputCacheMiss / 1_000_000) * pricing.input
-    + (Math.max(0, tokens.input - tokens.inputCacheHit - tokens.inputCacheMiss) / 1_000_000) * pricing.input;
-  const actualCny = inputCny + (tokens.output / 1_000_000) * pricing.output;
-  const actualCostCents = Math.round(actualCny * 100);
-  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, actualCostCents);
-  return { actualCostCents, chargeCents, billableUsage: tokens };
 }
 
 const CORS = {
@@ -168,13 +158,18 @@ function codexErrorCooldownMs(status: string): number {
   return status === "auth_error" ? DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS : DESKTOP_CODEX_ERROR_COOLDOWN_MS;
 }
 
-function desktopWallet(balanceCents: number) {
+function aiJobKind(value: unknown): string {
+  const text = stringValue(value);
+  return text && AI_JOB_KINDS.has(text) ? text : "coach_chat";
+}
+
+function noWalletCharge(usage: unknown = null) {
   return {
-    balance_cents: balanceCents,
+    balance_cents: null,
     charge_cents: 0,
     actual_cost_cents: 0,
-    charge_policy: DESKTOP_CODEX.chargePolicy,
-    billable_usage: null,
+    charge_policy: AI_CHARGE_POLICY,
+    billable_usage: tokenUsage(usage),
   };
 }
 
@@ -308,11 +303,18 @@ async function markDesktopFallback(admin: any, jobId: string, reason: string) {
     .in("status", ["queued", "claimed", "running"]);
 }
 
+function desktopWaitMs(kind: string, stream: boolean, preference: "auto" | "prefer_codex" | "deepseek_only"): number {
+  if (preference === "prefer_codex") return numberEnv("DESKTOP_CODEX_PREFER_WAIT_MS", 90_000);
+  if (stream) return numberEnv("DESKTOP_CODEX_WAIT_MS", 35_000);
+  if (kind === "coach_chat") return numberEnv("DESKTOP_CODEX_TASK_WAIT_MS", 60_000);
+  return numberEnv("DESKTOP_CODEX_TASK_WAIT_MS", 90_000);
+}
+
 async function tryDesktopCodex(opts: {
   admin: any;
   uid: string;
   body: { system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
-  walletBalanceCents: number;
+  kind: string;
   preference: "auto" | "prefer_codex" | "deepseek_only";
 }): Promise<{ response: Response | null; fallbackReason: string }> {
   if (opts.preference === "deepseek_only") {
@@ -322,15 +324,13 @@ async function tryDesktopCodex(opts: {
   const runner = await hasFreshDesktopRunner(opts.admin);
   if (!runner.ok) return { response: null, fallbackReason: runner.reason };
 
-  const waitMs = opts.preference === "prefer_codex"
-    ? numberEnv("DESKTOP_CODEX_PREFER_WAIT_MS", 90_000)
-    : numberEnv("DESKTOP_CODEX_WAIT_MS", opts.body.stream ? 35_000 : 45_000);
+  const waitMs = desktopWaitMs(opts.kind, opts.body.stream === true, opts.preference);
   const expiresAt = new Date(Date.now() + Math.max(waitMs + 15_000, DESKTOP_JOB_TTL_MS)).toISOString();
   const { data: job, error: jobErr } = await opts.admin
     .from("ai_jobs")
     .insert({
       user_id: opts.uid,
-      kind: "coach_chat",
+      kind: opts.kind,
       status: "queued",
       provider_requested: DESKTOP_CODEX.id,
       payload: desktopJobPayload(opts.body),
@@ -372,7 +372,7 @@ async function tryDesktopCodex(opts: {
           usage: Object.keys(usage).length ? usage : null,
           provider: DESKTOP_CODEX.id,
           model: typeof result.model === "string" ? result.model : DESKTOP_CODEX.model,
-          wallet: desktopWallet(opts.walletBalanceCents),
+          wallet: noWalletCharge(usage),
           desktop_job: { id: jobId, runner_id: result.runner_id || null },
         }),
         fallbackReason: "",
@@ -397,7 +397,7 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return json({ error: "unauthorized" }, 401);
 
-  let body: { action?: string; system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
+  let body: { action?: string; kind?: string; system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -411,44 +411,24 @@ Deno.serve(async (req) => {
 
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
-  const { error: ensureErr } = await admin.rpc("wallet_ensure", {
-    p_user_id: uid,
-    p_initial_cents: 500,
-  });
-  if (ensureErr) return json({ error: "wallet_ensure_failed" }, 500);
-
-  const { data: wallet } = await admin
-    .from("wallets")
-    .select("balance_cents")
-    .eq("user_id", uid)
-    .single();
-  const walletBalanceCents = Number(wallet?.balance_cents ?? 0);
-
   let fallback: Record<string, unknown> | null = null;
-  // Phase 1 POC: only the AI Coach chat path calls coachProxyStream
-  // (`stream:true`). Structured tasks such as Memory update, weekly reports,
-  // plan extraction, and plan-deviation rescue stay on DeepSeek until they are
-  // explicitly moved onto the provider router.
-  if (body.stream === true) {
-    const preference = await readProviderPreference(admin, uid);
-    const desktop = await tryDesktopCodex({
-      admin,
-      uid,
-      body,
-      walletBalanceCents,
-      preference,
-    });
-    if (desktop.response) return desktop.response;
-    if (desktop.fallbackReason && desktop.fallbackReason !== "desktop_schema_unavailable") {
-      fallback = {
-        from: DESKTOP_CODEX.id,
-        to: DEEPSEEK.id,
-        reason: desktop.fallbackReason,
-      };
-    }
+  const kind = aiJobKind(body.kind);
+  const preference = await readProviderPreference(admin, uid);
+  const desktop = await tryDesktopCodex({
+    admin,
+    uid,
+    body,
+    kind,
+    preference,
+  });
+  if (desktop.response) return desktop.response;
+  if (desktop.fallbackReason && desktop.fallbackReason !== "desktop_schema_unavailable") {
+    fallback = {
+      from: DESKTOP_CODEX.id,
+      to: DEEPSEEK.id,
+      reason: desktop.fallbackReason,
+    };
   }
-
-  if (walletBalanceCents < MIN_AI_CHARGE_CENTS) return json({ error: "insufficient_balance", fallback }, 402);
 
   const key = Deno.env.get(DEEPSEEK.keyEnv);
   if (!key) return json({ error: "server_misconfigured", fallback }, 500);
@@ -519,8 +499,8 @@ Deno.serve(async (req) => {
               } else if (evt.type === "message_delta") {
                 mergeUsage(evt.usage);
               } else if (evt.type === "message_stop") {
-                // Finalize after the upstream stream closes so the wallet event is
-                // the last data frame the client needs to read.
+                // Finalize after the upstream stream closes so the metadata event
+                // is the last data frame the client needs to read.
               } else if (evt.type === "error") {
                 const err = evt.error as { message?: unknown } | undefined;
                 upstreamError = typeof err?.message === "string" ? err.message : "stream error";
@@ -535,49 +515,13 @@ Deno.serve(async (req) => {
             return;
           }
 
-          if (!usage) {
-            finishWithError("missing_usage");
-            return;
-          }
-
-          const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(usage);
-          const upstreamId = typeof finalMessage?.id === "string" ? finalMessage.id : "";
-          const requestId = upstreamId ? `ai:${upstreamId}` : `ai:${uid}:${Date.now()}`;
-          const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
-            p_user_id: uid,
-            p_amount_cents: chargeCents,
-            p_kind: "ai_charge",
-            p_provider: DEEPSEEK.id,
-            p_request_id: requestId,
-            p_metadata: {
-              provider: DEEPSEEK.id,
-              model: DEEPSEEK.model,
-              usage,
-              billable_usage: billableUsage,
-              actual_cost_cents: actualCostCents,
-              charge_policy: AI_CHARGE_POLICY,
-              fallback,
-            },
-          });
-          if (debitErr) {
-            const insufficient = String(debitErr.message || "").includes("insufficient_balance");
-            finishWithError(insufficient ? "insufficient_balance" : "wallet_debit_failed");
-            return;
-          }
-
           streamEvent(controller, {
             type: "wallet",
             provider: DEEPSEEK.id,
             model: DEEPSEEK.model,
-            usage,
+            usage: usage || null,
             fallback,
-            wallet: {
-              balance_cents: balanceAfter,
-              charge_cents: chargeCents,
-              actual_cost_cents: actualCostCents,
-              charge_policy: AI_CHARGE_POLICY,
-              billable_usage: billableUsage,
-            },
+            wallet: noWalletCharge(usage),
           });
           controller.close();
         } catch (e) {
@@ -597,42 +541,12 @@ Deno.serve(async (req) => {
     return json({ error: (data as { error?: { message?: string } })?.error?.message || "upstream_error", detail: data }, upstream.status || 502);
   }
 
-  const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(data.usage || null);
-
-  const requestId = data.id ? `ai:${data.id}` : `ai:${uid}:${Date.now()}`;
-  const { data: balanceAfter, error: debitErr } = await admin.rpc("wallet_debit", {
-    p_user_id: uid,
-    p_amount_cents: chargeCents,
-    p_kind: "ai_charge",
-    p_provider: DEEPSEEK.id,
-    p_request_id: requestId,
-    p_metadata: {
-      provider: DEEPSEEK.id,
-      model: DEEPSEEK.model,
-      usage: data.usage || null,
-      billable_usage: billableUsage,
-      actual_cost_cents: actualCostCents,
-      charge_policy: AI_CHARGE_POLICY,
-      fallback,
-    },
-  });
-  if (debitErr) {
-    const insufficient = String(debitErr.message || "").includes("insufficient_balance");
-    return json({ error: insufficient ? "insufficient_balance" : "wallet_debit_failed" }, insufficient ? 402 : 500);
-  }
-
   return json({
     ...data,
     content: Array.isArray(data.content) ? data.content : [{ type: "text", text: extractText(data) }],
     provider: DEEPSEEK.id,
     model: DEEPSEEK.model,
     fallback,
-    wallet: {
-      balance_cents: balanceAfter,
-      charge_cents: chargeCents,
-      actual_cost_cents: actualCostCents,
-      charge_policy: AI_CHARGE_POLICY,
-      billable_usage: billableUsage,
-    },
+    wallet: noWalletCharge(data.usage || null),
   });
 });

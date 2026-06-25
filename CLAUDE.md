@@ -26,7 +26,7 @@
 - 钱包入口、充值入口、管理员充值入口
 - Settings 里的 Wallet / Admin / Other 分组 tab（当前只直接显示每日推送、天气自动更新、语言、使用手册、检查更新等个人设置）
 
-但底层能力先保留，不要删除：钱包余额与流水、AI / 天气成本记录、邀请码表、管理员充值、注册相关 Edge Function 都可能在未来公开时恢复入口。现在做新功能时，默认按个人模式设计 UI，不要新增“给其他用户使用才需要”的入口；如果确实需要为未来公开做准备，用 `PRODUCT_PUBLIC_FEATURES` 挂起来。
+但底层公开模式能力先保留，不要删除：钱包余额与流水、邀请码表、管理员充值、注册相关 Edge Function 都可能在未来公开时恢复入口。当前个人模式下，AI / 天气请求不检查钱包余额，也不会扣钱包；新功能默认不要接入钱包前置判断。如果未来公开模式要恢复钱包，用 `PRODUCT_PUBLIC_FEATURES` 挂起来，并先同步文档和 Supabase schema 方案。
 
 ## 需求路由预检（Aevum vs Ultreia）
 
@@ -117,10 +117,10 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - **`--no-verify-jwt` 看函数加不加**：靠登录用户 JWT 鉴权的（`coach-proxy` / `weather-proxy` / `delete-account`）部署时**不要**加；不靠用户 JWT 的（`daily-coach-dispatch` 由 pg_cron 定时调用、靠 header `x-cron-secret` 鉴权；`register-with-invite` 注册前调用、还没 JWT）**必须加** `--no-verify-jwt`，否则被网关挡掉。
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
 - 函数：
-  - `daily-coach-dispatch`（pg_cron 定时生成 AI 打卡 → 钱包扣费 → FCM 推送 → 写 `push_inbox`；部署加 `--no-verify-jwt`）
-  - `coach-proxy`（钱包版 AI Coach 代理，只走 DeepSeek；共享 key 只在服务端 Secrets，成功回复后按 DeepSeek 实际 token 成本扣钱包，四舍五入到分且最低 ¥0.01，余额不足返 402）
-  - `weather-proxy`（钱包版彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；成功天气请求固定扣 ¥0.01）
-  - `wallet-status`（读取/初始化钱包余额与最近流水）
+  - `daily-coach-dispatch`（pg_cron 定时生成每日 AI 打卡、后台周报和夜间 Memory 审核 → FCM 推送 / 写 `push_inbox`；部署加 `--no-verify-jwt`；AI provider 优先 desktop Codex runner，失败回退 DeepSeek；个人模式不扣钱包）
+  - `coach-proxy`（AI Coach 代理；优先把 `coach_chat` / `weekly_report` / `memory_update` / `plan_extract` / `plan_deviation_rescue` 等任务派给 desktop Codex runner，失败回退 DeepSeek；个人模式不检查钱包余额、不扣钱包）
+  - `weather-proxy`（彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；个人模式不检查钱包余额、不扣钱包）
+  - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
   - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
   - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
@@ -181,7 +181,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - `docs/data-import.md` —— FIT / CSV 导入
 - `docs/races.md` —— 赛事 + PR bar
 - `docs/ai-coach.md` —— AI Coach 全流程
-- `docs/weather.md` —— 天气（实时 / 预报 / 训练快照、24h 窗口、钱包扣费）
+- `docs/weather.md` —— 天气（实时 / 预报 / 训练快照、24h 窗口、个人模式无钱包扣费）
 - `docs/charts.md` —— 图表
 - `docs/SUMMARY.md` —— 应用内使用手册目录顺序
 - `docs/changelog.md` —— 版本变更
@@ -262,9 +262,9 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `push_subscriptions` — 设备推送订阅（FCM token）
 - `push_inbox` — 推送收件箱（每日打卡等推送落库）
 - `invite_codes` — 一次性邀请码（注册用，service_role 烧码）
-- `wallets` — 钱包余额（人民币分）
-- `wallet_ledger` — 钱包流水（AI / 天气 / 充值 / 退款等）
-- `app_admins` — 管理员账号白名单（钱包充值、邀请码等）
+- `wallets` — 旧公开模式钱包余额（人民币分）；当前个人模式 AI / 天气不依赖
+- `wallet_ledger` — 旧公开模式钱包流水（AI / 天气 / 充值 / 退款等）；当前个人模式 AI / 天气不写入
+- `app_admins` — 管理员账号白名单（旧钱包充值、邀请码等）
 - `usage_quota` — 旧免费额度表，仅保留删除账号兼容；新扣费逻辑不要继续依赖它
 
 公共字段约定：`id uuid PK`、`user_id uuid → auth.users(id)`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤。

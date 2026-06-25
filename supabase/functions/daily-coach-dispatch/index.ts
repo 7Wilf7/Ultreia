@@ -2,9 +2,10 @@
 //
 // Triggered by pg_cron every ~30 min. For each user who has daily push enabled
 // and whose chosen local hour matches "now" in their timezone (and who hasn't
-// been pushed today), it: pulls their recent training + target race, asks their
-// wallet-backed shared DeepSeek key for ONE short check-in line, debits the
-// wallet after a successful reply, and pushes it to their devices via FCM.
+// been pushed today), it: pulls their recent training + target race, asks the
+// configured AI route for ONE short check-in line, and pushes it to their
+// devices via FCM. AI calls do not check wallet balance or debit wallet records
+// in personal mode.
 //
 // Optional request body:
 //   { "mode": "weekly_recap", "force": true, "user_id": "..." }
@@ -25,16 +26,35 @@
 // Secrets (Edge Function → Secrets):
 //   FCM_SERVICE_ACCOUNT  – service-account JSON (same one push-test uses)
 //   CRON_SECRET          – random string; must match what the cron SQL sends
-//   SHARED_DEEPSEEK_KEY  – owner DeepSeek key used server-side only
+//   SHARED_DEEPSEEK_KEY  – owner DeepSeek key used server-side only as fallback
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const DEEPSEEK_URL = "https://api.deepseek.com/anthropic/v1/messages";
 const DEEPSEEK_MODEL = "deepseek-v4-pro";
-const DEEPSEEK_PRICING_CNY_PER_M = { input: 3.16, inputCacheHit: 0.026, output: 6.32 };
-const MIN_AI_CHARGE_CENTS = 1;
-const AI_CHARGE_POLICY = "actual_cost_min_1_cent";
+const DESKTOP_CODEX = {
+  id: "desktop_codex",
+  model: "codex-cli",
+} as const;
+const DESKTOP_RUNNER_FRESH_MS = 20_000;
+const DESKTOP_CODEX_ERROR_COOLDOWN_MS = 5 * 60_000;
+const DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS = 24 * 60 * 60_000;
+const DESKTOP_JOB_TTL_MS = 2 * 60_000;
+const DESKTOP_POLL_MS = 1000;
+
+type DispatchMode = "daily_checkin" | "weekly_recap" | "memory_update";
+type AiJobKind = "daily_checkin" | "weekly_report" | "memory_update";
+type LlmProvider = "desktop_codex" | "deepseek";
+type LlmResult = {
+  text: string;
+  usage: unknown;
+  id: string;
+  provider: LlmProvider;
+  model: string;
+  fallback: Record<string, unknown> | null;
+  desktopJob?: Record<string, unknown> | null;
+};
 
 function tokenUsage(usage: unknown): {
   input: number;
@@ -64,17 +84,50 @@ function calcChargeCents(usage: unknown): {
   chargeCents: number;
   billableUsage: ReturnType<typeof tokenUsage>;
 } {
-  const tokens = tokenUsage(usage);
-  const hasInputCacheBreakdown = tokens.inputCacheHit > 0 || tokens.inputCacheMiss > 0;
-  const inputCny = hasInputCacheBreakdown
-    ? (tokens.inputCacheHit / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.inputCacheHit
-      + (tokens.inputCacheMiss / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input
-      + (Math.max(0, tokens.input - tokens.inputCacheHit - tokens.inputCacheMiss) / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input
-    : (tokens.input / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.input;
-  const actualCny = inputCny + (tokens.output / 1_000_000) * DEEPSEEK_PRICING_CNY_PER_M.output;
-  const actualCostCents = Math.round(actualCny * 100);
-  const chargeCents = Math.max(MIN_AI_CHARGE_CENTS, actualCostCents);
-  return { actualCostCents, chargeCents, billableUsage: tokens };
+  return { actualCostCents: 0, chargeCents: 0, billableUsage: tokenUsage(usage) };
+}
+
+function numberEnv(name: string, fallback: number): number {
+  const n = Number(Deno.env.get(name));
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : fallback;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function ageMsFromIso(value: unknown): number | null {
+  const text = stringValue(value);
+  if (!text) return null;
+  const ms = Date.parse(text);
+  return Number.isFinite(ms) ? Math.max(0, Date.now() - ms) : null;
+}
+
+function codexStatusValue(value: unknown): "ok" | "error" | "auth_error" | "unknown" {
+  const status = stringValue(value);
+  if (status === "ok" || status === "error" || status === "auth_error") return status;
+  return "unknown";
+}
+
+function codexErrorCooldownMs(status: string): number {
+  return status === "auth_error" ? DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS : DESKTOP_CODEX_ERROR_COOLDOWN_MS;
+}
+
+function aiJobKindForMode(mode: DispatchMode): AiJobKind {
+  return mode === "weekly_recap" ? "weekly_report" : mode;
+}
+
+function providerPreference(value: unknown): "auto" | "prefer_codex" | "deepseek_only" {
+  const pref = String(value || "auto");
+  return pref === "prefer_codex" || pref === "deepseek_only" ? pref : "auto";
 }
 
 // ── FCM HTTP v1 auth (mirrors push-test) ──
@@ -383,7 +436,7 @@ function parseBilingualMemory(text: string): { en: string; zh: string } {
   return { en: plain, zh: plain };
 }
 
-async function callLLM(key: string, system: string, user: string): Promise<{ text: string; usage: unknown; id: string }> {
+async function callDeepSeek(key: string, system: string, user: string): Promise<LlmResult> {
   const resp = await fetch(DEEPSEEK_URL, {
     method: "POST",
     headers: {
@@ -408,7 +461,169 @@ async function callLLM(key: string, system: string, user: string): Promise<{ tex
     text: (data.content?.filter((b: any) => b.type === "text").map((b: any) => b.text).join("") || "").trim(),
     usage: data.usage || null,
     id: String(data.id || ""),
+    provider: "deepseek",
+    model: DEEPSEEK_MODEL,
+    fallback: null,
   };
+}
+
+async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: string } | { ok: false; reason: string }> {
+  const cutoff = new Date(Date.now() - DESKTOP_RUNNER_FRESH_MS).toISOString();
+  const { data, error } = await admin
+    .from("ai_runners")
+    .select("id, last_seen_at, metadata")
+    .eq("provider", DESKTOP_CODEX.id)
+    .eq("status", "online")
+    .gte("last_seen_at", cutoff)
+    .order("last_seen_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) return { ok: false, reason: "desktop_schema_unavailable" };
+  if (!data?.id) return { ok: false, reason: "desktop_runner_offline" };
+  const metadata = objectValue(data.metadata);
+  const lastCodexStatus = codexStatusValue(metadata.lastCodexStatus);
+  const lastErrorAgeMs = ageMsFromIso(metadata.lastCodexErrorAt);
+  if ((lastCodexStatus === "error" || lastCodexStatus === "auth_error")
+    && (lastErrorAgeMs === null || lastErrorAgeMs <= codexErrorCooldownMs(lastCodexStatus))) {
+    return { ok: false, reason: lastCodexStatus === "auth_error" ? "desktop_codex_auth_error" : "desktop_codex_unhealthy" };
+  }
+  return { ok: true, runnerId: String(data.id) };
+}
+
+function desktopWaitMs(kind: AiJobKind, preference: "auto" | "prefer_codex" | "deepseek_only"): number {
+  if (preference === "prefer_codex") return numberEnv("DESKTOP_CODEX_PREFER_WAIT_MS", 90_000);
+  if (kind === "daily_checkin") return numberEnv("DESKTOP_CODEX_DISPATCH_WAIT_MS", 60_000);
+  return numberEnv("DESKTOP_CODEX_DISPATCH_WAIT_MS", 90_000);
+}
+
+async function markDesktopFallback(admin: any, jobId: string, reason: string) {
+  await admin
+    .from("ai_jobs")
+    .update({
+      status: "fallback_used",
+      fallback_provider: "deepseek",
+      fallback_reason: reason,
+    })
+    .eq("id", jobId)
+    .in("status", ["queued", "claimed", "running"]);
+}
+
+async function tryDesktopCodex(opts: {
+  admin: any;
+  userId: string;
+  kind: AiJobKind;
+  system: string;
+  user: string;
+  preference: "auto" | "prefer_codex" | "deepseek_only";
+}): Promise<{ result: LlmResult | null; fallbackReason: string }> {
+  if (opts.preference === "deepseek_only") {
+    return { result: null, fallbackReason: "" };
+  }
+
+  const runner = await hasFreshDesktopRunner(opts.admin);
+  if (!runner.ok) return { result: null, fallbackReason: runner.reason };
+
+  const waitMs = desktopWaitMs(opts.kind, opts.preference);
+  const expiresAt = new Date(Date.now() + Math.max(waitMs + 15_000, DESKTOP_JOB_TTL_MS)).toISOString();
+  const { data: job, error: jobErr } = await opts.admin
+    .from("ai_jobs")
+    .insert({
+      user_id: opts.userId,
+      kind: opts.kind,
+      status: "queued",
+      provider_requested: DESKTOP_CODEX.id,
+      payload: {
+        source: "daily_coach_dispatch",
+        system: opts.system,
+        messages: [{ role: "user", content: opts.user }],
+        max_tokens: 8000,
+      },
+      expires_at: expiresAt,
+    })
+    .select("id")
+    .single();
+  if (jobErr || !job?.id) {
+    return { result: null, fallbackReason: "desktop_job_create_failed" };
+  }
+
+  const jobId = String(job.id);
+  const deadline = Date.now() + waitMs;
+  let fallbackReason = "desktop_timeout";
+  while (Date.now() < deadline) {
+    await delay(DESKTOP_POLL_MS);
+    const { data: row, error } = await opts.admin
+      .from("ai_jobs")
+      .select("status, result, error, provider_actual")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (error) {
+      fallbackReason = "desktop_job_read_failed";
+      break;
+    }
+    const status = String(row?.status || "");
+    if (status === "completed") {
+      const result = objectValue(row?.result);
+      const text = typeof result.text === "string" ? result.text.trim() : "";
+      if (!text) {
+        fallbackReason = "desktop_empty_response";
+        break;
+      }
+      return {
+        result: {
+          text,
+          usage: objectValue(result.usage),
+          id: `desktop:${jobId}`,
+          provider: DESKTOP_CODEX.id,
+          model: typeof result.model === "string" ? result.model : DESKTOP_CODEX.model,
+          fallback: null,
+          desktopJob: { id: jobId, runner_id: result.runner_id || null },
+        },
+        fallbackReason: "",
+      };
+    }
+    if (status === "failed" || status === "expired" || status === "fallback_used") {
+      fallbackReason = status === "failed"
+        ? `desktop_failed:${String(row?.error || "").slice(0, 120) || "unknown"}`
+        : `desktop_${status}`;
+      break;
+    }
+  }
+
+  await markDesktopFallback(opts.admin, jobId, fallbackReason).catch(() => {});
+  return { result: null, fallbackReason };
+}
+
+async function callPreferredLLM(opts: {
+  admin: any;
+  userId: string;
+  kind: AiJobKind;
+  preference: "auto" | "prefer_codex" | "deepseek_only";
+  deepseekKey: string;
+  system: string;
+  user: string;
+}): Promise<LlmResult> {
+  const desktop = await tryDesktopCodex({
+    admin: opts.admin,
+    userId: opts.userId,
+    kind: opts.kind,
+    system: opts.system,
+    user: opts.user,
+    preference: opts.preference,
+  });
+  if (desktop.result) return desktop.result;
+
+  const deepseek = await callDeepSeek(opts.deepseekKey, opts.system, opts.user);
+  if (desktop.fallbackReason && desktop.fallbackReason !== "desktop_schema_unavailable") {
+    return {
+      ...deepseek,
+      fallback: {
+        from: DESKTOP_CODEX.id,
+        to: "deepseek",
+        reason: desktop.fallbackReason,
+      },
+    };
+  }
+  return deepseek;
 }
 
 function json(obj: unknown, status = 200): Response {
@@ -423,10 +638,7 @@ async function dispatchCoachMessage(opts: {
   title?: string;
   pushTitle?: string;
   message: string;
-  usage: unknown;
-  upstreamId: string;
-  requestPrefix: string;
-  metadataSource: string;
+  llm: LlmResult;
 }): Promise<{
   accessToken: string | null;
   summary: {
@@ -439,12 +651,7 @@ async function dispatchCoachMessage(opts: {
   };
 }> {
   const charge = await chargeAiUsage({
-    supabase: opts.supabase,
-    userId: opts.userId,
-    usage: opts.usage,
-    upstreamId: opts.upstreamId,
-    requestPrefix: opts.requestPrefix,
-    metadataSource: opts.metadataSource,
+    usage: opts.llm.usage,
   });
   const delivery = await sendPushAndInbox({
     supabase: opts.supabase,
@@ -470,34 +677,9 @@ async function dispatchCoachMessage(opts: {
 }
 
 async function chargeAiUsage(opts: {
-  supabase: any;
-  userId: string;
   usage: unknown;
-  upstreamId: string;
-  requestPrefix: string;
-  metadataSource: string;
 }): Promise<ReturnType<typeof calcChargeCents>> {
-  const charge = calcChargeCents(opts.usage);
-  const { error: debitErr } = await opts.supabase.rpc("wallet_debit", {
-    p_user_id: opts.userId,
-    p_amount_cents: charge.chargeCents,
-    p_kind: "ai_charge",
-    p_provider: "deepseek",
-    p_request_id: opts.upstreamId ? `${opts.requestPrefix}:${opts.upstreamId}` : `${opts.requestPrefix}:${opts.userId}:${Date.now()}`,
-    p_metadata: {
-      source: opts.metadataSource,
-      model: DEEPSEEK_MODEL,
-      usage: opts.usage,
-      billable_usage: charge.billableUsage,
-      actual_cost_cents: charge.actualCostCents,
-      charge_policy: AI_CHARGE_POLICY,
-    },
-  });
-  if (debitErr) {
-    const insufficient = String(debitErr.message || "").includes("insufficient_balance");
-    throw new Error(insufficient ? "insufficient_balance" : "wallet_debit_failed");
-  }
-  return charge;
+  return calcChargeCents(opts.usage);
 }
 
 async function sendPushAndInbox(opts: {
@@ -571,13 +753,21 @@ Deno.serve(async (req) => {
     // Everyone with the relevant automation enabled; we filter by local
     // half-hour slot in JS for daily push / weekly reports, and by
     // coach_config for Memory.
-    let settingsQuery = supabase
-      .from("user_settings")
-      .select("user_id, push_enabled, push_hours, push_times, push_timezone, lang, coach_config, weekly_report_enabled, weekly_report_weekday, weekly_report_time");
-    if (mode === "daily_checkin") settingsQuery = settingsQuery.eq("push_enabled", true);
-    if (mode === "weekly_recap") settingsQuery = settingsQuery.eq("weekly_report_enabled", true);
-    if (body.user_id) settingsQuery = settingsQuery.eq("user_id", body.user_id);
-    const { data: settings, error: sErr } = await settingsQuery;
+    const buildSettingsQuery = (columns: string) => {
+      let query = supabase.from("user_settings").select(columns);
+      if (mode === "daily_checkin") query = query.eq("push_enabled", true);
+      if (mode === "weekly_recap") query = query.eq("weekly_report_enabled", true);
+      if (body.user_id) query = query.eq("user_id", body.user_id);
+      return query;
+    };
+    const settingsColumns = "user_id, push_enabled, push_hours, push_times, push_timezone, lang, coach_config, ai_provider_preference, weekly_report_enabled, weekly_report_weekday, weekly_report_time";
+    const legacySettingsColumns = "user_id, push_enabled, push_hours, push_times, push_timezone, lang, coach_config, weekly_report_enabled, weekly_report_weekday, weekly_report_time";
+    let { data: settings, error: sErr } = await buildSettingsQuery(settingsColumns);
+    if (sErr && String(sErr.message || "").includes("ai_provider_preference")) {
+      const retry = await buildSettingsQuery(legacySettingsColumns);
+      settings = retry.data;
+      sErr = retry.error;
+    }
     if (sErr) return json({ error: sErr.message }, 500);
 
     let fcmAccessToken: string | null = null;
@@ -587,6 +777,7 @@ Deno.serve(async (req) => {
       const tz = u.push_timezone || "Asia/Shanghai";
       const parts = localParts(tz);
       const date = body.date || parts.date;
+      const preference = providerPreference(u.ai_provider_preference);
       if (mode === "memory_update") {
         if (u.coach_config?.nightlyMemoryReview !== true && !body.force) continue;
         const { startIso, endIso } = localDateUtcWindow(date, tz);
@@ -619,21 +810,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const { error: ensureErr } = await supabase.rpc("wallet_ensure", {
-          p_user_id: u.user_id,
-          p_initial_cents: 500,
-        });
-        if (ensureErr) { summary.push({ user: u.user_id, error: "wallet_ensure_failed" }); continue; }
-        const { data: wallet } = await supabase
-          .from("wallets")
-          .select("balance_cents")
-          .eq("user_id", u.user_id)
-          .single();
-        if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) {
-          summary.push({ user: u.user_id, skipped: "insufficient_balance" });
-          continue;
-        }
-
         const { data: activeFacts, error: factsErr } = await supabase
           .from("coach_memory_facts")
           .select("category, content_en, content_zh, status, updated_at")
@@ -653,45 +829,37 @@ Deno.serve(async (req) => {
           chatRows: chatRows || [],
         });
 
-        let text = "";
-        let usage: unknown = null;
-        let upstreamId = "";
+        let llm: LlmResult;
         try {
-          const llm = await callLLM(deepseekKey, system, user);
-          text = llm.text;
-          usage = llm.usage;
-          upstreamId = llm.id;
+          llm = await callPreferredLLM({
+            admin: supabase,
+            userId: u.user_id,
+            kind: aiJobKindForMode(mode),
+            preference,
+            deepseekKey,
+            system,
+            user,
+          });
         } catch (e) {
           summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
           continue;
         }
-        if (!text) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+        if (!llm.text) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
 
-        const parsed = parseBilingualMemory(text);
+        const parsed = parseBilingualMemory(llm.text);
         if (!parsed.en && !parsed.zh) { summary.push({ user: u.user_id, error: "empty memory parse" }); continue; }
 
-        const { actualCostCents, chargeCents, billableUsage } = calcChargeCents(usage);
-        const requestId = upstreamId ? `nightly-memory:${upstreamId}` : `nightly-memory:${u.user_id}:${date}`;
-        const { error: debitErr } = await supabase.rpc("wallet_debit", {
-          p_user_id: u.user_id,
-          p_amount_cents: chargeCents,
-          p_kind: "ai_charge",
-          p_provider: "deepseek",
-          p_request_id: requestId,
-          p_metadata: {
-            source: "nightly_memory_review",
-            model: DEEPSEEK_MODEL,
-            usage,
-            billable_usage: billableUsage,
-            actual_cost_cents: actualCostCents,
-            charge_policy: AI_CHARGE_POLICY,
-          },
-        });
-        if (debitErr) {
-          const insufficient = String(debitErr.message || "").includes("insufficient_balance");
-          summary.push({ user: u.user_id, error: insufficient ? "insufficient_balance" : "wallet_debit_failed" });
+        let memoryCharge: ReturnType<typeof calcChargeCents>;
+        try {
+          memoryCharge = await chargeAiUsage({
+            usage: llm.usage,
+          });
+        } catch (e) {
+          summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
           continue;
         }
+        const requestId = llm.id ? `nightly-memory:${llm.id}` : `nightly-memory:${u.user_id}:${date}`;
+        const { actualCostCents, chargeCents } = memoryCharge;
 
         const clientId = `nightly-memory-${date}-${u.user_id}`;
         const sourceRef = chatRows?.length ? String(chatRows[chatRows.length - 1].id || "") : null;
@@ -717,7 +885,10 @@ Deno.serve(async (req) => {
             result: {
               chargeCents,
               actualCostCents,
-              model: DEEPSEEK_MODEL,
+              provider: llm.provider,
+              model: llm.model,
+              fallback: llm.fallback,
+              desktopJob: llm.desktopJob || null,
               requestId,
             },
             created_at: new Date().toISOString(),
@@ -732,7 +903,7 @@ Deno.serve(async (req) => {
           ? "教练已根据今天的对话整理出长期记忆建议，打开 AI Coach 审核后才会保存。"
           : "The coach drafted a Memory update from today's chat. Open AI Coach to review before saving.";
         await supabase.from("push_inbox").insert({ user_id: u.user_id, title, body: message });
-        summary.push({ user: u.user_id, mode, date, action: clientId, chargeCents, actualCostCents });
+        summary.push({ user: u.user_id, mode, date, action: clientId, provider: llm.provider, chargeCents, actualCostCents });
         continue;
       }
 
@@ -762,21 +933,6 @@ Deno.serve(async (req) => {
             .limit(1)
             .maybeSingle();
           if (logged) continue;
-        }
-
-        const { error: ensureErr } = await supabase.rpc("wallet_ensure", {
-          p_user_id: u.user_id,
-          p_initial_cents: 500,
-        });
-        if (ensureErr) { summary.push({ user: u.user_id, error: "wallet_ensure_failed" }); continue; }
-        const { data: wallet } = await supabase
-          .from("wallets")
-          .select("balance_cents")
-          .eq("user_id", u.user_id)
-          .single();
-        if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) {
-          summary.push({ user: u.user_id, skipped: "insufficient_balance" });
-          continue;
         }
 
         const reportTitle = u.lang === "zh" ? "AI 周复盘" : "AI weekly report";
@@ -898,14 +1054,17 @@ Deno.serve(async (req) => {
           coachConfig: u.coach_config || {},
         });
 
-        let message = "";
-        let usage: unknown = null;
-        let upstreamId = "";
+        let llm: LlmResult;
         try {
-          const llm = await callLLM(deepseekKey, system, user);
-          message = llm.text;
-          usage = llm.usage;
-          upstreamId = llm.id;
+          llm = await callPreferredLLM({
+            admin: supabase,
+            userId: u.user_id,
+            kind: aiJobKindForMode(mode),
+            preference,
+            deepseekKey,
+            system,
+            user,
+          });
         } catch (e) {
           await supabase.from("coach_reports").update({
             status: "failed",
@@ -914,7 +1073,7 @@ Deno.serve(async (req) => {
           summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
           continue;
         }
-        if (!message) {
+        if (!llm.text) {
           await supabase.from("coach_reports").update({
             status: "failed",
             error: "empty llm reply",
@@ -926,28 +1085,26 @@ Deno.serve(async (req) => {
         let weeklyCharge: ReturnType<typeof calcChargeCents>;
         try {
           weeklyCharge = await chargeAiUsage({
-            supabase,
-            userId: u.user_id,
-            usage,
-            upstreamId,
-            requestPrefix: "weekly-recap",
-            metadataSource: "weekly_recap_dispatch",
+            usage: llm.usage,
           });
           const { error: reportReadyErr } = await supabase
             .from("coach_reports")
             .update({
               status: "ready",
-              body: message,
+              body: llm.text,
               error: null,
               wallet_charge_cents: weeklyCharge.chargeCents,
-              model: DEEPSEEK_MODEL,
+              model: llm.model,
               metadata: {
                 trigger: "server_cron",
                 timezone: tz,
                 scheduled_weekday: u.weekly_report_weekday ?? 0,
                 scheduled_time: u.weekly_report_time || "20:00",
-                upstream_id: upstreamId || null,
-                usage,
+                provider: llm.provider,
+                fallback: llm.fallback,
+                desktop_job: llm.desktopJob || null,
+                upstream_id: llm.id || null,
+                usage: llm.usage,
                 actual_cost_cents: weeklyCharge.actualCostCents,
               },
             })
@@ -981,6 +1138,7 @@ Deno.serve(async (req) => {
             mode,
             reportId,
             week: `${start}..${end}`,
+            provider: llm.provider,
             chargeCents: weeklyCharge.chargeCents,
             actualCostCents: weeklyCharge.actualCostCents,
             sent: delivery.sent,
@@ -993,6 +1151,7 @@ Deno.serve(async (req) => {
             mode,
             reportId,
             week: `${start}..${end}`,
+            provider: llm.provider,
             chargeCents: weeklyCharge.chargeCents,
             notificationError: String(e).slice(0, 120),
           });
@@ -1025,21 +1184,6 @@ Deno.serve(async (req) => {
       const { error: claimErr } = await supabase
         .from("push_log").insert({ user_id: u.user_id, sent_on: date, hour: slotIdx });
       if (claimErr) { summary.push({ user: u.user_id, skipped: "already-claimed" }); continue; }
-
-      const { error: ensureErr } = await supabase.rpc("wallet_ensure", {
-        p_user_id: u.user_id,
-        p_initial_cents: 500,
-      });
-      if (ensureErr) { summary.push({ user: u.user_id, error: "wallet_ensure_failed" }); continue; }
-      const { data: wallet } = await supabase
-        .from("wallets")
-        .select("balance_cents")
-        .eq("user_id", u.user_id)
-        .single();
-      if ((wallet?.balance_cents ?? 0) < MIN_AI_CHARGE_CENTS) {
-        summary.push({ user: u.user_id, skipped: "insufficient_balance" });
-        continue;
-      }
 
       const { data: workouts } = await supabase
         .from("workouts")
@@ -1082,19 +1226,22 @@ Deno.serve(async (req) => {
         recentChat,
       });
 
-      let message = "";
-      let usage: unknown = null;
-      let upstreamId = "";
+      let llm: LlmResult;
       try {
-        const llm = await callLLM(deepseekKey, system, user);
-        message = llm.text;
-        usage = llm.usage;
-        upstreamId = llm.id;
+        llm = await callPreferredLLM({
+          admin: supabase,
+          userId: u.user_id,
+          kind: aiJobKindForMode(mode),
+          preference,
+          deepseekKey,
+          system,
+          user,
+        });
       } catch (e) {
         summary.push({ user: u.user_id, error: `llm: ${String(e).slice(0, 120)}` });
         continue;
       }
-      if (!message) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+      if (!llm.text) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
 
       try {
         const result = await dispatchCoachMessage({
@@ -1103,14 +1250,11 @@ Deno.serve(async (req) => {
           accessToken: fcmAccessToken,
           userId: u.user_id,
           pushTitle: "Ultreia",
-          message,
-          usage,
-          upstreamId,
-          requestPrefix: "daily-coach",
-          metadataSource: "daily_coach_dispatch",
+          message: llm.text,
+          llm,
         });
         fcmAccessToken = result.accessToken;
-        summary.push({ user: u.user_id, mode, ...result.summary, message });
+        summary.push({ user: u.user_id, mode, provider: llm.provider, ...result.summary, message: llm.text });
       } catch (e) {
         summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
       }

@@ -214,14 +214,13 @@ function readinessComplete(readiness) {
   return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
 }
 
-function buildCoachReplyMeta({ providerId, model, usage, walletChargeCents, fallback }) {
+function buildCoachReplyMeta({ providerId, model, usage, fallback }) {
   const normalized = normalizeTokenUsage(usage);
   return {
     provider: providerId,
     model,
     freeTier: false,
     usage: normalized || null,
-    walletChargeCents: Number(walletChargeCents || 0),
     fallback: fallback || null,
     createdAt: new Date().toISOString(),
   };
@@ -433,9 +432,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
   const [itraPI, setItraPIState] = useState("");
-  // AI calls are wallet-backed through Edge Functions. Legacy API settings may
-  // still exist in user_settings, but normal users no longer configure or use
-  // personal provider keys from the UI.
+  // AI calls go through Edge Functions: prefer the desktop Codex runner and
+  // fall back to server-side DeepSeek. Legacy API settings may still exist in
+  // user_settings, but normal users no longer configure or use personal keys.
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
   const [lang, setLangState] = useState(DEFAULT_LANG);
   // Default location for weather fetch — used when navigator.geolocation /
@@ -469,7 +468,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           withTimeout(db.agentActions.listMyActions(), "agentActions").then(value => ({ key: "agentActions", value }), error => ({ key: "agentActions", error })),
           withTimeout(db.memoryFacts.listMyFacts(), "memoryFacts").then(value => ({ key: "memoryFacts", value }), error => ({ key: "memoryFacts", error })),
           withTimeout(db.dailyNotes.listMyDailyNotes(), "notes").then(value => ({ key: "notes", value }), error => ({ key: "notes", error })),
-          withTimeout(db.wallet.getMyWallet(), "wallet").then(value => ({ key: "wallet", value }), error => ({ key: "wallet", error })),
         ]);
         const result = Object.fromEntries(pieces.map(p => [p.key, p]));
         const failures = pieces.filter(p => p.error);
@@ -553,8 +551,6 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
         if (!result.notes.error) setDailyNotes(result.notes.value);
-
-        if (!result.wallet.error) setWallet(result.wallet.value || { balanceCents: 0, currency: "CNY", ledger: [] });
 
         if (failures.length) {
           const err = new Error(`Partial data load: ${failures.map(p => p.key).join(", ")}`);
@@ -1589,13 +1585,6 @@ function AppShell({
     return next;
   }, [setWallet]);
 
-  const applyWalletBalance = useCallback((balanceCents) => {
-    if (typeof balanceCents === "number") {
-      setWallet(prev => ({ ...prev, balanceCents }));
-    }
-    refreshWallet().catch(err => console.warn("[wallet] refresh failed:", err));
-  }, [refreshWallet, setWallet]);
-
   // Ask the LLM to distill durable Memory facts from the current chat + existing
   // fact cards. Runs at app scope (not inside AICoachTab) so unmounting that tab
   // mid-request doesn't drop the result. Errors surface via alert; success
@@ -1607,11 +1596,11 @@ function AppShell({
     setMemoryUpdating(true);
     try {
       const data = await db.usage.coachProxy({
+        kind: "memory_update",
         system: "",
         messages: [{ role: "user", content: memoryPrompt }],
         max_tokens: 8000,
       });
-      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       if (!text.trim()) { appDialog.alert(t("coach.memory_empty_response")); return; }
       const parsedMemory = parseBilingualMemory(text);
@@ -1633,13 +1622,7 @@ function AppShell({
       setLastMemoryAction(null);
     } catch (err) {
       console.error("[AI Coach] Memory update error:", err);
-      if (err?.code === "insufficient_balance") {
-        appDialog.alert(t("wallet.insufficient_ai"));
-        openWalletSurface();
-        refreshWallet().catch(() => {});
-      } else {
-        appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
-      }
+      appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
     } finally {
       setMemoryUpdating(false);
     }
@@ -1651,15 +1634,9 @@ function AppShell({
   // the same forecastByDate if we lift that later. Status field lets the
   // UI tell the user *why* weather isn't showing up instead of silently
   // dropping it.
-  // Stable so it doesn't churn the weather hook's effect every render.
-  const onWeatherUsed = useCallback((balanceCents) => {
-    applyWalletBalance(balanceCents);
-  }, [applyWalletBalance]);
-
   const weatherCtx = useWeatherContext({
     defaultLng: defaultLocation?.lng,
     defaultLat: defaultLocation?.lat,
-    onWeatherUsed,
     autoUpdate: weatherSettings.autoUpdate,
     intervalHours: weatherSettings.intervalHours,
   });
@@ -1696,13 +1673,13 @@ function AppShell({
         memoryFacts,
       });
       const data = await db.usage.coachProxy({
+        kind: "weekly_report",
         system: prompt.system,
         messages: [{ role: "user", content: prompt.user }],
         max_tokens: 8000,
         signal: controller.signal,
       });
       if (controller.signal.aborted || runId !== weeklyReportRunRef.current) return;
-      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const report = {
         id: `${range.start}:${Date.now()}`,
@@ -1722,8 +1699,7 @@ function AppShell({
       }).catch(() => {});
     } catch (err) {
       if (err?.code === "aborted" || err?.name === "AbortError") return;
-      if (err?.code === "insufficient_balance") setWeeklyReportError(t("wallet.insufficient_ai"));
-      else setWeeklyReportError(t("weekly_report.generate_failed", { msg: err?.message || String(err) }));
+      setWeeklyReportError(t("weekly_report.generate_failed", { msg: err?.message || String(err) }));
     } finally {
       if (runId === weeklyReportRunRef.current) {
         weeklyReportAbortRef.current = null;
@@ -1731,7 +1707,6 @@ function AppShell({
       }
     }
   }, [
-    applyWalletBalance,
     agentActions,
     coachConfig,
     dailyNotes,
@@ -1743,7 +1718,7 @@ function AppShell({
     weeklyReportLoading,
   ]);
 
-  // ── Lifted sendChat — talks to the wallet-backed coach proxy.
+  // ── Lifted sendChat — talks to the personal-mode coach proxy.
   //    Takes the user's typed message; reads everything else from props/
   //    state in this scope. Streams the assistant turn locally, then persists
   //    one final row. On API or network errors, emits a transient local-only
@@ -1781,7 +1756,6 @@ function AppShell({
           weeklyReportWeekday,
           weeklyReportTime,
           weeklyReportAfterSundayImport,
-          walletBalanceCents: wallet.balanceCents,
         },
         data: {
           workouts: logs,
@@ -1900,7 +1874,6 @@ function AppShell({
         },
       });
       if (controller.signal.aborted || runId !== chatRunRef.current) return false;
-      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
       const providerId = data.provider || "deepseek";
       setLastCoachProvider({
@@ -1926,7 +1899,6 @@ function AppShell({
         providerId,
         model: data.model || DEFAULT_MODEL,
         usage: data.usage,
-        walletChargeCents: data.wallet?.charge_cents ?? 0,
         fallback: data.fallback || null,
       });
       const finalContent = appendCoachMessageMeta(reply, meta);
@@ -1948,14 +1920,8 @@ function AppShell({
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== chatRunRef.current) {
         return false;
       }
-      if (err?.code === "insufficient_balance") {
-        appendLocalChatMessage("assistant", t("wallet.insufficient_ai"));
-        openWalletSurface();
-        refreshWallet().catch(() => {});
-      } else {
-        console.error("[AI Coach] proxy error:", err);
-        appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
-      }
+      console.error("[AI Coach] proxy error:", err);
+      appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
     } finally {
       if (runId === chatRunRef.current) {
         chatAbortRef.current = null;
@@ -2045,13 +2011,13 @@ Rules:
 
     try {
       const data = await db.usage.coachProxy({
+        kind: "plan_extract",
         system: "",
         messages: [{ role: "user", content: extractPrompt }],
         max_tokens: 8000,
         signal: controller.signal,
       });
       if (controller.signal.aborted || runId !== extractRunRef.current) return;
-      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
       if (plans.length === 0) {
@@ -2065,13 +2031,7 @@ Rules:
     } catch (err) {
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== extractRunRef.current) return;
       console.error("[AI Coach] Plan-extract error:", err);
-      if (err?.code === "insufficient_balance") {
-        appDialog.alert(t("wallet.insufficient_ai"));
-        openWalletSurface();
-        refreshWallet().catch(() => {});
-      } else {
-        appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
-      }
+      appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
     } finally {
       if (runId === extractRunRef.current) {
         extractAbortRef.current = null;
@@ -2115,11 +2075,11 @@ Rules:
         now: now || new Date(),
       });
       const data = await db.usage.coachProxy({
+        kind: "plan_deviation_rescue",
         system: "",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 8000,
       });
-      if (typeof data.wallet?.balance_cents === "number") applyWalletBalance(data.wallet.balance_cents);
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
       if (plans.length === 0) {
@@ -2152,13 +2112,7 @@ Rules:
       return true;
     } catch (err) {
       console.error("[AI Coach] Plan rescue error:", err);
-      if (err?.code === "insufficient_balance") {
-        appDialog.alert(t("wallet.insufficient_ai"));
-        openWalletSurface();
-        refreshWallet().catch(() => {});
-      } else {
-        appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
-      }
+      appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       return false;
     } finally {
       setPlanRescueLoading(false);
@@ -2308,7 +2262,6 @@ Rules:
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
     if (!isProfileComplete(profile)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setProfileEditorMode("setup");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

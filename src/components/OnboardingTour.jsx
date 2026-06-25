@@ -68,7 +68,7 @@ const STEPS = [
       { zh: "把它给的训练建议先审核成动作卡片，再**导入到日历**", en: "Review its suggested plan as an action card, then import it into your calendar." },
       { zh: "长期记忆：它会记住你的持久偏好，越聊越懂你", en: "Long-term memory: it remembers your durable preferences and gets to know you over time." },
       { zh: "信息填得越全（资料 / 训练 / 目标赛），回复越定制", en: "The more you fill in (profile / training / goal races), the more tailored the replies." },
-      { zh: "AI Coach 直接使用内置 DeepSeek，不用自己申请第三方密钥", en: "AI Coach uses the built-in DeepSeek setup. No third-party key setup is needed." },
+      { zh: "AI Coach 优先使用 Codex，失败时自动回退 DeepSeek，不用自己申请第三方密钥", en: "AI Coach prefers Codex and falls back to DeepSeek automatically. No third-party key setup is needed." },
     ],
   },
   {

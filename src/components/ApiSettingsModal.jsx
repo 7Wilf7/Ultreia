@@ -24,8 +24,8 @@ function fmtCost(usd) {
 }
 
 /**
- * Legacy API settings. Normal AI Coach calls now go through the wallet-backed
- * DeepSeek Edge Function, so this component is no longer mounted by App.jsx.
+ * Legacy API settings. Normal AI Coach calls now go through personal-mode Edge
+ * Functions, so this component is no longer mounted by App.jsx.
  */
 export function ApiSettingsModal({
   apiProvider,

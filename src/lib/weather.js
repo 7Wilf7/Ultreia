@@ -2,7 +2,7 @@
 //   1. Get the user's lng/lat — Capacitor Geolocation on native, browser
 //      navigator.geolocation on web, with a manual-entry fallback from
 //      user_settings.default_lng/lat when neither works.
-//   2. Hit the wallet-backed Supabase weather-proxy Edge Function and normalize
+//   2. Hit the personal-mode Supabase weather-proxy Edge Function and normalize
 //      Caiyun's verbose JSON into a flat shape the rest of the app can store +
 //      render without re-learning the API.
 
@@ -95,8 +95,8 @@ async function throwFunctionError(error, fallback) {
   throw e;
 }
 
-// Wallet-backed Supabase weather proxy. The Caiyun token stays in Edge
-// Function secrets; successful fetches debit the user's wallet server-side.
+// Personal-mode Supabase weather proxy. The Caiyun token stays in Edge Function
+// secrets; successful fetches do not debit wallet records.
 async function fetchProxy({ lng, lat, type, begin }) {
   const { data, error } = await supabase.functions.invoke('weather-proxy', {
     body: {
@@ -187,7 +187,7 @@ function buildSnapshot({
 }
 
 // Reduce a raw Caiyun realtime payload to a snapshot. Shared by the direct
-// legacy own-token path and the current wallet-backed proxy bundle.
+// legacy own-token path and the current shared server proxy bundle.
 function snapshotFromRealtimeData(data, lng, lat) {
   const r = data?.result?.realtime;
   if (!r) throw new Error('caiyun_realtime_missing_result');
@@ -257,7 +257,7 @@ export async function fetchHistoricalSnapshot({ lng, lat, when }) {
 // and by the AI Coach for planned workout days. Returns an array of
 // snapshots, one per day, keyed by YYYY-MM-DD (local).
 // Reduce a raw Caiyun daily payload to the forecast array. Shared by the direct
-// legacy own-token path and the current wallet-backed proxy bundle.
+// legacy own-token path and the current shared server proxy bundle.
 function forecastsFromDailyData(data) {
   const d = data?.result?.daily;
   if (!d) throw new Error('caiyun_daily_missing_result');
@@ -295,8 +295,8 @@ export async function fetchDailyForecasts({ lng, lat }) {
   return forecastsFromDailyData(data);
 }
 
-// One call to the wallet-backed weather-proxy Edge Function returns realtime +
-// 7-day forecast in one shot and counts as ONE wallet debit.
+// One call to the weather-proxy Edge Function returns realtime + 7-day forecast
+// in one shot.
 async function weatherProxyBundle({ lng, lat }) {
   const { data, error } = await supabase.functions.invoke('weather-proxy', {
     body: { mode: 'bundle', lng: roundCoord(lng), lat: roundCoord(lat) },
@@ -315,7 +315,6 @@ async function weatherProxyBundle({ lng, lat }) {
   return {
     realtime: data?.realtime ? snapshotFromRealtimeData(data.realtime, lng, lat) : null,
     forecasts: data?.daily ? forecastsFromDailyData(data.daily) : null,
-    wallet: data?.wallet || null,
   };
 }
 
@@ -503,7 +502,7 @@ function coordsMatch(cache, lng, lat) {
 // `lastUpdatedAt` is the ISO timestamp of the most recent successful
 //   realtime fetch — surfaced so the UI can render "updated HH:MM" labels
 //   and decide when a manual refresh is meaningful.
-export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed, autoUpdate = true, intervalHours = DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS } = {}) {
+export function useWeatherContext({ defaultLng, defaultLat, autoUpdate = true, intervalHours = DEFAULT_WEATHER_UPDATE_INTERVAL_HOURS } = {}) {
   // Hydrate from cache synchronously on mount so the AI Coach status pill
   // doesn't flash 'idle' on every page load. The freshness check below
   // decides whether to actually refetch.
@@ -568,7 +567,6 @@ export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed, autoU
       const bundle = await weatherProxyBundle({ lng: loc.lng, lat: loc.lat });
       const rt = bundle.realtime ?? (cache?.realtime || null);
       const daily = bundle.forecasts ?? (cache?.forecasts || null);
-      if (typeof bundle?.wallet?.balance_cents === 'number' && onWeatherUsed) onWeatherUsed(bundle.wallet.balance_cents);
       const today = localDateKey();
       const nextCache = {
         lng: loc.lng,
@@ -589,10 +587,9 @@ export function useWeatherContext({ defaultLng, defaultLat, onWeatherUsed, autoU
         lastUpdatedAt: nextCache.realtimeAt,
       });
     } catch (e) {
-      const status = e?.code === 'insufficient_balance' ? 'insufficient_balance' : 'error';
-      setState({ currentWeather: null, forecastByDate: null, status, error: status === 'error' ? (e.message || String(e)) : null, lastUpdatedAt: null });
+      setState({ currentWeather: null, forecastByDate: null, status: 'error', error: e.message || String(e), lastUpdatedAt: null });
     }
-  }, [defaultLng, defaultLat, onWeatherUsed, autoUpdate, intervalHours]);
+  }, [defaultLng, defaultLat, autoUpdate, intervalHours]);
 
   // run() is async — the setState calls inside happen on later ticks, not
   // synchronously inside the effect body. The lint rule still flags this

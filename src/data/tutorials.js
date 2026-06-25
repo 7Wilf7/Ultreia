@@ -1,6 +1,6 @@
 // Legacy in-app setup tutorials for the old BYOK flow. Normal users now use
-// wallet-backed server keys and should not see these screens; keep the content
-// only for compatibility with any older hidden entry points.
+// server-side provider configuration and should not see these screens; keep the
+// content only for compatibility with any older hidden entry points.
 //
 // Shape per tutorial:
 //   title:    { zh, en }

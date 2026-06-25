@@ -15,8 +15,8 @@ const FIELD_MAP = {
   defaultLng:    'default_lng',
   defaultLat:    'default_lat',
   defaultLocationName: 'default_location_name',  // friendly label, e.g. "上海"
-  // Legacy user-supplied Caiyun token column; weather now uses wallet-backed
-  // Edge Function secrets instead of per-user tokens.
+  // Legacy user-supplied Caiyun token column; weather now uses Edge Function
+  // secrets instead of per-user tokens.
   caiyunApiKey:  'caiyun_api_key',
   // Daily coach push (Android APK). The server-side dispatch reads these to
   // decide who to push to and when. pushHours is up to 3 LOCAL hours (0–23)

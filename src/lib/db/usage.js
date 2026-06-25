@@ -2,10 +2,10 @@ import { supabase } from '../supabase';
 import { postJson, postJsonStream } from '../apiFetch';
 import { supabaseFunctionUrl, supabasePublicAnonKey } from '../supabase';
 
-// Wallet-backed AI chat via the coach-proxy Edge Function. The shared DeepSeek
-// key stays server-side; successful replies debit the caller's wallet.
-// Throws an Error with `.code` (e.g. 'insufficient_balance') so the caller can branch.
-export async function coachProxy({ system, messages, max_tokens, signal }) {
+// Personal-mode AI calls via the coach-proxy Edge Function. The app prefers the
+// desktop Codex runner when available and falls back to server-side DeepSeek.
+// No AI request checks wallet balance or debits wallet records.
+export async function coachProxy({ kind, system, messages, max_tokens, signal }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
@@ -21,7 +21,7 @@ export async function coachProxy({ system, messages, max_tokens, signal }) {
       apikey: supabasePublicAnonKey,
       Authorization: `Bearer ${accessToken}`,
     },
-    body: { system, messages, max_tokens },
+    body: { kind, system, messages, max_tokens },
     signal,
   });
 
@@ -106,8 +106,8 @@ export async function coachProxyStream({ system, messages, max_tokens, onToken, 
 
   const meta = result.data || {};
   if (!meta.wallet) {
-    const e = new Error('missing_wallet_metadata');
-    e.code = 'missing_wallet_metadata';
+    const e = new Error('missing_ai_metadata');
+    e.code = 'missing_ai_metadata';
     throw e;
   }
 

@@ -84,7 +84,7 @@ function fmtDailyNote(n) {
   return `- ${parts.join(" · ")}`;
 }
 
-export function buildWeeklyReportPrompt({ lang, coachConfig, logs, races, dailyNotes, now, range, agentActions = [], memoryFacts = [] }) {
+export function buildWeeklyReportPrompt({ coachConfig, logs, races, dailyNotes, now, range, agentActions = [], memoryFacts = [] }) {
   const completed = logs
     .filter(w => !w.isPlanned && w.date >= range.start && w.date <= range.end)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
@@ -104,7 +104,7 @@ export function buildWeeklyReportPrompt({ lang, coachConfig, logs, races, dailyN
   const totalKm = completed.reduce((sum, w) => sum + (Number(w.distance) || 0), 0);
   const totalAscent = completed.reduce((sum, w) => sum + (Number(w.ascent) || 0), 0);
   const totalSec = completed.reduce((sum, w) => sum + (Number(w.duration) || 0), 0);
-  const languageName = lang === "zh" ? "简体中文" : "English";
+  const languageName = "简体中文";
 
   const system =
     `You are an expert endurance running coach for trail running and hybrid fitness. ` +

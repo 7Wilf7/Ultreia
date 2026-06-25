@@ -33,6 +33,8 @@ const FIELD_MAP = {
   weeklyReportWeekday: 'weekly_report_weekday', // 0 Sunday ... 6 Saturday
   weeklyReportTime: 'weekly_report_time',       // "HH:MM"
   weeklyReportAfterSundayImport: 'weekly_report_after_sunday_import',
+  weatherAutoUpdate: 'weather_auto_update',
+  weatherIntervalHours: 'weather_interval_hours',
   aiProviderPreference: 'ai_provider_preference', // "auto" | "prefer_codex" | "deepseek_only"
 };
 
@@ -56,6 +58,8 @@ function fromRow(row) {
     } else if (camel === 'pushEnabled' || camel === 'weeklyReportEnabled') {
       // boolean → null defends as false.
       out[camel] = v === true;
+    } else if (camel === 'weatherAutoUpdate') {
+      out[camel] = v !== false;
     } else if (camel === 'weeklyReportAfterSundayImport') {
       // Existing rows may be null until the new column is backfilled; keep the
       // Sunday prompt on by default because it is user-confirmed and low risk.
@@ -65,6 +69,9 @@ function fromRow(row) {
       out[camel] = Number.isInteger(n) && n >= 0 && n <= 6 ? n : 0;
     } else if (camel === 'weeklyReportTime') {
       out[camel] = typeof v === 'string' && /^\d{2}:\d{2}$/.test(v) ? v : '20:00';
+    } else if (camel === 'weatherIntervalHours') {
+      const n = Number(v);
+      out[camel] = [3, 6, 12, 24].includes(n) ? n : 3;
     } else {
       out[camel] = v ?? '';
     }

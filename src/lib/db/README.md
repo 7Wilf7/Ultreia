@@ -62,15 +62,18 @@ silent retry, etc.). Don't swallow errors inside the DAL.
 
 ## Status
 
-**Migration complete (3.4).** All 6 user-level data domains (profile,
-user_settings, workouts, races, coach_messages, plus the `itra_pi` field
-co-located on `profiles`) live on Supabase. `localStorage` is no longer used
-by any business code. `src/utils/migrate.js` has been deleted.
+**Migration complete (3.4).** User-level source-of-truth data domains
+(profile, user_settings, workouts, races, coach_messages, weekly reports,
+agent actions, memory facts, plus the `itra_pi` field co-located on
+`profiles`) live on Supabase. `localStorage` is still allowed for device
+state, caches, debug tokens, migration fallbacks, and transient UI state, but
+not as the only durable copy of cross-device business settings. `src/utils/migrate.js`
+has been deleted.
 
 | Module | Status | Notes |
 |--------|--------|-------|
 | `profiles.js` | ✅ 3.3b | int fields (`restingHR` / `maxHR` / `itraPI`) round-trip as strings on the UI side; `toRow` skips undefined fields |
-| `userSettings.js` | ✅ 3.3b | `coach_config` is `jsonb` — never `JSON.stringify` it on the JS side |
+| `userSettings.js` | ✅ 2026-06-25 | `coach_config` is `jsonb`; weather auto-update settings round-trip via `weather_auto_update` / `weather_interval_hours` |
 | `workouts.js` | ✅ 3.3c | See below |
 | `races.js` | ✅ 3.3d | See below |
 | `coachMessages.js` | ✅ 3.3e | Append-only chat history; see below |

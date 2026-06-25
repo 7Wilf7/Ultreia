@@ -548,6 +548,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [weeklyReportWeekday, setWeeklyReportWeekdayState] = useState(0);
   const [weeklyReportTime, setWeeklyReportTimeState] = useState("20:00");
   const [weeklyReportAfterSundayImport, setWeeklyReportAfterSundayImportState] = useState(true);
+  const [weatherSettings, setWeatherSettingsState] = useState(() => getStoredWeatherSettings());
   const [wallet, setWallet] = useState({ balanceCents: 0, currency: "CNY", ledger: [] });
   const [dataLoading, setDataLoading] = useState(true);
   const [dataLoadError, setDataLoadError] = useState(null);
@@ -612,6 +613,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           setWeeklyReportWeekdayState(cleanWeeklyReportWeekday(settingsData.weeklyReportWeekday));
           setWeeklyReportTimeState(cleanWeeklyReportTime(settingsData.weeklyReportTime));
           setWeeklyReportAfterSundayImportState(settingsData.weeklyReportAfterSundayImport !== false);
+          setWeatherSettingsState({
+            autoUpdate: settingsData.weatherAutoUpdate !== false,
+            intervalHours: [3, 6, 12, 24].includes(Number(settingsData.weatherIntervalHours))
+              ? Number(settingsData.weatherIntervalHours)
+              : getStoredWeatherSettings().intervalHours,
+          });
         }
 
         // Language: a saved setting wins; otherwise fall back to the choice the
@@ -782,6 +789,17 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     if ("weeklyReportWeekday" in patch) setWeeklyReportWeekdayState(cleanWeeklyReportWeekday(patch.weeklyReportWeekday));
     if ("weeklyReportTime" in patch) setWeeklyReportTimeState(cleanWeeklyReportTime(patch.weeklyReportTime));
     if ("weeklyReportAfterSundayImport" in patch) setWeeklyReportAfterSundayImportState(patch.weeklyReportAfterSundayImport !== false);
+    if ("weatherAutoUpdate" in patch || "weatherIntervalHours" in patch) {
+      setWeatherSettingsState(prev => {
+        const next = {
+          ...prev,
+          ...("weatherAutoUpdate" in patch ? { autoUpdate: patch.weatherAutoUpdate !== false } : {}),
+          ...("weatherIntervalHours" in patch ? { intervalHours: [3, 6, 12, 24].includes(Number(patch.weatherIntervalHours)) ? Number(patch.weatherIntervalHours) : prev.intervalHours } : {}),
+        };
+        setStoredWeatherSettings(next);
+        return next;
+      });
+    }
     try {
       await db.userSettings.updateMySettings(patch);
     } catch (err) {
@@ -800,6 +818,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || pushTimezone || "";
     return updateSettings({ ...patch, pushTimezone: detectedTimezone });
   };
+  const setWeatherSettings = (patch) => updateSettings({
+    ...(Object.prototype.hasOwnProperty.call(patch, "autoUpdate") ? { weatherAutoUpdate: patch.autoUpdate !== false } : {}),
+    ...(Object.prototype.hasOwnProperty.call(patch, "intervalHours") ? { weatherIntervalHours: Number(patch.intervalHours) } : {}),
+  });
   // Patch the local state immediately AND persist to Supabase. updateSettings()
   // doesn't refresh local state, so we do it eagerly here so the Settings page
   // and any new addLog calls see the latest values without waiting for a
@@ -1302,6 +1324,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             weeklyReportTime={weeklyReportTime}
             weeklyReportAfterSundayImport={weeklyReportAfterSundayImport}
             setWeeklyReportSettings={setWeeklyReportSettings}
+            weatherSettings={weatherSettings}
+            setWeatherSettings={setWeatherSettings}
           />
         )}
       </AppDialogProvider>
@@ -1322,6 +1346,7 @@ function AppShell({
   pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings,
   weeklyReportEnabled, weeklyReportWeekday, weeklyReportTime,
   weeklyReportAfterSundayImport, setWeeklyReportSettings,
+  weatherSettings, setWeatherSettings,
 }) {
   const t = useT();
   const appDialog = useAppDialog();
@@ -1388,8 +1413,6 @@ function AppShell({
   // the calendar flashes today's weather card. A counter (not a bool) so each
   // click replays the pulse even if the user is already on the calendar.
   const [calWeatherFlash, setCalWeatherFlash] = useState(0);
-  const [weatherSettings, setWeatherSettingsState] = useState(() => getStoredWeatherSettings());
-
   // Inbox messages, loaded ONCE at startup so opening the inbox is instant (no
   // per-open fetch) and the unread badge derives from this list — marking read
   // updates the badge immediately, no DB round-trip / race. The modal does a
@@ -1837,12 +1860,6 @@ function AppShell({
     intervalHours: weatherSettings.intervalHours,
   });
 
-  function setWeatherSettings(patch) {
-    const next = { ...weatherSettings, ...patch };
-    setWeatherSettingsState(next);
-    setStoredWeatherSettings(next);
-  }
-
   function notifyWhenBackground(payload) {
     if (typeof document !== "undefined" && document.visibilityState === "visible") return;
     notifyTaskDone(payload).catch(() => {});
@@ -1952,6 +1969,7 @@ function AppShell({
           weeklyReportWeekday,
           weeklyReportTime,
           weeklyReportAfterSundayImport,
+          weatherSettings,
         },
         data: {
           workouts: logs,

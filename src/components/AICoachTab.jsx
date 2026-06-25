@@ -18,6 +18,7 @@ import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
 import { ItemActionModal } from "./ItemActionModal";
 import { useAppDialog } from "./AppDialogContext";
+import { Dropdown } from "./Dropdown";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -941,42 +942,13 @@ export function AICoachTab({
                 <button onClick={() => setShowCoachConfig(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
-
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {COACH_STYLES.map(o => (
-                    <button key={o.id} onClick={() => setStyle(o.id)}
-                      style={{ ...s.chip(coachConfig.style === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }}>
-                      {t(`enum.coach.${o.id}`)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {OUTPUT_LENGTHS.map(o => (
-                    <button key={o.id} onClick={() => setOutputLength(o.id)}
-                      style={{ ...s.chip(coachConfig.outputLength === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }}>
-                      {t(`enum.length.${o.id}`)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {INTERVENTION_LEVELS.map(o => (
-                    <button key={o.id} onClick={() => setIntervention(o.id)}
-                      style={{ ...s.chip(coachConfig.intervention === o.id), padding: "10px 14px", width: "100%", textAlign: "center" }}>
-                      {t(`enum.intervention.${o.id}`)}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <CoachConfigDropdowns
+                coachConfig={coachConfig}
+                onStyle={setStyle}
+                onOutputLength={setOutputLength}
+                onIntervention={setIntervention}
+                t={t}
+              />
             </div>
           </div>
         </ModalRoot>
@@ -1072,29 +1044,44 @@ export function AICoachTab({
 
       {showMemory && (
         <ModalRoot onClose={() => setShowMemory(false)}>
-          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowMemory(false)}>
-            <div style={s.modalCard(isMobile, { maxWidth: 600, float: true })} onClick={(e) => e.stopPropagation()}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
-                <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+          <div style={s.modalOverlay(isMobile)} onClick={() => setShowMemory(false)}>
+            <div style={{
+              ...s.modalCard(isMobile, { maxWidth: 860 }),
+              maxWidth: isMobile ? "none" : 860,
+              ...(!isMobile ? {
+                height: "calc(100dvh - 40px)",
+                maxHeight: "calc(100dvh - 40px)",
+                margin: "0 auto",
+              } : {}),
+            }} onClick={(e) => e.stopPropagation()}>
+              <div style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 12,
+                marginBottom: 8,
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
+                  <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                  {!memoryProposal && (
+                    <button onClick={proposeMemoryUpdate}
+                      disabled={memoryUpdating || chatMessages.length === 0}
+                      style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                      {memoryUpdating && <Spinner size={11} thickness={1.4} />}
+                      {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
+                    </button>
+                  )}
+                  <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                </div>
               </div>
-              <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
               <MemoryReviewSetting
                 enabled={coachConfig.nightlyMemoryReview === true}
                 onToggle={setNightlyMemoryReview}
                 t={t}
               />
-
-              {!memoryProposal && (
-                <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-                  <button onClick={proposeMemoryUpdate}
-                    disabled={memoryUpdating || chatMessages.length === 0}
-                    style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                    {memoryUpdating && <Spinner size={11} thickness={1.4} />}
-                    {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
-                  </button>
-                </div>
-              )}
               {lastMemoryAction && !memoryProposal && (
                 <MemoryActionStatus action={lastMemoryAction} t={t} />
               )}
@@ -1241,28 +1228,6 @@ export function AICoachTab({
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
 
         <span style={{ flex: 1, minWidth: 6 }} />
-        {onOpenInbox && (
-          <button onClick={onOpenInbox} title={t("inbox.title")} aria-label={t("inbox.title")}
-            style={{
-              position: "relative",
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              minHeight: 26, width: 34, padding: 0,
-              border: "1px solid var(--rule)", borderRadius: 2,
-              background: "var(--bg-elevated)", color: "var(--ink-2)",
-              cursor: "pointer", WebkitTapHighlightColor: "transparent",
-            }}>
-            <MailIcon size={15} />
-            {inboxUnread > 0 && (
-              <span style={{
-                position: "absolute", top: -6, right: -6,
-                minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box",
-                borderRadius: 8, background: "var(--warn)", color: "var(--bg-deep)",
-                fontSize: 9, fontWeight: 700, lineHeight: "16px", textAlign: "center",
-                fontFamily: "var(--font-mono)",
-              }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
-            )}
-          </button>
-        )}
         {showManualAdjustmentShortcut && (
           <button
             type="button"
@@ -1284,6 +1249,28 @@ export function AICoachTab({
               : proactiveAdjustmentLoading
                 ? t("coach.proactive_generating")
                 : t("coach.proactive_manual")}
+          </button>
+        )}
+        {onOpenInbox && (
+          <button onClick={onOpenInbox} title={t("inbox.title")} aria-label={t("inbox.title")}
+            style={{
+              position: "relative",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              minHeight: 26, width: 34, padding: 0,
+              border: "1px solid var(--rule)", borderRadius: 2,
+              background: "var(--bg-elevated)", color: "var(--ink-2)",
+              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+            }}>
+            <MailIcon size={15} />
+            {inboxUnread > 0 && (
+              <span style={{
+                position: "absolute", top: -6, right: -6,
+                minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box",
+                borderRadius: 8, background: "var(--warn)", color: "var(--bg-deep)",
+                fontSize: 9, fontWeight: 700, lineHeight: "16px", textAlign: "center",
+                fontFamily: "var(--font-mono)",
+              }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
+            )}
           </button>
         )}
         {isMobile && (
@@ -2058,39 +2045,13 @@ export function AICoachTab({
                   {coachHubTab === "config" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
-                      <div style={{ marginBottom: 18 }}>
-                        <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.style")}</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {COACH_STYLES.map(o => (
-                            <button key={o.id} onClick={() => setStyle(o.id)}
-                              style={s.chip(coachConfig.style === o.id)}>
-                              {t(`enum.coach.${o.id}`)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div style={{ marginBottom: 18 }}>
-                        <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.length")}</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {OUTPUT_LENGTHS.map(o => (
-                            <button key={o.id} onClick={() => setOutputLength(o.id)}
-                              style={s.chip(coachConfig.outputLength === o.id)}>
-                              {t(`enum.length.${o.id}`)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.intervention")}</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {INTERVENTION_LEVELS.map(o => (
-                            <button key={o.id} onClick={() => setIntervention(o.id)}
-                              style={s.chip(coachConfig.intervention === o.id)}>
-                              {t(`enum.intervention.${o.id}`)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      <CoachConfigDropdowns
+                        coachConfig={coachConfig}
+                        onStyle={setStyle}
+                        onOutputLength={setOutputLength}
+                        onIntervention={setIntervention}
+                        t={t}
+                      />
                     </div>
                   )}
 
@@ -2130,22 +2091,28 @@ export function AICoachTab({
 
                   {coachHubTab === "memory" && (
                     <div>
-                      <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.5 }}>{t("coach.memory_hint")}</div>
+                      <div style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        marginBottom: 14,
+                      }}>
+                        <div style={{ ...s.muted, lineHeight: 1.5, flex: 1, minWidth: 0 }}>{t("coach.memory_hint")}</div>
+                        {!memoryProposal && (
+                          <button onClick={proposeMemoryUpdate}
+                            disabled={memoryUpdating || chatMessages.length === 0}
+                            style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                            {memoryUpdating && <Spinner size={11} thickness={1.4} />}
+                            {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
+                          </button>
+                        )}
+                      </div>
                       <MemoryReviewSetting
                         enabled={coachConfig.nightlyMemoryReview === true}
                         onToggle={setNightlyMemoryReview}
                         t={t}
                       />
-                      {!memoryProposal && (
-                        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
-                          <button onClick={proposeMemoryUpdate}
-                            disabled={memoryUpdating || chatMessages.length === 0}
-                            style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
-                            {memoryUpdating && <Spinner size={11} thickness={1.4} />}
-                            {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
-                          </button>
-                        </div>
-                      )}
                       {lastMemoryAction && !memoryProposal && (
                         <MemoryActionStatus action={lastMemoryAction} t={t} />
                       )}
@@ -2236,6 +2203,56 @@ function MemoryActionStatus({ action, t }) {
       background: "var(--paper-2)",
     }}>
       {isExecuted ? t("coach.memory_action_executed") : t("coach.memory_action_rejected")}
+    </div>
+  );
+}
+
+function CoachConfigDropdowns({ coachConfig, onStyle, onOutputLength, onIntervention, t }) {
+  const rowStyle = {
+    display: "grid",
+    gridTemplateColumns: "minmax(96px, 0.42fr) minmax(0, 1fr)",
+    gap: 12,
+    alignItems: "center",
+    marginBottom: 12,
+  };
+  const triggerStyle = {
+    minHeight: 38,
+    borderRadius: 6,
+    background: "var(--bg-elevated)",
+    fontSize: 13,
+  };
+  return (
+    <div style={{ display: "grid", gap: 2 }}>
+      <div style={rowStyle}>
+        <div style={{ ...s.label, margin: 0 }}>{t("coach.style")}</div>
+        <Dropdown
+          options={COACH_STYLES.map(o => ({ value: o.id, label: t(`enum.coach.${o.id}`) }))}
+          value={coachConfig.style || DEFAULT_COACH_CONFIG.style}
+          onChange={onStyle}
+          ariaLabel={t("coach.style")}
+          triggerStyle={triggerStyle}
+        />
+      </div>
+      <div style={rowStyle}>
+        <div style={{ ...s.label, margin: 0 }}>{t("coach.length")}</div>
+        <Dropdown
+          options={OUTPUT_LENGTHS.map(o => ({ value: o.id, label: t(`enum.length.${o.id}`) }))}
+          value={coachConfig.outputLength || DEFAULT_COACH_CONFIG.outputLength}
+          onChange={onOutputLength}
+          ariaLabel={t("coach.length")}
+          triggerStyle={triggerStyle}
+        />
+      </div>
+      <div style={{ ...rowStyle, marginBottom: 0 }}>
+        <div style={{ ...s.label, margin: 0 }}>{t("coach.intervention")}</div>
+        <Dropdown
+          options={INTERVENTION_LEVELS.map(o => ({ value: o.id, label: t(`enum.intervention.${o.id}`) }))}
+          value={coachConfig.intervention || DEFAULT_COACH_CONFIG.intervention}
+          onChange={onIntervention}
+          ariaLabel={t("coach.intervention")}
+          triggerStyle={triggerStyle}
+        />
+      </div>
     </div>
   );
 }
@@ -2362,33 +2379,52 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
       })
       .slice(0, 20);
   }, [facts, view]);
+  const categorySummary = useMemo(() => {
+    const counts = new Map();
+    for (const fact of visibleFacts) {
+      const category = fact.category || "other";
+      counts.set(category, (counts.get(category) || 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])));
+  }, [visibleFacts]);
 
   return (
     <div style={{ marginTop: 14 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-        <div style={{ ...s.label, margin: 0 }}>{t("coach.memory_facts_title")}</div>
-        <div style={{ color: "var(--ink-3)", fontSize: 11 }}>{t("coach.memory_facts_count", { count: visibleFacts.length })}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...s.label, margin: 0 }}>{t("coach.memory_facts_title")}</div>
+          <div style={{ color: "var(--ink-3)", fontSize: 11, marginTop: 3 }}>{t("coach.memory_facts_count", { count: visibleFacts.length })}</div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          {["current", "archived"].map(option => {
+            const selected = view === option;
+            return (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setView(option)}
+                style={{
+                  ...memoryFactFilterButtonStyle,
+                  background: selected ? "var(--ink-1)" : "transparent",
+                  color: selected ? "var(--paper)" : "var(--ink-2)",
+                  borderColor: selected ? "var(--ink-1)" : "var(--rule)",
+                }}
+              >
+                {t(`coach.memory_facts_filter_${option}`)}
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        {["current", "archived"].map(option => {
-          const selected = view === option;
-          return (
-            <button
-              key={option}
-              type="button"
-              onClick={() => setView(option)}
-              style={{
-                ...memoryFactFilterButtonStyle,
-                background: selected ? "var(--ink-1)" : "transparent",
-                color: selected ? "var(--paper)" : "var(--ink-2)",
-                borderColor: selected ? "var(--ink-1)" : "var(--rule)",
-              }}
-            >
-              {t(`coach.memory_facts_filter_${option}`)}
-            </button>
-          );
-        })}
-      </div>
+      {categorySummary.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          {categorySummary.map(([category, count]) => (
+            <span key={category} style={memoryFactCategoryChipStyle}>
+              {t(`coach.memory_fact_category_${category}`)} · {count}
+            </span>
+          ))}
+        </div>
+      )}
       <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.45, marginBottom: 8 }}>
         {t("coach.memory_facts_hint")}
       </div>
@@ -2403,18 +2439,8 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
               border: "1px solid var(--rule-soft)",
               borderRadius: 4,
               background: "var(--paper-2)",
-              padding: "8px 9px",
+              padding: "10px 11px",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, flexWrap: "wrap" }}>
-                <span style={detailBadgeStyle}>{t(`coach.memory_fact_category_${fact.category || "other"}`)}</span>
-                <span style={{
-                  ...detailBadgeStyle,
-                  color: fact.status === "proposed" ? "var(--moss-deep)" : "var(--ink-3)",
-                  borderColor: fact.status === "proposed" ? "var(--moss)" : "var(--rule)",
-                }}>
-                  {t(`coach.memory_fact_status_${fact.status || "active"}`)}
-                </span>
-              </div>
               <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-1)" }}>
                 {displayLang === "zh"
                   ? (fact.contentZh || fact.contentEn || "-")
@@ -2458,6 +2484,20 @@ const memoryFactFilterButtonStyle = {
   padding: "5px 10px",
   fontSize: 11,
   borderRadius: 999,
+};
+
+const memoryFactCategoryChipStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  width: "fit-content",
+  minHeight: 0,
+  border: "1px solid var(--rule)",
+  borderRadius: 999,
+  padding: "3px 8px",
+  fontSize: 11,
+  lineHeight: 1.2,
+  background: "var(--bg-elevated)",
+  color: "var(--ink-2)",
 };
 
 const memoryFactButtonStyle = {

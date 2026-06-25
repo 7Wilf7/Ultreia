@@ -258,7 +258,7 @@ function buildPrompt(opts: {
   workouts: any[]; targetRace: any | null; memory: string;
   recentChat?: { role: string; content: string }[];
 }): { system: string; user: string } {
-  const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
+  const langName = "Chinese (简体中文)";
   const lines = (opts.workouts || []).slice(0, 8).map((w) => {
     const bits = [w.date, w.type];
     if (w.distance > 0) bits.push(`${w.distance}km`);
@@ -306,7 +306,7 @@ function buildWeeklyRecapPrompt(opts: {
   completed: any[]; plannedThisWeek: any[]; plannedNextWeek: any[]; notes: any[];
   targetRace: any | null; memoryFacts: any[]; agentActions: any[]; coachConfig: Record<string, unknown>;
 }): { system: string; user: string } {
-  const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
+  const langName = "Chinese (简体中文)";
   const workoutLine = (w: any) => {
     const bits = [w.date, w.type];
     if (Number(w.distance || 0) > 0) bits.push(fmtKm(w.distance));
@@ -898,10 +898,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const title = u.lang === "zh" ? "记忆更新待审核" : "Memory update ready";
-        const message = u.lang === "zh"
-          ? "教练已根据今天的对话整理出长期记忆建议，打开 AI Coach 审核后才会保存。"
-          : "The coach drafted a Memory update from today's chat. Open AI Coach to review before saving.";
+        const title = "记忆更新待审核";
+        const message = "教练已根据今天的对话整理出长期记忆建议，打开 AI Coach 审核后才会保存。";
         await supabase.from("push_inbox").insert({ user_id: u.user_id, title, body: message });
         summary.push({ user: u.user_id, mode, date, action: clientId, provider: llm.provider, chargeCents, actualCostCents });
         continue;
@@ -935,7 +933,7 @@ Deno.serve(async (req) => {
           if (logged) continue;
         }
 
-        const reportTitle = u.lang === "zh" ? "AI 周复盘" : "AI weekly report";
+        const reportTitle = "AI 周复盘";
         const { data: reportRow, error: reportCreateErr } = await supabase
           .from("coach_reports")
           .insert({
@@ -1119,10 +1117,8 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const notificationTitle = u.lang === "zh" ? "AI 周复盘已完成" : "Weekly report ready";
-        const notificationMessage = u.lang === "zh"
-          ? "打开 Ultreia 查看本周周报，并可审核接下来的训练计划。"
-          : "Open Ultreia to review this week's report and the next training plan.";
+        const notificationTitle = "AI 周复盘已完成";
+        const notificationMessage = "打开 Ultreia 查看本周周报，并可审核接下来的训练计划。";
         try {
           const delivery = await sendPushAndInbox({
             supabase,

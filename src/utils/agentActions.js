@@ -200,6 +200,23 @@ export function describeCreatePlansImpact(action, existingPlans = []) {
   const overwrittenDates = dateWideReplaceDates
     .map(date => ({ date, count: existingByDate.get(date) || 0 }))
     .filter(x => x.count > 0);
+  const dateImpacts = affectedDates.map(date => {
+    const plansOnDate = plans.filter(p => p?.date === date);
+    const restsOnDate = plansOnDate.filter(isRestPlanItem);
+    const workoutsOnDate = plansOnDate.filter(p => !isRestPlanItem(p));
+    const updatesOnDate = workoutsOnDate.filter(isPlanUpdateItem);
+    const createsOnDate = workoutsOnDate.filter(p => !isPlanUpdateItem(p));
+    return {
+      date,
+      itemCount: plansOnDate.length,
+      createCount: createsOnDate.length,
+      updateCount: updatesOnDate.length,
+      restCount: restsOnDate.length,
+      existingPlanCount: existingByDate.get(date) || 0,
+      dateWideReplace: createsOnDate.length > 0 || restsOnDate.length > 0,
+      updatedPlanIds: [...new Set(updatesOnDate.map(getPlanTargetId).filter(Boolean))].sort(),
+    };
+  });
 
   return {
     itemCount: plans.length,
@@ -210,6 +227,7 @@ export function describeCreatePlansImpact(action, existingPlans = []) {
     restDates,
     updatedPlanIds,
     overwrittenDates,
+    dateImpacts,
     replacesExistingPlans: action?.payload?.replacesExistingPlans !== false,
   };
 }

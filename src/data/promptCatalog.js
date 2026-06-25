@@ -49,7 +49,7 @@ Output a JSON array. Each item:
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional),
   "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/afternoon/下午/晚上),
-  "notes": string (brief — optional)
+  "notes": string (brief Chinese reason — optional)
 }
 
 Rules:

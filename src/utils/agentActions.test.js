@@ -127,6 +127,28 @@ describe("agent action helpers", () => {
         { date: "2026-06-20", count: 1 },
         { date: "2026-06-21", count: 2 },
       ],
+      dateImpacts: [
+        {
+          date: "2026-06-20",
+          itemCount: 1,
+          createCount: 1,
+          updateCount: 0,
+          restCount: 0,
+          existingPlanCount: 1,
+          dateWideReplace: true,
+          updatedPlanIds: [],
+        },
+        {
+          date: "2026-06-21",
+          itemCount: 1,
+          createCount: 1,
+          updateCount: 0,
+          restCount: 0,
+          existingPlanCount: 2,
+          dateWideReplace: true,
+          updatedPlanIds: [],
+        },
+      ],
       replacesExistingPlans: true,
     });
   });
@@ -153,6 +175,28 @@ describe("agent action helpers", () => {
         { date: "2026-06-20", count: 1 },
         { date: "2026-06-21", count: 1 },
       ],
+      dateImpacts: [
+        {
+          date: "2026-06-20",
+          itemCount: 1,
+          createCount: 0,
+          updateCount: 0,
+          restCount: 1,
+          existingPlanCount: 1,
+          dateWideReplace: true,
+          updatedPlanIds: [],
+        },
+        {
+          date: "2026-06-21",
+          itemCount: 1,
+          createCount: 1,
+          updateCount: 0,
+          restCount: 0,
+          existingPlanCount: 1,
+          dateWideReplace: true,
+          updatedPlanIds: [],
+        },
+      ],
     });
   });
 
@@ -177,6 +221,18 @@ describe("agent action helpers", () => {
       restDates: [],
       updatedPlanIds: ["plan-1"],
       overwrittenDates: [],
+      dateImpacts: [
+        {
+          date: "2026-06-20",
+          itemCount: 1,
+          createCount: 0,
+          updateCount: 1,
+          restCount: 0,
+          existingPlanCount: 2,
+          dateWideReplace: false,
+          updatedPlanIds: ["plan-1"],
+        },
+      ],
       replacesExistingPlans: true,
     });
   });

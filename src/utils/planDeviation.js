@@ -169,7 +169,7 @@ Output a JSON array only. Each item:
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
   "timeOfDay": "am" | "pm" (optional),
-  "notes": string (brief, include why this is a rescue adjustment)
+  "notes": string (brief Chinese reason; include why this is a rescue adjustment)
 }
 
 Rules:

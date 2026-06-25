@@ -87,7 +87,7 @@ Output a JSON array only. Each item:
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
   "timeOfDay": "am" | "pm" (optional),
-  "notes": string (brief, explain how this balances missed-plan recovery with load protection)
+  "notes": string (brief Chinese reason; explain how this balances missed-plan recovery with load protection)
 }
 
 Rules:

@@ -75,7 +75,68 @@ function planSummary(it, t) {
   return bits.filter(Boolean).join(" · ");
 }
 
-export function CoachPlanImportModal({ plans = [], action = null, existingPlans = [], onConfirm, onCancel, onReject, onReExtract }) {
+function normalizeReasonLine(value) {
+  return String(value || "")
+    .replace(/^#{1,6}\s*/, "")
+    .replace(/^(?:[-*]|\u2022)\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function assistantAnalysisLines(assistantContent) {
+  return String(assistantContent || "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .split(/\n+/)
+    .map(normalizeReasonLine)
+    .filter(Boolean)
+    .filter(line => !/^\{|\[|\]$/.test(line))
+    .filter(line => !/^\d{4}-\d{2}-\d{2}\b/.test(line))
+    .filter(line => !/^(Road Run|Trail Run|Hiking|Strength|HIIT|Rest)\b/i.test(line))
+    .slice(0, 3);
+}
+
+function localizedActionReason(action, t) {
+  const source = String(action?.source || "ai_coach_reply");
+  const key = `coach.action_reason_source_${source}`;
+  const translated = t(key);
+  return translated === key ? t("coach.action_reason_source_default") : translated;
+}
+
+function coachReasonLines(action, selectedItems, assistantContent, t) {
+  const lines = [];
+  const seen = new Set();
+  const add = value => {
+    const line = normalizeReasonLine(value);
+    const key = line.toLowerCase();
+    if (!line || seen.has(key)) return;
+    seen.add(key);
+    lines.push(line);
+  };
+
+  assistantAnalysisLines(assistantContent).forEach(add);
+  if (lines.length === 0) add(localizedActionReason(action, t));
+  selectedItems.map(it => it.notes).forEach(add);
+  return lines.slice(0, 4);
+}
+
+function dateImpactText(row, t) {
+  const date = compactDateLabel(row.date);
+  if (row.dateWideReplace && row.existingPlanCount > 0) {
+    if (row.restCount > 0 && row.createCount === 0) {
+      return t("coach.action_date_replace_rest", { date, count: row.existingPlanCount });
+    }
+    return t("coach.action_date_replace_plan", { date, count: row.existingPlanCount });
+  }
+  if (row.dateWideReplace && row.restCount > 0 && row.createCount === 0) {
+    return t("coach.action_date_add_rest", { date });
+  }
+  if (row.updateCount > 0) {
+    return t("coach.action_date_update_only", { date, n: row.updateCount });
+  }
+  return t("coach.action_date_add_plan", { date, n: row.createCount || row.itemCount });
+}
+
+export function CoachPlanImportModal({ plans = [], action = null, assistantContent = "", existingPlans = [], onConfirm, onCancel, onReject, onReExtract }) {
   const t = useT();
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
@@ -105,6 +166,8 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
   const selectedUpdateCount = selectedItems.filter(isPlanUpdateItem).length;
   const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it) && !isPlanUpdateItem(it)).length;
   const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
+  const reasonLines = coachReasonLines(agentAction, selectedItems, assistantContent, t);
+  const dateImpactRows = impact.dateImpacts || [];
 
   async function doImport() {
     // Validate: every selected row needs a date + type.
@@ -264,6 +327,53 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
               color: "var(--ink-3)",
               marginBottom: 7,
             }}>
+              {t("coach.action_analysis_title")}
+            </div>
+            {reasonLines.length === 0 ? (
+              <div style={{ ...s.muted, fontSize: 12 }}>
+                {t("coach.action_analysis_empty")}
+              </div>
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.55 }}>
+                {reasonLines.map(line => <li key={line}>{line}</li>)}
+              </ul>
+            )}
+          </div>
+          <div style={{
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: "1px solid var(--rule)",
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--ink-3)",
+              marginBottom: 7,
+            }}>
+              {t("coach.action_calendar_impact_title")}
+            </div>
+            <div style={{ ...s.muted, fontSize: 12, lineHeight: 1.45, marginBottom: dateImpactRows.length ? 7 : 0 }}>
+              {t("coach.action_calendar_impact_scope")}
+            </div>
+            {dateImpactRows.length > 0 && (
+              <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.55 }}>
+                {dateImpactRows.map(row => (
+                  <li key={row.date}>{dateImpactText(row, t)}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div style={{
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: "1px solid var(--rule)",
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 11,
+              color: "var(--ink-3)",
+              marginBottom: 7,
+            }}>
               {t("coach.action_will_execute")}
             </div>
             {selectedItems.length === 0 ? (
@@ -279,21 +389,6 @@ export function CoachPlanImportModal({ plans = [], action = null, existingPlans 
                   <li>{t("coach.action_more_items", { n: selectedItems.length - 4 })}</li>
                 )}
               </ul>
-            )}
-            {impact.overwrittenDates.length > 0 && (
-              <div style={{
-                marginTop: 9,
-                padding: "8px 10px",
-                border: "1px solid var(--rule)",
-                background: "var(--bg)",
-                fontSize: 12,
-                lineHeight: 1.45,
-                color: "var(--ink-2)",
-              }}>
-                {t("coach.action_replace_warning", {
-                  dates: impact.overwrittenDates.map(x => compactDateLabel(x.date)).join(", "),
-                })}
-              </div>
             )}
           </div>
         </div>

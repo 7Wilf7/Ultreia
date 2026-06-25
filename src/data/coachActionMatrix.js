@@ -44,39 +44,17 @@ export const COACH_ACTION_MATRIX = [
     },
   },
   {
-    id: "weather_plan_adjustment",
-    phase: "Phase 6",
-    rank: 3,
-    status: "planned",
-    title: {
-      en: "Weather-driven plan adjustment",
-      zh: "天气驱动计划调整",
-    },
-    trigger: {
-      en: "Upcoming long runs or quality sessions meet heat, humidity, strong wind, pollution, or heavy rain.",
-      zh: "未来长距离或强度课遇到高温高湿、强风、污染或大雨。",
-    },
-    suggestion: {
-      en: "Suggest a better date/time window, or keep the date but lower the target.",
-      zh: "建议换到更合适的日期 / 时段，或保留日期但降低目标。",
-    },
-    boundary: {
-      en: "Only future plans are considered. Completed workouts are never changed.",
-      zh: "只调整未来计划，不影响已经完成的训练。",
-    },
-  },
-  {
     id: "data_quality_completion",
     phase: "Phase 6",
-    rank: 4,
+    rank: 3,
     status: "planned",
     title: {
       en: "Data quality completion",
       zh: "数据质量补全助手",
     },
     trigger: {
-      en: "Recent workouts miss RPE, notes, accurate type, or available weather snapshots.",
-      zh: "最近训练缺 RPE、备注、准确类型，或有可补的天气快照。",
+      en: "Recent workouts miss RPE, notes, or accurate type.",
+      zh: "最近训练缺 RPE、备注或准确类型。",
     },
     suggestion: {
       en: "Start as a lightweight checklist; later expand low-risk items into reviewable cards.",
@@ -90,7 +68,7 @@ export const COACH_ACTION_MATRIX = [
   {
     id: "race_briefing_checklist",
     phase: "Phase 6",
-    rank: 5,
+    rank: 4,
     status: "planned",
     title: {
       en: "Race briefing and gear checklist",
@@ -107,6 +85,28 @@ export const COACH_ACTION_MATRIX = [
     boundary: {
       en: "First version is report/checklist only, without automatic training changes.",
       zh: "第一版只做报告 / checklist，不自动修改训练。",
+    },
+  },
+  {
+    id: "weather_plan_adjustment",
+    phase: "Phase 6",
+    rank: 5,
+    status: "deferred",
+    title: {
+      en: "Weather-driven plan adjustment",
+      zh: "天气驱动计划调整（暂缓）",
+    },
+    trigger: {
+      en: "Upcoming long runs or quality sessions meet severe weather. Deferred because forecasts can be too noisy for changing training plans.",
+      zh: "未来长距离或强度课遇到极端天气。因天气预报误差较大，暂不作为改计划触发条件。",
+    },
+    suggestion: {
+      en: "Keep it as a reminder or race-day checklist signal before considering any calendar change.",
+      zh: "先只作为提醒或赛前 checklist 信号，不优先生成改日历建议。",
+    },
+    boundary: {
+      en: "Do not disrupt the original plan based on ordinary forecasts. Only very high-confidence severe weather should be escalated later.",
+      zh: "不因普通预报打乱原计划；后续只考虑高置信度的极端天气提醒。",
     },
   },
 ];

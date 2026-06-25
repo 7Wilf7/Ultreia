@@ -1091,6 +1091,7 @@ const dict = {
   "coach.action_matrix_status_observing": { en: "Live, observing", zh: "已上线观察" },
   "coach.action_matrix_status_next": { en: "Next", zh: "下一梯队" },
   "coach.action_matrix_status_planned": { en: "Planned", zh: "规划中" },
+  "coach.action_matrix_status_deferred": { en: "Deferred", zh: "暂缓" },
   "coach.agent_actions_hint": { en: "The latest 10 calendar or Memory suggestions the coach prepared, with your decision and save result. Open one to ask the coach about it, or long-press a record to delete only that record.", zh: "这里显示最近 10 条教练整理过的日历或记忆建议，以及你的选择和保存结果。展开后可以带着这条建议继续问教练；长按记录只会删除这条记录。" },
   "coach.agent_actions_empty": { en: "No prepared suggestions yet. Try a calendar suggestion from a coach reply, or update Memory from chat.", zh: "还没有整理过的建议。可以先从一条教练回复里查看日历建议，或从对话更新长期记忆。" },
   "coach.agent_actions_items": { en: "Suggestion items", zh: "建议内容" },

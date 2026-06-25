@@ -2240,6 +2240,14 @@ function actionMatrixStatusStyle(status) {
       borderColor: "var(--accent)",
     };
   }
+  if (status === "deferred") {
+    return {
+      ...base,
+      color: "var(--ink-3)",
+      background: "var(--paper)",
+      borderColor: "var(--rule)",
+    };
+  }
   return {
     ...base,
     color: "var(--ink-2)",

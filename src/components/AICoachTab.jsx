@@ -290,6 +290,7 @@ export function AICoachTab({
   planDeviationSummary = null,
   recoveryGuardSummary = null,
   raceBriefingSummary = null,
+  proactiveAutoPauseUntil = 0,
   proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onOpenProactiveAction,
   raceBriefingLoading = false, onRaceBriefingRequest,
   agentActions = [], onDeleteAgentAction,
@@ -364,6 +365,7 @@ export function AICoachTab({
     catch { return ""; }
   });
   const proactiveAdjustmentSnoozed = proactiveAdjustmentSnoozedUntil > runnerNowMs;
+  const proactiveAutoPaused = Number(proactiveAutoPauseUntil) > runnerNowMs;
   const raceBriefingSnoozed = raceBriefingSnoozedUntil > runnerNowMs;
   const snoozeProactiveAdjustment = useCallback(() => {
     const until = Date.now() + PROACTIVE_ADJUSTMENT_SNOOZE_MS;
@@ -483,6 +485,7 @@ export function AICoachTab({
     if (proactiveAdjustment.existingAction) return;
     if (proactiveAdjustment.settledAction) return;
     if (proactiveAdjustmentSnoozed) return;
+    if (proactiveAutoPaused) return;
     if (attemptedProactiveAdjustmentSignature === proactiveAdjustment.signature) return;
     if (proactiveAdjustmentLoading) return;
     if (typeof onProactiveTrainingAdjustmentRequest !== "function") return;
@@ -500,6 +503,7 @@ export function AICoachTab({
     onProactiveTrainingAdjustmentRequest,
     proactiveAdjustment,
     proactiveAdjustmentLoading,
+    proactiveAutoPaused,
     proactiveAdjustmentSnoozed,
   ]);
   useEffect(() => {
@@ -530,6 +534,7 @@ export function AICoachTab({
     proactiveAdjustment
     && !proactiveAdjustment.settledAction
     && !proactiveAdjustmentSnoozed
+    && !proactiveAutoPaused
     && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
   );
   const showRaceBriefing = !!(

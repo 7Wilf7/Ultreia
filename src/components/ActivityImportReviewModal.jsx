@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { s } from "../styles";
+import { STRENGTH_SUBS, WEATHER_RELEVANT_TYPES } from "../constants";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { useT } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
@@ -31,39 +32,84 @@ function workoutSummary(w) {
   };
 }
 
+function weatherEligibleForImport(w) {
+  return WEATHER_RELEVANT_TYPES.includes(w?.type)
+    && weatherWindowEligible({ ...w, durationSec: w?.duration || 0 });
+}
+
 export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, onConfirm }) {
   const t = useT();
   const isMobile = useIsMobile();
   const [page, setPage] = useState(initialPage);
-  const [fetchWeather, setFetchWeather] = useState(true);
+  const initialFetchWeather = useMemo(
+    () => workouts.some(weatherEligibleForImport),
+    [workouts]
+  );
+  const [fetchWeather, setFetchWeather] = useState(initialFetchWeather);
   const [askCoach, setAskCoach] = useState(workouts.length <= DETAIL_LIMIT);
   const [coachNotes, setCoachNotes] = useState("");
   const [rpeByIndex, setRpeByIndex] = useState({});
   const [bulkRpe, setBulkRpe] = useState("");
+  const [strengthSubsByIndex, setStrengthSubsByIndex] = useState({});
+  const [bulkStrengthSubs, setBulkStrengthSubs] = useState([]);
 
   const count = workouts.length;
   const detailMode = count <= DETAIL_LIMIT;
   const current = workouts[Math.min(page, count - 1)] || workouts[0];
   const currentSummary = current ? workoutSummary(current) : { title: "", meta: "" };
   const weatherEligibleCount = useMemo(
-    () => workouts.filter(w => weatherWindowEligible({ ...w, durationSec: w.duration || 0 })).length,
+    () => workouts.filter(weatherEligibleForImport).length,
+    [workouts]
+  );
+  const strengthRows = useMemo(
+    () => workouts
+      .map((w, idx) => ({ w, idx }))
+      .filter(({ w }) => w?.type === "Strength"),
     [workouts]
   );
   const coachCount = detailMode ? count : Math.min(COACH_LIMIT, count);
   const hasRequiredRpe = detailMode
     ? workouts.every((w, idx) => (Number(w.rpe) >= 1 && Number(w.rpe) <= 10) || (Number(rpeByIndex[idx]) >= 1 && Number(rpeByIndex[idx]) <= 10))
     : Number(bulkRpe) >= 1 && Number(bulkRpe) <= 10;
-  const confirmDisabled = !workouts.length || !hasRequiredRpe;
+  const hasRequiredStrength = detailMode
+    ? workouts.every((w, idx) => w?.type !== "Strength" || ((strengthSubsByIndex[idx] ?? w.subTypes ?? []).length > 0))
+    : strengthRows.every(({ w }) => (Array.isArray(w.subTypes) && w.subTypes.length > 0) || bulkStrengthSubs.length > 0);
+  const confirmDisabled = !workouts.length || !hasRequiredRpe || !hasRequiredStrength;
+  const currentStrengthSubs = current?.type === "Strength"
+    ? (strengthSubsByIndex[page] ?? current?.subTypes ?? [])
+    : [];
+  const missingStrengthCount = detailMode
+    ? workouts.filter((w, idx) => w?.type === "Strength" && ((strengthSubsByIndex[idx] ?? w.subTypes ?? []).length === 0)).length
+    : strengthRows.filter(({ w }) => !(Array.isArray(w.subTypes) && w.subTypes.length > 0)).length;
 
   function setCurrentRpe(value) {
     setRpeByIndex(prev => ({ ...prev, [page]: clampRpe(value) }));
   }
 
+  function toggleCurrentStrengthSub(sub) {
+    const currentSet = new Set(currentStrengthSubs);
+    if (currentSet.has(sub)) currentSet.delete(sub);
+    else currentSet.add(sub);
+    setStrengthSubsByIndex(prev => ({ ...prev, [page]: [...currentSet] }));
+  }
+
+  function toggleBulkStrengthSub(sub) {
+    setBulkStrengthSubs(prev => prev.includes(sub)
+      ? prev.filter(x => x !== sub)
+      : [...prev, sub]);
+  }
+
   function submit() {
     const patched = workouts.map((w, idx) => {
       const raw = detailMode ? rpeByIndex[idx] : bulkRpe;
-      if (raw === "" || raw == null) return { ...w, rpe: Number(w.rpe) };
-      return { ...w, rpe: Number(raw) };
+      const next = raw === "" || raw == null ? { ...w, rpe: Number(w.rpe) } : { ...w, rpe: Number(raw) };
+      if (next.type === "Strength") {
+        const existingSubs = Array.isArray(next.subTypes) ? next.subTypes : [];
+        next.subTypes = detailMode
+          ? (strengthSubsByIndex[idx] ?? existingSubs)
+          : (existingSubs.length ? existingSubs : bulkStrengthSubs);
+      }
+      return next;
     });
     onConfirm({
       workouts: patched,
@@ -193,6 +239,44 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
               </label>
             )}
 
+            {detailMode && current?.type === "Strength" && (
+              <div style={fieldBlockStyle}>
+                <span style={labelStyle}>{t("activities.import_review_strength_title")}</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {STRENGTH_SUBS.map(sub => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => toggleCurrentStrengthSub(sub)}
+                      style={{ ...s.chip(currentStrengthSubs.includes(sub)), minHeight: 0, padding: "6px 10px", fontSize: 12 }}
+                    >
+                      {t(`enum.subtype.${sub}`)}
+                    </button>
+                  ))}
+                </div>
+                <span style={hintStyle}>{t("activities.import_review_strength_required")}</span>
+              </div>
+            )}
+
+            {!detailMode && missingStrengthCount > 0 && (
+              <div style={fieldBlockStyle}>
+                <span style={labelStyle}>{t("activities.import_review_strength_title")}</span>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                  {STRENGTH_SUBS.map(sub => (
+                    <button
+                      key={sub}
+                      type="button"
+                      onClick={() => toggleBulkStrengthSub(sub)}
+                      style={{ ...s.chip(bulkStrengthSubs.includes(sub)), minHeight: 0, padding: "6px 10px", fontSize: 12 }}
+                    >
+                      {t(`enum.subtype.${sub}`)}
+                    </button>
+                  ))}
+                </div>
+                <span style={hintStyle}>{t("activities.import_review_strength_bulk", { n: missingStrengthCount })}</span>
+              </div>
+            )}
+
             <div style={fieldBlockStyle}>
               <label style={{ display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer" }}>
                 <input
@@ -221,6 +305,12 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
               )}
             </div>
           </div>
+
+          {!hasRequiredStrength && (
+            <div style={{ color: "var(--warn)", fontSize: 12, lineHeight: 1.45, marginTop: 10 }}>
+              {t("activities.import_review_strength_required")}
+            </div>
+          )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
             <button onClick={onClose} style={s.btnGhost}>

@@ -5,7 +5,7 @@ import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
   DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
-  RUN_GROUP_TYPES,
+  RUN_GROUP_TYPES, WEATHER_RELEVANT_TYPES,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
@@ -153,6 +153,7 @@ function cleanWeeklyReportWeekday(value) {
 }
 
 const WEEKLY_REPORT_LIST_LIMIT = 50;
+const POST_IMPORT_REVIEW_PROACTIVE_PAUSE_MS = 12 * 60 * 60 * 1000;
 
 function monthStartKey(now = new Date()) {
   const d = new Date(now);
@@ -315,7 +316,7 @@ function buildWorkoutReviewDraft(workouts, meta = {}) {
 2. 恢复风险或需要注意的地方
 3. 下一次训练建议
 
-不要重写完整训练计划，重点点评这次活动。
+不要重写完整训练计划，重点点评这次活动。如果下一次训练建议涉及已有日历计划，只给一个明确口径：保留 / 降量 / 取消三选一，并简短说明，不要和同一轮点评里的其他建议互相冲突。
 ${noteLine}
 
 [New Activities]
@@ -1023,7 +1024,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // to the saved default location when a row has no GPS.
         if (fetchWeather) {
           toInsert = await Promise.all(workouts.map(async (w) => {
-            if (w.weather || !weatherWindowEligible({ ...w, durationSec: w.duration || 0 })) return w;
+            if (
+              w.weather
+              || !WEATHER_RELEVANT_TYPES.includes(w.type)
+              || !weatherWindowEligible({ ...w, durationSec: w.duration || 0 })
+            ) return w;
             const start = Array.isArray(w.gpsTrack) && w.gpsTrack.length ? w.gpsTrack[0] : null;
             const lng = start ? start[1] : defaultLocation.lng;
             const lat = start ? start[0] : defaultLocation.lat;
@@ -1404,6 +1409,7 @@ function AppShell({
   const [showGuide, setShowGuide] = useState(false);
   const [readinessPromptDate, setReadinessPromptDate] = useState(null);
   const [coachReviewPrompt, setCoachReviewPrompt] = useState(null);
+  const [proactiveAutoPauseUntil, setProactiveAutoPauseUntil] = useState(0);
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
   // "set up daily push" button — draws the eye to where the setting lives.
   const [pushFlash, setPushFlash] = useState(false);
@@ -2717,6 +2723,7 @@ Rules:
     const reviewed = coachReviewPrompt.workouts;
     const note = coachReviewPrompt.note;
     setCoachReviewPrompt(null);
+    setProactiveAutoPauseUntil(Date.now() + POST_IMPORT_REVIEW_PROACTIVE_PAUSE_MS);
     setTab(3);
     // Guarantee the just-reviewed sessions are in the prompt's training-load
     // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
@@ -3006,6 +3013,7 @@ Rules:
           planDeviationSummary={planDeviationSummary}
           recoveryGuardSummary={recoveryGuardSummary}
           raceBriefingSummary={raceBriefingSummary}
+          proactiveAutoPauseUntil={proactiveAutoPauseUntil}
           proactiveAdjustmentLoading={proactiveAdjustmentLoading}
           onProactiveTrainingAdjustmentRequest={proposeProactiveTrainingAdjustment}
           onOpenProactiveAction={openProactivePlanAction}

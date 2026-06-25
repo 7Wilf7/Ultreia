@@ -1201,7 +1201,9 @@ const dict = {
   "coach.proactive_generating": { en: "Generating…", zh: "生成中……" },
   "coach.proactive_retry": { en: "Generate now", zh: "立即生成" },
   "coach.proactive_open": { en: "View suggestion", zh: "查看建议" },
-  "coach.proactive_dismiss": { en: "Not now", zh: "暂不处理" },
+  "coach.proactive_manual": { en: "One-tap adjust", zh: "一键综合调整" },
+  "coach.proactive_manual_hint": { en: "Generate a calendar adjustment from the current plan and recovery signals.", zh: "根据当前计划偏差和恢复信号，主动生成一份日历调整建议。" },
+  "coach.proactive_dismiss": { en: "Snooze 3 days", zh: "3 天内不再提醒" },
   "coach.proactive_no_plans": { en: "The coach did not find a safe concrete adjustment. Nothing was changed.", zh: "教练没有整理出足够安全、具体的调整建议。没有改动任何数据。" },
 
   // ===== AI Coach → Calendar import =====

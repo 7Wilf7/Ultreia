@@ -203,8 +203,21 @@ function makeMdComponents(isMobile) {
 // older turns start competing with the system prompt for the model's focus.
 // 40 (~20 exchanges) keeps the nudge from firing on every short session.
 const LONG_CHAT_HINT_THRESHOLD = 40;
-const PROACTIVE_ADJUSTMENT_DISMISS_KEY = "ultreia.proactiveAdjustment.dismissedSignature";
+const PROACTIVE_ADJUSTMENT_SNOOZE_KEY = "ultreia.proactiveAdjustment.snoozedUntil";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_KEY = "ultreia.proactiveAdjustment.attemptedSignature";
+const PROACTIVE_ADJUSTMENT_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
+
+function readProactiveAdjustmentSnooze() {
+  try {
+    const raw = localStorage.getItem(PROACTIVE_ADJUSTMENT_SNOOZE_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw);
+    const value = typeof parsed === "number" ? parsed : Number(parsed?.until || parsed?.untilMs || 0);
+    return Number.isFinite(value) && value > Date.now() ? value : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function formatProviderMeta(meta, lang) {
   if (!meta?.provider) return "";
@@ -321,20 +334,17 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
-  const [dismissedProactiveAdjustmentSignature, setDismissedProactiveAdjustmentSignature] = useState(() => {
-    try { return localStorage.getItem(PROACTIVE_ADJUSTMENT_DISMISS_KEY) || ""; }
-    catch { return ""; }
-  });
+  const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [attemptedProactiveAdjustmentSignature, setAttemptedProactiveAdjustmentSignature] = useState(() => {
     try { return localStorage.getItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY) || ""; }
     catch { return ""; }
   });
-  const dismissProactiveAdjustmentSignature = useCallback((signature) => {
-    const next = signature || "";
-    setDismissedProactiveAdjustmentSignature(next);
+  const proactiveAdjustmentSnoozed = proactiveAdjustmentSnoozedUntil > runnerNowMs;
+  const snoozeProactiveAdjustment = useCallback(() => {
+    const until = Date.now() + PROACTIVE_ADJUSTMENT_SNOOZE_MS;
+    setProactiveAdjustmentSnoozedUntil(until);
     try {
-      if (next) localStorage.setItem(PROACTIVE_ADJUSTMENT_DISMISS_KEY, next);
-      else localStorage.removeItem(PROACTIVE_ADJUSTMENT_DISMISS_KEY);
+      localStorage.setItem(PROACTIVE_ADJUSTMENT_SNOOZE_KEY, JSON.stringify({ until }));
     } catch { /* private mode */ }
   }, []);
   const markProactiveAdjustmentAttempted = useCallback((signature) => {
@@ -375,8 +385,8 @@ export function AICoachTab({
     return { kind, signature, existingAction, settledAction };
   }, [agentActions, planDeviationSummary, recoveryGuardSummary]);
   const handleProactiveAdjustmentDismiss = useCallback(() => {
-    if (proactiveAdjustment?.signature) dismissProactiveAdjustmentSignature(proactiveAdjustment.signature);
-  }, [dismissProactiveAdjustmentSignature, proactiveAdjustment]);
+    snoozeProactiveAdjustment();
+  }, [snoozeProactiveAdjustment]);
   const handleProactiveAdjustmentRequest = useCallback(async ({ quiet = false } = {}) => {
     if (!proactiveAdjustment?.kind) return;
     const generated = await onProactiveTrainingAdjustmentRequest?.(proactiveAdjustment.kind, { quiet });
@@ -391,7 +401,7 @@ export function AICoachTab({
     if (!proactiveAdjustment) return;
     if (proactiveAdjustment.existingAction) return;
     if (proactiveAdjustment.settledAction) return;
-    if (dismissedProactiveAdjustmentSignature === proactiveAdjustment.signature) return;
+    if (proactiveAdjustmentSnoozed) return;
     if (attemptedProactiveAdjustmentSignature === proactiveAdjustment.signature) return;
     if (proactiveAdjustmentLoading) return;
     if (typeof onProactiveTrainingAdjustmentRequest !== "function") return;
@@ -405,18 +415,30 @@ export function AICoachTab({
     };
   }, [
     attemptedProactiveAdjustmentSignature,
-    dismissedProactiveAdjustmentSignature,
     handleProactiveAdjustmentRequest,
     onProactiveTrainingAdjustmentRequest,
     proactiveAdjustment,
     proactiveAdjustmentLoading,
+    proactiveAdjustmentSnoozed,
   ]);
   const showProactiveAdjustment = !!(
     proactiveAdjustment
     && !proactiveAdjustment.settledAction
-    && dismissedProactiveAdjustmentSignature !== proactiveAdjustment.signature
+    && !proactiveAdjustmentSnoozed
     && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
   );
+  const showManualAdjustmentShortcut = !!(
+    proactiveAdjustment
+    && !showProactiveAdjustment
+    && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
+  );
+  const handleManualAdjustmentShortcut = useCallback(() => {
+    if (proactiveAdjustment?.existingAction) {
+      onOpenProactiveAction?.(proactiveAdjustment.existingAction);
+      return;
+    }
+    handleProactiveAdjustmentRequest();
+  }, [handleProactiveAdjustmentRequest, onOpenProactiveAction, proactiveAdjustment]);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -1118,6 +1140,29 @@ export function AICoachTab({
                 fontFamily: "var(--font-mono)",
               }}>{inboxUnread > 99 ? "99+" : inboxUnread}</span>
             )}
+          </button>
+        )}
+        {showManualAdjustmentShortcut && (
+          <button
+            type="button"
+            onClick={handleManualAdjustmentShortcut}
+            disabled={proactiveAdjustmentLoading}
+            title={proactiveAdjustment?.existingAction ? t("coach.proactive_open") : t("coach.proactive_manual_hint")}
+            style={{
+              ...s.btnGhost,
+              minHeight: 26,
+              padding: "4px 9px",
+              fontSize: 11,
+              whiteSpace: "nowrap",
+              flex: "0 0 auto",
+              opacity: proactiveAdjustmentLoading ? 0.65 : 1,
+              cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+            }}>
+            {proactiveAdjustment?.existingAction
+              ? t("coach.proactive_open")
+              : proactiveAdjustmentLoading
+                ? t("coach.proactive_generating")
+                : t("coach.proactive_manual")}
           </button>
         )}
         {isMobile && (

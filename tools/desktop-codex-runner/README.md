@@ -68,11 +68,12 @@ spawn compatibility. On macOS/Linux, it calls `npx ...` directly. The effective
 Codex invocation is:
 
 ```bash
-npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-user-config --ignore-rules --disable plugins --disable apps --disable browser_use --disable browser_use_external --disable computer_use --disable image_generation --sandbox read-only --skip-git-repo-check --cd <empty temp dir> [-c model_reasoning_effort=\"high\"] -
+npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-rules --disable plugins --disable apps --disable browser_use --disable browser_use_external --disable computer_use --disable image_generation --sandbox read-only --skip-git-repo-check --cd <empty temp dir> [-c model_reasoning_effort=\"xhigh\"] -
 ```
 
-That keeps the run local, non-interactive, read-only, and tool-light. The prompt
-is passed via stdin instead of shell arguments.
+That keeps the run local, non-interactive, read-only, and tool-light while still
+loading the machine's normal Codex provider/auth configuration. The prompt is
+passed via stdin instead of shell arguments.
 
 The desktop Codex runner writes back one completed assistant reply after
 `codex exec` finishes. It does not currently stream partial tokens into AI

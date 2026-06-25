@@ -270,7 +270,6 @@ async function runCodex(payload, job) {
       "exec",
       "--json",
       "--ephemeral",
-      "--ignore-user-config",
       "--ignore-rules",
       "--disable", "plugins",
       "--disable", "apps",

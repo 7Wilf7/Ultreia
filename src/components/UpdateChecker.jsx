@@ -65,6 +65,7 @@ function pickApkAsset(assets) {
 
 const NOTE_TRANSLATIONS = {
   "replace product logo assets": "更换 Ultreia 新 logo 并同步图标资源",
+  "refine poster mark background cleanup": "精修分享海报背景 mark",
   "poster mark: centre the watermark": "分享海报水印位置居中",
   "poster mark: extract the real logo line-art, themed per finish": "分享海报背景改用真实 logo 线稿，并跟随风格切换",
   "poster background: brand mark (bold peaks + dots + green tick), drop contours": "分享海报背景改为品牌山形标志",

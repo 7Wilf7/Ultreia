@@ -157,33 +157,33 @@ proposed -> cancelled
 第一版接入：
 
 - `src/lib/db/agentActions.js` 负责读写 `agent_actions`。
-- App 启动读取账号下的 `create_plans` 动作，恢复 AI Coach 消息下方的已提炼 / 已执行 / 已忽略状态。
-- 计划提炼成功时写入 `proposed`；确认导入后写入 `executed`；忽略后写入 `rejected`。
+- App 启动读取账号下的 `create_plans` 动作，恢复 AI Coach 消息下方的已整理 / 已保存 / 已跳过状态。
+- 计划整理成功时写入 `proposed`；确认加入日历后写入 `executed`；跳过后写入 `rejected`。
 - Memory 自动更新建议同样写入 `proposed`，接受 / 放弃后写入 `executed` / `rejected`。
 - action log 写入是 best-effort，不阻止计划导入或 Memory 保存。
 
 第二步接入：
 
-- 用户点击计划导入 Action Card 的「接受并执行」后，先把动作标记为 `accepted`。
+- 用户点击计划导入 Action Card 的「加入日历」后，先把动作标记为 `accepted`。
 - `bulkAddLogs` 后台保存成功后，再把动作标记为 `executed`，并在 `result` 里记录创建的 workout id、创建数量和计划休息日期。
-- 保存失败时把动作标记为 `failed`，并把错误信息写入 `error`，方便后续排查或重新提炼。
+- 保存失败时把动作标记为 `failed`，并把错误信息写入 `error`，方便后续排查或重新整理。
 - Memory 更新接受后会在 `result` 里记录保存了哪些语言版本和字符数。
 
 第三步接入：
 
 - AI Coach 普通对话和 AI 周复盘会读取最近几条 `agent_actions`。
-- Prompt 里只放轻量摘要：动作类型、状态、涉及日期、创建数量、计划休息日期、Memory 保存语言和错误摘要。
-- 目的不是让 AI 自动执行，而是让 Coach 把用户的接受 / 忽略 / 失败当作反馈，避免反复提出不被采纳的方向。
+- Prompt 里只放轻量摘要：建议类型、状态、涉及日期、创建数量、计划休息日期、Memory 保存语言和错误摘要。
+- 目的不是让 AI 自动执行，而是让 Coach 把用户的确认 / 跳过 / 失败当作反馈，避免反复提出不被采纳的方向。
 
 第四步接入：
 
-- AI Coach 设置里新增轻量 `Recent Agent Actions`。
-- 最近 10 条动作只读展示：动作类型、状态、来源、涉及日期 / 数量、失败原因。
-- 点击单条可展开查看可读动作摘要和执行结果；修改已有计划时显示 before / after 摘要，不再直接展示内部 JSON。
-- 展开详情要按用户理解组织，而不是按 payload 原始字段组织：计划修改按日期聚合展示「原计划 / 新计划」，隐藏内部计划 id，执行结果用短摘要标签显示。
+- AI Coach 设置里新增轻量 `Recent Agent Actions`（用户界面显示为“最近教练建议”，内部仍使用 `agent_actions` / Action Card 术语）。
+- 最近 10 条建议只读展示：建议类型、状态、来源、涉及日期 / 数量、失败原因。
+- 点击单条可展开查看可读建议摘要和保存结果；修改已有计划时显示 before / after 摘要，不再直接展示内部 JSON。
+- 展开详情要按用户理解组织，而不是按 payload 原始字段组织：计划修改按日期聚合展示「原计划 / 新计划」，隐藏内部计划 id，保存结果用短摘要标签显示。
 - action log 写库仍是 best-effort，但前端会先合并到当前列表，保证 PWA 不需要刷新就能看到最新提议 / 接受 / 执行 / 忽略状态。
-- 用户可在 Recent Agent Actions 长按删除某条 action log，用于清理测试 Action Card；删除只清理 action 记录和消息按钮状态，不回滚已经执行的数据变更。
-- 用户可从展开的 action log 直接带着动作摘要和执行结果追问 Coach，让 Coach 复盘这次动作是否合理、下一步继续还是调整；这只创建普通聊天消息，不自动执行新动作。
+- 用户可在 Recent Agent Actions 长按删除某条 action log，用于清理测试 Action Card；删除只清理 action 记录和消息按钮状态，不回滚已经保存的数据变更。
+- 用户可从展开的 action log 直接带着建议摘要和保存结果追问 Coach，让 Coach 复盘这次建议是否合理、下一步继续还是调整；这只创建普通聊天消息，不自动执行新动作。
 - 这一步只解决可审计性，不扩展新的 Action Card 类型。
 
 第五步接入：
@@ -407,3 +407,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-24：Phase 6 第一版落地：AI Coach 会识别最近两周漏练 / 部分完成的计划，在对话上方提示生成“计划偏差补救” Action Card；用户确认前不改日历，执行结果写入 Agent Action Log。下一梯队按恢复风险、天气调整、数据质量补全、赛前简报推进。
 - 2026-06-25：Desktop Codex provider POC 第一版接入：新增 `ai_jobs` SQL 草案、本地 `desktop-codex-runner` 和 `coach-proxy` 的 `desktop_codex → DeepSeek fallback` 路线。原则：本地 Codex 凭据只留在 runner 电脑；runner 不开放公网端口；Codex 运行在空临时目录、read-only sandbox，并禁用 plugins / apps / browser / computer-use / image generation。
 - 2026-06-25：Codex provider router 扩展到所有主要 AI job kind：AI Coach 对话、计划提炼、计划偏差补救、周复盘、Memory 更新、每日推送 / 后台周报 / 夜间 Memory 审核都可优先走 desktop Codex，失败时 fallback DeepSeek。个人模式下 AI 和天气路径不再检查钱包余额或扣钱包。
+- 2026-06-25：Action Card 用户文案收敛：内部继续使用 `Action Card` / `agent_actions` 表示可确认动作链路，面向用户的按钮和记录改为“日历建议”“教练建议”“加入日历”“保存结果”，减少审核 / 执行感，同时保持确认前不改数据的边界。

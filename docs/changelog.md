@@ -4,6 +4,7 @@
 
 ## 2026-06-25
 
+- **Action Card 文案更柔和**：AI Coach 里的「审核建议动作 / 接受并执行 / 最近 Agent 动作」收敛为「看看日历建议 / 加入日历 / 最近教练建议」这类更像教练草案的表达；确认前仍不会改动日历或 Memory。
 - **AI Coach 增加 Codex 状态点**：AI Coach 顶部模型状态前新增小圆点，绿色表示下一次预计调用 Codex，橙色表示检查中或连接不稳，红色表示离线或上次调用失败；模型 chip 会随状态显示 Codex 或 DeepSeek fallback。
 - **Codex 状态刷新更快**：AI Coach 的 Codex 状态改为约 5 秒刷新一次，并按最后心跳时间在前端本地更新颜色；电脑关机或断网后通常会在约 20-30 秒内显示离线。
 - **Codex 认证异常更明确**：如果本机 Codex runner 使用的 OpenAI 认证失效，状态点会保持红色并显示认证异常，AI Coach 会直接使用 DeepSeek fallback，避免每次对话都先尝试失败的 Codex。

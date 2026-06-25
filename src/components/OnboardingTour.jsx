@@ -65,7 +65,7 @@ const STEPS = [
     bullets: [
       { zh: "它实时看到你的资料、近期训练、目标赛、长期记忆，给出**个性化**建议", en: "It sees your profile, recent training, goal races and long-term memory — and gives personalized advice." },
       { zh: "直接问它：今天该怎么练？这周量合理吗？赛前怎么调整？", en: "Just ask: what should I run today? Is this week's load OK? How do I taper?" },
-      { zh: "把它给的训练建议先审核成动作卡片，再**导入到日历**", en: "Review its suggested plan as an action card, then import it into your calendar." },
+      { zh: "把它给的训练建议整理成日历草案，确认后再**加入日历**", en: "Turn its plan suggestions into a calendar draft, then add them after checking." },
       { zh: "长期记忆：它会记住你的持久偏好，越聊越懂你", en: "Long-term memory: it remembers your durable preferences and gets to know you over time." },
       { zh: "信息填得越全（资料 / 训练 / 目标赛），回复越定制", en: "The more you fill in (profile / training / goal races), the more tailored the replies." },
       { zh: "AI Coach 优先使用 Codex，失败时自动回退 DeepSeek，不用自己申请第三方密钥", en: "AI Coach prefers Codex and falls back to DeepSeek automatically. No third-party key setup is needed." },

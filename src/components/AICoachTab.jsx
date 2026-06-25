@@ -2459,8 +2459,8 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
   const zh = lang === "zh";
   const lines = [
     zh
-      ? "请基于下面这条 Agent Action 继续分析，不要直接执行新动作："
-      : "Please analyze this Agent Action. Do not execute any new action directly:",
+      ? "请基于下面这条教练建议继续分析，不要直接改日历或保存新内容："
+      : "Please analyze this coach suggestion. Do not change the calendar or save anything new directly:",
     "",
     `${zh ? "类型" : "Type"}：${summary.typeLabel}`,
     `${zh ? "状态" : "Status"}：${t(`coach.agent_action_status_${action.status || "proposed"}`)}`,
@@ -2469,11 +2469,11 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
     action.error ? `${zh ? "错误" : "Error"}：${action.error}` : "",
   ].filter(Boolean);
   if (plans.length) {
-    lines.push("", zh ? "动作内容：" : "Action items:");
+    lines.push("", zh ? "建议内容：" : "Suggestion items:");
     plans.slice(0, 10).forEach(plan => lines.push(`- ${formatPlanActionBrief(plan, t)}`));
   }
   if (changes.length) {
-    lines.push("", zh ? "执行后的修改：" : "Applied changes:");
+    lines.push("", zh ? "已保存的修改：" : "Saved changes:");
     changes.slice(0, 10).forEach(change => {
       lines.push(`- ${formatPlanActionBrief(change.before, t)} -> ${formatPlanActionBrief(change.after, t)}`);
     });
@@ -2489,10 +2489,10 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
   if (restDates.length) resultBits.push(zh ? `计划休息日：${restDates.join(", ")}` : `planned rest: ${restDates.join(", ")}`);
   if (savedFactCount > 0) resultBits.push(zh ? `已启用记忆事实 ${savedFactCount} 条` : `activated ${savedFactCount} memory fact(s)`);
   else if (savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
-  if (resultBits.length) lines.push("", `${zh ? "执行结果" : "Execution result"}：${resultBits.join(zh ? "；" : "; ")}`);
+  if (resultBits.length) lines.push("", `${zh ? "保存结果" : "Saved result"}：${resultBits.join(zh ? "；" : "; ")}`);
   lines.push("", zh
-    ? "请告诉我：这条动作是否合理？接下来我应该继续、调整，还是撤回/手动修正？如果需要调整，请给出明确建议。"
-    : "Tell me whether this action was reasonable. Should I continue, adjust, or undo/manual-fix something next? If adjustment is needed, give a concrete recommendation.");
+    ? "请告诉我：这条建议是否合理？接下来我应该继续、调整，还是撤回/手动修正？如果需要调整，请给出明确建议。"
+    : "Tell me whether this suggestion was reasonable. Should I continue, adjust, or undo/manual-fix something next? If adjustment is needed, give a concrete recommendation.");
   return lines.join("\n");
 }
 

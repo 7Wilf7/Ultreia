@@ -158,8 +158,8 @@ export function getPromptCatalog() {
     },
     {
       id: "extract",
-      title: "⑤ 建议动作审核（计划抽取）",
-      when: "点「审核建议动作」时",
+      title: "⑤ 日历建议整理（计划抽取）",
+      when: "点「看看日历建议」时",
       source: "src/App.jsx · importToCalendar()",
       blocks: [{ label: "抽取提示词", text: PLAN_EXTRACTOR }],
     },

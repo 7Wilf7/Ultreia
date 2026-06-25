@@ -1400,7 +1400,7 @@ function AppShell({
   }, []);
   useEffect(() => {
     refreshCodexRunnerStatus();
-    const timer = setInterval(refreshCodexRunnerStatus, 30_000);
+    const timer = setInterval(refreshCodexRunnerStatus, 5_000);
     const handleVisible = () => {
       if (document.visibilityState === "visible") refreshCodexRunnerStatus();
     };

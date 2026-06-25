@@ -65,6 +65,7 @@ android/keystore.properties
 
 # Supabase CLI local link state
 supabase/.temp/
+**/supabase/.temp/
 
 # Private, owner-only notes (prompt catalog, internal docs). NEVER goes to the
 # public repo. Sync across devices via a SEPARATE private repo (git init inside).

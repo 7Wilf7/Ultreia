@@ -19,6 +19,7 @@ const CODEX_REASONING_EFFORT = optionalEnum(
   "CODEX_REASONING_EFFORT",
 );
 const MAX_PROMPT_CHARS = positiveInt(env.MAX_PROMPT_CHARS, 120000);
+const RUNNING_HEARTBEAT_MS = positiveInt(env.RUNNING_HEARTBEAT_MS, 10000);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -146,7 +147,8 @@ async function processJob(job) {
       heartbeat_at: new Date().toISOString(),
       lease_expires_at: new Date(Date.now() + LEASE_SECONDS * 1000).toISOString(),
     }).catch(err => console.warn("[runner] heartbeat job failed:", err.message));
-  }, Math.max(15_000, Math.floor((LEASE_SECONDS * 1000) / 3)));
+    heartbeat().catch(err => console.warn("[runner] heartbeat failed:", err.message));
+  }, Math.min(RUNNING_HEARTBEAT_MS, Math.max(15_000, Math.floor((LEASE_SECONDS * 1000) / 3))));
 
   try {
     const payload = validatePayload(job.payload);

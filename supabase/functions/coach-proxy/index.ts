@@ -29,7 +29,8 @@ const DESKTOP_CODEX = {
   model: "codex-cli",
   chargePolicy: "chatgpt_codex_subscription_no_wallet_debit",
 } as const;
-const DESKTOP_RUNNER_FRESH_MS = 60_000;
+const DESKTOP_RUNNER_FRESH_MS = 20_000;
+const DESKTOP_RUNNER_STALE_MS = 10_000;
 const DESKTOP_JOB_TTL_MS = 2 * 60_000;
 const DESKTOP_POLL_MS = 1000;
 
@@ -151,7 +152,7 @@ function ageMsFromIso(value: unknown): number | null {
 
 function runnerHeartbeatState(status: string, ageMs: number | null): "online" | "stale" | "offline" {
   if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS) return "online";
-  if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS * 5) return "stale";
+  if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS + DESKTOP_RUNNER_STALE_MS) return "stale";
   return "offline";
 }
 
@@ -219,6 +220,7 @@ async function readDesktopRunnerStatus(admin: any, uid: string) {
       preference,
       expected_provider: DEEPSEEK.id,
       fresh_ms: DESKTOP_RUNNER_FRESH_MS,
+      stale_ms: DESKTOP_RUNNER_STALE_MS,
       checked_at: checkedAt,
     };
   }
@@ -233,6 +235,7 @@ async function readDesktopRunnerStatus(admin: any, uid: string) {
       preference,
       expected_provider: DEEPSEEK.id,
       fresh_ms: DESKTOP_RUNNER_FRESH_MS,
+      stale_ms: DESKTOP_RUNNER_STALE_MS,
       checked_at: checkedAt,
     };
   }
@@ -258,6 +261,7 @@ async function readDesktopRunnerStatus(admin: any, uid: string) {
     last_seen_at: stringValue(data.last_seen_at),
     age_ms: ageMs,
     fresh_ms: DESKTOP_RUNNER_FRESH_MS,
+    stale_ms: DESKTOP_RUNNER_STALE_MS,
     model: stringValue(metadata.codexModel) || DESKTOP_CODEX.model,
     reasoning_effort: stringValue(metadata.reasoningEffort),
     codex_package: stringValue(metadata.codexPackage),

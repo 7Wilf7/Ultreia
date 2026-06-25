@@ -233,6 +233,12 @@ function formatRunnerClock(iso, lang) {
   }
 }
 
+function runnerAgeMs(iso, nowMs) {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? Math.max(0, nowMs - ms) : null;
+}
+
 export function AICoachTab({
   coachConfig, setCoachConfig,
   chatMessages,
@@ -269,10 +275,15 @@ export function AICoachTab({
   const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  const [runnerNowMs, setRunnerNowMs] = useState(() => Date.now());
   // Markdown component map depends on isMobile (mobile swaps wide tables to
   // stacked row cards). Memoize so we don't rebuild the renderer object on
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
+  useEffect(() => {
+    const timer = setInterval(() => setRunnerNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showAgentActions, setShowAgentActions] = useState(false);
@@ -611,13 +622,24 @@ export function AICoachTab({
       : wStatus === 'error' ? 'error'
       : '—');
   const weatherActive = wStatus === 'ready';
-  const runnerState = codexRunnerStatus?.state || "loading";
+  const runnerLastSeenIso = codexRunnerStatus?.last_seen_at || null;
+  const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
+  const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 20_000;
+  const runnerStaleMs = Number(codexRunnerStatus?.stale_ms) || 10_000;
+  const serverRunnerState = codexRunnerStatus?.state || "loading";
+  const runnerState = (serverRunnerState === "online" || serverRunnerState === "stale") && runnerAge !== null
+    ? runnerAge > runnerFreshMs + runnerStaleMs
+      ? "offline"
+      : runnerAge > runnerFreshMs
+        ? "stale"
+        : "online"
+    : serverRunnerState;
   const runnerCodexStatus = codexRunnerStatus?.codex_status || "unknown";
   const runnerHealthy = runnerState === "online" && runnerCodexStatus !== "error";
-  const expectedProvider = codexRunnerStatus?.expected_provider || (runnerHealthy ? "desktop_codex" : "deepseek");
+  const expectedProvider = runnerHealthy && codexRunnerStatus?.expected_provider !== "deepseek" ? "desktop_codex" : "deepseek";
   const expectedProviderLabel = expectedProvider === "desktop_codex" ? "Codex" : "DeepSeek";
   const runnerChecking = runnerState === "loading";
-  const runnerLastSeen = formatRunnerClock(codexRunnerStatus?.last_seen_at || codexRunnerStatus?.checked_at, lang);
+  const runnerLastSeen = formatRunnerClock(runnerLastSeenIso || codexRunnerStatus?.checked_at, lang);
   const runnerModel = codexRunnerStatus?.model || "Codex";
   const runnerEffort = codexRunnerStatus?.reasoning_effort;
   const runnerPrimary = lang === "zh"

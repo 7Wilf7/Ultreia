@@ -614,6 +614,8 @@ export function AICoachTab({
   const runnerState = codexRunnerStatus?.state || "loading";
   const runnerCodexStatus = codexRunnerStatus?.codex_status || "unknown";
   const runnerHealthy = runnerState === "online" && runnerCodexStatus !== "error";
+  const expectedProvider = codexRunnerStatus?.expected_provider || (runnerHealthy ? "desktop_codex" : "deepseek");
+  const expectedProviderLabel = expectedProvider === "desktop_codex" ? "Codex" : "DeepSeek";
   const runnerChecking = runnerState === "loading";
   const runnerLastSeen = formatRunnerClock(codexRunnerStatus?.last_seen_at || codexRunnerStatus?.checked_at, lang);
   const runnerModel = codexRunnerStatus?.model || "Codex";
@@ -645,10 +647,17 @@ export function AICoachTab({
       : "var(--warn)";
   const runnerTitle = [
     runnerPrimary,
+    lang === "zh" ? `下一次预计调用 ${expectedProviderLabel}` : `Next call: ${expectedProviderLabel}`,
     runnerDetail,
     runnerFallbackText,
     codexRunnerStatus?.last_error ? `${lang === "zh" ? "上次错误" : "Last error"}: ${codexRunnerStatus.last_error}` : null,
   ].filter(Boolean).join(" · ");
+  const displayProviderLabel = expectedProvider === "desktop_codex" ? "Codex" : providerLabel;
+  const providerTitle = expectedProvider === "desktop_codex"
+    ? (lang === "zh" ? "下一次 AI Coach 对话预计调用 Codex" : "Next AI Coach chat is expected to use Codex")
+    : coachProviderFallback
+      ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
+      : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`);
   const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
@@ -910,9 +919,7 @@ export function AICoachTab({
           }}
         />
         <span
-          title={coachProviderFallback
-            ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
-            : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`)}
+          title={providerTitle}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
@@ -923,7 +930,7 @@ export function AICoachTab({
           }}>
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
           {!isMobile && <span style={{ color: "var(--ink-3)" }}>Model</span>}
-          <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{providerLabel}</span>
+          <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{displayProviderLabel}</span>
         </span>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has

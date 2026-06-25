@@ -198,8 +198,9 @@ async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: 
   return { ok: true, runnerId: String(data.id) };
 }
 
-async function readDesktopRunnerStatus(admin: any) {
+async function readDesktopRunnerStatus(admin: any, uid: string) {
   const checkedAt = new Date().toISOString();
+  const preference = await readProviderPreference(admin, uid);
   const { data, error } = await admin
     .from("ai_runners")
     .select("id, provider, status, last_seen_at, metadata")
@@ -215,6 +216,8 @@ async function readDesktopRunnerStatus(admin: any) {
       runner_state: "offline",
       codex_status: "unknown",
       error: "desktop_schema_unavailable",
+      preference,
+      expected_provider: DEEPSEEK.id,
       fresh_ms: DESKTOP_RUNNER_FRESH_MS,
       checked_at: checkedAt,
     };
@@ -227,6 +230,8 @@ async function readDesktopRunnerStatus(admin: any) {
       runner_state: "offline",
       codex_status: "unknown",
       reason: "no_runner",
+      preference,
+      expected_provider: DEEPSEEK.id,
       fresh_ms: DESKTOP_RUNNER_FRESH_MS,
       checked_at: checkedAt,
     };
@@ -239,12 +244,15 @@ async function readDesktopRunnerStatus(admin: any) {
   const rawCodexStatus = stringValue(metadata.lastCodexStatus);
   const codexStatus = rawCodexStatus === "error" || rawCodexStatus === "ok" ? rawCodexStatus : "unknown";
   const state = codexStatus === "error" ? "error" : runnerState;
+  const expectedProvider = state === "online" && preference !== "deepseek_only" ? DESKTOP_CODEX.id : DEEPSEEK.id;
 
   return {
     provider: DESKTOP_CODEX.id,
     state,
     runner_state: runnerState,
     codex_status: codexStatus,
+    preference,
+    expected_provider: expectedProvider,
     runner_id: String(data.id),
     status,
     last_seen_at: stringValue(data.last_seen_at),
@@ -379,13 +387,13 @@ Deno.serve(async (req) => {
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const { data: { user }, error: whoErr } = await admin.auth.getUser(jwt);
   if (whoErr || !user) return json({ error: "unauthorized" }, 401);
+  const uid = user.id;
 
   if (body.action === "runner_status") {
-    return json(await readDesktopRunnerStatus(admin));
+    return json(await readDesktopRunnerStatus(admin, uid));
   }
 
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
-  const uid = user.id;
 
   const { error: ensureErr } = await admin.rpc("wallet_ensure", {
     p_user_id: uid,

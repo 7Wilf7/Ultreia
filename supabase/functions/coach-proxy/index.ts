@@ -31,6 +31,8 @@ const DESKTOP_CODEX = {
 } as const;
 const DESKTOP_RUNNER_FRESH_MS = 20_000;
 const DESKTOP_RUNNER_STALE_MS = 10_000;
+const DESKTOP_CODEX_ERROR_COOLDOWN_MS = 5 * 60_000;
+const DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS = 24 * 60 * 60_000;
 const DESKTOP_JOB_TTL_MS = 2 * 60_000;
 const DESKTOP_POLL_MS = 1000;
 
@@ -140,7 +142,7 @@ function stringValue(value: unknown): string | null {
 function publicErrorMessage(value: unknown): string | null {
   const text = stringValue(value);
   if (!text) return null;
-  return text.replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 240);
+  return text.replace(/sk-[A-Za-z0-9_.*-]+/g, "[redacted]").slice(0, 240);
 }
 
 function ageMsFromIso(value: unknown): number | null {
@@ -154,6 +156,16 @@ function runnerHeartbeatState(status: string, ageMs: number | null): "online" | 
   if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS) return "online";
   if (status === "online" && ageMs !== null && ageMs <= DESKTOP_RUNNER_FRESH_MS + DESKTOP_RUNNER_STALE_MS) return "stale";
   return "offline";
+}
+
+function codexStatusValue(value: unknown): "ok" | "error" | "auth_error" | "unknown" {
+  const status = stringValue(value);
+  if (status === "ok" || status === "error" || status === "auth_error") return status;
+  return "unknown";
+}
+
+function codexErrorCooldownMs(status: string): number {
+  return status === "auth_error" ? DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS : DESKTOP_CODEX_ERROR_COOLDOWN_MS;
 }
 
 function desktopWallet(balanceCents: number) {
@@ -191,10 +203,11 @@ async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: 
   if (error) return { ok: false, reason: "desktop_schema_unavailable" };
   if (!data?.id) return { ok: false, reason: "desktop_runner_offline" };
   const metadata = objectValue(data.metadata);
-  const lastCodexStatus = stringValue(metadata.lastCodexStatus);
+  const lastCodexStatus = codexStatusValue(metadata.lastCodexStatus);
   const lastErrorAgeMs = ageMsFromIso(metadata.lastCodexErrorAt);
-  if (lastCodexStatus === "error" && (lastErrorAgeMs === null || lastErrorAgeMs <= DESKTOP_RUNNER_FRESH_MS * 5)) {
-    return { ok: false, reason: "desktop_codex_unhealthy" };
+  if ((lastCodexStatus === "error" || lastCodexStatus === "auth_error")
+    && (lastErrorAgeMs === null || lastErrorAgeMs <= codexErrorCooldownMs(lastCodexStatus))) {
+    return { ok: false, reason: lastCodexStatus === "auth_error" ? "desktop_codex_auth_error" : "desktop_codex_unhealthy" };
   }
   return { ok: true, runnerId: String(data.id) };
 }
@@ -244,9 +257,8 @@ async function readDesktopRunnerStatus(admin: any, uid: string) {
   const status = String(data.status || "offline");
   const ageMs = ageMsFromIso(data.last_seen_at);
   const runnerState = runnerHeartbeatState(status, ageMs);
-  const rawCodexStatus = stringValue(metadata.lastCodexStatus);
-  const codexStatus = rawCodexStatus === "error" || rawCodexStatus === "ok" ? rawCodexStatus : "unknown";
-  const state = codexStatus === "error" ? "error" : runnerState;
+  const codexStatus = codexStatusValue(metadata.lastCodexStatus);
+  const state = codexStatus === "error" || codexStatus === "auth_error" ? "error" : runnerState;
   const expectedProvider = state === "online" && preference !== "deepseek_only" ? DESKTOP_CODEX.id : DEEPSEEK.id;
 
   return {

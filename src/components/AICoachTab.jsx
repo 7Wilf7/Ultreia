@@ -635,7 +635,7 @@ export function AICoachTab({
         : "online"
     : serverRunnerState;
   const runnerCodexStatus = codexRunnerStatus?.codex_status || "unknown";
-  const runnerHealthy = runnerState === "online" && runnerCodexStatus !== "error";
+  const runnerHealthy = runnerState === "online" && runnerCodexStatus !== "error" && runnerCodexStatus !== "auth_error";
   const expectedProvider = runnerHealthy && codexRunnerStatus?.expected_provider !== "deepseek" ? "desktop_codex" : "deepseek";
   const expectedProviderLabel = expectedProvider === "desktop_codex" ? "Codex" : "DeepSeek";
   const runnerChecking = runnerState === "loading";
@@ -645,11 +645,13 @@ export function AICoachTab({
   const runnerPrimary = lang === "zh"
     ? (runnerHealthy ? "Codex 可用"
       : runnerChecking ? "检查 Codex"
+      : runnerCodexStatus === "auth_error" ? "Codex 认证异常"
       : runnerState === "error" ? "Codex 异常"
       : runnerState === "stale" ? "Codex 连接不稳"
       : "Codex 离线")
     : (runnerHealthy ? "Codex ready"
       : runnerChecking ? "Checking Codex"
+      : runnerCodexStatus === "auth_error" ? "Codex auth issue"
       : runnerState === "error" ? "Codex issue"
       : runnerState === "stale" ? "Codex unstable"
       : "Codex offline");

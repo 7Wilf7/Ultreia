@@ -38,6 +38,9 @@ main().catch(err => {
 
 async function main() {
   console.log(`[runner] starting ${RUNNER_ID}`);
+  await loadPreviousHealth().catch(err => {
+    console.warn("[runner] previous health load failed:", err.message);
+  });
 
   while (!stopping) {
     try {
@@ -105,8 +108,44 @@ async function heartbeat(extra = {}) {
 
 function publicErrorMessage(value) {
   return String(value || "unknown_error")
-    .replace(/sk-[A-Za-z0-9_-]+/g, "[redacted]")
+    .replace(/sk-[A-Za-z0-9_.*-]+/g, "[redacted]")
     .slice(0, 500);
+}
+
+function isCodexAuthError(value) {
+  const text = String(value || "");
+  return /401 Unauthorized|invalid_api_key|Incorrect API key|auth error code:\s*invalid_api_key/i.test(text);
+}
+
+function codexFailureStatus(value) {
+  return isCodexAuthError(value)
+    ? "auth_error"
+    : "error";
+}
+
+async function loadPreviousHealth() {
+  const { data, error } = await supabase
+    .from("ai_runners")
+    .select("metadata")
+    .eq("id", RUNNER_ID)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const metadata = data?.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+    ? data.metadata
+    : {};
+  const previousStatus = typeof metadata.lastCodexStatus === "string" ? metadata.lastCodexStatus : null;
+  const previousError = typeof metadata.lastCodexError === "string" ? metadata.lastCodexError : null;
+  const lastCodexStatus = previousStatus === "auth_error" || isCodexAuthError(previousError)
+    ? "auth_error"
+    : previousStatus === "error" || previousStatus === "ok"
+      ? previousStatus
+      : null;
+  runnerHealthMetadata = {
+    ...(lastCodexStatus ? { lastCodexStatus } : {}),
+    ...(typeof metadata.lastCodexOkAt === "string" ? { lastCodexOkAt: metadata.lastCodexOkAt } : {}),
+    ...(typeof metadata.lastCodexErrorAt === "string" ? { lastCodexErrorAt: metadata.lastCodexErrorAt } : {}),
+    ...(previousError ? { lastCodexError: publicErrorMessage(previousError) } : {}),
+  };
 }
 
 async function rememberCodexHealth(patch) {
@@ -171,6 +210,7 @@ async function processJob(job) {
   } catch (err) {
     const message = err?.message || String(err);
     const publicMessage = publicErrorMessage(message);
+    const codexStatus = codexFailureStatus(message);
     await updateJob(job.id, {
       status: "failed",
       provider_actual: "desktop_codex",
@@ -179,7 +219,7 @@ async function processJob(job) {
       heartbeat_at: new Date().toISOString(),
     });
     await rememberCodexHealth({
-      lastCodexStatus: "error",
+      lastCodexStatus: codexStatus,
       lastCodexErrorAt: new Date().toISOString(),
       lastCodexError: publicMessage,
     }).catch(healthErr => console.warn("[runner] health update failed:", healthErr.message));

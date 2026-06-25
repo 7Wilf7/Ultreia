@@ -38,7 +38,7 @@ export POLL_MS="3000"
 export LEASE_SECONDS="180"
 export CODEX_TIMEOUT_MS="180000"
 export CODEX_PACKAGE="@openai/codex@0.142.0"
-export CODEX_REASONING_EFFORT="high"
+export CODEX_REASONING_EFFORT="xhigh"
 npm run start
 ```
 
@@ -57,7 +57,7 @@ then ask Codex:
 > key; set `SUPABASE_URL=https://ihibmkfgfznqwzavaeiq.supabase.co`,
 > `RUNNER_ID=company-mac-mini-codex`, `POLL_MS=3000`, `LEASE_SECONDS=180`,
 > `CODEX_TIMEOUT_MS=180000`, `CODEX_PACKAGE=@openai/codex@0.142.0`, and
-> `CODEX_REASONING_EFFORT=high`; then run `npm run start` from
+> `CODEX_REASONING_EFFORT=xhigh`; then run `npm run start` from
 > `tools/desktop-codex-runner`. Keep the runner running and do not commit any
 > `.env`, secret, or temporary Supabase files.
 
@@ -73,6 +73,11 @@ npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-user-config --igno
 
 That keeps the run local, non-interactive, read-only, and tool-light. The prompt
 is passed via stdin instead of shell arguments.
+
+The desktop Codex runner writes back one completed assistant reply after
+`codex exec` finishes. It does not currently stream partial tokens into AI
+Coach; if Codex is unavailable or too slow, the Edge Function falls back to
+DeepSeek.
 
 Whichever Codex account is logged in on this machine pays for / consumes the
 Codex usage. If the machine uses API-key auth, usage belongs to that API plan.

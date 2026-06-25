@@ -39,6 +39,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
   const [askCoach, setAskCoach] = useState(workouts.length <= DETAIL_LIMIT);
   const [coachNotes, setCoachNotes] = useState("");
   const [rpeByIndex, setRpeByIndex] = useState({});
+  const [bulkRpe, setBulkRpe] = useState("");
 
   const count = workouts.length;
   const detailMode = count <= DETAIL_LIMIT;
@@ -49,7 +50,10 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
     [workouts]
   );
   const coachCount = detailMode ? count : Math.min(COACH_LIMIT, count);
-  const confirmDisabled = !workouts.length;
+  const hasRequiredRpe = detailMode
+    ? workouts.every((w, idx) => (Number(w.rpe) >= 1 && Number(w.rpe) <= 10) || (Number(rpeByIndex[idx]) >= 1 && Number(rpeByIndex[idx]) <= 10))
+    : Number(bulkRpe) >= 1 && Number(bulkRpe) <= 10;
+  const confirmDisabled = !workouts.length || !hasRequiredRpe;
 
   function setCurrentRpe(value) {
     setRpeByIndex(prev => ({ ...prev, [page]: clampRpe(value) }));
@@ -57,8 +61,8 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
 
   function submit() {
     const patched = workouts.map((w, idx) => {
-      const raw = rpeByIndex[idx];
-      if (raw === "" || raw == null) return w;
+      const raw = detailMode ? rpeByIndex[idx] : bulkRpe;
+      if (raw === "" || raw == null) return { ...w, rpe: Number(w.rpe) };
       return { ...w, rpe: Number(raw) };
     });
     onConfirm({
@@ -165,17 +169,28 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                   inputMode="numeric"
                   min="1"
                   max="10"
-                  value={rpeByIndex[page] || ""}
+                  value={rpeByIndex[page] || current?.rpe || ""}
                   placeholder={t("activities.import_review_rpe_placeholder")}
                   onChange={e => setCurrentRpe(e.target.value)}
                   style={{ ...s.input, marginTop: 6, minHeight: 0 }}
                 />
+                <span style={hintStyle}>{t("activities.import_review_rpe_required")}</span>
               </label>
             ) : (
-              <div style={fieldBlockStyle}>
+              <label style={fieldBlockStyle}>
                 <span style={labelStyle}>{t("activities.import_review_rpe_title")}</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min="1"
+                  max="10"
+                  value={bulkRpe}
+                  placeholder={t("activities.import_review_rpe_placeholder")}
+                  onChange={e => setBulkRpe(clampRpe(e.target.value))}
+                  style={{ ...s.input, marginTop: 6, minHeight: 0 }}
+                />
                 <span style={hintStyle}>{t("activities.import_review_rpe_bulk")}</span>
-              </div>
+              </label>
             )}
 
             <div style={fieldBlockStyle}>

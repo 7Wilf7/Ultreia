@@ -15,7 +15,7 @@ const FIELD_MAP = {
   aerobicTE:  'aerobic_te',
   gap:        'gap',
   note:       'note',          // text — optional free-text note ("new shoes", "knee tight")
-  rpe:        'rpe',           // smallint 1–10 — optional session RPE (perceived exertion)
+  rpe:        'rpe',           // smallint 1–10 — required by UI for completed sessions; legacy/planned rows may be null
   isPlanned:  'is_planned',    // boolean — future plan (true) vs completed (false)
   planStatus: 'plan_status',   // text 'pending'|'done' (planned rows only; legacy 'skipped' is ignored)
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']

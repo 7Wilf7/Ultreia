@@ -388,6 +388,17 @@ export function CalendarDayModal({
                         {l.isPlanned ? planHeadline(l, t) : logHeadline(l)}
                       </div>
                     </div>
+                    {String(l.note || "").trim() && (
+                      <div style={{
+                        marginTop: 7,
+                        color: "var(--ink-2)",
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        whiteSpace: "pre-wrap",
+                      }}>
+                        {String(l.note).trim()}
+                      </div>
+                    )}
                     {/* Plan reconciliation — past plans show their outcome and a
                         one-tap resolve, so the user never has to delete a past
                         plan to keep the calendar clean. */}

@@ -44,31 +44,9 @@ export const COACH_ACTION_MATRIX = [
     },
   },
   {
-    id: "data_quality_completion",
-    phase: "Phase 6",
-    rank: 3,
-    status: "planned",
-    title: {
-      en: "Data quality completion",
-      zh: "数据质量补全助手",
-    },
-    trigger: {
-      en: "Recent workouts miss RPE, notes, or accurate type.",
-      zh: "最近训练缺 RPE、备注或准确类型。",
-    },
-    suggestion: {
-      en: "Start as a lightweight checklist; later expand low-risk items into reviewable cards.",
-      zh: "先做轻量 checklist；后续再把低风险项扩成可确认卡片。",
-    },
-    boundary: {
-      en: "No database write happens before review. The flow should stay lightweight.",
-      zh: "写入前必须确认，不为了补全数据制造复杂流程。",
-    },
-  },
-  {
     id: "race_briefing_checklist",
     phase: "Phase 6",
-    rank: 4,
+    rank: 3,
     status: "planned",
     title: {
       en: "Race briefing and gear checklist",
@@ -90,7 +68,7 @@ export const COACH_ACTION_MATRIX = [
   {
     id: "weather_plan_adjustment",
     phase: "Phase 6",
-    rank: 5,
+    rank: 4,
     status: "deferred",
     title: {
       en: "Weather-driven plan adjustment",

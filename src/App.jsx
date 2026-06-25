@@ -76,6 +76,7 @@ import {
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
+import { buildImportFeelingNote, mergeImportFeelingNote } from "./utils/importReviewNotes";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -93,6 +94,34 @@ function withTimeout(promise, label, ms = 15000) {
     timer = setTimeout(() => reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`)), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+const WORKOUT_CACHE_LIMIT = 1500;
+
+function workoutCacheKey(userId) {
+  return `ultreia.workoutsCache.v1:${userId}`;
+}
+
+function readWorkoutCache(userId) {
+  if (!userId) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(workoutCacheKey(userId)) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeWorkoutCache(userId, workouts) {
+  if (!userId || !Array.isArray(workouts)) return;
+  try {
+    const lean = workouts.slice(0, WORKOUT_CACHE_LIMIT).map((workout) => {
+      const copy = { ...workout };
+      delete copy.gpsTrack;
+      return copy;
+    });
+    localStorage.setItem(workoutCacheKey(userId), JSON.stringify(lean));
+  } catch { /* cache is best-effort only */ }
 }
 
 function cleanWeeklyReportTime(value) {
@@ -371,6 +400,56 @@ function LoadingScreen({ userId = null, boot = false }) {
   );
 }
 
+function DataLoadErrorScreen({ onRetry, onSignOut }) {
+  let lang = "en";
+  try {
+    const l = localStorage.getItem("ultreia.lang");
+    if (l === "zh" || l === "en") lang = l;
+  } catch { /* private mode */ }
+  const copy = lang === "zh"
+    ? {
+        title: "训练记录没有加载成功",
+        body: "这通常是网络、登录态或数据库请求超时。为了避免误以为记录被清空，Ultreia 不会进入空列表。",
+        retry: "重新加载",
+        signOut: "退出登录",
+      }
+    : {
+        title: "Training data did not load",
+        body: "This is usually a network, session, or database timeout. To avoid showing an empty log by mistake, Ultreia will not enter the app with missing workouts.",
+        retry: "Retry",
+        signOut: "Sign out",
+      };
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      background: "var(--bg)", padding: 20,
+    }}>
+      <div style={{
+        width: "100%", maxWidth: 360,
+        border: "1px solid var(--rule)",
+        background: "var(--panel)",
+        borderRadius: 10,
+        padding: 18,
+        boxShadow: "0 18px 50px rgba(0,0,0,0.22)",
+        fontFamily: "var(--font-sans)",
+      }}>
+        <div style={{ fontSize: 17, fontWeight: 650, color: "var(--ink-1)", marginBottom: 8 }}>
+          {copy.title}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, marginBottom: 16 }}>
+          {copy.body}
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onSignOut} style={s.btnGhost}>{copy.signOut}</button>
+          <button onClick={onRetry} style={s.btn}>{copy.retry}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const {
     user,
@@ -452,6 +531,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [weeklyReportAfterSundayImport, setWeeklyReportAfterSundayImportState] = useState(true);
   const [wallet, setWallet] = useState({ balanceCents: 0, currency: "CNY", ledger: [] });
   const [dataLoading, setDataLoading] = useState(true);
+  const [dataLoadError, setDataLoadError] = useState(null);
 
   // Pull-to-refresh in flight (Training tab). Separate from dataLoading so a
   // refresh shows a small top spinner instead of the full LoadingScreen.
@@ -530,8 +610,23 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           db.userSettings.updateMySettings({ lang: preLang }).catch(() => {});
         }
 
-        // Workouts — list already sorted date desc, created_at desc by the DAL.
-        if (!result.workouts.error) setLogs(result.workouts.value);
+        // Workouts are critical. Do not let a failed refresh look like the
+        // account has zero activities; use last good local cache as a fallback,
+        // otherwise block the app on a retry screen.
+        if (!result.workouts.error) {
+          setLogs(result.workouts.value);
+          writeWorkoutCache(user.id, result.workouts.value);
+        } else {
+          const cached = readWorkoutCache(user.id);
+          if (cached.length) {
+            setLogs(cached);
+            console.warn("[boot] using cached workouts after load failure:", result.workouts.error?.message || result.workouts.error);
+          } else {
+            const err = new Error(`Workouts failed to load: ${result.workouts.error?.message || result.workouts.error}`);
+            err.critical = true;
+            throw err;
+          }
+        }
 
         // Races — DAL returns created_at desc; RacesTab re-sorts internally
         // (target by date asc, history by date desc).
@@ -553,8 +648,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // order isn't critical; we keep the DAL ordering as-is.
         if (!result.notes.error) setDailyNotes(result.notes.value);
 
-        if (failures.length) {
-          const err = new Error(`Partial data load: ${failures.map(p => p.key).join(", ")}`);
+        const nonCriticalFailures = failures.filter(p => p.key !== "workouts");
+        if (nonCriticalFailures.length) {
+          const err = new Error(`Partial data load: ${nonCriticalFailures.map(p => p.key).join(", ")}`);
           err.partial = true;
           throw err;
         }
@@ -569,10 +665,15 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     }, 25000);
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setDataLoading(true);
+    setDataLoadError(null);
     loadData()
       .catch((err) => {
         if (cancelled) return;
-        if (err?.partial) {
+        if (err?.critical) {
+          console.error("Failed to load critical user data:", err);
+          reportError(`Critical data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
+          setDataLoadError(err);
+        } else if (err?.partial) {
           console.warn("[boot] entered app with partial data:", err.message);
         } else {
           console.error("Failed to load user data:", err);
@@ -589,12 +690,41 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // is actually visible instead of flashing by.
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    try { await Promise.all([loadData(), new Promise(r => setTimeout(r, 600))]); }
+    try {
+      setDataLoadError(null);
+      await Promise.all([loadData(), new Promise(r => setTimeout(r, 600))]);
+    }
     catch (err) {
-      if (err?.partial) console.warn("[refresh] partial data load:", err.message);
+      if (err?.critical) {
+        console.error("[refresh] critical data load:", err);
+        setDataLoadError(err);
+        reportError(`Refresh critical data load failed: ${err?.message || String(err)}`);
+      } else if (err?.partial) console.warn("[refresh] partial data load:", err.message);
       else reportError(`Refresh failed: ${err?.message || String(err)}`);
     }
     finally { setRefreshing(false); }
+  }, [loadData]);
+
+  const retryDataLoad = useCallback(async () => {
+    setDataLoading(true);
+    setDataLoadError(null);
+    try {
+      await loadData();
+    } catch (err) {
+      if (err?.critical) {
+        console.error("[retry] critical data load:", err);
+        setDataLoadError(err);
+        reportError(`Retry critical data load failed: ${err?.message || String(err)}`);
+      } else if (err?.partial) {
+        console.warn("[retry] partial data load:", err.message);
+      } else {
+        console.error("[retry] data load failed:", err);
+        setDataLoadError(err);
+        reportError(`Retry data load failed: ${err?.message || String(err)}`);
+      }
+    } finally {
+      setDataLoading(false);
+    }
   }, [loadData]);
 
   // Register this device for push (Android APK only; no-op on web). Fires once
@@ -747,7 +877,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           if (weather) payload = { ...workoutData, weather };
         }
         const created = await db.workouts.createWorkout(payload, { source });
-        setLogs(prev => prev.map(l => l.id === tempId ? created : l));
+        setLogs(prev => {
+          const next = prev.map(l => l.id === tempId ? created : l);
+          writeWorkoutCache(user.id, next);
+          return next;
+        });
       } catch (err) {
         console.error("[addLog] background save failed:", err);
         setLogs(prev => prev.filter(l => l.id !== tempId));
@@ -764,7 +898,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     let snapshot = null;
     setLogs(prev => {
       snapshot = prev.find(l => l.id === id) || null;
-      return prev.map(l => l.id === id ? { ...l, ...patch } : l);
+      const next = prev.map(l => l.id === id ? { ...l, ...patch } : l);
+      writeWorkoutCache(user.id, next);
+      return next;
     });
 
     const seq = (logWriteSeqRef.current.get(id) || 0) + 1;
@@ -777,10 +913,22 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Drop our result if a newer write for this row already landed —
         // otherwise an earlier-but-slower save would overwrite it, flashing
         // the UI back to the stale value (see logWriteSeqRef).
-        if (isLatest()) setLogs(prev => prev.map(l => l.id === id ? updated : l));
+        if (isLatest()) {
+          setLogs(prev => {
+            const next = prev.map(l => l.id === id ? updated : l);
+            writeWorkoutCache(user.id, next);
+            return next;
+          });
+        }
       } catch (err) {
         console.error("[updateLog] background save failed:", err);
-        if (isLatest() && snapshot) setLogs(prev => prev.map(l => l.id === id ? snapshot : l));
+        if (isLatest() && snapshot) {
+          setLogs(prev => {
+            const next = prev.map(l => l.id === id ? snapshot : l);
+            writeWorkoutCache(user.id, next);
+            return next;
+          });
+        }
         window.alert("Failed to update workout: " + err.message);
       }
     })();
@@ -853,7 +1001,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const created = await db.workouts.bulkInsertWorkouts(toInsert, { source });
         const tempIds = new Set(optimistics.map(o => o.id));
         // Replace all temp rows with the persisted ones in one pass.
-        setLogs(prev => [...created, ...prev.filter(l => !tempIds.has(l.id))]);
+        setLogs(prev => {
+          const next = [...created, ...prev.filter(l => !tempIds.has(l.id))];
+          writeWorkoutCache(user.id, next);
+          return next;
+        });
         onPersisted?.(created);
       } catch (err) {
         console.error("[bulkAddLogs] background save failed:", err);
@@ -876,7 +1028,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     let removed = [];
     setLogs(prev => {
       removed = prev.filter(l => idSet.has(l.id));
-      return prev.filter(l => !idSet.has(l.id));
+      const next = prev.filter(l => !idSet.has(l.id));
+      writeWorkoutCache(user.id, next);
+      return next;
     });
     // Skip the DB call for optimistic rows that were never persisted
     // (user added then immediately deleted). For mixed batches we still
@@ -889,7 +1043,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         await db.workouts.deleteWorkouts(realIds);
       } catch (err) {
         console.error("[deleteLogs] background delete failed:", err);
-        setLogs(prev => [...removed, ...prev]);
+        setLogs(prev => {
+          const next = [...removed, ...prev];
+          writeWorkoutCache(user.id, next);
+          return next;
+        });
         window.alert("Failed to delete workout: " + err.message);
       }
     })();
@@ -905,6 +1063,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   async function refreshLogs() {
     const fresh = await db.workouts.listMyWorkouts();
     setLogs(fresh);
+    writeWorkoutCache(user.id, fresh);
     return fresh;
   }
 
@@ -1091,6 +1250,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       <AppDialogProvider>
         {dataLoading ? (
           <LoadingScreen userId={user?.id} />
+        ) : dataLoadError ? (
+          <DataLoadErrorScreen
+            onRetry={retryDataLoad}
+            onSignOut={signOut}
+          />
         ) : (
           <AppShell
             user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount}
@@ -1284,6 +1448,7 @@ function AppShell({
     setCoachReviewPrompt({
       workouts: rows,
       count: meta.count || rows.length,
+      note: meta.note || "",
       text: buildWorkoutReviewDraft(rows, { ...meta, count: meta.count || rows.length }),
     });
   }
@@ -1928,6 +2093,7 @@ function AppShell({
       }
       console.error("[AI Coach] proxy error:", err);
       appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
+      return false;
     } finally {
       if (runId === chatRunRef.current) {
         chatAbortRef.current = null;
@@ -2284,15 +2450,30 @@ Rules:
     importToCalendar(assistantContent, msgId, { force: true });
   }
 
-  function confirmCoachReviewPrompt() {
+  async function writeImportFeelingNotes(reviewed, rawNote) {
+    const feelingNote = buildImportFeelingNote(rawNote, lang);
+    if (!feelingNote) return;
+    const rows = (Array.isArray(reviewed) ? reviewed : [reviewed])
+      .filter(w => w?.id && !String(w.id).startsWith("temp-") && !String(w.id).startsWith("bulk-"));
+    if (!rows.length) return;
+    await Promise.all(rows.map(w => updateLog(w.id, { note: mergeImportFeelingNote(w.note, feelingNote) })));
+  }
+
+  async function confirmCoachReviewPrompt() {
     if (!coachReviewPrompt || chatLoading) return;
     const text = coachReviewPrompt.text;
     const reviewed = coachReviewPrompt.workouts;
+    const note = coachReviewPrompt.note;
     setCoachReviewPrompt(null);
     setTab(3);
     // Guarantee the just-reviewed sessions are in the prompt's training-load
     // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
-    sendChat(text, { ensureLogs: reviewed });
+    const sent = await sendChat(text, { ensureLogs: reviewed });
+    if (sent) {
+      writeImportFeelingNotes(reviewed, note).catch((err) => {
+        console.warn("[coach review] feeling note writeback failed:", err);
+      });
+    }
   }
 
   async function requestWeeklyReportAfterImport(created, meta = {}) {

@@ -34,7 +34,7 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 | Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
 | Phase 4 | 进行中 | Memory Facts 结构化 | 事实表已接入；Memory 面板改为 facts-only；AI Coach / 周报只读取 active facts；旧分区 Memory 已退出 prompt，清理 SQL 已准备；夜间记忆审核第一版已接入 |
 | Phase 5 | 暂不推进 | 自动同步外部训练数据 | Strava API 因 AI 使用政策和数据完整性问题，不作为短期路线 |
-| Phase 6 | 进行中 | 内部闭环 Action Cards | 计划偏差补救 Action Card 第一版已落地；下一梯队是恢复风险、天气调整、数据质量补全和赛前简报 |
+| Phase 6 | 进行中 | 内部闭环 Action Cards | 计划偏差补救和恢复风险 / 负荷守门 Action Card 第一版已落地；天气调整暂缓；数据质量改用输入约束解决，下一梯队是赛前简报 |
 | Runtime POC | 进行中 | Desktop Codex provider | `ai_jobs` / 本地 runner / `coach-proxy` / `daily-coach-dispatch` provider router 已接入；当前覆盖聊天、计划提炼 / 补救、周报、Memory 和每日推送，个人模式下不走钱包余额判断 |
 
 ## Phase 1：Action Card 雏形
@@ -309,9 +309,10 @@ archived_at
 |---|---|---|---|---|
 | 1 | 计划偏差补救 | 最近 7–14 天漏练 / 部分完成 | 调整接下来 3–7 天计划 | 已落地第一版；继续观察真机效果 |
 | 2 | 恢复风险 / 负荷守门 | ACWR high / danger、RPE 偏高、晨间状态差、疼痛 / 疲劳备注 | 建议恢复日、降强度或暂停叠加强度课 | 已落地第一版；不诊断，所有改计划都确认后执行 |
-| 3 | 数据质量补全助手 | 缺 RPE、缺备注、导入类型不准 | 先做 checklist；后续可扩成低风险 Action Card | 写库前确认；不为了补全制造复杂流程 |
-| 4 | 赛前简报 / 装备检查 | A 级目标赛进入 14 天窗口，地点 / 天气可用 | 生成 briefing 和 checklist；必要时再提计划调整卡 | 第一版只报告 / checklist，不自动改训练 |
+| 3 | 赛前简报 / 装备检查 | A 级目标赛进入 14 天窗口，地点 / 天气可用 | 生成 briefing 和 checklist；必要时再提计划调整卡 | 第一版只报告 / checklist，不自动改训练 |
 | 暂缓 | 天气驱动计划调整 | 未来 7 天强度 / 长距离遇到高温高湿、强风、污染或大雨 | 暂不作为改日历卡片；最多做提醒 / checklist | 天气预报置信度不够时，不应打乱原计划 |
+
+数据质量补全助手不再作为单独 Phase 6 Action Card 推进。RPE 缺失、导入备注缺失这类问题先通过产品约束解决：新增 / 编辑 / 导入训练强制填写 RPE；导入弹窗的主观感受会在 AI Coach 点评完成后写回训练备注。这样能提升训练负荷和 Coach 上下文质量，同时避免为了“补全”再制造一条额外流程。
 
 ## 下一批可落地 Agent 化机会
 
@@ -333,12 +334,7 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
    - 边界：健康风险只能建议和解释，不做诊断；所有计划变更都走确认。
    - 状态：第一版已落地。`summarizeRecoveryGuard` 先做非 AI 风险检测，只有存在未来计划且恢复 / 负荷信号明确时才在 AI Coach 上方提示；点击后生成来源为 `recovery_load_guard` 的 `create_plans` Action Card，结果写入 Agent Action Log。
 
-3. **数据质量补全助手（下一优先级）**
-   - 触发：最近完成训练缺 RPE、导入活动有未知类型、重要训练缺备注。
-   - 动作：先做非 AI 的轻量 checklist；需要写库时让用户确认。后续可把“补 RPE / 补备注 / 改类型”扩展成低风险 Action Card。
-   - 为什么重要：ACWR、周报、Memory 的质量依赖 RPE / 备注 / 类型准确性，补数据比多接一个模型更实用。
-
-4. **赛前简报 / 装备检查**
+3. **赛前简报 / 装备检查**
    - 触发：A 级目标赛进入 14 天窗口，且已填写地点 / 天气可用。
    - 动作：生成赛前 briefing（天气、补给、装备、减量重点、风险提醒），并可把“需要确认的准备事项”做成 checklist。
    - 边界：第一版只生成报告 / checklist，不自动改训练计划；如要调整减量计划，再走 Action Card。
@@ -414,3 +410,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-25：Desktop Codex provider POC 第一版接入：新增 `ai_jobs` SQL 草案、本地 `desktop-codex-runner` 和 `coach-proxy` 的 `desktop_codex → DeepSeek fallback` 路线。原则：本地 Codex 凭据只留在 runner 电脑；runner 不开放公网端口；Codex 运行在空临时目录、read-only sandbox，并禁用 plugins / apps / browser / computer-use / image generation。
 - 2026-06-25：Codex provider router 扩展到所有主要 AI job kind：AI Coach 对话、计划提炼、计划偏差补救、周复盘、Memory 更新、每日推送 / 后台周报 / 夜间 Memory 审核都可优先走 desktop Codex，失败时 fallback DeepSeek。个人模式下 AI 和天气路径不再检查钱包余额或扣钱包。
 - 2026-06-25：Action Card 用户文案收敛：内部继续使用 `Action Card` / `agent_actions` 表示可确认动作链路，面向用户的按钮和记录改为“日历建议”“教练建议”“加入日历”“保存结果”，减少审核 / 执行感，同时保持确认前不改数据的边界。
+- 2026-06-25：数据质量补全助手不再作为独立 Action Card 推进。改用更直接的产品约束：手动新增 / 编辑 / 导入训练强制 RPE；导入弹窗里的主观感受在 AI Coach 点评完成后写回训练备注；训练卡和日历详情显示备注。Phase 6 下一梯队前移为赛前简报 / 装备检查。

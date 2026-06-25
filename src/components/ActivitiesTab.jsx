@@ -1291,6 +1291,7 @@ function showWeather(log) {
 // mirrors what ExpandedMetrics actually renders (+ the weather line). When
 // false we skip the expand entirely so the card doesn't open to a blank panel.
 function hasExpandableMetrics(l) {
+  if (String(l.note || "").trim()) return true;
   if (showWeather(l)) return true;
   switch (l.type) {
     case "Road Run":       return l.ascent > 0 || l.hr > 0 || l.cadence > 0;
@@ -1433,6 +1434,16 @@ function ExpandedMetrics({ log: l }) {
           fontVariantNumeric: "tabular-nums", fontSize: 12, color: "var(--ink-2)",
         }}>
           <MetricWeather w={l.weather} full />
+        </div>
+      )}
+      {String(l.note || "").trim() && (
+        <div style={{
+          color: "var(--ink-2)",
+          fontSize: 12,
+          lineHeight: 1.5,
+          whiteSpace: "pre-wrap",
+        }}>
+          {String(l.note).trim()}
         </div>
       )}
     </>

@@ -191,6 +191,11 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       appDialog.alert(t("form.alert_run"));
       return;
     }
+    const rpe = parseInt(form.rpe, 10);
+    if (!(rpe >= 1 && rpe <= 10)) {
+      appDialog.alert(t("form.alert_rpe"));
+      return;
+    }
     // Swimming input is in meters → convert back to km for storage.
     const distInput = showDistance ? (parseFloat(form.distance) || 0) : 0;
     const dist = isSwimming ? +(distInput / 1000).toFixed(3) : distInput;
@@ -220,9 +225,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       maxHR:     parseInt(form.maxHR)      || 0,
       ascent:    showAscent ? (parseInt(form.ascent) || 0) : 0,
       cadence:   showCadence ? (parseInt(form.cadence) || 0) : 0,
-      // RPE: keep only a valid 1–10 integer; anything else (empty / out of
-      // range) → null so the DB CHECK (rpe BETWEEN 1 AND 10) never rejects.
-      rpe:       (() => { const n = parseInt(form.rpe, 10); return n >= 1 && n <= 10 ? n : null; })(),
+      rpe,
       note:      form.note.trim() || null,
       // Only consulted by addLog (manual add). Edit/import ignore it.
       fetchWeather: form.fetchWeather,
@@ -377,13 +380,11 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
         )}
       </div>
 
-      {/* RPE — optional, every activity type. Drives the training-load (sRPE)
-          calculation. Kept narrow so it doesn't read like a required metric;
-          the hint below spells out the 1–10 scale for users new to RPE. */}
+      {/* RPE — required for completed activities. Drives training-load (sRPE). */}
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 160 }}>
           <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 500 }}>
-            {t("form.rpe")}<span style={{ color: "var(--ink-3)", fontWeight: 400 }}> (1–10, {t("form.optional")})</span>
+            {t("form.rpe")}<span style={{ color: "var(--ink-3)", fontWeight: 400 }}> (1–10, {t("form.required_short")})</span>
           </span>
           <input type="number" inputMode="numeric" min="1" max="10" step="1"
             placeholder="—" value={form.rpe}

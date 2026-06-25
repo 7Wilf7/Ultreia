@@ -303,6 +303,15 @@ function describeWorkoutForCoach(w, idx) {
   return `${idx + 1}. ${w.date || "No date"} · ${w.type || "Activity"}${subTypes ? ` (${subTypes})` : ""}${metrics ? ` · ${metrics}` : ""}`;
 }
 
+function buildWorkoutReviewDisplayText(workouts, meta = {}) {
+  const note = String(meta.note || "").trim();
+  if (note) return note;
+  const count = Number(meta.count || workouts.length || 0);
+  if (count > workouts.length) return `请点评刚导入的 ${count} 条活动，重点看最近 ${workouts.length} 条。`;
+  if (workouts.length > 1) return `请点评刚新增的 ${workouts.length} 条训练。`;
+  return "请点评刚新增的这次训练。";
+}
+
 function buildWorkoutReviewDraft(workouts, meta = {}) {
   const rows = workouts.map(describeWorkoutForCoach).join("\n");
   const countLine = meta.count && meta.count > workouts.length
@@ -311,16 +320,45 @@ function buildWorkoutReviewDraft(workouts, meta = {}) {
   const noteLine = meta.note ? `\n\n我的主观感受：${meta.note}` : "";
   return `请点评下面的训练。${countLine}
 
+这不是普通闲聊，而是一次“新增活动后的教练回合”。请同时完成两件事：
+- 点评这次新增活动本身。
+- 结合当前上下文里的 [Planned Sessions]、[Training Load]、[Plan Adherence]、[Day Notes] 和 [Recent Agent Actions]，判断下一次相关计划是否需要调整。
+
 请按这个结构回答：
 1. 训练目的和强度判断
 2. 恢复风险或需要注意的地方
-3. 下一次训练建议
+3. 下一次相关计划结论：只在【保留 / 降量 / 取消 / 暂不判断】里选一个，并用一句话说明
+4. 如果需要改日历，只给一个最小、可确认的调整方向；不要输出 JSON，不要假装已经修改日历
 
-不要重写完整训练计划，重点点评这次活动。如果下一次训练建议涉及已有日历计划，只给一个明确口径：保留 / 降量 / 取消三选一，并简短说明，不要和同一轮点评里的其他建议互相冲突。
+规则：
+- 这条回复是当前“新增活动 + 下一次计划”的唯一口径；不要在同一条回复里一边说保留，一边又给降量替代方案。
+- 如果结论是【保留】，就不要再建议把同一条计划降量或取消。
+- 如果结论是【降量】或【取消】，必须说明是因为新增活动后的恢复 / 负荷 / 身体部位影响，还是因为近期计划偏差。
+- 不要重写完整训练计划，不要机械补回漏掉的训练量；恢复和负荷保护优先于补量。
 ${noteLine}
 
 [New Activities]
 ${rows}`;
+}
+
+function logIdentityForPrompt(l) {
+  return `${l?.date || ""}|${l?.type || ""}|${Math.round(Number(l?.duration) || 0)}|${Math.round((Number(l?.distance) || 0) * 1000)}`;
+}
+
+function ensureLogsForPrompt(baseLogs = [], ensuredLogs = []) {
+  const base = Array.isArray(baseLogs) ? baseLogs.filter(Boolean) : [];
+  const ensured = Array.isArray(ensuredLogs) ? ensuredLogs.filter(Boolean) : [];
+  if (!ensured.length) return base;
+  const present = new Set(base.map(logIdentityForPrompt));
+  const missing = ensured.filter(l => !present.has(logIdentityForPrompt(l)));
+  return missing.length ? [...missing, ...base] : base;
+}
+
+function proactiveAdjustmentSignaturesForSummaries(planSummary, recoverySummary) {
+  const planSig = planSummary?.affectedCount > 0 ? planAdjustmentSignature(planSummary) : "";
+  const recoverySig = recoverySummary?.signalCount > 0 ? recoveryAdjustmentSignature(recoverySummary) : "";
+  const combinedSig = planSig && recoverySig ? trainingAdjustmentSignature(planSummary, recoverySummary) : "";
+  return Array.from(new Set([combinedSig, planSig, recoverySig].filter(Boolean)));
 }
 
 // Boot screen — deliberately mirrors the native Android splash (logo +
@@ -1410,6 +1448,7 @@ function AppShell({
   const [readinessPromptDate, setReadinessPromptDate] = useState(null);
   const [coachReviewPrompt, setCoachReviewPrompt] = useState(null);
   const [proactiveAutoPauseUntil, setProactiveAutoPauseUntil] = useState(0);
+  const [handledProactiveAdjustmentSignatures, setHandledProactiveAdjustmentSignatures] = useState([]);
   // Flash the "Daily coach push" settings cell after the user taps the inbox's
   // "set up daily push" button — draws the eye to where the setting lives.
   const [pushFlash, setPushFlash] = useState(false);
@@ -1497,11 +1536,13 @@ function AppShell({
   function requestCoachReview(workouts, meta = {}) {
     const rows = (Array.isArray(workouts) ? workouts : [workouts]).filter(Boolean).slice(0, 3);
     if (!rows.length) return;
+    const reviewMeta = { ...meta, count: meta.count || rows.length };
     setCoachReviewPrompt({
       workouts: rows,
-      count: meta.count || rows.length,
-      note: meta.note || "",
-      text: buildWorkoutReviewDraft(rows, { ...meta, count: meta.count || rows.length }),
+      count: reviewMeta.count,
+      note: reviewMeta.note || "",
+      displayText: buildWorkoutReviewDisplayText(rows, reviewMeta),
+      modelText: buildWorkoutReviewDraft(rows, reviewMeta),
     });
   }
 
@@ -2002,6 +2043,8 @@ function AppShell({
   async function sendChat(userMsg, opts = {}) {
     if (!userMsg || chatLoading) return false;
 
+    const visibleUserMsg = String(userMsg || "").trim();
+    const modelUserMsg = String(opts.modelMessage || visibleUserMsg).trim();
     const controller = new AbortController();
     const runId = chatRunRef.current + 1;
     chatRunRef.current = runId;
@@ -2009,9 +2052,9 @@ function AppShell({
     const optimisticId = `pending-${Date.now()}`;
     const messagesToSend = [
       ...chatMessages.map(m => ({ role: m.role, content: messageContentForCoach(m.content) })),
-      { role: "user", content: userMsg },
+      { role: "user", content: modelUserMsg },
     ];
-    setChatMessages(prev => [...prev, { id: optimisticId, role: "user", content: userMsg, isLocal: true }]);
+    setChatMessages(prev => [...prev, { id: optimisticId, role: "user", content: visibleUserMsg, isLocal: true }]);
     setChatLoading(true);
 
     let freshLogs = logs;
@@ -2061,7 +2104,7 @@ function AppShell({
     });
 
     try {
-      const saved = await db.coachMessages.appendMessage("user", userMsg);
+      const saved = await db.coachMessages.appendMessage("user", visibleUserMsg);
       setChatMessages(prev => prev.map(m => m.id === optimisticId ? saved : m));
     } catch (err) {
       setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
@@ -2717,18 +2760,29 @@ Rules:
     await Promise.all(rows.map(w => updateLog(w.id, { note: mergeImportFeelingNote(w.note, feelingNote) })));
   }
 
+  function collectPostImportHandledProactiveSignatures(reviewed) {
+    const currentNow = now || new Date();
+    const promptLogs = ensureLogsForPrompt(logs, reviewed);
+    const planSummary = summarizePlanDeviation(promptLogs, currentNow);
+    const recoverySummary = summarizeRecoveryGuard(promptLogs, dailyNotes, currentNow);
+    return proactiveAdjustmentSignaturesForSummaries(planSummary, recoverySummary);
+  }
+
   async function confirmCoachReviewPrompt() {
     if (!coachReviewPrompt || chatLoading) return;
-    const text = coachReviewPrompt.text;
+    const displayText = coachReviewPrompt.displayText || coachReviewPrompt.text || coachReviewPrompt.modelText;
+    const modelText = coachReviewPrompt.modelText || coachReviewPrompt.text || displayText;
     const reviewed = coachReviewPrompt.workouts;
     const note = coachReviewPrompt.note;
+    const handledSignatures = collectPostImportHandledProactiveSignatures(reviewed);
     setCoachReviewPrompt(null);
     setProactiveAutoPauseUntil(Date.now() + POST_IMPORT_REVIEW_PROACTIVE_PAUSE_MS);
     setTab(3);
     // Guarantee the just-reviewed sessions are in the prompt's training-load
     // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
-    const sent = await sendChat(text, { ensureLogs: reviewed });
+    const sent = await sendChat(displayText, { ensureLogs: reviewed, modelMessage: modelText });
     if (sent) {
+      if (handledSignatures.length) setHandledProactiveAdjustmentSignatures(handledSignatures);
       writeImportFeelingNotes(reviewed, note).catch((err) => {
         console.warn("[coach review] feeling note writeback failed:", err);
       });
@@ -3014,6 +3068,7 @@ Rules:
           recoveryGuardSummary={recoveryGuardSummary}
           raceBriefingSummary={raceBriefingSummary}
           proactiveAutoPauseUntil={proactiveAutoPauseUntil}
+          handledProactiveAdjustmentSignatures={handledProactiveAdjustmentSignatures}
           proactiveAdjustmentLoading={proactiveAdjustmentLoading}
           onProactiveTrainingAdjustmentRequest={proposeProactiveTrainingAdjustment}
           onOpenProactiveAction={openProactivePlanAction}

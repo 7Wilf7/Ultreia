@@ -206,6 +206,7 @@ function makeMdComponents(isMobile) {
 const LONG_CHAT_HINT_THRESHOLD = 40;
 const PROACTIVE_ADJUSTMENT_SNOOZE_KEY = "ultreia.proactiveAdjustment.snoozedUntil";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_KEY = "ultreia.proactiveAdjustment.attemptedSignature";
+const PROACTIVE_ADJUSTMENT_ATTEMPT_LIMIT = 20;
 const PROACTIVE_ADJUSTMENT_SNOOZE_MS = 3 * 24 * 60 * 60 * 1000;
 const RACE_BRIEFING_SNOOZE_KEY = "ultreia.raceBriefing.snoozedUntil";
 const RACE_BRIEFING_ATTEMPT_KEY = "ultreia.raceBriefing.attemptedSignature";
@@ -232,6 +233,31 @@ function readRaceBriefingSnooze() {
     return Number.isFinite(value) && value > Date.now() ? value : 0;
   } catch {
     return 0;
+  }
+}
+
+function compactProactiveAdjustmentSignatures(signatures = []) {
+  return Array.from(new Set(
+    (Array.isArray(signatures) ? signatures : [signatures])
+      .map(sig => String(sig || "").trim())
+      .filter(Boolean),
+  )).slice(-PROACTIVE_ADJUSTMENT_ATTEMPT_LIMIT);
+}
+
+function readProactiveAdjustmentAttempts() {
+  try {
+    const raw = localStorage.getItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return compactProactiveAdjustmentSignatures(parsed);
+      if (typeof parsed === "string") return compactProactiveAdjustmentSignatures([parsed]);
+    } catch {
+      return compactProactiveAdjustmentSignatures([raw]);
+    }
+    return compactProactiveAdjustmentSignatures([raw]);
+  } catch {
+    return [];
   }
 }
 
@@ -291,6 +317,7 @@ export function AICoachTab({
   recoveryGuardSummary = null,
   raceBriefingSummary = null,
   proactiveAutoPauseUntil = 0,
+  handledProactiveAdjustmentSignatures = [],
   proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onOpenProactiveAction,
   raceBriefingLoading = false, onRaceBriefingRequest,
   agentActions = [], onDeleteAgentAction,
@@ -356,10 +383,7 @@ export function AICoachTab({
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
   const [raceBriefingAction, setRaceBriefingAction] = useState(null);
-  const [attemptedProactiveAdjustmentSignature, setAttemptedProactiveAdjustmentSignature] = useState(() => {
-    try { return localStorage.getItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY) || ""; }
-    catch { return ""; }
-  });
+  const [attemptedProactiveAdjustmentSignatures, setAttemptedProactiveAdjustmentSignatures] = useState(readProactiveAdjustmentAttempts);
   const [attemptedRaceBriefingSignature, setAttemptedRaceBriefingSignature] = useState(() => {
     try { return localStorage.getItem(RACE_BRIEFING_ATTEMPT_KEY) || ""; }
     catch { return ""; }
@@ -374,13 +398,21 @@ export function AICoachTab({
       localStorage.setItem(PROACTIVE_ADJUSTMENT_SNOOZE_KEY, JSON.stringify({ until }));
     } catch { /* private mode */ }
   }, []);
-  const markProactiveAdjustmentAttempted = useCallback((signature) => {
-    const next = signature || "";
-    setAttemptedProactiveAdjustmentSignature(next);
-    try {
-      if (next) localStorage.setItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY, next);
-      else localStorage.removeItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY);
-    } catch { /* private mode */ }
+  const markProactiveAdjustmentAttempted = useCallback((signatures) => {
+    const incoming = compactProactiveAdjustmentSignatures(signatures);
+    if (!incoming.length) return;
+    setAttemptedProactiveAdjustmentSignatures(prev => {
+      const next = compactProactiveAdjustmentSignatures([
+        ...readProactiveAdjustmentAttempts(),
+        ...(Array.isArray(prev) ? prev : []),
+        ...incoming,
+      ]);
+      try {
+        if (next.length) localStorage.setItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY, JSON.stringify(next));
+        else localStorage.removeItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY);
+      } catch { /* private mode */ }
+      return next;
+    });
   }, []);
   const snoozeRaceBriefing = useCallback(() => {
     const until = Date.now() + RACE_BRIEFING_SNOOZE_MS;
@@ -426,6 +458,30 @@ export function AICoachTab({
     ));
     return { kind, signature, existingAction, settledAction };
   }, [agentActions, planDeviationSummary, recoveryGuardSummary]);
+  const allAttemptedProactiveAdjustmentSignatures = useMemo(
+    () => compactProactiveAdjustmentSignatures([
+      ...attemptedProactiveAdjustmentSignatures,
+      ...compactProactiveAdjustmentSignatures(handledProactiveAdjustmentSignatures),
+    ]),
+    [attemptedProactiveAdjustmentSignatures, handledProactiveAdjustmentSignatures],
+  );
+  useEffect(() => {
+    const incoming = compactProactiveAdjustmentSignatures(handledProactiveAdjustmentSignatures);
+    if (!incoming.length) return;
+    const missing = incoming.filter(sig => !attemptedProactiveAdjustmentSignatures.includes(sig));
+    if (!missing.length) return;
+    const next = compactProactiveAdjustmentSignatures([
+      ...readProactiveAdjustmentAttempts(),
+      ...attemptedProactiveAdjustmentSignatures,
+      ...missing,
+    ]);
+    try {
+      localStorage.setItem(PROACTIVE_ADJUSTMENT_ATTEMPT_KEY, JSON.stringify(next));
+    } catch { /* private mode */ }
+  }, [
+    attemptedProactiveAdjustmentSignatures,
+    handledProactiveAdjustmentSignatures,
+  ]);
   const raceBriefing = useMemo(() => {
     if (!raceBriefingSummary?.signature) return null;
     const summaryRaceId = raceBriefingSummary.race?.id || null;
@@ -486,7 +542,7 @@ export function AICoachTab({
     if (proactiveAdjustment.settledAction) return;
     if (proactiveAdjustmentSnoozed) return;
     if (proactiveAutoPaused) return;
-    if (attemptedProactiveAdjustmentSignature === proactiveAdjustment.signature) return;
+    if (allAttemptedProactiveAdjustmentSignatures.includes(proactiveAdjustment.signature)) return;
     if (proactiveAdjustmentLoading) return;
     if (typeof onProactiveTrainingAdjustmentRequest !== "function") return;
     let cancelled = false;
@@ -498,7 +554,7 @@ export function AICoachTab({
       clearTimeout(timer);
     };
   }, [
-    attemptedProactiveAdjustmentSignature,
+    allAttemptedProactiveAdjustmentSignatures,
     handleProactiveAdjustmentRequest,
     onProactiveTrainingAdjustmentRequest,
     proactiveAdjustment,

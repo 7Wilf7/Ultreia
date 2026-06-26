@@ -2071,10 +2071,27 @@ function AppShell({
   }
 
   async function sendChat(userMsg, opts = {}) {
-    if (!userMsg || chatLoading) return false;
+    const imageAttachments = Array.isArray(opts.imageAttachments) ? opts.imageAttachments : [];
+    const rawUserMsg = String(userMsg || "").trim();
+    if ((!rawUserMsg && !imageAttachments.length) || chatLoading) return false;
 
-    const visibleUserMsg = String(userMsg || "").trim();
-    const modelUserMsg = String(opts.modelMessage || visibleUserMsg).trim();
+    const attachmentMarker = imageAttachments.length
+      ? t("coach.image_message_marker", { count: imageAttachments.length })
+      : "";
+    const visibleUserMsg = [
+      rawUserMsg || t("coach.image_only_message"),
+      attachmentMarker,
+    ].filter(Boolean).join("\n\n");
+    const imageNames = imageAttachments
+      .map((img, idx) => `${idx + 1}. ${img?.name || "image"}`)
+      .join("; ");
+    const imageModelMarker = imageAttachments.length
+      ? `[Attached images for this turn: ${imageNames}. Use the image content as visual evidence when relevant. If the image is unclear, say what cannot be determined.]`
+      : "";
+    const modelUserMsg = [
+      String(opts.modelMessage || rawUserMsg || t("coach.image_only_message")).trim(),
+      imageModelMarker,
+    ].filter(Boolean).join("\n\n");
     const controller = new AbortController();
     const runId = chatRunRef.current + 1;
     chatRunRef.current = runId;
@@ -2156,8 +2173,10 @@ function AppShell({
     let finalReplyText;
     try {
       const data = await db.usage.coachProxyStream({
+        kind: "coach_chat",
         system: systemPrompt,
         messages: messagesToSend,
+        attachments: imageAttachments,
         max_tokens: 8000,
         signal: controller.signal,
         onToken: (text) => {
@@ -2216,7 +2235,10 @@ function AppShell({
         return false;
       }
       console.error("[AI Coach] proxy error:", err);
-      appendLocalChatMessage("assistant", t("coach.api_error", { msg: err?.message || String(err) }));
+      const msg = err?.code === "image_requires_codex"
+        ? t("coach.image_requires_codex")
+        : (err?.message || String(err));
+      appendLocalChatMessage("assistant", t("coach.api_error", { msg }));
       return false;
     } finally {
       if (runId === chatRunRef.current) {

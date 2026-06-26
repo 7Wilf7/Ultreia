@@ -33,6 +33,7 @@ const DESKTOP_CODEX_ERROR_COOLDOWN_MS = 5 * 60_000;
 const DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS = 24 * 60 * 60_000;
 const DESKTOP_JOB_TTL_MS = 2 * 60_000;
 const DESKTOP_POLL_MS = 1000;
+const IMAGE_INPUT_CAPABILITY_KEYS = ["supportsImageInput", "imageInput"];
 const AI_JOB_KINDS = new Set([
   "coach_chat",
   "weekly_report",
@@ -41,6 +42,25 @@ const AI_JOB_KINDS = new Set([
   "plan_deviation_rescue",
   "daily_checkin",
 ]);
+const MAX_IMAGE_ATTACHMENTS = 3;
+const MAX_IMAGE_DATA_URL_CHARS = 2_500_000;
+
+type ImageAttachment = {
+  type: "image";
+  name: string;
+  mediaType: "image/png" | "image/jpeg" | "image/webp";
+  dataUrl: string;
+};
+
+type CoachRequestBody = {
+  action?: string;
+  kind?: string;
+  system?: string;
+  messages?: unknown;
+  attachments?: unknown;
+  max_tokens?: number;
+  stream?: boolean;
+};
 
 function tokenUsage(usage: unknown): {
   input: number;
@@ -129,6 +149,37 @@ function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
 }
 
+function normalizeImageAttachments(value: unknown): ImageAttachment[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new Error("bad_image_attachments");
+  if (value.length > MAX_IMAGE_ATTACHMENTS) throw new Error("too_many_image_attachments");
+
+  return value.map((item, index) => {
+    const obj = objectValue(item);
+    if (obj.type !== "image") throw new Error("bad_image_attachment_type");
+    const dataUrl = stringValue(obj.dataUrl);
+    if (!dataUrl) throw new Error("bad_image_attachment");
+    if (dataUrl.length > MAX_IMAGE_DATA_URL_CHARS) throw new Error("image_attachment_too_large");
+    const match = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp));base64,[A-Za-z0-9+/=]+$/);
+    if (!match) throw new Error("bad_image_data_url");
+    const normalizedMediaType = match[1] === "image/jpg" ? "image/jpeg" : match[1];
+    if (normalizedMediaType !== "image/png" && normalizedMediaType !== "image/jpeg" && normalizedMediaType !== "image/webp") {
+      throw new Error("unsupported_image_type");
+    }
+    const mediaType = normalizedMediaType as ImageAttachment["mediaType"];
+    const declaredMediaType = stringValue(obj.mediaType);
+    if (declaredMediaType && declaredMediaType !== mediaType && !(declaredMediaType === "image/jpg" && mediaType === "image/jpeg")) {
+      throw new Error("image_media_type_mismatch");
+    }
+    return {
+      type: "image" as const,
+      name: (stringValue(obj.name) || `coach-image-${index + 1}.jpg`).slice(0, 100),
+      mediaType,
+      dataUrl,
+    };
+  });
+}
+
 function publicErrorMessage(value: unknown): string | null {
   const text = stringValue(value);
   if (!text) return null;
@@ -158,6 +209,12 @@ function codexErrorCooldownMs(status: string): number {
   return status === "auth_error" ? DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS : DESKTOP_CODEX_ERROR_COOLDOWN_MS;
 }
 
+function runnerSupportsImageInput(metadata: Record<string, unknown>): boolean {
+  if (IMAGE_INPUT_CAPABILITY_KEYS.some(key => metadata[key] === true)) return true;
+  const capabilities = objectValue(metadata.capabilities);
+  return capabilities.image_input === true || capabilities.imageInput === true;
+}
+
 function aiJobKind(value: unknown): string {
   const text = stringValue(value);
   return text && AI_JOB_KINDS.has(text) ? text : "coach_chat";
@@ -184,7 +241,7 @@ async function readProviderPreference(admin: any, uid: string): Promise<"auto" |
   return pref === "prefer_codex" || pref === "deepseek_only" ? pref : "auto";
 }
 
-async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: string } | { ok: false; reason: string }> {
+async function hasFreshDesktopRunner(admin: any, requiresImageInput = false): Promise<{ ok: true; runnerId: string } | { ok: false; reason: string }> {
   const cutoff = new Date(Date.now() - DESKTOP_RUNNER_FRESH_MS).toISOString();
   const { data, error } = await admin
     .from("ai_runners")
@@ -193,18 +250,31 @@ async function hasFreshDesktopRunner(admin: any): Promise<{ ok: true; runnerId: 
     .eq("status", "online")
     .gte("last_seen_at", cutoff)
     .order("last_seen_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(5);
   if (error) return { ok: false, reason: "desktop_schema_unavailable" };
-  if (!data?.id) return { ok: false, reason: "desktop_runner_offline" };
-  const metadata = objectValue(data.metadata);
+  if (!Array.isArray(data) || !data.length) return { ok: false, reason: "desktop_runner_offline" };
+  const imageUnsupported = requiresImageInput && data.some(row => !runnerSupportsImageInput(objectValue(row.metadata)));
+  if (imageUnsupported) return { ok: false, reason: "desktop_runner_image_input_unsupported" };
+  const available = data.find(row => {
+    const metadata = objectValue(row.metadata);
+    const lastCodexStatus = codexStatusValue(metadata.lastCodexStatus);
+    const lastErrorAgeMs = ageMsFromIso(metadata.lastCodexErrorAt);
+    return !((lastCodexStatus === "error" || lastCodexStatus === "auth_error")
+      && (lastErrorAgeMs === null || lastErrorAgeMs <= codexErrorCooldownMs(lastCodexStatus)));
+  });
+  if (!available?.id) {
+    const latestMetadata = objectValue(data[0]?.metadata);
+    const latestStatus = codexStatusValue(latestMetadata.lastCodexStatus);
+    return { ok: false, reason: latestStatus === "auth_error" ? "desktop_codex_auth_error" : "desktop_codex_unhealthy" };
+  }
+  const metadata = objectValue(available.metadata);
   const lastCodexStatus = codexStatusValue(metadata.lastCodexStatus);
   const lastErrorAgeMs = ageMsFromIso(metadata.lastCodexErrorAt);
   if ((lastCodexStatus === "error" || lastCodexStatus === "auth_error")
     && (lastErrorAgeMs === null || lastErrorAgeMs <= codexErrorCooldownMs(lastCodexStatus))) {
     return { ok: false, reason: lastCodexStatus === "auth_error" ? "desktop_codex_auth_error" : "desktop_codex_unhealthy" };
   }
-  return { ok: true, runnerId: String(data.id) };
+  return { ok: true, runnerId: String(available.id) };
 }
 
 async function readDesktopRunnerStatus(admin: any, uid: string) {
@@ -281,26 +351,50 @@ async function readDesktopRunnerStatus(admin: any, uid: string) {
   };
 }
 
-function desktopJobPayload(body: { system?: string; messages?: unknown; max_tokens?: number; stream?: boolean }) {
+function desktopJobPayload(body: CoachRequestBody & { attachments?: ImageAttachment[] }) {
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
   return {
     source: "coach_proxy",
     system: typeof body.system === "string" ? body.system : "",
     messages: Array.isArray(body.messages) ? body.messages : [],
+    attachments,
     max_tokens: Number(body.max_tokens || 8000),
     stream: body.stream === true,
   };
 }
 
-async function markDesktopFallback(admin: any, jobId: string, reason: string) {
+function redactedDesktopJobPayload(payload: ReturnType<typeof desktopJobPayload>) {
+  return {
+    ...payload,
+    attachments: payload.attachments.map(attachment => ({
+      type: attachment.type,
+      name: attachment.name,
+      mediaType: attachment.mediaType,
+      redacted: true,
+    })),
+  };
+}
+
+async function markDesktopFallback(admin: any, jobId: string, reason: string, fallbackProvider: string | null = DEEPSEEK.id, redactedPayload?: unknown) {
   await admin
     .from("ai_jobs")
     .update({
       status: "fallback_used",
-      fallback_provider: DEEPSEEK.id,
+      fallback_provider: fallbackProvider,
       fallback_reason: reason,
     })
     .eq("id", jobId)
     .in("status", ["queued", "claimed", "running"]);
+  if (redactedPayload) {
+    await scrubDesktopJobPayload(admin, jobId, redactedPayload);
+  }
+}
+
+async function scrubDesktopJobPayload(admin: any, jobId: string, redactedPayload: unknown) {
+  await admin
+    .from("ai_jobs")
+    .update({ payload: redactedPayload })
+    .eq("id", jobId);
 }
 
 function desktopWaitMs(kind: string, stream: boolean, preference: "auto" | "prefer_codex" | "deepseek_only"): number {
@@ -313,19 +407,23 @@ function desktopWaitMs(kind: string, stream: boolean, preference: "auto" | "pref
 async function tryDesktopCodex(opts: {
   admin: any;
   uid: string;
-  body: { system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
+  body: CoachRequestBody & { attachments?: ImageAttachment[] };
   kind: string;
   preference: "auto" | "prefer_codex" | "deepseek_only";
+  requiresDesktop?: boolean;
 }): Promise<{ response: Response | null; fallbackReason: string }> {
-  if (opts.preference === "deepseek_only") {
+  if (opts.preference === "deepseek_only" && !opts.requiresDesktop) {
     return { response: null, fallbackReason: "" };
   }
 
-  const runner = await hasFreshDesktopRunner(opts.admin);
+  const runner = await hasFreshDesktopRunner(opts.admin, opts.requiresDesktop === true);
   if (!runner.ok) return { response: null, fallbackReason: runner.reason };
 
-  const waitMs = desktopWaitMs(opts.kind, opts.body.stream === true, opts.preference);
+  const waitPreference = opts.requiresDesktop ? "prefer_codex" : opts.preference;
+  const waitMs = desktopWaitMs(opts.kind, opts.body.stream === true, waitPreference);
   const expiresAt = new Date(Date.now() + Math.max(waitMs + 15_000, DESKTOP_JOB_TTL_MS)).toISOString();
+  const queuedPayload = desktopJobPayload(opts.body);
+  const redactedPayload = redactedDesktopJobPayload(queuedPayload);
   const { data: job, error: jobErr } = await opts.admin
     .from("ai_jobs")
     .insert({
@@ -333,7 +431,7 @@ async function tryDesktopCodex(opts: {
       kind: opts.kind,
       status: "queued",
       provider_requested: DESKTOP_CODEX.id,
-      payload: desktopJobPayload(opts.body),
+      payload: queuedPayload,
       expires_at: expiresAt,
     })
     .select("id")
@@ -365,6 +463,7 @@ async function tryDesktopCodex(opts: {
         break;
       }
       const usage = objectValue(result.usage);
+      await scrubDesktopJobPayload(opts.admin, jobId, redactedPayload).catch(() => {});
       return {
         response: json({
           id: `desktop:${jobId}`,
@@ -386,7 +485,7 @@ async function tryDesktopCodex(opts: {
     }
   }
 
-  await markDesktopFallback(opts.admin, jobId, fallbackReason).catch(() => {});
+  await markDesktopFallback(opts.admin, jobId, fallbackReason, opts.requiresDesktop ? null : DEEPSEEK.id, redactedPayload).catch(() => {});
   return { response: null, fallbackReason };
 }
 
@@ -397,7 +496,7 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   if (!jwt) return json({ error: "unauthorized" }, 401);
 
-  let body: { action?: string; kind?: string; system?: string; messages?: unknown; max_tokens?: number; stream?: boolean };
+  let body: CoachRequestBody;
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -411,17 +510,36 @@ Deno.serve(async (req) => {
 
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
 
+  let imageAttachments: ImageAttachment[] = [];
+  try {
+    imageAttachments = normalizeImageAttachments(body.attachments);
+  } catch (e) {
+    return json({ error: String((e as Error)?.message || e) }, 400);
+  }
+  const bodyForDesktop = { ...body, attachments: imageAttachments };
+
   let fallback: Record<string, unknown> | null = null;
   const kind = aiJobKind(body.kind);
   const preference = await readProviderPreference(admin, uid);
   const desktop = await tryDesktopCodex({
     admin,
     uid,
-    body,
+    body: bodyForDesktop,
     kind,
     preference,
+    requiresDesktop: imageAttachments.length > 0,
   });
   if (desktop.response) return desktop.response;
+  if (imageAttachments.length) {
+    return json({
+      error: "image_requires_codex",
+      fallback: {
+        from: DESKTOP_CODEX.id,
+        to: null,
+        reason: desktop.fallbackReason || "desktop_codex_unavailable",
+      },
+    }, 503);
+  }
   if (desktop.fallbackReason && desktop.fallbackReason !== "desktop_schema_unavailable") {
     fallback = {
       from: DESKTOP_CODEX.id,

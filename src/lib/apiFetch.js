@@ -167,7 +167,13 @@ export async function postJsonStream({ url, headers = {}, body, onToken, signal 
     const ct = resp.headers.get("content-type") || "";
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "");
-      return { ok: false, status: resp.status, text: "", errorText: errText.slice(0, 200) };
+      let errorData = null;
+      try { errorData = JSON.parse(errText); } catch { /* non-json error body */ }
+      const errorText = errorData?.error?.message
+        || errorData?.error
+        || errorData?.message
+        || errText.slice(0, 200);
+      return { ok: false, status: resp.status, text: "", errorText, errorData };
     }
     // Non-streaming fallback: provider returned a single JSON body.
     if (!ct.includes("event-stream") || !resp.body || !resp.body.getReader) {

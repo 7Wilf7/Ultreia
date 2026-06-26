@@ -173,6 +173,16 @@ export function CoachIcon({ size = 13 }) {
   );
 }
 
+export function ImageIcon({ size = 13 }) {
+  return (
+    <svg {...baseProps(size)}>
+      <rect x="2.2" y="2.5" width="9.6" height="9" rx="1.2" />
+      <circle cx="5.2" cy="5.2" r="1" />
+      <path d="M3.5 10 L6.1 7.4 L8 9.1 L9.1 7.9 L11 10" />
+    </svg>
+  );
+}
+
 export function SettingsIcon({ size = 13 }) {
   return (
     <svg {...baseProps(size)}>

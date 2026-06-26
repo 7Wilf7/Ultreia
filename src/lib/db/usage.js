@@ -5,7 +5,7 @@ import { supabaseFunctionUrl, supabasePublicAnonKey } from '../supabase';
 // Personal-mode AI calls via the coach-proxy Edge Function. The app prefers the
 // desktop Codex runner when available and falls back to server-side DeepSeek.
 // No AI request checks wallet balance or debits wallet records.
-export async function coachProxy({ kind, system, messages, max_tokens, signal }) {
+export async function coachProxy({ kind, system, messages, attachments, max_tokens, signal }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
@@ -21,7 +21,7 @@ export async function coachProxy({ kind, system, messages, max_tokens, signal })
       apikey: supabasePublicAnonKey,
       Authorization: `Bearer ${accessToken}`,
     },
-    body: { kind, system, messages, max_tokens },
+    body: { kind, system, messages, attachments, max_tokens },
     signal,
   });
 
@@ -71,7 +71,7 @@ export async function getRunnerStatus({ signal } = {}) {
   return data;
 }
 
-export async function coachProxyStream({ system, messages, max_tokens, onToken, signal }) {
+export async function coachProxyStream({ kind, system, messages, attachments, max_tokens, onToken, signal }) {
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
   if (!accessToken) {
@@ -87,7 +87,7 @@ export async function coachProxyStream({ system, messages, max_tokens, onToken, 
       apikey: supabasePublicAnonKey,
       Authorization: `Bearer ${accessToken}`,
     },
-    body: { system, messages, max_tokens, stream: true },
+    body: { kind, system, messages, attachments, max_tokens, stream: true },
     onToken,
     signal,
   });
@@ -98,9 +98,12 @@ export async function coachProxyStream({ system, messages, max_tokens, onToken, 
       e.code = 'aborted';
       throw e;
     }
-    const code = result.errorText || 'coach_proxy_failed';
+    const code = typeof result.errorData?.error === 'string'
+      ? result.errorData.error
+      : result.errorText || 'coach_proxy_failed';
     const e = new Error(code);
     e.code = code;
+    e.detail = result.errorData || null;
     throw e;
   }
 

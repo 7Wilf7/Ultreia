@@ -8,7 +8,7 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 
 - 已有能力：训练上下文注入、AI Coach 对话、计划解析、Memory facts 审核、周复盘、服务端定时任务、Agent Action Log，以及多个需要用户确认的 Action Card。
 - 主要短板：持续任务对象和统一工具层还不完整；主动循环仍以低风险、可确认动作优先，尚未进入自动执行阶段。
-- 运行时探索：`desktop_codex` provider 已接入服务端 provider router；AI Coach 对话、计划提炼 / 补救、Memory、周复盘和每日推送可优先走本地 Codex runner，DeepSeek 保持 fallback。
+- 运行时探索：`desktop_codex` provider 已接入服务端 provider router；AI Coach 对话、计划提炼 / 补救、Memory、周复盘和每日推送可优先走本地 Codex runner，DeepSeek 保持 fallback。带图片的 AI Coach 对话必须走 Codex，失败时不回退 DeepSeek。
 
 中期目标是推进到 **可确认动作的 AI Coach Agent**：
 
@@ -35,7 +35,7 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 | Phase 4 | 进行中 | Memory Facts 结构化 | 事实表已接入；Memory 面板改为 facts-only；AI Coach / 周报只读取 active facts；旧分区 Memory 已退出 prompt，清理 SQL 已准备；夜间记忆审核第一版已接入 |
 | Phase 5 | 暂不推进 | 自动同步外部训练数据 | Strava API 因 AI 使用政策和数据完整性问题，不作为短期路线 |
 | Phase 6 | 进行中 | 内部闭环 Action Cards | 计划偏差补救、恢复风险 / 负荷守门、赛前简报 / 装备检查第一版已落地；天气调整暂缓；数据质量改用输入约束解决 |
-| Runtime POC | 进行中 | Desktop Codex provider | `ai_jobs` / 本地 runner / `coach-proxy` / `daily-coach-dispatch` provider router 已接入；当前覆盖聊天、计划提炼 / 补救、周报、Memory 和每日推送，个人模式下不走钱包余额判断 |
+| Runtime POC | 进行中 | Desktop Codex provider | `ai_jobs` / 本地 runner / `coach-proxy` / `daily-coach-dispatch` provider router 已接入；当前覆盖聊天、计划提炼 / 补救、周报、Memory 和每日推送，个人模式下不走钱包余额判断；AI Coach 图片消息通过 Codex `--image` 输入，不能回退 DeepSeek |
 
 ## Phase 1：Action Card 雏形
 
@@ -422,3 +422,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-25：导入 / 新增活动后的 Coach 点评升级为“训练点评 + 下一次计划裁决”的统一教练回合；前端聊天只显示用户自然备注，后台提示词带上新增活动和当前计划 / 负荷上下文，并把当下 plan / recovery / combined proactive signatures 标记为已处理，减少短时间内前后口径不一致。
 - 2026-06-25：赛前简报 / 装备检查第一版落地。目标赛进入 14 天窗口且地点 / 天气上下文足够时，AI Coach 顶部会自动生成 `race_briefing` 简报并写入 Agent Action Log；A / B / C 都触发，同一天多场时才按 A > B > C 排优先级；Hyrox 可无天气生成；简报可从顶部卡片和 Recent Agent Actions 查看、继续追问，支持 3 天静默，第一版不自动改 Calendar。
 - 2026-06-26：AI Coach 设置入口按「教练 / 动作 / 高级」收敛；Recent Agent Actions 仅在已有记录时显示。AI 周复盘移除多段正文注解入口，保留底部追问；分享海报去掉 Day 模式，统一使用暗色 logo 水印背景。
+- 2026-06-26：AI Coach 对话支持图片附件。前端发送前压缩图片；`coach-proxy` 带图时强制走 desktop Codex runner；runner 写入临时文件并通过 `codex exec --image` 交给 Codex。图片请求失败时不回退 DeepSeek，`ai_jobs.payload` 在 runner claim / 完成 / 失败 / 超时后会 redacted，只保留图片名和 media type。

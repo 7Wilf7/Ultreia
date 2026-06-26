@@ -15,7 +15,7 @@ import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingA
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
-import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon } from "./Icons";
+import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon } from "./Icons";
 import { ItemActionModal } from "./ItemActionModal";
 import { useAppDialog } from "./AppDialogContext";
 import { Dropdown } from "./Dropdown";
@@ -358,6 +358,69 @@ function runnerAgeMs(iso, nowMs) {
   return Number.isFinite(ms) ? Math.max(0, nowMs - ms) : null;
 }
 
+const COACH_IMAGE_LIMIT = 3;
+const COACH_IMAGE_MAX_SIDE = 1280;
+const COACH_IMAGE_MAX_DATA_URL_CHARS = 2_200_000;
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("image_read_failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("image_decode_failed"));
+    image.src = src;
+  });
+}
+
+function dataUrlBytes(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  return Math.round((base64.length * 3) / 4);
+}
+
+async function prepareCoachImageAttachment(file) {
+  if (!file || !String(file.type || "").startsWith("image/")) {
+    throw new Error("unsupported_image");
+  }
+  const raw = await readFileAsDataUrl(file);
+  const image = await loadImageElement(raw);
+  const longestSide = Math.max(image.naturalWidth || image.width || 0, image.naturalHeight || image.height || 0);
+  if (!longestSide) throw new Error("unsupported_image");
+  const scale = Math.min(1, COACH_IMAGE_MAX_SIDE / longestSide);
+  const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+  const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("image_canvas_failed");
+  ctx.drawImage(image, 0, 0, width, height);
+
+  let dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+  if (dataUrl.length > COACH_IMAGE_MAX_DATA_URL_CHARS) {
+    dataUrl = canvas.toDataURL("image/jpeg", 0.68);
+  }
+  if (dataUrl.length > COACH_IMAGE_MAX_DATA_URL_CHARS) {
+    throw new Error("image_too_large");
+  }
+  return {
+    type: "image",
+    name: String(file.name || "coach-image.jpg").slice(0, 100),
+    mediaType: "image/jpeg",
+    dataUrl,
+    width,
+    height,
+    sizeBytes: dataUrlBytes(dataUrl),
+  };
+}
+
 export function AICoachTab({
   coachConfig, setCoachConfig,
   chatMessages,
@@ -422,6 +485,7 @@ export function AICoachTab({
   const memoryDisplayLang = lang === "zh" ? "zh" : "en";
   // First-send guidance: { msg, hints } while the one-time nudge modal is open.
   const [coachHints, setCoachHints] = useState(null);
+  const [coachImages, setCoachImages] = useState([]);
 
   // Single ⚙ toggle replaces the row of toggle buttons (config / memory /
   // prompt preview / edit profile / clear chat). Open the menu to access
@@ -720,6 +784,7 @@ export function AICoachTab({
   // input row below never move while the user scrolls messages.
   const chatScrollRef = useRef(null);
   const chatInputRef = useRef(null);
+  const imageInputRef = useRef(null);
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const hideJumpTimer = useRef(null);
@@ -812,6 +877,38 @@ export function AICoachTab({
       el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
     }
   }, [chatInput, isMobile]);
+
+  async function handleImagePick(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (!files.length) return;
+    const slots = COACH_IMAGE_LIMIT - coachImages.length;
+    if (slots <= 0) {
+      appDialog.alert(t("coach.image_too_many", { count: COACH_IMAGE_LIMIT }));
+      return;
+    }
+    const selected = files.slice(0, slots);
+    try {
+      const prepared = [];
+      for (const file of selected) {
+        // Sequential compression keeps memory predictable on mobile browsers.
+        prepared.push(await prepareCoachImageAttachment(file));
+      }
+      setCoachImages(prev => [...prev, ...prepared]);
+      if (files.length > slots) {
+        appDialog.alert(t("coach.image_too_many", { count: COACH_IMAGE_LIMIT }));
+      }
+    } catch (err) {
+      const code = err?.message || "";
+      appDialog.alert(code === "image_too_large"
+        ? t("coach.image_too_large")
+        : t("coach.image_unsupported"));
+    }
+  }
+
+  function removeCoachImage(index) {
+    setCoachImages(prev => prev.filter((_, i) => i !== index));
+  }
 
   // Small circular jump button, vertically pinned to top/bottom of the window.
   const jumpBtnStyle = (edge) => ({
@@ -942,16 +1039,22 @@ export function AICoachTab({
 
   async function handleSend() {
     const userMsg = chatInput.trim();
-    if (!userMsg || chatLoading) return;
+    const attachments = coachImages;
+    if ((!userMsg && !attachments.length) || chatLoading) return;
     let seen = true;
     try { seen = !!localStorage.getItem(HINTS_FLAG); } catch { /* private mode */ }
-    if (!seen) {
+    if (!seen && !attachments.length) {
       const hints = computeCoachHints();
       if (hints.length) { setCoachHints({ msg: userMsg, hints }); return; }
       markHintsSeen();
     }
     setChatInput("");
-    await sendChat(userMsg);
+    setCoachImages([]);
+    const sent = await sendChat(userMsg || t("coach.image_only_message"), { imageAttachments: attachments });
+    if (!sent && attachments.length) {
+      setChatInput(userMsg);
+      setCoachImages(attachments);
+    }
   }
 
   // Mobile has two views inside this tab — chat (default) and a settings
@@ -975,6 +1078,8 @@ export function AICoachTab({
   const calendarLabel = lang === "zh"
     ? (calendarImportOn ? "显示" : "隐藏")
     : (calendarImportOn ? "shown" : "hidden");
+  const hasCoachImageAttachments = coachImages.length > 0;
+  const canSubmitCoachMessage = chatInput.trim().length > 0 || hasCoachImageAttachments;
   // Weather pill value + state. The pill is clickable when location is
   // missing → opens the Settings → Default location modal so the user can
   // fix it without hunting through menus.
@@ -1927,55 +2032,160 @@ export function AICoachTab({
         borderTop: isMobile ? "1px solid var(--rule)" : "none",
         flexShrink: 0,
       }}>
-        <textarea
-          ref={chatInputRef}
-          rows={isMobile ? 1 : 9}
-          placeholder={t("coach.input_placeholder")}
-          value={chatInput}
-          onChange={e => setChatInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
-          style={{
-            ...s.input,
-            resize: isMobile ? "none" : "vertical",
-            fontFamily: "var(--font-sans)",
-            flex: 1,
-            lineHeight: isMobile ? 1.35 : 1.45,
-            padding: isMobile ? "6px 9px" : undefined,
-            minHeight: isMobile ? 32 : undefined,
-            height: isMobile ? 32 : undefined,
-            maxHeight: isMobile ? "calc(13px * 1.35 * 7 + 18px)" : undefined,
-            overflowY: isMobile ? "auto" : undefined,
-            "--mobile-input-fs": isMobile ? "13px" : undefined,
-          }} />
-        {isMobile ? (
-          <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !chatInput.trim()}
-            aria-label={chatLoading ? t("coach.stop_generating") : t("coach.send")}
-            style={{
-              ...s.btn,
-              width: 40,
-              height: 32,
-              padding: 0,
-              fontSize: 20,
-              lineHeight: 1,
-              minHeight: 32,
-              flexShrink: 0,
-              opacity: (!chatLoading && !chatInput.trim()) ? 0.4 : 1,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/*"
+          multiple
+          onChange={handleImagePick}
+          style={{ display: "none" }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {hasCoachImageAttachments && (
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 6,
+              marginBottom: 6,
             }}>
-            {chatLoading ? "×" : "⏎"}
-          </button>
+              {coachImages.map((img, idx) => (
+                <div key={`${img.name}-${idx}`} style={{
+                  position: "relative",
+                  width: 48,
+                  height: 48,
+                  borderRadius: 6,
+                  overflow: "hidden",
+                  border: "1px solid var(--rule)",
+                  background: "var(--bg-elevated)",
+                  flexShrink: 0,
+                }}>
+                  <img
+                    src={img.dataUrl}
+                    alt={img.name}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCoachImage(idx)}
+                    aria-label={t("coach.image_remove")}
+                    title={t("coach.image_remove")}
+                    style={{
+                      position: "absolute",
+                      top: 3,
+                      right: 3,
+                      width: 18,
+                      height: 18,
+                      minWidth: 0,
+                      minHeight: 0,
+                      padding: 0,
+                      borderRadius: 9,
+                      border: "1px solid rgba(255,255,255,0.28)",
+                      background: "rgba(0,0,0,0.62)",
+                      color: "#fff",
+                      fontSize: 13,
+                      lineHeight: 1,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={chatInputRef}
+            rows={isMobile ? 1 : 9}
+            placeholder={t("coach.input_placeholder")}
+            value={chatInput}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
+            style={{
+              ...s.input,
+              resize: isMobile ? "none" : "vertical",
+              fontFamily: "var(--font-sans)",
+              width: "100%",
+              lineHeight: isMobile ? 1.35 : 1.45,
+              padding: isMobile ? "6px 9px" : undefined,
+              minHeight: isMobile ? 32 : undefined,
+              height: isMobile ? 32 : undefined,
+              maxHeight: isMobile ? "calc(13px * 1.35 * 7 + 18px)" : undefined,
+              overflowY: isMobile ? "auto" : undefined,
+              "--mobile-input-fs": isMobile ? "13px" : undefined,
+            }} />
+        </div>
+        {isMobile ? (
+          <>
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={chatLoading || coachImages.length >= COACH_IMAGE_LIMIT}
+              aria-label={t("coach.attach_image")}
+              title={t("coach.attach_image")}
+              style={{
+                ...s.btnGhost,
+                width: 36,
+                height: 32,
+                padding: 0,
+                minHeight: 32,
+                flexShrink: 0,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: (chatLoading || coachImages.length >= COACH_IMAGE_LIMIT) ? 0.45 : 1,
+              }}>
+              <ImageIcon size={15} />
+            </button>
+            <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !canSubmitCoachMessage}
+              aria-label={chatLoading ? t("coach.stop_generating") : t("coach.send")}
+              style={{
+                ...s.btn,
+                width: 40,
+                height: 32,
+                padding: 0,
+                fontSize: 20,
+                lineHeight: 1,
+                minHeight: 32,
+                flexShrink: 0,
+                opacity: (!chatLoading && !canSubmitCoachMessage) ? 0.4 : 1,
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+              }}>
+              {chatLoading ? "×" : "⏎"}
+            </button>
+          </>
         ) : (
           // Desktop: ⚙ stacked above Send in a slim column, mirroring mobile.
           // ⚙ opens the unified hub modal (vertical tabs on left, content on right).
           <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 84 }}>
-            <button onClick={() => { setCoachHubTab("config"); setShowCoachHub(true); }} aria-label={t("coach.menu_open")}
-              style={{ ...s.btnGhost, padding: "8px 10px", fontSize: 13, lineHeight: 1.2 }}>
-              ⚙{memoryReady ? " ●" : ""}
-            </button>
-            <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !chatInput.trim()}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <button onClick={() => { setCoachHubTab("config"); setShowCoachHub(true); }} aria-label={t("coach.menu_open")}
+                style={{ ...s.btnGhost, padding: "8px 0", fontSize: 13, lineHeight: 1.2, minWidth: 0 }}>
+                ⚙{memoryReady ? " ●" : ""}
+              </button>
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                disabled={chatLoading || coachImages.length >= COACH_IMAGE_LIMIT}
+                aria-label={t("coach.attach_image")}
+                title={t("coach.attach_image")}
+                style={{
+                  ...s.btnGhost,
+                  padding: "8px 0",
+                  minWidth: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: (chatLoading || coachImages.length >= COACH_IMAGE_LIMIT) ? 0.45 : 1,
+                }}>
+                <ImageIcon size={14} />
+              </button>
+            </div>
+            <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !canSubmitCoachMessage}
               style={{
                 ...s.btn, padding: "10px 20px",
-                opacity: (!chatLoading && !chatInput.trim()) ? 0.5 : 1,
+                opacity: (!chatLoading && !canSubmitCoachMessage) ? 0.5 : 1,
                 flex: 1,
               }}>
               {chatLoading ? t("common.stop") : t("coach.send")}

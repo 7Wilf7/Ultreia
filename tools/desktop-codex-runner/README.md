@@ -80,12 +80,19 @@ spawn compatibility. On macOS/Linux, it calls `npx ...` directly. The effective
 Codex invocation is:
 
 ```bash
-npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-rules --disable plugins --disable apps --disable browser_use --disable browser_use_external --disable computer_use --disable image_generation --sandbox read-only --skip-git-repo-check --cd <empty temp dir> [--model gpt-5.5] [-c model_reasoning_effort=\"xhigh\"] -
+npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-rules --disable plugins --disable apps --disable browser_use --disable browser_use_external --disable computer_use --disable image_generation --sandbox read-only --skip-git-repo-check --cd <empty temp dir> [--model gpt-5.5] [-c model_reasoning_effort=\"xhigh\"] [--image <temp image>] -
 ```
 
 That keeps the run local, non-interactive, read-only, and tool-light while still
 loading the machine's normal Codex provider/auth configuration. The prompt is
 passed via stdin instead of shell arguments.
+
+For AI Coach image messages, the Edge Function queues compressed image data in
+`ai_jobs.payload.attachments` only long enough for the runner to claim the job.
+The runner writes each attachment into the empty temp directory and passes it to
+Codex with `--image`. After claim / completion / failure / timeout, the stored
+job payload is redacted down to image name + media type metadata. DeepSeek is
+not used as fallback for image messages because it cannot inspect the image.
 
 Do not add `--ignore-user-config`; the company Mac may require custom provider
 settings such as `base_url` in the local Codex config.
@@ -93,7 +100,7 @@ settings such as `base_url` in the local Codex config.
 The desktop Codex runner writes back one completed assistant reply after
 `codex exec` finishes. It does not currently stream partial tokens into AI Coach
 when Codex is selected; if Codex is unavailable or too slow, the Edge Function
-falls back to DeepSeek.
+falls back to DeepSeek for text-only jobs.
 
 Whichever Codex account is logged in on this machine pays for / consumes the
 Codex usage. If the machine uses API-key auth, usage belongs to that API plan.

@@ -189,6 +189,51 @@ function planLocationForecastKey(date, location) {
   return `${date}|${location.id || `${Number(location.lat).toFixed(4)},${Number(location.lng).toFixed(4)}`}`;
 }
 
+const PLAN_LOCATION_FORECAST_CACHE_KEY = "ultreia.planLocationForecast.v1";
+const PLAN_LOCATION_FORECAST_CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+
+function planLocationForecastCacheKey(location) {
+  if (!location) return "";
+  return `${location.id || "loc"}|${Number(location.lat).toFixed(4)}|${Number(location.lng).toFixed(4)}`;
+}
+
+function readPlanLocationForecastCache() {
+  try {
+    if (typeof localStorage === "undefined") return {};
+    return JSON.parse(localStorage.getItem(PLAN_LOCATION_FORECAST_CACHE_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function writePlanLocationForecastCache(cache) {
+  try {
+    if (typeof localStorage === "undefined") return;
+    const entries = Object.entries(cache || {})
+      .sort((a, b) => Number(b[1]?.updatedAt || 0) - Number(a[1]?.updatedAt || 0))
+      .slice(0, 20);
+    localStorage.setItem(PLAN_LOCATION_FORECAST_CACHE_KEY, JSON.stringify(Object.fromEntries(entries)));
+  } catch { /* best-effort cache */ }
+}
+
+function readCachedPlanLocationForecasts(location, nowMs = Date.now()) {
+  const key = planLocationForecastCacheKey(location);
+  if (!key) return null;
+  const cache = readPlanLocationForecastCache();
+  const hit = cache[key];
+  if (!hit || !Array.isArray(hit.forecasts)) return null;
+  if (nowMs - Number(hit.updatedAt || 0) > PLAN_LOCATION_FORECAST_CACHE_TTL_MS) return null;
+  return hit.forecasts;
+}
+
+function writeCachedPlanLocationForecasts(location, forecasts, nowMs = Date.now()) {
+  const key = planLocationForecastCacheKey(location);
+  if (!key || !Array.isArray(forecasts)) return;
+  const cache = readPlanLocationForecastCache();
+  cache[key] = { forecasts, updatedAt: nowMs };
+  writePlanLocationForecastCache(cache);
+}
+
 function findPlannedLocationForWorkout(workout, allLogs = []) {
   if (!workout?.date) return null;
   const sameDayPlans = allLogs.filter(l => l?.isPlanned && l.date === workout.date);
@@ -2102,7 +2147,11 @@ function AppShell({
     const limited = [...groups.values()].slice(0, 3);
     await Promise.all(limited.map(async ({ loc, dates }) => {
       try {
-        const forecasts = await fetchDailyForecasts({ lng: loc.lng, lat: loc.lat });
+        let forecasts = readCachedPlanLocationForecasts(loc);
+        if (!forecasts) {
+          forecasts = await fetchDailyForecasts({ lng: loc.lng, lat: loc.lat });
+          writeCachedPlanLocationForecasts(loc, forecasts);
+        }
         for (const date of dates) {
           const hit = forecasts.find(f => f.date === date);
           if (hit) out.set(planLocationForecastKey(date, loc), hit);

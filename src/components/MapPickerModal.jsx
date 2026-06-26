@@ -7,6 +7,7 @@ import { Spinner } from "./Spinner";
 import { PinIcon } from "./Icons";
 
 const TILE_SIZE = 256;
+const PRELOAD_TILE_BUFFER = 2;
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
 const FALLBACK_WGS = { lng: 113.2644, lat: 23.1291 }; // Guangzhou
@@ -102,6 +103,19 @@ function fmtCoord(value) {
   return Number.isFinite(n) ? n.toFixed(5) : "";
 }
 
+function requestFrame(cb) {
+  if (typeof requestAnimationFrame === "function") return requestAnimationFrame(cb);
+  return setTimeout(cb, 16);
+}
+
+function cancelFrame(id) {
+  if (typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(id);
+    return;
+  }
+  clearTimeout(id);
+}
+
 function useElementSize(ref) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
@@ -123,13 +137,28 @@ function useElementSize(ref) {
   return size;
 }
 
-function StreetMapView({ center, zoom, onCenterChange, interactive = false, style, children }) {
+function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive = false, style, children }) {
   const ref = useRef(null);
   const dragRef = useRef(null);
+  const pointersRef = useRef(new Map());
+  const pinchRef = useRef(null);
+  const frameRef = useRef(0);
+  const pendingCenterRef = useRef(null);
   const size = useElementSize(ref);
   const safeZoom = clamp(Math.round(Number(zoom) || 16), MIN_ZOOM, MAX_ZOOM);
   const safeCenter = validCoord(center) || toMapCoord(FALLBACK_WGS);
   const centerWorld = lngLatToWorld(safeCenter.lng, safeCenter.lat, safeZoom);
+  const centerWorldRef = useRef(centerWorld);
+  const zoomRef = useRef(safeZoom);
+
+  useEffect(() => () => {
+    if (frameRef.current) cancelFrame(frameRef.current);
+  }, []);
+
+  useEffect(() => {
+    centerWorldRef.current = centerWorld;
+    zoomRef.current = safeZoom;
+  }, [centerWorld, safeZoom]);
 
   const tiles = useMemo(() => {
     if (!size.width || !size.height) return [];
@@ -137,10 +166,10 @@ function StreetMapView({ center, zoom, onCenterChange, interactive = false, styl
       x: centerWorld.x - size.width / 2,
       y: centerWorld.y - size.height / 2,
     };
-    const minX = Math.floor(topLeft.x / TILE_SIZE) - 1;
-    const maxX = Math.floor((topLeft.x + size.width) / TILE_SIZE) + 1;
-    const minY = Math.floor(topLeft.y / TILE_SIZE) - 1;
-    const maxY = Math.floor((topLeft.y + size.height) / TILE_SIZE) + 1;
+    const minX = Math.floor(topLeft.x / TILE_SIZE) - PRELOAD_TILE_BUFFER;
+    const maxX = Math.floor((topLeft.x + size.width) / TILE_SIZE) + PRELOAD_TILE_BUFFER;
+    const minY = Math.floor(topLeft.y / TILE_SIZE) - PRELOAD_TILE_BUFFER;
+    const maxY = Math.floor((topLeft.y + size.height) / TILE_SIZE) + PRELOAD_TILE_BUFFER;
     const tileCount = 2 ** safeZoom;
     const out = [];
     for (let x = minX; x <= maxX; x += 1) {
@@ -158,27 +187,83 @@ function StreetMapView({ center, zoom, onCenterChange, interactive = false, styl
     return out;
   }, [centerWorld.x, centerWorld.y, safeZoom, size.height, size.width]);
 
-  function pointerDown(e) {
-    if (!interactive || !onCenterChange) return;
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    dragRef.current = {
-      id: e.pointerId,
-      x: e.clientX,
-      y: e.clientY,
-      centerWorld,
+  function scheduleCenterChange(nextCenter) {
+    if (!onCenterChange) return;
+    pendingCenterRef.current = nextCenter;
+    if (frameRef.current) return;
+    frameRef.current = requestFrame(() => {
+      frameRef.current = 0;
+      const pending = pendingCenterRef.current;
+      pendingCenterRef.current = null;
+      if (pending) onCenterChange(pending);
+    });
+  }
+
+  function activePointerList() {
+    return [...pointersRef.current.values()];
+  }
+
+  function pointerDistance(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function initPinch() {
+    const pts = activePointerList();
+    if (pts.length < 2) {
+      pinchRef.current = null;
+      return;
+    }
+    pinchRef.current = {
+      startDistance: Math.max(8, pointerDistance(pts[0], pts[1])),
+      startZoom: zoomRef.current,
     };
   }
 
+  function pointerDown(e) {
+    if (!interactive || !onCenterChange) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointersRef.current.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
+    if (pointersRef.current.size >= 2) {
+      dragRef.current = null;
+      initPinch();
+      return;
+    }
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, centerWorld: centerWorldRef.current };
+  }
+
   function pointerMove(e) {
+    if (!interactive) return;
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
+    }
+    if (pointersRef.current.size >= 2) {
+      const pts = activePointerList();
+      const pinch = pinchRef.current;
+      if (!pinch || pts.length < 2 || !onZoomChange) return;
+      const ratio = pointerDistance(pts[0], pts[1]) / pinch.startDistance;
+      const nextZoom = clamp(Math.round(pinch.startZoom + Math.log2(Math.max(0.25, ratio))), MIN_ZOOM, MAX_ZOOM);
+      if (nextZoom !== zoomRef.current) onZoomChange(nextZoom);
+      return;
+    }
     const drag = dragRef.current;
     if (!drag || drag.id !== e.pointerId || !onCenterChange) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
-    onCenterChange(worldToLngLat(drag.centerWorld.x - dx, drag.centerWorld.y - dy, safeZoom));
+    scheduleCenterChange(worldToLngLat(drag.centerWorld.x - dx, drag.centerWorld.y - dy, zoomRef.current));
   }
 
   function pointerUp(e) {
+    pointersRef.current.delete(e.pointerId);
     if (dragRef.current?.id === e.pointerId) dragRef.current = null;
+    if (pointersRef.current.size >= 2) {
+      initPinch();
+    } else if (pointersRef.current.size === 1) {
+      pinchRef.current = null;
+      const pt = activePointerList()[0];
+      dragRef.current = { id: pt.id, x: pt.x, y: pt.y, centerWorld: centerWorldRef.current };
+    } else {
+      pinchRef.current = null;
+    }
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   }
 
@@ -192,10 +277,12 @@ function StreetMapView({ center, zoom, onCenterChange, interactive = false, styl
       style={{
         position: "relative",
         overflow: "hidden",
-        background: "var(--bg-elevated)",
+        background: "#dfe7dd",
         touchAction: interactive ? "none" : "auto",
         cursor: interactive ? "grab" : "default",
         userSelect: "none",
+        contain: "layout paint size",
+        isolation: "isolate",
         ...style,
       }}
     >
@@ -205,6 +292,8 @@ function StreetMapView({ center, zoom, onCenterChange, interactive = false, styl
           src={tile.url}
           alt=""
           draggable={false}
+          loading="eager"
+          decoding="async"
           referrerPolicy="no-referrer"
           style={{
             position: "absolute",
@@ -216,12 +305,6 @@ function StreetMapView({ center, zoom, onCenterChange, interactive = false, styl
           }}
         />
       ))}
-      <div style={{
-        position: "absolute",
-        inset: 0,
-        background: "linear-gradient(180deg, rgba(8,11,10,0.08), rgba(8,11,10,0.18))",
-        pointerEvents: "none",
-      }} />
       {children}
     </div>
   );
@@ -433,6 +516,7 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
             center={center}
             zoom={zoom}
             onCenterChange={setCenter}
+            onZoomChange={setZoom}
             interactive
             style={{ position: "absolute", inset: 0 }}
           >

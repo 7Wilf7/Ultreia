@@ -37,7 +37,60 @@ function uniqueParts(parts) {
 }
 
 function stripCitySuffix(name) {
-  return String(name || '').trim().replace(/(?:市|特别行政区)$/, '');
+  return toSimplifiedChineseLabel(name).trim().replace(/(?:市|特别行政区)$/, '');
+}
+
+const TRADITIONAL_CHINESE_MAP = {
+  廣: '广',
+  東: '东',
+  區: '区',
+  縣: '县',
+  鎮: '镇',
+  鄉: '乡',
+  街: '街',
+  道: '道',
+  裡: '里',
+  里: '里',
+  臺: '台',
+  門: '门',
+  灣: '湾',
+  雲: '云',
+  陽: '阳',
+  陰: '阴',
+  龍: '龙',
+  鳳: '凤',
+  黃: '黄',
+  長: '长',
+  樂: '乐',
+  興: '兴',
+  橋: '桥',
+  濱: '滨',
+  邊: '边',
+  園: '园',
+  國: '国',
+  內: '内',
+  廈: '厦',
+  寧: '宁',
+  貴: '贵',
+  從: '从',
+  營: '营',
+  會: '会',
+  學: '学',
+  醫: '医',
+  鐵: '铁',
+  車: '车',
+  運: '运',
+  連: '连',
+  島: '岛',
+  閣: '阁',
+  樓: '楼',
+  館: '馆',
+};
+
+const TRADITIONAL_CHINESE_RE = new RegExp(`[${Object.keys(TRADITIONAL_CHINESE_MAP).join('')}]`, 'g');
+
+function toSimplifiedChineseLabel(value) {
+  return String(value || '').replace(TRADITIONAL_CHINESE_RE, ch => TRADITIONAL_CHINESE_MAP[ch] || ch);
 }
 
 const KNOWN_CITY_ABBREVIATIONS = {
@@ -108,7 +161,7 @@ const CITY_COORD_BOUNDS = [
 ];
 
 function knownCityFromText(text) {
-  const raw = String(text || '').trim();
+  const raw = toSimplifiedChineseLabel(text).trim();
   if (!raw) return '';
   const compact = raw.replace(/\s+/g, '').toLowerCase();
   const compactAscii = raw.toLowerCase().replace(/[^a-z]/g, '');
@@ -124,14 +177,14 @@ function knownCityFromText(text) {
 }
 
 function looksSubCityPlaceName(name) {
-  const text = String(name || '').trim();
+  const text = toSimplifiedChineseLabel(name).trim();
   if (!text) return false;
   return /(?:区|县|镇|乡|街道|街|村|社区|园区)$/u.test(text)
     || /\b(?:subdistrict|district|county|township|town|village|community|neighborhood)\b/i.test(text);
 }
 
 export function cityFromLocationName(name) {
-  const raw = String(name || '').trim();
+  const raw = toSimplifiedChineseLabel(name).trim();
   if (!raw) return '';
   const compactRaw = raw.replace(/\s+/g, '');
   const municipalityMatch = compactRaw.match(/(北京市|上海市|天津市|重庆市|香港特别行政区|澳门特别行政区)/u);
@@ -782,12 +835,12 @@ function compactReverseLabel(data, localityLanguage) {
     ? data.localityInfo.administrative
     : [];
   const adminNames = administrative
-    .map(item => String(item?.name || item?.isoName || '').trim())
+    .map(item => toSimplifiedChineseLabel(item?.name || item?.isoName).trim())
     .filter(Boolean)
     .filter(name => !/^(中国|China|中华人民共和国)$/i.test(name));
-  const province = String(data?.principalSubdivision || '').trim();
-  const city = String(data?.city || '').trim();
-  const locality = String(data?.locality || '').trim();
+  const province = toSimplifiedChineseLabel(data?.principalSubdivision).trim();
+  const city = toSimplifiedChineseLabel(data?.city).trim();
+  const locality = toSimplifiedChineseLabel(data?.locality).trim();
   const candidates = uniqueParts([province, city, locality, ...adminNames]);
   if (!candidates.length) return '';
 

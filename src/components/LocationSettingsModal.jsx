@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
-import { useIsMobile } from "../hooks/useMediaQuery";
 import { hasValidCoords } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
@@ -38,7 +37,6 @@ export function LocationSettingsModal({
 }) {
   const t = useT();
   const appDialog = useAppDialog();
-  const isMobile = useIsMobile();
   const sortedLocations = sortLocations(locations);
   const defaultSaved = sortedLocations.find(l => l.isDefaultWeather) || null;
   const previewLocation = defaultSaved || (hasValidCoords(defaultLocation) ? defaultLocation : null) || sortedLocations[0] || null;
@@ -113,17 +111,52 @@ export function LocationSettingsModal({
 
   return (
     <ModalRoot onClose={onClose}>
-      <div onClick={onClose} style={s.modalOverlay(isMobile, { float: true })}>
-        <div onClick={e => e.stopPropagation()} style={s.modalCard(isMobile, { maxWidth: 520, float: true })}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 12 }}>
-            <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("location.title")}</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+      <div style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10010,
+        background: "var(--bg)",
+        color: "var(--ink-1)",
+        display: "flex",
+        flexDirection: "column",
+        fontFamily: "var(--font-sans)",
+      }}>
+        <div style={{
+          padding: "calc(env(safe-area-inset-top) + 12px) 14px 10px",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 12,
+          borderBottom: "1px solid var(--rule)",
+          background: "rgba(8, 11, 10, 0.94)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          zIndex: 1,
+        }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: 19, fontWeight: 650, margin: 0 }}>{t("location.title")}</h2>
+            <p style={{ ...s.muted, margin: "4px 0 0", lineHeight: 1.45, fontSize: 12 }}>
+              {t("location.hint")}
+            </p>
           </div>
-          <p style={{ ...s.muted, margin: "0 0 14px", lineHeight: 1.55, fontSize: 12 }}>
-            {t("location.hint")}
-          </p>
+          <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+        </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          padding: "14px 14px calc(env(safe-area-inset-bottom) + 18px)",
+        }}>
+          <div style={{
+            width: "100%",
+            maxWidth: 720,
+            margin: "0 auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+          }}>
             <LocationMapPreview
               location={previewLocation}
               onOpen={() => setMapOpen(true)}
@@ -326,19 +359,15 @@ export function LocationSettingsModal({
               <div style={{ color: "var(--danger)", fontSize: 12, lineHeight: 1.5 }}>{error}</div>
             )}
           </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
-            <button type="button" onClick={onClose} style={s.btnGhost}>{t("common.close")}</button>
-          </div>
-
-          {mapOpen && (
-            <MapPickerModal
-              initialLocation={previewLocation}
-              onConfirm={onMapConfirm}
-              onClose={() => setMapOpen(false)}
-            />
-          )}
         </div>
+
+        {mapOpen && (
+          <MapPickerModal
+            initialLocation={previewLocation}
+            onConfirm={onMapConfirm}
+            onClose={() => setMapOpen(false)}
+          />
+        )}
       </div>
     </ModalRoot>
   );

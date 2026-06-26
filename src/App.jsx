@@ -71,6 +71,7 @@ import {
   captureSnapshotForWorkout,
   weatherWindowEligible,
   useWeatherContext,
+  fetchDailyForecasts,
   fetchRaceDayWeather,
   getStoredWeatherSettings,
   setStoredWeatherSettings,
@@ -148,6 +149,51 @@ function writeWorkoutCache(userId, workouts) {
     });
     localStorage.setItem(workoutCacheKey(userId), JSON.stringify(lean));
   } catch { /* cache is best-effort only */ }
+}
+
+function normalizeWeatherLocation(location) {
+  const lng = Number(location?.lng);
+  const lat = Number(location?.lat);
+  return {
+    lng: Number.isFinite(lng) ? lng : null,
+    lat: Number.isFinite(lat) ? lat : null,
+    name: String(location?.name || location?.address || "").trim(),
+  };
+}
+
+function sortTrainingLocationList(locations = []) {
+  return [...locations].sort((a, b) => {
+    if (!!a.isDefaultWeather !== !!b.isDefaultWeather) return a.isDefaultWeather ? -1 : 1;
+    const sortA = Number(a.sortOrder || 0);
+    const sortB = Number(b.sortOrder || 0);
+    if (sortA !== sortB) return sortA - sortB;
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+}
+
+function planLocationFromWorkout(workout) {
+  const loc = workout?.planDetail?.location;
+  const lng = Number(loc?.lng);
+  const lat = Number(loc?.lat);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+  return {
+    id: String(loc.id || `${lat.toFixed(4)},${lng.toFixed(4)}`),
+    name: String(loc.name || "").trim(),
+    lng,
+    lat,
+  };
+}
+
+function planLocationForecastKey(date, location) {
+  if (!date || !location) return "";
+  return `${date}|${location.id || `${Number(location.lat).toFixed(4)},${Number(location.lng).toFixed(4)}`}`;
+}
+
+function findPlannedLocationForWorkout(workout, allLogs = []) {
+  if (!workout?.date) return null;
+  const sameDayPlans = allLogs.filter(l => l?.isPlanned && l.date === workout.date);
+  const sameType = sameDayPlans.find(l => l.type === workout.type && planLocationFromWorkout(l));
+  return planLocationFromWorkout(sameType) || planLocationFromWorkout(sameDayPlans.find(planLocationFromWorkout));
 }
 
 function cleanWeeklyReportTime(value) {
@@ -608,6 +654,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
   // (or null when unset), name is a free-text label the user types in.
   const [defaultLocation, setDefaultLocationState] = useState({ lng: null, lat: null, name: "" });
+  const [trainingLocations, setTrainingLocations] = useState([]);
   const [pushEnabled, setPushEnabledState] = useState(false);
   const [pushHours, setPushHoursState] = useState([]);
   const [pushTimes, setPushTimesState] = useState([]);
@@ -637,6 +684,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           withTimeout(db.agentActions.listMyActions(), "agentActions").then(value => ({ key: "agentActions", value }), error => ({ key: "agentActions", error })),
           withTimeout(db.memoryFacts.listMyFacts(), "memoryFacts").then(value => ({ key: "memoryFacts", value }), error => ({ key: "memoryFacts", error })),
           withTimeout(db.dailyNotes.listMyDailyNotes(), "notes").then(value => ({ key: "notes", value }), error => ({ key: "notes", error })),
+          withTimeout(db.trainingLocations.listMyLocations(), "trainingLocations").then(value => ({ key: "trainingLocations", value }), error => ({ key: "trainingLocations", error })),
         ]);
         const result = Object.fromEntries(pieces.map(p => [p.key, p]));
         const failures = pieces.filter(p => p.error);
@@ -741,6 +789,13 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
         if (!result.notes.error) setDailyNotes(result.notes.value);
+
+        if (!result.trainingLocations.error) {
+          const locs = sortTrainingLocationList(result.trainingLocations.value || []);
+          setTrainingLocations(locs);
+          const defaultPlace = locs.find(l => l.isDefaultWeather) || null;
+          if (defaultPlace) setDefaultLocationState(normalizeWeatherLocation(defaultPlace));
+        }
 
         const nonCriticalFailures = failures.filter(p => p.key !== "workouts");
         if (nonCriticalFailures.length) {
@@ -902,6 +957,58 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       defaultLat: next.lat,
       defaultLocationName: next.name,
     });
+  }
+
+  async function syncWeatherDefaultFromTrainingLocation(place) {
+    const next = normalizeWeatherLocation(place);
+    setDefaultLocationState(next);
+    await updateSettings({
+      defaultLng: next.lng,
+      defaultLat: next.lat,
+      defaultLocationName: next.name,
+    });
+  }
+
+  async function createTrainingLocation(location) {
+    const shouldBeDefault = trainingLocations.length === 0 || location?.isDefaultWeather === true;
+    const created = await db.trainingLocations.createLocation({
+      ...location,
+      sortOrder: trainingLocations.length,
+      isDefaultWeather: shouldBeDefault,
+    });
+    setTrainingLocations(prev => sortTrainingLocationList([
+      created,
+      ...prev.map(l => ({ ...l, isDefaultWeather: created.isDefaultWeather ? false : l.isDefaultWeather })),
+    ]));
+    if (created.isDefaultWeather) await syncWeatherDefaultFromTrainingLocation(created);
+    return created;
+  }
+
+  async function setDefaultTrainingLocation(id) {
+    const selected = await db.trainingLocations.setDefaultLocation(id);
+    setTrainingLocations(prev => sortTrainingLocationList(
+      prev.map(l => ({ ...l, isDefaultWeather: l.id === id }))
+    ));
+    await syncWeatherDefaultFromTrainingLocation(selected);
+    return selected;
+  }
+
+  async function deleteTrainingLocation(id) {
+    const current = trainingLocations.find(l => l.id === id) || null;
+    await db.trainingLocations.archiveLocation(id);
+    const remaining = trainingLocations.filter(l => l.id !== id);
+    if (current?.isDefaultWeather && remaining.length > 0) {
+      const selected = await db.trainingLocations.setDefaultLocation(remaining[0].id);
+      setTrainingLocations(sortTrainingLocationList(
+        remaining.map(l => ({ ...l, isDefaultWeather: l.id === selected.id }))
+      ));
+      await syncWeatherDefaultFromTrainingLocation(selected);
+    } else {
+      setTrainingLocations(sortTrainingLocationList(remaining));
+      if (current?.isDefaultWeather) {
+        await setDefaultLocation({ name: "", lng: null, lat: null });
+      }
+    }
   }
 
   // Best-effort weather capture before writing. Never blocks the save —
@@ -1097,8 +1204,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
               || !weatherWindowEligible({ ...w, durationSec: w.duration || 0 })
             ) return w;
             const start = Array.isArray(w.gpsTrack) && w.gpsTrack.length ? w.gpsTrack[0] : null;
-            const lng = start ? start[1] : defaultLocation.lng;
-            const lat = start ? start[0] : defaultLocation.lat;
+            const plannedLocation = start ? null : findPlannedLocationForWorkout(w, logs);
+            const lng = start ? start[1] : (plannedLocation?.lng ?? defaultLocation.lng);
+            const lat = start ? start[0] : (plannedLocation?.lat ?? defaultLocation.lat);
             try {
               const weather = await captureSnapshotForWorkout({
                 date: w.date, startedAt: w.startedAt, durationSec: w.duration || 0,
@@ -1388,7 +1496,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             profile={profile} setProfile={setProfile}
             coachConfig={coachConfig} setCoachConfig={setCoachConfig}
             lang={lang} setLang={setLang}
-            defaultLocation={defaultLocation} setDefaultLocation={setDefaultLocation}
+            defaultLocation={defaultLocation}
+            trainingLocations={trainingLocations}
+            createTrainingLocation={createTrainingLocation}
+            setDefaultTrainingLocation={setDefaultTrainingLocation}
+            deleteTrainingLocation={deleteTrainingLocation}
             wallet={wallet} setWallet={setWallet}
             pushEnabled={pushEnabled} pushHours={pushHours} pushTimes={pushTimes} pushTimezone={pushTimezone} setPushSettings={setPushSettings}
             weeklyReportEnabled={weeklyReportEnabled}
@@ -1413,7 +1525,8 @@ function AppShell({
   dailyNotes, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   lang, setLang,
-  defaultLocation, setDefaultLocation,
+  defaultLocation,
+  trainingLocations = [], createTrainingLocation, setDefaultTrainingLocation, deleteTrainingLocation,
   wallet, setWallet,
   pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings,
   weeklyReportEnabled, weeklyReportWeekday, weeklyReportTime,
@@ -1967,6 +2080,40 @@ function AppShell({
     intervalHours: weatherSettings.intervalHours,
   });
 
+  async function buildPlanLocationForecastMap(logList, baseNow = new Date()) {
+    const start = new Date(baseNow);
+    start.setHours(0, 0, 0, 0);
+    const todayKey = localDateKey(start);
+    const endMs = start.getTime() + 6 * 24 * 60 * 60 * 1000;
+    const groups = new Map();
+    for (const workout of logList || []) {
+      if (!workout?.isPlanned || !workout.date) continue;
+      const planMs = new Date(`${workout.date}T00:00:00`).getTime();
+      if (!Number.isFinite(planMs) || planMs < start.getTime() || planMs > endMs) continue;
+      const loc = planLocationFromWorkout(workout);
+      if (!loc) continue;
+      const key = loc.id || `${loc.lat.toFixed(4)},${loc.lng.toFixed(4)}`;
+      const group = groups.get(key) || { loc, dates: new Set() };
+      group.dates.add(workout.date || todayKey);
+      groups.set(key, group);
+    }
+    if (!groups.size) return null;
+    const out = new Map();
+    const limited = [...groups.values()].slice(0, 3);
+    await Promise.all(limited.map(async ({ loc, dates }) => {
+      try {
+        const forecasts = await fetchDailyForecasts({ lng: loc.lng, lat: loc.lat });
+        for (const date of dates) {
+          const hit = forecasts.find(f => f.date === date);
+          if (hit) out.set(planLocationForecastKey(date, loc), hit);
+        }
+      } catch (err) {
+        console.warn("[weather] plan location forecast skipped:", err?.message || err);
+      }
+    }));
+    return out.size ? out : null;
+  }
+
   function notifyWhenBackground(payload) {
     if (typeof document !== "undefined" && document.visibilityState === "visible") return;
     notifyTaskDone(payload).catch(() => {});
@@ -2077,12 +2224,14 @@ function AppShell({
           weeklyReportTime,
           weeklyReportAfterSundayImport,
           weatherSettings,
+          trainingLocations,
         },
         data: {
           workouts: logs,
           races,
           dailyNotes,
           coachMessages: coachMessagesForBackup,
+          trainingLocations,
         },
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
@@ -2171,11 +2320,13 @@ function AppShell({
       }
     } catch { /* best-effort — skip race weather on any failure */ }
 
+    const planForecastByLocation = await buildPlanLocationForecastMap(freshLogs, now || new Date());
+
     const systemPrompt = buildSystemPrompt({
       profile, coachConfig,
       dataBlock: buildDataBlock({
         logs: freshLogs, races, now, lang: "en",
-        currentWeather, forecastByDate, dailyNotes, raceDayWeather, agentActions, memoryFacts,
+        currentWeather, forecastByDate, planForecastByLocation, dailyNotes, raceDayWeather, agentActions, memoryFacts,
       }),
       lang: "en",
     });
@@ -3114,6 +3265,7 @@ Rules:
           setDailyTags={setDailyTags}
           setReadiness={setReadiness}
           races={races}
+          trainingLocations={trainingLocations}
           /* Shared weather context — same cache as AI Coach. Per-tab-mount
              fetch was wasteful; cache + visibility-change refresh in the
              hook is enough. */
@@ -3394,7 +3546,10 @@ Rules:
       {showLocationSettings && (
         <LocationSettingsModal
           defaultLocation={defaultLocation}
-          setDefaultLocation={setDefaultLocation}
+          locations={trainingLocations}
+          onCreateLocation={createTrainingLocation}
+          onSetDefaultLocation={setDefaultTrainingLocation}
+          onDeleteLocation={deleteTrainingLocation}
           onClose={() => setShowLocationSettings(false)}
         />
       )}

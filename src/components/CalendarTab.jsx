@@ -53,7 +53,7 @@ const MONTH_KEYS = [
   "period.month_short.9",  "period.month_short.10", "period.month_short.11",
 ];
 
-export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, setReadiness, weatherCtx, races, weatherFlashToken = 0 }) {
+export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNotes, setDailyTags, setReadiness, weatherCtx, races, trainingLocations = [], weatherFlashToken = 0 }) {
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
@@ -362,6 +362,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
             setDailyTags={setDailyTags}
             setReadiness={setReadiness}
             isToday={k === todayKey}
+            trainingLocations={trainingLocations}
           />
         );
       })()}
@@ -876,6 +877,7 @@ function LogPill({ log, t }) {
   if (!isRun && Array.isArray(log.subTypes) && log.subTypes.length > 0) {
     metrics.push(log.subTypes.map(st => t(`enum.subtype.${st}`)).join(" · "));
   }
+  if (isPlanned && log.planDetail?.location?.name) metrics.push(log.planDetail.location.name);
 
   return (
     <div style={{

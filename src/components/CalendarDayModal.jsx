@@ -32,6 +32,7 @@ export function planHeadline(l, t) {
       else if (l.duration > 0) parts.push(formatPlanDuration(l.duration));
     } else if (l.duration > 0) parts.push(formatPlanDuration(l.duration));
   }
+  if (l.planDetail?.location?.name) parts.push(l.planDetail.location.name);
   return parts.join(" · ") || "—";
 }
 import { skyconMeta } from "../lib/weather";
@@ -102,6 +103,7 @@ const navBtn = {
 export function CalendarDayModal({
   dateKey, isFuture, isToday, logs, note, weather, onClose, onPrev, onNext,
   addLog, updateLog, setConfirmDelete, setDailyTags, setReadiness,
+  trainingLocations = [],
 }) {
   const t = useT();
   const appDialog = useAppDialog();
@@ -138,6 +140,7 @@ export function CalendarDayModal({
   const [planDurationMin, setPlanDurationMin] = useState(""); // swimming target (min)
   const [planRunType, setPlanRunType] = useState("");      // Road Run: Easy/Aerobic/Tempo/Interval
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
+  const [planLocationId, setPlanLocationId] = useState("");
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
   const [editingId, setEditingId] = useState(null);
   // Long-press a workout row → a centered Edit/Delete action card (same
@@ -175,6 +178,7 @@ export function CalendarDayModal({
     setPlanDurationMin("");
     setPlanRunType("");
     setPlanTimeOfDay("");
+    setPlanLocationId("");
     setPlanSubTypes([]);
     setEditingId(null);
   }
@@ -190,6 +194,7 @@ export function CalendarDayModal({
     const subs = Array.isArray(l.subTypes) ? l.subTypes : [];
     setPlanRunType(l.type === "Road Run" ? (subs.find(s => RUN_PACE_TYPES.includes(s)) || "") : "");
     setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
+    setPlanLocationId(l.planDetail?.location?.id || "");
     setPlanSubTypes(subs);
     setActionTarget(null);
     setPanel("plan");
@@ -219,6 +224,18 @@ export function CalendarDayModal({
       subTypes = planSubTypes;
     }
     if (f.speed && speedNum > 0) planDetail = { ...(planDetail || {}), speed: speedNum };
+    const selectedLocation = trainingLocations.find(loc => loc.id === planLocationId) || null;
+    if (selectedLocation) {
+      planDetail = {
+        ...(planDetail || {}),
+        location: {
+          id: selectedLocation.id,
+          name: selectedLocation.name || selectedLocation.address || "",
+          lat: selectedLocation.lat,
+          lng: selectedLocation.lng,
+        },
+      };
+    }
 
     // HIIT is valid with nothing but a time-of-day; every other type needs at
     // least one target so the plan means something.
@@ -546,6 +563,23 @@ export function CalendarDayModal({
                       onChange={setPlanTimeOfDay}
                     />
                   </div>
+                  {trainingLocations.length > 0 && (
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("calendar.plan_location")}</div>
+                      <Dropdown
+                        ariaLabel={t("calendar.plan_location")}
+                        options={[
+                          { value: "", label: t("calendar.plan_location_any") },
+                          ...trainingLocations.map(loc => ({
+                            value: loc.id,
+                            label: loc.name || loc.address || t("location.unnamed"),
+                          })),
+                        ]}
+                        value={planLocationId}
+                        onChange={setPlanLocationId}
+                      />
+                    </div>
+                  )}
                   {planF.distance && (
                     <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.distance")} (km)</div>

@@ -533,7 +533,7 @@ export function buildMemoryFactsBlock(memoryFacts = [], lang = "en", limit = 12)
 // `currentWeather` is the realtime snapshot (or null when unavailable).
 // `forecastByDate` is a Map<YYYY-MM-DD, dailyForecast> covering the next 7
 // days; used to attach daily weather to planned sessions in that window.
-export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, dailyNotes = [], raceDayWeather = null, agentActions = [], memoryFacts = [] }) {
+export function buildDataBlock({ logs, races, now, lang = "en", currentWeather = null, forecastByDate = null, planForecastByLocation = null, dailyNotes = [], raceDayWeather = null, agentActions = [], memoryFacts = [] }) {
   const D = DATA_LABELS[lang] || DATA_LABELS.en;
   // Strip future-planned entries — the LLM should only see what actually
   // happened. Planned rows would otherwise be misread as "recent activity"
@@ -596,6 +596,14 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
     .map(l => {
       const isTodayPlan = l.date === formatLocalDateTime(now).slice(0, 10);
       const tod = l.startedAt ? new Date(l.startedAt).getHours() < 12 ? "AM" : "PM" : "";
+      const planLocation = l.planDetail?.location && Number.isFinite(Number(l.planDetail.location.lat)) && Number.isFinite(Number(l.planDetail.location.lng))
+        ? {
+          id: String(l.planDetail.location.id || `${Number(l.planDetail.location.lat).toFixed(4)},${Number(l.planDetail.location.lng).toFixed(4)}`),
+          name: String(l.planDetail.location.name || "").trim(),
+          lat: Number(l.planDetail.location.lat),
+          lng: Number(l.planDetail.location.lng),
+        }
+        : null;
       const status = isTodayPlan
         ? (tod === "PM" && now.getHours() < 18
           ? "scheduled later today, NOT completed yet"
@@ -612,8 +620,15 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
       } else if (l.duration > 0) {
         planParts.push(formatPlanDuration(l.duration));
       }
-      const fcStr = forecastByDate ? formatDailyForecast(forecastByDate.get(l.date)) : "";
-      if (fcStr) planParts.push(`forecast: ${fcStr}`);
+      if (planLocation) {
+        planParts.push(`location: ${planLocation.name || "saved place"} (${planLocation.lat.toFixed(4)},${planLocation.lng.toFixed(4)})`);
+      }
+      const planLocationKey = planLocation ? `${l.date}|${planLocation.id}` : "";
+      const planSpecificForecast = planLocationKey && planForecastByLocation ? planForecastByLocation.get(planLocationKey) : null;
+      const fcStr = planSpecificForecast
+        ? formatDailyForecast(planSpecificForecast)
+        : (!planLocation && forecastByDate ? formatDailyForecast(forecastByDate.get(l.date)) : "");
+      if (fcStr) planParts.push(`forecast${planSpecificForecast ? "@location" : ""}: ${fcStr}`);
       return planParts.join(" ");
     })
     .join("\n");

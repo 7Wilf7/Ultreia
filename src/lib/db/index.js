@@ -13,3 +13,4 @@ export * as pushInbox from './pushInbox';
 export * as invites from './invites';
 export * as usage from './usage';
 export * as wallet from './wallet';
+export * as trainingLocations from './trainingLocations';

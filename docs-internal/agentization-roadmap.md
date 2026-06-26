@@ -30,7 +30,7 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 |---|---|---|---|
 | Phase 0 | 已完成 | 明确 agent 化方向和差距 | 已有 `agentization-analysis.md` |
 | Phase 1 | 已完成 | Action Card 雏形 | 日历计划、单条未来计划修改和 Memory 更新已接入前端 Action Card |
-| Phase 2 | 已完成（服务端 cron 待启用） | AI 周复盘 Page | 全屏周报页、账号保存、文本注解和停止控制已落地；服务端会按用户本地星期 / 时间生成并写入 `coach_reports`，待执行 cron SQL 正式启用 |
+| Phase 2 | 已完成（服务端 cron 待启用） | AI 周复盘 Page | 全屏周报页、账号保存、报告底部追问和停止控制已落地；服务端会按用户本地星期 / 时间生成并写入 `coach_reports`，待执行 cron SQL 正式启用 |
 | Phase 3 | 已完成（观察中） | Agent Action Log | `agent_actions` 已建表；动作记录会恢复状态、即时刷新、记录执行结果、反哺 AI Coach / 周复盘上下文，并已有轻量 Recent Agent Actions 可视化入口；展开详情已改为用户可读摘要 |
 | Phase 4 | 进行中 | Memory Facts 结构化 | 事实表已接入；Memory 面板改为 facts-only；AI Coach / 周报只读取 active facts；旧分区 Memory 已退出 prompt，清理 SQL 已准备；夜间记忆审核第一版已接入 |
 | Phase 5 | 暂不推进 | 自动同步外部训练数据 | Strava API 因 AI 使用政策和数据完整性问题，不作为短期路线 |
@@ -104,10 +104,10 @@ Ultreia 当前状态已经从 **AI Coach Copilot** 进入 **早期可确认 AI C
 - 先做 Settings 里的 AI 周复盘入口，支持本周 / 上周手动生成。
 - 周报页使用完整页面，不再用弹窗；生成状态提升到 App 层，用户离开页面或切 App 后仍继续跑，完成后发本地系统通知。
 - 周报写入 `coach_reports`，本周 / 上周两个 tab 各自显示账号内最新报告；旧设备 localStorage 周报会迁移一次。
-- 周报下方先复用现有计划提炼 Action Card；多段文本注解第一版先作为本地确认动作，用户选中文本并写注解后一次性发给 Coach，不入库、不自动改数据。
+- 周报下方先复用现有计划提炼 Action Card；多段文本注解因日常使用频率低已下调为报告底部简单追问输入，不入库、不自动改数据。
 - `daily-coach-dispatch` 的 `weekly_recap` 已升级为正式服务端周报任务：读取用户本地星期 / 时间、Current Memory facts 和 Recent Agent Actions，完整正文写入 `coach_reports`，通知 / inbox 只放短提示。
 - 自动每周生成使用现有用户级开关、触发星期、触发时间和时区；前端不再自己到点执行，避免 App 与服务器重复生成。
-- 2026-06-22 起，周报页改成选中文本附近浮出“加注解”动作，底部输入栏固定；AI Coach 聊天、周报分析、计划提炼都有前端停止入口。普通 AI Coach 回复注解入口因日常价值不高已移除，聊天保持直接输入发送。APK 非流式请求停止后只能立即结束等待并忽略旧结果，不能保证服务端调用已经取消。
+- 2026-06-26 起，周报正文注解入口移除，只保留底部追问输入；AI Coach 聊天、周报分析、计划提炼都有前端停止入口。普通 AI Coach 回复注解入口因日常价值不高已移除，聊天保持直接输入发送。APK 非流式请求停止后只能立即结束等待并忽略旧结果，不能保证服务端调用已经取消。
 - 低风险触发已落地：固定每周时间 / 开关由服务端 cron 执行；周日导入提示收敛为补漏，在已有周报早于新导入活动、或预定时间已过但报告仍缺失时提供手动分析兜底。
 
 ## Phase 3：Agent Action Log
@@ -421,3 +421,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-25：计划偏差补救和恢复负荷守门从“用户点击后生成”改为“命中后自动生成建议草案”；两类信号同时存在时合并成 `combined_training_adjustment`，恢复 / 负荷保护优先。自动提醒支持 3 天静默，避免晨间状态 / 备注每日更新导致反复弹；AI Coach 顶部保留“一键综合调整”主动入口；写入 Calendar 仍需用户确认。
 - 2026-06-25：导入 / 新增活动后的 Coach 点评升级为“训练点评 + 下一次计划裁决”的统一教练回合；前端聊天只显示用户自然备注，后台提示词带上新增活动和当前计划 / 负荷上下文，并把当下 plan / recovery / combined proactive signatures 标记为已处理，减少短时间内前后口径不一致。
 - 2026-06-25：赛前简报 / 装备检查第一版落地。目标赛进入 14 天窗口且地点 / 天气上下文足够时，AI Coach 顶部会自动生成 `race_briefing` 简报并写入 Agent Action Log；A / B / C 都触发，同一天多场时才按 A > B > C 排优先级；Hyrox 可无天气生成；简报可从顶部卡片和 Recent Agent Actions 查看、继续追问，支持 3 天静默，第一版不自动改 Calendar。
+- 2026-06-26：AI Coach 设置入口按「教练 / 动作 / 高级」收敛；Recent Agent Actions 仅在已有记录时显示。AI 周复盘移除多段正文注解入口，保留底部追问；分享海报去掉 Day 模式，统一使用暗色 logo 水印背景。

@@ -1,11 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { weekWindow } from "../utils/weeklyReport";
-import { buildAnnotatedDiscussionMessage } from "../utils/annotations";
-import { TextAnnotationPanel } from "./TextAnnotationPanel";
 
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
@@ -14,6 +12,14 @@ function fmtGeneratedAt(iso) {
   if (Number.isNaN(d.getTime())) return "";
   const p = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function buildReportDiscussionMessage({ intro, sourceTitle, sourceText, extraText }) {
+  return [
+    String(intro || "").trim(),
+    String(extraText || "").trim(),
+    String(sourceText || "").trim() ? `${sourceTitle}\n\n${sourceText}` : "",
+  ].filter(Boolean).join("\n\n");
 }
 
 const mdComponents = {
@@ -61,27 +67,23 @@ export function WeeklyReportPage({
   onStopImport,
 }) {
   const t = useT();
-  const articleRef = useRef(null);
   const [discussionText, setDiscussionText] = useState("");
-  const [annotations, setAnnotations] = useState([]);
   const range = useMemo(() => weekWindow(now || new Date(), rangeMode === "last" ? -1 : 0), [now, rangeMode]);
   const selected = useMemo(() => {
     const modeReports = (reports || []).filter(r => r.rangeMode === rangeMode);
     return modeReports.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
   }, [reports, rangeMode]);
-  const canDiscuss = selected && (discussionText.trim() || annotations.length > 0);
+  const canDiscuss = !!selected && discussionText.trim().length > 0;
 
   function sendDiscussion() {
     if (!canDiscuss) return;
-    onDiscussReport?.(selected, buildAnnotatedDiscussionMessage({
+    onDiscussReport?.(selected, buildReportDiscussionMessage({
       intro: t("weekly_report.discuss_intro"),
       sourceTitle: t("weekly_report.title"),
       sourceText: selected?.text || "",
       extraText: discussionText,
-      annotations,
     }));
     setDiscussionText("");
-    setAnnotations([]);
   }
 
   return (
@@ -199,7 +201,7 @@ export function WeeklyReportPage({
             <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.5, marginBottom: 12 }}>
               {t("weekly_report.generated_at", { time: fmtGeneratedAt(selected.generatedAt) })}
             </div>
-            <article ref={articleRef} className="selectable" style={{ maxWidth: 720, color: "var(--ink-1)", fontSize: 14, lineHeight: 1.75 }}>
+            <article className="selectable" style={{ maxWidth: 720, color: "var(--ink-1)", fontSize: 14, lineHeight: 1.75 }}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>
                 {selected.text || ""}
               </ReactMarkdown>
@@ -212,21 +214,45 @@ export function WeeklyReportPage({
         </div>
       </div>
       {selected && (
-        <TextAnnotationPanel
-          title={t("weekly_report.annotations_title")}
-          hint={t("weekly_report.annotations_hint")}
-          sourceLabel={t("weekly_report.title")}
-          annotations={annotations}
-          setAnnotations={setAnnotations}
-          extraText={discussionText}
-          setExtraText={setDiscussionText}
-          extraPlaceholder={t("weekly_report.discuss_placeholder")}
-          sendLabel={t("weekly_report.discuss_send")}
-          onSend={sendDiscussion}
-          selectionRootRef={articleRef}
-          floating
-          compact
-        />
+        <div style={{
+          borderTop: "1px solid var(--rule)",
+          background: "var(--bg)",
+          padding: "10px 12px calc(max(env(safe-area-inset-bottom), 0px) + 10px)",
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-end",
+          flexShrink: 0,
+        }}>
+          <textarea
+            value={discussionText}
+            onChange={e => setDiscussionText(e.target.value)}
+            placeholder={t("weekly_report.discuss_placeholder")}
+            rows={1}
+            style={{
+              ...s.input,
+              flex: 1,
+              minHeight: 36,
+              maxHeight: 96,
+              resize: "vertical",
+              fontSize: 13,
+              lineHeight: 1.35,
+              padding: "8px 10px",
+              "--mobile-input-fs": "13px",
+            }}
+          />
+          <button
+            onClick={sendDiscussion}
+            disabled={!canDiscuss}
+            style={{
+              ...s.btn,
+              minHeight: 36,
+              padding: "0 12px",
+              whiteSpace: "nowrap",
+              opacity: canDiscuss ? 1 : 0.45,
+            }}>
+            {t("weekly_report.discuss_send")}
+          </button>
+        </div>
       )}
     </div>
   );

@@ -412,8 +412,8 @@ export function AICoachTab({
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showAgentActions, setShowAgentActions] = useState(false);
-  const [showActionMatrix, setShowActionMatrix] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
+  const [coachAdvancedOpen, setCoachAdvancedOpen] = useState(false);
   // Preview language is independent of UI language — defaults to UI language
   // but the user can flip it to read the prompt in the other language.
   const [previewLang, setPreviewLang] = useState(lang);
@@ -432,8 +432,9 @@ export function AICoachTab({
   // below. coachHubTab tracks which tab is active in that modal.
   const [showCoachMenu, setShowCoachMenu] = useState(false);
   const [showCoachHub, setShowCoachHub] = useState(false);
-  // Default to the Prompt preview — it's the "result" the other tabs feed.
-  const [coachHubTab, setCoachHubTab] = useState("prompt");
+  // Default to the practical behavior controls. Internal diagnostics are now
+  // under Advanced so the settings hub does not open on a prompt/debug surface.
+  const [coachHubTab, setCoachHubTab] = useState("config");
   // Long-chat hint is dismissible. Once dismissed it collapses to a
   // single-line tappable chip that sits between provider pills and the
   // chat scroll area — no longer occupies a full banner, but still
@@ -1112,8 +1113,8 @@ export function AICoachTab({
         </ModalRoot>
       )}
 
-      {/* Calendar button toggle — separate modal opened from the mobile settings
-          sub-page. Pulled out of the Coach Config modal because it's a display
+      {/* Calendar button toggle — separate modal opened from Advanced settings.
+          Pulled out of Coach Preferences because it's a display
           preference, not a behavior knob about the coach itself. */}
       {showCalendarSettings && (
         <ModalRoot onClose={() => setShowCalendarSettings(false)}>
@@ -1177,27 +1178,6 @@ export function AICoachTab({
           mdComponents={mdComponents}
           onClose={() => setRaceBriefingAction(null)}
         />
-      )}
-
-      {showActionMatrix && (
-        <ModalRoot onClose={() => setShowActionMatrix(false)}>
-          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowActionMatrix(false)}>
-            <div
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                ...s.modalCard(isMobile, { maxWidth: 560, float: true }),
-                maxHeight: isMobile ? "min(74dvh, 580px)" : "min(74vh, 620px)",
-                overflowY: "auto",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.action_matrix_title")}</h2>
-                <button onClick={() => setShowActionMatrix(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
-              </div>
-              <CoachActionMatrix matrix={COACH_ACTION_MATRIX} lang={lang} t={t} />
-            </div>
-          </div>
-        </ModalRoot>
       )}
 
       {showMemory && (
@@ -1988,7 +1968,7 @@ export function AICoachTab({
           // Desktop: ⚙ stacked above Send in a slim column, mirroring mobile.
           // ⚙ opens the unified hub modal (vertical tabs on left, content on right).
           <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 84 }}>
-            <button onClick={() => setShowCoachHub(true)} aria-label={t("coach.menu_open")}
+            <button onClick={() => { setCoachHubTab("config"); setShowCoachHub(true); }} aria-label={t("coach.menu_open")}
               style={{ ...s.btnGhost, padding: "8px 10px", fontSize: 13, lineHeight: 1.2 }}>
               ⚙{memoryReady ? " ●" : ""}
             </button>
@@ -2005,12 +1985,8 @@ export function AICoachTab({
       </div>
       </>)}
 
-      {/* MOBILE settings — bottom sheet (slides up from the bottom for
-          one-handed reach). Grouped: a "Prompt" parent (opens the assembled-
-          prompt preview) with Edit Profile / Coach Config / Memory nested
-          beneath it (they shape the prompt), then a "Chat" group with the
-          calendar-button toggle + clear chat. Tapping any item closes the
-          sheet and opens the matching modal. */}
+      {/* MOBILE settings — bottom sheet. Daily-use controls stay first; internal
+          diagnostics and destructive actions sit behind Advanced. */}
       {coachHints && (() => {
         const proceed = () => {
           markHintsSeen();
@@ -2075,23 +2051,23 @@ export function AICoachTab({
         // openSub: KEEP the menu open and open a sub-modal on top of it (the menu
         // sits at a lower z-index, below). Closing the sub returns to the menu.
         const openSub = (fn) => { fn(); };
-        const sub = (label, onClick, badge) => (
+        const row = (label, onClick, { badge = false, danger = false, muted = false } = {}) => (
           <button onClick={onClick} style={{
             display: "flex", alignItems: "center", width: "100%", textAlign: "left",
             background: "transparent", border: "none",
             borderTop: "1px solid var(--rule-soft)",
-            padding: "13px 16px 13px 28px", minHeight: 50,
-            fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--ink-1)",
+            padding: "13px 16px", minHeight: 50,
+            fontFamily: "var(--font-sans)", fontSize: 15,
+            color: danger ? "var(--danger)" : muted ? "var(--ink-2)" : "var(--ink-1)",
             cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
           }}>
             <span style={{ flex: 1 }}>{label}{badge ? <span style={{ color: "var(--moss)", marginLeft: 6 }}>●</span> : null}</span>
             <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
           </button>
         );
-        const groupHeader = (label, hint) => (
+        const groupHeader = (label) => (
           <div style={{ padding: "14px 16px 6px", display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
-            {hint && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>({hint})</span>}
           </div>
         );
         return (
@@ -2116,61 +2092,34 @@ export function AICoachTab({
                   <button onClick={() => setShowCoachMenu(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>
 
-                {/* Prompt group — parent row opens preview, sub-items nested */}
-                {groupHeader(t("coach.group_prompt"), t("coach.group_prompt_hint"))}
-                <button onClick={() => openSub(() => setShowPromptPreview(true))} style={{
-                  display: "flex", alignItems: "center", width: "100%", textAlign: "left",
-                  background: "transparent", border: "none",
-                  borderTop: "1px solid var(--rule-soft)",
-                  padding: "13px 16px 13px 28px", minHeight: 50,
-                  fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--ink-1)",
-                  cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
-                }}>
-                  <span style={{ flex: 1 }}>{t("coach.preview_prompt")}</span>
-                  <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
-                </button>
-                {sub(t("coach.edit_profile"), () => pick(onEditProfile))}
-                {sub(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
-                {sub(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), memoryReady)}
+                {groupHeader(t("coach.group_coach"))}
+                {row(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
+                {row(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), { badge: memoryReady })}
+                {row(t("coach.edit_profile"), () => pick(onEditProfile))}
 
-                {/* Agent group */}
-                {groupHeader(t("coach.group_agent"))}
-                {showManualAdjustmentShortcut && (
-                  <button
-                    type="button"
-                    onClick={handleManualAdjustmentFromMenu}
-                    title={manualAdjustmentHint}
-                    style={{
-                      display: "flex", alignItems: "center", width: "100%", textAlign: "left",
-                      background: "transparent", border: "none",
-                      borderTop: "1px solid var(--rule-soft)",
-                      padding: "13px 16px 13px 28px", minHeight: 50,
-                      fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--ink-1)",
-                      cursor: "pointer",
-                      borderRadius: 0,
-                      WebkitTapHighlightColor: "transparent",
-                    }}>
-                    <span style={{ flex: 1 }}>{manualAdjustmentLabel}</span>
-                    <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
-                  </button>
-                )}
-                {sub(t("coach.action_matrix_title"), () => openSub(() => setShowActionMatrix(true)))}
-                {sub(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)), agentActions.length > 0)}
+                {groupHeader(t("coach.group_actions"))}
+                {showManualAdjustmentShortcut && row(manualAdjustmentLabel, handleManualAdjustmentFromMenu)}
+                {agentActions.length > 0 && row(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)), { muted: true })}
 
-                {/* Chat group */}
-                {groupHeader(t("coach.group_chat"))}
-                {sub(t("coach.calendar_btn_label"), () => openSub(() => setShowCalendarSettings(true)))}
-                {chatMessages.length > 0 && (
-                  <button onClick={() => pick(clearChat)} style={{
+                <button
+                  type="button"
+                  onClick={() => setCoachAdvancedOpen(open => !open)}
+                  style={{
                     display: "flex", alignItems: "center", width: "100%", textAlign: "left",
-                    background: "transparent", border: "none",
-                    borderTop: "1px solid var(--rule-soft)",
-                    padding: "13px 16px 13px 28px", minHeight: 50,
-                    fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--danger)",
+                    background: "transparent", border: "none", borderTop: "1px solid var(--rule-soft)",
+                    padding: "13px 16px", minHeight: 50,
+                    fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--ink-2)",
                     cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
                   }}>
-                    <span style={{ flex: 1 }}>{t("coach.clear_chat")}</span>
-                  </button>
+                  <span style={{ flex: 1 }}>{t("coach.group_advanced")}</span>
+                  <span style={{ color: "var(--ink-3)", fontSize: 15 }}>{coachAdvancedOpen ? "⌃" : "⌄"}</span>
+                </button>
+                {coachAdvancedOpen && (
+                  <div>
+                    {row(t("coach.preview_prompt"), () => openSub(() => setShowPromptPreview(true)), { muted: true })}
+                    {row(t("coach.calendar_btn_label"), () => openSub(() => setShowCalendarSettings(true)), { muted: true })}
+                    {chatMessages.length > 0 && row(t("coach.clear_chat"), () => pick(clearChat), { danger: true })}
+                  </div>
                 )}
               </div>
             </div>
@@ -2178,9 +2127,8 @@ export function AICoachTab({
         );
       })()}
 
-      {/* Desktop unified settings hub. Left vertical tabs route the right
-          pane to one of the existing config / memory / prompt-preview blocks,
-          plus shortcuts to Edit Profile and Clear Chat. */}
+      {/* Desktop unified settings hub. Keep daily-use controls first; internal
+          diagnostics and destructive actions sit in Advanced. */}
       {showCoachHub && !isMobile && (
         <ModalRoot onClose={() => setShowCoachHub(false)}>
           <div style={s.modalOverlay(false)} onClick={() => setShowCoachHub(false)}>
@@ -2210,29 +2158,26 @@ export function AICoachTab({
                   display: "flex", flexDirection: "column",
                   padding: "10px 0",
                 }}>
-                  {/* Grouped: "Prompt" (preview parent + the three inputs that
-                      shape it), "Agent" (matrix + recent suggestions), then
-                      "Chat" (calendar toggle + clear). */}
                   {[
-                    { header: t("coach.group_prompt"), items: [
-                      { id: "prompt",  label: t("coach.preview_prompt"), parent: true },
-                      { id: "profile", label: t("coach.edit_profile"), indent: true },
-                      { id: "config",  label: t("coach.show_config"), indent: true },
-                      { id: "memory",  label: t("coach.show_memory") + (memoryReady ? " ●" : ""), indent: true },
+                    { header: t("coach.group_coach"), items: [
+                      { id: "config", label: t("coach.show_config") },
+                      { id: "memory", label: t("coach.show_memory") + (memoryReady ? " ●" : "") },
+                      { id: "profile", label: t("coach.edit_profile") },
                     ] },
-                    { header: t("coach.group_agent"), items: [
+                    { header: t("coach.group_actions"), items: [
                       ...(showManualAdjustmentShortcut ? [{ id: "adjust", label: manualAdjustmentLabel }] : []),
-                      { id: "matrix", label: t("coach.action_matrix_title") },
-                      { id: "actions", label: t("coach.recent_agent_actions") },
+                      ...(agentActions.length > 0 ? [{ id: "actions", label: t("coach.recent_agent_actions"), muted: true }] : []),
                     ] },
-                    { header: t("coach.group_chat"), items: [
-                      { id: "calendar", label: t("coach.calendar_btn_label") },
-                      { id: "clear",    label: t("coach.clear_chat") },
+                    { header: t("coach.group_advanced"), items: [
+                      { id: "prompt", label: t("coach.preview_prompt"), muted: true },
+                      { id: "calendar", label: t("coach.calendar_btn_label"), muted: true },
+                      { id: "matrix", label: t("coach.action_matrix_title"), muted: true },
+                      { id: "clear", label: t("coach.clear_chat"), muted: true, danger: true },
                     ] },
-                  ].map((group, gi) => (
+                  ].filter(group => group.items.length > 0).map((group, gi) => (
                     <div key={group.header}>
                       <div style={{
-                        padding: gi === 0 ? "2px 14px 6px" : "16px 14px 6px",
+                        padding: gi === 0 ? "2px 14px 6px" : "14px 14px 6px",
                         fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)",
                         textTransform: "uppercase", letterSpacing: "0.06em",
                       }}>{group.header}</div>
@@ -2242,16 +2187,16 @@ export function AICoachTab({
                           <button key={tab.id}
                             onClick={() => setCoachHubTab(tab.id)}
                             style={{
-                              textAlign: "left", width: "100%",
+                              textAlign: "left", width: "calc(100% - 16px)",
+                              margin: "0 8px 3px",
                               background: active ? "var(--bg-elevated)" : "transparent",
-                              border: "none",
-                              borderLeft: active ? "3px solid var(--ink-1)" : "3px solid transparent",
-                              padding: tab.indent ? "9px 14px 9px 26px" : "9px 14px",
+                              border: active ? "1px solid var(--rule)" : "1px solid transparent",
+                              padding: "9px 10px",
                               fontFamily: "var(--font-sans)",
                               fontSize: 13,
-                              fontWeight: active ? 600 : (tab.parent ? 600 : 500),
-                              color: active ? "var(--ink-1)" : "var(--ink-2)",
-                              cursor: "pointer", borderRadius: 0,
+                              fontWeight: active ? 600 : 500,
+                              color: active ? "var(--ink-1)" : tab.danger ? "var(--danger)" : tab.muted ? "var(--ink-3)" : "var(--ink-2)",
+                              cursor: "pointer", borderRadius: 6,
                             }}>
                             {tab.label}
                           </button>

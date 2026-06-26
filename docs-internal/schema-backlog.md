@@ -85,15 +85,16 @@
 
 - `docs-internal/supabase-coach-memory-facts.sql`
 
-## 待建表 / 待接入
+## 暂不推进 / 已下调
 
 ### 1. `coach_report_notes` 或 `coach_annotations`
 
 现状：
 
-- 周报下方可以把回答和周报一起转发到 AI Coach，但没有保存“这段周报上的用户注解”。
+- 2026-06-26 已下调：周报正文选区注解入口移除，不再按当前方案建表。
+- 周报下方保留简单追问输入，可以把问题和当前报告一起转发到 AI Coach，但不会保存“这段周报上的用户注解”。
 
-基于 `coach_reports` 继续做：
+如果未来重新证明有价值，再基于 `coach_reports` 评估：
 
 - `report_id`
 - `selected_text`

@@ -359,7 +359,12 @@ export function UpdateChecker() {
       : copy.check;
   const onPrimaryAction = () => {
     if (recentActionEnabled) {
-      setShowNotes(o => !o);
+      if (showNotes) {
+        setShowNotes(false);
+        setShowRecentAction(false);
+      } else {
+        setShowNotes(true);
+      }
       return;
     }
     void check({ automatic: false });
@@ -371,6 +376,9 @@ export function UpdateChecker() {
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8 }}>
           <div style={primaryStyle}>{copy.version}</div>
           <div style={{ ...secondaryStyle, marginTop: 0 }}>v{currentVersion}</div>
+          {recentActionEnabled && (
+            <div style={latestHintStyle}>✓ {copy.latest}</div>
+          )}
         </div>
         <button
           onClick={onPrimaryAction}
@@ -492,6 +500,15 @@ const secondaryStyle = {
   fontSize: 12,
   color: "var(--ink-3)",
   marginTop: 3,
+};
+
+const latestHintStyle = {
+  fontFamily: "var(--font-sans)",
+  fontSize: 12,
+  color: "var(--moss)",
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
 };
 
 const btnStyle = {

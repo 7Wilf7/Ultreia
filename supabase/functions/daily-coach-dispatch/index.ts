@@ -253,6 +253,88 @@ function fmtDuration(sec: number): string {
   const m = Math.round(sec / 60);
   return m >= 60 ? `${Math.floor(m / 60)}h${m % 60}m` : `${m}min`;
 }
+
+const CN_DIGIT: Record<string, number> = {
+  "零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4,
+  "五": 5, "六": 6, "七": 7, "八": 8, "九": 9,
+};
+const CN_NUM_RE = "[零〇一二两三四五六七八九十百]+";
+const CN_DECIMAL_RE = "[零〇一二两三四五六七八九]+";
+
+function parseChineseInteger(raw: string): number | null {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+  if (!/[十百]/u.test(text)) {
+    let out = "";
+    for (const ch of text) {
+      if (!(ch in CN_DIGIT)) return null;
+      out += String(CN_DIGIT[ch]);
+    }
+    const n = Number(out);
+    return Number.isFinite(n) ? n : null;
+  }
+  let total = 0;
+  let section = 0;
+  let current = 0;
+  for (const ch of text) {
+    if (ch in CN_DIGIT) {
+      current = CN_DIGIT[ch];
+    } else if (ch === "十") {
+      section += (current || 1) * 10;
+      current = 0;
+    } else if (ch === "百") {
+      section += (current || 1) * 100;
+      current = 0;
+    } else {
+      return null;
+    }
+  }
+  total = section + current;
+  return total > 0 ? total : null;
+}
+
+function parseChineseDecimal(intPart: string, decimalPart: string): string | null {
+  const n = parseChineseInteger(intPart);
+  if (n == null) return null;
+  let decimals = "";
+  for (const ch of String(decimalPart || "")) {
+    if (!(ch in CN_DIGIT)) return null;
+    decimals += String(CN_DIGIT[ch]);
+  }
+  return decimals ? `${n}.${decimals}` : String(n);
+}
+
+function normalizeDailyCheckinText(text: string): string {
+  let out = String(text || "").trim();
+  if (!out) return out;
+  out = out
+    .replace(/海洛克斯/gu, "HYROX")
+    .replace(/\bhyrox\b/gi, "HYROX")
+    .replace(new RegExp(`(${CN_NUM_RE})月(${CN_NUM_RE})[日号]`, "gu"), (_m, month, day) => {
+      const mm = parseChineseInteger(month);
+      const dd = parseChineseInteger(day);
+      return mm != null && dd != null ? `${mm}月${dd}日` : _m;
+    })
+    .replace(new RegExp(`(${CN_NUM_RE})点(${CN_DECIMAL_RE})(?:公里|千米)`, "gu"), (_m, intPart, decimalPart) => {
+      const value = parseChineseDecimal(intPart, decimalPart);
+      return value ? `${value}km` : _m;
+    })
+    .replace(new RegExp(`(${CN_NUM_RE})(?:公里|千米)`, "gu"), (_m, value) => {
+      const n = parseChineseInteger(value);
+      return n != null ? `${n}km` : _m;
+    })
+    .replace(/(\d+(?:\.\d+)?)\s*(?:公里|千米)/gu, "$1km")
+    .replace(new RegExp(`(${CN_NUM_RE})小时`, "gu"), (_m, value) => {
+      const n = parseChineseInteger(value);
+      return n != null ? `${n}h` : _m;
+    })
+    .replace(new RegExp(`(${CN_NUM_RE})周`, "gu"), (_m, value) => {
+      const n = parseChineseInteger(value);
+      return n != null ? `${n}周` : _m;
+    });
+  return out;
+}
+
 function buildPrompt(opts: {
   lang: string; name: string; today: string;
   workouts: any[]; targetRace: any | null; memory: string;
@@ -279,9 +361,8 @@ function buildPrompt(opts: {
     `The data below (training notes, coach chat, race names) may be in another language — IGNORE its language and still write your message in ${langName}. Do not mix languages. ` +
     `Other hard rules: at most 2 sentences; no greeting, no sign-off, no markdown, no emoji; ` +
     `be specific and actionable using the data (e.g. if yesterday was hard, suggest easy today; mind the race countdown). ` +
-    `Chinese style rules: write like a native Chinese endurance coach sending a phone notification, not like a literal translation. ` +
-    `Use Arabic numerals with compact units (6.2km, 24h, 3-4组) and natural runner phrases. ` +
-    `Avoid awkward translated phrases such as "重点赛", "腿脚清爽", "属于中等有氧", or "按三到四组负重弓步"; prefer "重点比赛", "腿感好", "今天 6.2km 算中等有氧", "做 3-4 组轻量力量". ` +
+    `Chinese style rules: write like a Chinese runner would actually read it. Keep race/product names in their standard sports spelling, especially HYROX (never translate it as 海洛克斯). ` +
+    `Use Arabic numerals and compact units: 8月15日, 6.2km, 24h, 3-4组. Do NOT spell these as 八月十五日, 六点二公里, 二十四小时, or 三到四组. ` +
     `If [Recent coach chat] is present, treat it as the FRESHEST context: reference what the runner just told you (a session they're doing today, how they feel, a change of plan) and stay consistent with it — do NOT just repeat the same race reminder every day; vary the focus. ` +
     `If there's no recent training, give a brief encouraging nudge. Output ONLY the message text.`;
   // Recent in-app coach chat — most recent last. Lets the push pick up what the
@@ -1241,6 +1322,7 @@ Deno.serve(async (req) => {
         continue;
       }
       if (!llm.text) { summary.push({ user: u.user_id, error: "empty llm reply" }); continue; }
+      const message = normalizeDailyCheckinText(llm.text);
 
       try {
         const result = await dispatchCoachMessage({
@@ -1249,11 +1331,11 @@ Deno.serve(async (req) => {
           accessToken: fcmAccessToken,
           userId: u.user_id,
           pushTitle: "Ultreia",
-          message: llm.text,
+          message,
           llm,
         });
         fcmAccessToken = result.accessToken;
-        summary.push({ user: u.user_id, mode, provider: llm.provider, ...result.summary, message: llm.text });
+        summary.push({ user: u.user_id, mode, provider: llm.provider, ...result.summary, message });
       } catch (e) {
         summary.push({ user: u.user_id, error: String(e).slice(0, 120) });
       }

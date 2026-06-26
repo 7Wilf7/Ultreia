@@ -84,8 +84,15 @@ Recent conversation:
 {[role] 内容 …整段对话}
 
 Guidelines:
-- One short fact per line. No markdown headings.
-- Keep durable facts (preferences, goals, injuries, training style, recurring concerns).
+- Return a COMPLETE, deduplicated active snapshot. Do not output only additions. If an old fact is outdated, replaced, or no longer useful, omit it.
+- Keep the exact section headings from the real prompt.
+- Use categories strictly:
+  - Injuries / Health: injuries, recovery needs, fatigue readiness, health risks, HRV/resting-HR/heart-rate risk signals.
+  - Goals / Races: current target races and current race priorities only. Drop completed race results and stale targets.
+  - Training Preferences: plan structure, equipment constraints, terrain, schedule preferences, training methods.
+  - Coaching Style: how the user wants the coach to communicate, decide, or frame judgment.
+  - Recurring Patterns: repeated behavior patterns that affect planning.
+- One short fact per line.
 - DROP session-specific things (today's specific question, one-off advice).
 - Don't repeat what's already in the user's profile (age, location, basic stats).
 - Maximum ~500 words. Trim older entries if needed.

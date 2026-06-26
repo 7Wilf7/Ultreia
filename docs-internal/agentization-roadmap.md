@@ -201,7 +201,7 @@ proposed -> cancelled
 
 - `coach_memory_facts` 已成为当前长期记忆主线；`status=active` 的事实进入 AI Coach / 周报 prompt，`archived` 不进入。
 - 旧分区文本字段 `coach_memory` / `coach_memory_zh` 已退出 UI 和 prompt，仅作为历史兼容字段保留；Wilf 迁移完成后可用一次性 SQL 清空个人账号旧文本。
-- 自动更新会基于当前 active facts + 最近对话生成英文 + 中文事实建议，并以 `memory_update` Action Card 审核后启用。
+- 自动更新会基于当前 active facts + 最近对话生成英文 + 中文事实建议，并以 `memory_update` Action Card 审核后启用；接受时把 AI 结果视为完整 active 快照，相近事实复用旧行，快照中消失的旧 active facts 自动归档，真正新事实才新增。
 - `agent_actions` 只是 Memory 更新的审计日志，不是事实记忆的数据源；跨设备可见的长期记忆以 `coach_memory_facts` 为准。接受 Memory 更新时必须先确认 facts 写库成功，再把 `memory_update` 标记为 `executed`。
 - 英文事实用于模型上下文，中文用于审核和阅读。
 - Phase 3 的 `agent_actions` 已能记录 Memory 更新的提议、接受 / 忽略和结果，因此 Phase 4 可以接着做事实级记录。
@@ -210,7 +210,7 @@ proposed -> cancelled
 
 - 不做黑箱迁移；旧文本是否清空由用户确认后通过一次性 SQL 执行。
 - 事实系统已经从旁路升级为 prompt 主记忆：AI 从对话 / 周报 / Action Log 提炼“单条事实”，用户审核后保存、归档或忽略。
-- 保存的 active fact 会作为 `[Memory Facts]` 进入 Coach / 周报上下文；旧 `[Long-term Memory]` 文本块不再发送。
+- 保存的 active fact 会作为 `[Memory Facts]` 进入 Coach / 周报上下文；旧 `[Long-term Memory]` 文本块不再发送。分类边界收紧为：伤病 / 健康、当前目标赛事、训练偏好、教练风格、长期模式五类。
 
 第一版范围（Phase 4.1）：
 

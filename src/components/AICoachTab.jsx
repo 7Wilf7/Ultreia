@@ -949,7 +949,9 @@ export function AICoachTab({
       if (facts.length && typeof saveMemoryFacts !== "function") {
         throw new Error("Memory facts save handler is unavailable");
       }
-      const savedFacts = facts.length ? await saveMemoryFacts(facts) : [];
+      const saveResult = await saveMemoryFacts(facts, { replaceActiveSnapshot: true, returnSummary: true });
+      const savedFacts = Array.isArray(saveResult) ? saveResult : (saveResult?.savedFacts || []);
+      const archivedFactCount = Array.isArray(saveResult) ? 0 : (saveResult?.archivedFacts?.length || 0);
       if (facts.length && (!Array.isArray(savedFacts) || savedFacts.length < facts.length)) {
         throw new Error(`Only saved ${savedFacts?.length || 0} of ${facts.length} Memory facts`);
       }
@@ -959,6 +961,7 @@ export function AICoachTab({
               savedLanguages: [e ? "en" : null, z ? "zh" : null].filter(Boolean),
               savedCharacterCount: { en: e.length, zh: z.length },
               savedFactCount: savedFacts.length,
+              archivedFactCount,
             })
           : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
         setLastMemoryAction(nextAction);
@@ -3331,6 +3334,7 @@ function MemoryActionDetails({ action, t }) {
   ].filter(Boolean);
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
   const savedFactCount = Number(action.result?.savedFactCount || 0);
+  const archivedFactCount = Number(action.result?.archivedFactCount || 0);
   return (
     <>
       {previews.length > 0 && (
@@ -3345,18 +3349,29 @@ function MemoryActionDetails({ action, t }) {
           </div>
         </ActionDetailSection>
       )}
-      {(savedFactCount > 0 || savedLanguages.length > 0 || action.error) && (
+      {(savedFactCount > 0 || archivedFactCount > 0 || savedLanguages.length > 0 || action.error) && (
         <ActionDetailSection title={t("coach.agent_actions_result")}>
           <div style={{ color: action.error ? "var(--danger)" : "var(--ink-2)", fontSize: 12, lineHeight: 1.45 }}>
-            {action.error
-              ? t("coach.agent_action_error", { msg: action.error })
-              : savedFactCount > 0
-                ? t("coach.agent_action_memory_facts_saved", { count: savedFactCount })
-                : t("coach.agent_action_memory_saved", { langs: savedLanguages.join(" / ") })}
+            {action.error ? (
+              t("coach.agent_action_error", { msg: action.error })
+            ) : (
+              <>
+                {savedFactCount > 0
+                  ? t("coach.agent_action_memory_facts_saved", { count: savedFactCount })
+                  : savedLanguages.length > 0
+                    ? t("coach.agent_action_memory_saved", { langs: savedLanguages.join(" / ") })
+                    : null}
+                {archivedFactCount > 0 && (
+                  <span style={{ display: "block", marginTop: savedFactCount || savedLanguages.length ? 3 : 0 }}>
+                    {t("coach.agent_action_memory_facts_archived", { count: archivedFactCount })}
+                  </span>
+                )}
+              </>
+            )}
           </div>
         </ActionDetailSection>
       )}
-      {!previews.length && !savedFactCount && !savedLanguages.length && !action.error && (
+      {!previews.length && !savedFactCount && !archivedFactCount && !savedLanguages.length && !action.error && (
         <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>
       )}
     </>
@@ -3544,11 +3559,13 @@ function buildAgentActionFollowUpMessage(action, t, lang = "zh") {
   const restDates = Array.isArray(action.result?.plannedRestDates) ? action.result.plannedRestDates : [];
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
   const savedFactCount = Number(action.result?.savedFactCount || 0);
+  const archivedFactCount = Number(action.result?.archivedFactCount || 0);
   if (createdCount > 0) resultBits.push(zh ? `创建计划 ${createdCount} 条` : `created ${createdCount} planned item(s)`);
   if (updatedCount > 0) resultBits.push(zh ? `修改计划 ${updatedCount} 条` : `updated ${updatedCount} existing plan(s)`);
   if (restDates.length) resultBits.push(zh ? `计划休息日：${restDates.join(", ")}` : `planned rest: ${restDates.join(", ")}`);
   if (savedFactCount > 0) resultBits.push(zh ? `已启用记忆事实 ${savedFactCount} 条` : `activated ${savedFactCount} memory fact(s)`);
-  else if (savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
+  if (archivedFactCount > 0) resultBits.push(zh ? `归档旧记忆事实 ${archivedFactCount} 条` : `archived ${archivedFactCount} old memory fact(s)`);
+  if (!savedFactCount && savedLanguages.length) resultBits.push(zh ? `已保存记忆语言：${savedLanguages.join(" / ")}` : `saved memory languages: ${savedLanguages.join(" / ")}`);
   if (resultBits.length) lines.push("", `${zh ? "保存结果" : "Saved result"}：${resultBits.join(zh ? "；" : "; ")}`);
   if (raceBriefingText) {
     lines.push("", zh
@@ -3571,6 +3588,7 @@ function summarizeAgentAction(action, t) {
   const memory = action.payload?.memory && typeof action.payload.memory === "object" ? action.payload.memory : null;
   const savedLanguages = Array.isArray(action.result?.savedLanguages) ? action.result.savedLanguages : [];
   const savedFactCount = Number(action.result?.savedFactCount || 0);
+  const archivedFactCount = Number(action.result?.archivedFactCount || 0);
   const race = action.payload?.raceBriefing || null;
 
   const typeLabel = action.type === "create_plans"
@@ -3591,15 +3609,20 @@ function summarizeAgentAction(action, t) {
           : action.source === "race_briefing_checklist" || isRaceBriefingAction(action)
             ? t("coach.agent_action_source_race_briefing")
             : t("coach.agent_action_source_coach");
+  const memoryDetail = () => {
+    const count = savedFactCount || savedLanguages.length || [memory?.en, memory?.zh].filter(v => String(v || "").trim()).length || 0;
+    const base = t("coach.agent_action_memory_detail", { count });
+    return archivedFactCount > 0
+      ? `${base} · ${t("coach.agent_action_memory_archived_short", { count: archivedFactCount })}`
+      : base;
+  };
   const detail = action.type === "create_plans"
     ? t("coach.agent_action_plan_detail", {
         dates: affectedDates.length ? affectedDates.slice(0, 4).join(", ") : "-",
         count: plans.length || createdCount || 0,
       })
     : action.type === "memory_update"
-      ? t("coach.agent_action_memory_detail", {
-          count: savedFactCount || savedLanguages.length || [memory?.en, memory?.zh].filter(v => String(v || "").trim()).length || 0,
-        })
+      ? memoryDetail()
       : isRaceBriefingAction(action)
         ? t("coach.agent_action_race_briefing_detail", {
             name: race?.name || "-",

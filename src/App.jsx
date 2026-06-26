@@ -24,7 +24,7 @@ import { INITIAL_FILTER } from "./components/GlobalFilter";
 import { TrainingTab } from "./components/TrainingTab";
 import { RacesTab } from "./components/RacesTab";
 import { AICoachTab } from "./components/AICoachTab";
-import { buildMemoryUpdatePrompt, extractMemoryFacts, parseBilingualMemory } from "./utils/memory";
+import { buildMemoryUpdatePrompt, extractMemoryFacts, parseBilingualMemory, prepareMemoryFactSnapshot } from "./utils/memory";
 import { reportError } from "./lib/errorOverlay";
 import { pickGreeting, timeGreeting } from "./data/greetings";
 import { CalendarTab } from "./components/CalendarTab";
@@ -1723,13 +1723,24 @@ function AppShell({
         console.warn("[agent_actions] save failed:", err);
       });
   }
-  async function saveMemoryFacts(facts = []) {
-    const safeFacts = (Array.isArray(facts) ? facts : []).filter(f => f?.clientId || f?.id);
-    if (!safeFacts.length) return [];
-    const savedFacts = await db.memoryFacts.upsertFacts(safeFacts);
+  async function saveMemoryFacts(facts = [], { replaceActiveSnapshot = false, returnSummary = false } = {}) {
+    const prepared = replaceActiveSnapshot
+      ? prepareMemoryFactSnapshot(facts, memoryFacts)
+      : { facts, archivedFacts: [] };
+    const safeFacts = (Array.isArray(prepared.facts) ? prepared.facts : []).filter(f => f?.clientId || f?.id);
+    const savedFacts = safeFacts.length ? await db.memoryFacts.upsertFacts(safeFacts) : [];
     if (savedFacts?.length) {
       setMemoryFacts(prev => savedFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
     }
+    const archivedFacts = [];
+    for (const fact of prepared.archivedFacts || []) {
+      const archived = await db.memoryFacts.updateFactStatus(fact, "archived");
+      if (archived) archivedFacts.push(archived);
+    }
+    if (archivedFacts.length) {
+      setMemoryFacts(prev => archivedFacts.reduce((list, fact) => mergeMemoryFactList(list, fact), prev));
+    }
+    if (returnSummary) return { savedFacts: savedFacts || [], archivedFacts };
     return savedFacts || [];
   }
   async function setMemoryFactStatus(fact, status) {

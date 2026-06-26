@@ -3,9 +3,11 @@ import {
   buildMemoryUpdatePrompt,
   extractMemoryFacts,
   fillEmptyMemorySections,
+  inferMemoryFactCategory,
   isMemorySectionHeading,
   MEMORY_SECTIONS,
   parseBilingualMemory,
+  prepareMemoryFactSnapshot,
 } from "./memory";
 
 describe("parseBilingualMemory", () => {
@@ -57,6 +59,83 @@ describe("extractMemoryFacts", () => {
       contentEn: "",
       contentZh: "偏好早晨空腹跑",
     });
+  });
+
+  it("tightens categories from fact content when the model puts an item under the wrong heading", () => {
+    const facts = extractMemoryFacts({
+      zh: "[训练偏好]\n- Hyrox 男双 Pro 是当前 A 级赛事\n[长期模式]\n- 偏好教练用若A则B的决策树式指令",
+    });
+
+    expect(facts[0]).toMatchObject({ category: "goals_races" });
+    expect(facts[1]).toMatchObject({ category: "coaching_style" });
+  });
+});
+
+describe("memory snapshot merge", () => {
+  it("reuses matching active fact rows and archives facts missing from the new snapshot", () => {
+    const existingFacts = [
+      {
+        rowId: "row-1",
+        clientId: "old-1",
+        status: "active",
+        category: "injury_health",
+        contentZh: "高负荷训练后倾向需要24–48小时恢复窗口；优先按摩、睡眠和营养。",
+        acceptedAt: "2026-06-24T00:00:00Z",
+      },
+      {
+        rowId: "row-2",
+        clientId: "old-2",
+        status: "active",
+        category: "goals_races",
+        contentZh: "Hyrox仅为交叉训练，无需专项技术训练。",
+      },
+      {
+        rowId: "row-3",
+        clientId: "old-3",
+        status: "archived",
+        category: "training_preferences",
+        contentZh: "旧归档不参与替换。",
+      },
+    ];
+    const incomingFacts = [
+      {
+        clientId: "new-1",
+        status: "active",
+        category: "recurring_patterns",
+        contentZh: "高负荷训练后倾向需要24–48小时恢复；优先按摩、睡眠和营养。",
+      },
+      {
+        clientId: "new-2",
+        status: "active",
+        category: "training_preferences",
+        contentZh: "2026-08-15深圳 Hyrox 是当前 A 级赛事：男双 Pro。",
+      },
+    ];
+
+    const snapshot = prepareMemoryFactSnapshot(incomingFacts, existingFacts);
+
+    expect(snapshot.facts[0]).toMatchObject({
+      rowId: "row-1",
+      clientId: "old-1",
+      category: "injury_health",
+      acceptedAt: "2026-06-24T00:00:00Z",
+    });
+    expect(snapshot.facts[1]).toMatchObject({
+      clientId: "new-2",
+      category: "goals_races",
+    });
+    expect(snapshot.archivedFacts).toHaveLength(1);
+    expect(snapshot.archivedFacts[0]).toMatchObject({ rowId: "row-2" });
+  });
+});
+
+describe("inferMemoryFactCategory", () => {
+  it("keeps category boundaries narrow", () => {
+    expect(inferMemoryFactCategory({ contentZh: "静息心率约60 bpm；连续3天晨脉>65则降级计划。" }, "training_preferences")).toBe("injury_health");
+    expect(inferMemoryFactCategory({ contentZh: "Hyrox 男双 Pro 是当前 A 级赛事。" }, "training_preferences")).toBe("goals_races");
+    expect(inferMemoryFactCategory({ contentZh: "周模板：周一恢复跑，周二全休。" }, "recurring_patterns")).toBe("training_preferences");
+    expect(inferMemoryFactCategory({ contentZh: "偏好教练使用若A则B的决策树式指令。" }, "recurring_patterns")).toBe("coaching_style");
+    expect(inferMemoryFactCategory({ contentZh: "遇到生活冲突时会灵活调整计划，不事后追量。" }, "training_preferences")).toBe("recurring_patterns");
   });
 });
 

@@ -36,6 +36,135 @@ function isEmptyMemoryFact(line = "") {
   return !normalized || normalized === "none" || normalized === "无";
 }
 
+export function inferMemoryFactCategory(fact = {}, fallbackCategory = "other") {
+  const fallback = MEMORY_SECTIONS.some(section => section.key === fallbackCategory) ? fallbackCategory : "other";
+  const text = `${fact.contentZh || ""} ${fact.contentEn || ""}`.toLowerCase();
+  if (!text.trim()) return fallback;
+
+  if (
+    fallback === "coaching_style" &&
+    /(偏好|喜欢|希望|需要|认可|适应|不要|不喜欢).*(教练|coach|建议|指令|语气|解释|判断|回复)|决策树|若.+则/.test(text)
+  ) {
+    return "coaching_style";
+  }
+  if (/(教练风格|coaching style|语气|回复风格|指令格式|决策树|若.+则|不要夸|少废话|解释方式)/.test(text)) {
+    return "coaching_style";
+  }
+
+  const raceLike = /(比赛|赛事|目标|hyrox|半马|全马|越野赛|road race|race|goal|马拉松|utmb|ccc|莫干山|深圳)/.test(text);
+  const pastRaceLike = /(已完成|完成过|过去|历史|成绩|result|finished|completed)/.test(text);
+  if (raceLike && !pastRaceLike) return "goals_races";
+
+  if (/(周模板|宏观计划|训练结构|高峰周|训练量|容量|减量|器械|skierg|rowerg|雪橇|墙球|哑铃|自重|地形|白云山|火炉山|力量|有氧主课|错过的力量|不追量|easy|z1|z2|tempo|间歇|爬升|跑步稳定性|站点切换|训练偏好|training preference)/.test(text)) {
+    return "training_preferences";
+  }
+
+  if (/(伤|疼|痛|不适|恢复|疲劳恢复|24.?48|晨脉|静息心率|hrv|body battery|健康|受伤|膝|踝|髋|跟腱|筋膜|风险|睡眠|营养|按摩|心率漂移|高温高湿|下坡离心|无已知伤病|ready|readiness|recovery)/.test(text)) {
+    return "injury_health";
+  }
+
+  if (/(经常|总是|反复|长期|模式|遇到|会主动|不会强行|不会硬撑|已内化|倾向|生活冲突|缺课|天气|调整计划|tends to|often|recurring|pattern|when|if)/.test(text)) {
+    return "recurring_patterns";
+  }
+
+  if (/(计划|training preference)/.test(text)) {
+    return "training_preferences";
+  }
+
+  return fallback;
+}
+
+function normalizeMemoryFactText(text = "") {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[，。；：、,.!?！？;:()[\]（）【】"'“”‘’`~\-—_/\\\s\u3000]/g, "")
+    .replace(/(本人|用户|wilf|theuser|user)/g, "")
+    .trim();
+}
+
+function memoryFactText(fact = {}) {
+  return `${fact.contentZh || ""}\n${fact.contentEn || ""}`.trim();
+}
+
+function charBigrams(text = "") {
+  const normalized = normalizeMemoryFactText(text);
+  if (normalized.length < 2) return normalized ? [normalized] : [];
+  const grams = [];
+  for (let i = 0; i < normalized.length - 1; i += 1) grams.push(normalized.slice(i, i + 2));
+  return grams;
+}
+
+function jaccardSimilarity(a = "", b = "") {
+  const aSet = new Set(charBigrams(a));
+  const bSet = new Set(charBigrams(b));
+  if (!aSet.size || !bSet.size) return 0;
+  let intersection = 0;
+  for (const item of aSet) {
+    if (bSet.has(item)) intersection += 1;
+  }
+  return intersection / (aSet.size + bSet.size - intersection);
+}
+
+function memoryFactSimilarity(a = {}, b = {}) {
+  const aText = memoryFactText(a);
+  const bText = memoryFactText(b);
+  const aNorm = normalizeMemoryFactText(aText);
+  const bNorm = normalizeMemoryFactText(bText);
+  if (!aNorm || !bNorm) return 0;
+  if (aNorm === bNorm) return 1;
+  const shorter = aNorm.length <= bNorm.length ? aNorm : bNorm;
+  const longer = aNorm.length > bNorm.length ? aNorm : bNorm;
+  if (shorter.length >= 12 && longer.includes(shorter) && shorter.length / longer.length >= 0.58) return 0.88;
+  return jaccardSimilarity(aText, bText);
+}
+
+function memoryFactKey(fact = {}) {
+  return fact.rowId || fact.clientId || fact.id || "";
+}
+
+function findMemoryFactMatch(fact, candidates, usedKeys) {
+  let best = null;
+  let bestScore = 0;
+  for (const candidate of candidates) {
+    const key = memoryFactKey(candidate);
+    if (!key || usedKeys.has(key)) continue;
+    const score = memoryFactSimilarity(fact, candidate);
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 0.72 ? best : null;
+}
+
+export function prepareMemoryFactSnapshot(incomingFacts = [], existingFacts = []) {
+  const activeExisting = (Array.isArray(existingFacts) ? existingFacts : []).filter(f => f?.status === "active");
+  const usedExistingKeys = new Set();
+  const facts = (Array.isArray(incomingFacts) ? incomingFacts : []).map(fact => {
+    const category = inferMemoryFactCategory(fact, fact.category || "other");
+    const match = findMemoryFactMatch(fact, activeExisting, usedExistingKeys);
+    if (!match) return { ...fact, category };
+    const matchKey = memoryFactKey(match);
+    if (matchKey) usedExistingKeys.add(matchKey);
+    return {
+      ...fact,
+      id: match.id || fact.id,
+      rowId: match.rowId || fact.rowId,
+      clientId: match.clientId || match.id || fact.clientId || fact.id,
+      category,
+      acceptedAt: match.acceptedAt || fact.acceptedAt,
+      proposedAt: match.proposedAt || fact.proposedAt,
+      createdAt: match.createdAt || fact.createdAt,
+      lastUsedAt: match.lastUsedAt || fact.lastUsedAt,
+    };
+  });
+  const archivedFacts = activeExisting.filter(fact => {
+    const key = memoryFactKey(fact);
+    return key && !usedExistingKeys.has(key);
+  });
+  return { facts, archivedFacts };
+}
+
 export function extractMemoryFacts(memory = {}, opts = {}) {
   const enLines = String(memory.en || "").split("\n").map(line => line.trim()).filter(Boolean);
   const zhLines = String(memory.zh || "").split("\n").map(line => line.trim()).filter(Boolean);
@@ -57,9 +186,10 @@ export function extractMemoryFacts(memory = {}, opts = {}) {
     const contentEn = normalizeMemoryFactLine(line);
     const contentZh = normalizeMemoryFactLine(zhLine);
     if (isEmptyMemoryFact(contentEn) && isEmptyMemoryFact(contentZh)) return;
+    const category = inferMemoryFactCategory({ contentEn, contentZh }, currentSection);
     facts.push({
       clientId: `${opts.clientPrefix || "memory-fact"}-${currentSection}-${index}`,
-      category: currentSection,
+      category,
       contentEn: primaryLang === "zh" && !aligned ? "" : contentEn,
       contentZh: contentZh || contentEn,
       source: opts.source || "ai_coach_memory",
@@ -132,7 +262,14 @@ Guidelines:
 - Keep the memory grouped under these exact English section headings:
 ${enSections}
 - Under each heading, write one short fact per line as "- ...".
-- Keep durable facts only: injuries/health constraints, goals/races, training preferences, coaching style preferences, recurring patterns.
+- Return a COMPLETE, deduplicated active snapshot. Do not output only additions. If an old fact is outdated, replaced, or no longer useful, omit it.
+- Use the categories strictly:
+  - Injuries / Health: injuries, recovery needs, fatigue readiness, health risks, HRV/resting-HR/heart-rate risk signals.
+  - Goals / Races: current target races and current race priorities only. Drop completed race results and stale targets.
+  - Training Preferences: plan structure, equipment constraints, terrain, schedule preferences, training methods.
+  - Coaching Style: how the user wants the coach to communicate, decide, or frame judgment.
+  - Recurring Patterns: repeated behavior patterns that affect planning.
+- Keep durable facts only.
 - DROP session-specific things: today's specific question, one-off advice, temporary feelings that do not look durable.
 - Don't repeat what's already in the user's profile: age, location, basic stats.
 - Maximum ~500 words total. Trim older or less useful entries if needed.

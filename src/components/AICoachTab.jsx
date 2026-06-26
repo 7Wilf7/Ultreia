@@ -9,7 +9,7 @@ import {
 import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { cityAbbreviationFromLocationName, cityFromLocationName, hasValidCoords } from "../lib/weather";
+import { cityAbbreviationFromLocation, cityFromLocation, hasValidCoords } from "../lib/weather";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
@@ -766,14 +766,15 @@ export function AICoachTab({
     : proactiveAdjustment?.existingAction
     ? t("coach.proactive_open")
     : t("coach.proactive_manual_hint");
+  const manualAdjustmentOpensConfirm = !proactiveAdjustmentLoading && !proactiveAdjustment?.existingAction;
   const handleManualAdjustmentFromMenu = useCallback(() => {
-    setShowCoachMenu(false);
+    if (!manualAdjustmentOpensConfirm) setShowCoachMenu(false);
     handleManualAdjustmentShortcut();
-  }, [handleManualAdjustmentShortcut]);
+  }, [handleManualAdjustmentShortcut, manualAdjustmentOpensConfirm]);
   const handleManualAdjustmentFromHub = useCallback(() => {
-    setShowCoachHub(false);
+    if (!manualAdjustmentOpensConfirm) setShowCoachHub(false);
     handleManualAdjustmentShortcut();
-  }, [handleManualAdjustmentShortcut]);
+  }, [handleManualAdjustmentShortcut, manualAdjustmentOpensConfirm]);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -1102,8 +1103,8 @@ export function AICoachTab({
       : '—');
   const weatherActive = wStatus === 'ready';
   const hasDefaultLocation = hasValidCoords(defaultLocation);
-  const locationCity = cityFromLocationName(defaultLocation?.name);
-  const locationLabel = cityAbbreviationFromLocationName(defaultLocation?.name, lang);
+  const locationCity = cityFromLocation(defaultLocation);
+  const locationLabel = cityAbbreviationFromLocation(defaultLocation, lang);
   const runnerLastSeenIso = codexRunnerStatus?.last_seen_at || null;
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
   const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 20_000;
@@ -1385,7 +1386,7 @@ export function AICoachTab({
           if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
         }}>
           <div
-            style={s.modalOverlay(isMobile, { float: true })}
+            style={{ ...s.modalOverlay(isMobile, { float: true }), zIndex: 10010 }}
             onClick={() => {
               if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
             }}

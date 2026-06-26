@@ -20,14 +20,123 @@ function shortCandidateLabel(item) {
     .join(", ");
 }
 
-function staticMapUrl({ lat, lng }) {
-  if (!hasValidCoords({ lat, lng })) return "";
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${Number(lng) - 0.015}%2C${Number(lat) - 0.012}%2C${Number(lng) + 0.015}%2C${Number(lat) + 0.012}&layer=mapnik&marker=${lat}%2C${lng}`;
-}
-
 function fmtCoord(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n.toFixed(4) : "";
+}
+
+function LocationPreview({ hasCoords, name, lat, lng, t }) {
+  if (!hasCoords) {
+    return (
+      <div style={{
+        minHeight: 148,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "var(--ink-3)",
+        fontSize: 12,
+        textAlign: "center",
+        padding: 18,
+        lineHeight: 1.5,
+      }}>
+        {t("location.map_empty")}
+      </div>
+    );
+  }
+  const title = (name || "").trim() || t("location.unnamed");
+  return (
+    <div
+      role="img"
+      aria-label={t("location.current_summary", { name: title, lng: fmtCoord(lng), lat: fmtCoord(lat) })}
+      style={{
+        minHeight: 168,
+        position: "relative",
+        overflow: "hidden",
+        background: "linear-gradient(145deg, rgba(20,34,28,0.92), rgba(10,13,12,0.98))",
+      }}
+    >
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        opacity: 0.26,
+        backgroundImage: `
+          linear-gradient(rgba(166, 183, 150, 0.22) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(166, 183, 150, 0.18) 1px, transparent 1px)
+        `,
+        backgroundSize: "26px 26px",
+      }} />
+      <div style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        width: 88,
+        height: 88,
+        transform: "translate(-50%, -50%)",
+        borderRadius: "50%",
+        border: "1px solid rgba(166,183,150,0.28)",
+        boxShadow: "0 0 0 28px rgba(166,183,150,0.05)",
+      }} />
+      <div style={{
+        position: "absolute",
+        left: "50%",
+        top: "50%",
+        transform: "translate(-50%, -58%)",
+        width: 34,
+        height: 34,
+        borderRadius: 17,
+        background: "var(--moss)",
+        color: "var(--accent-ink)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 10px 28px rgba(58,91,67,0.45)",
+      }}>
+        <PinIcon size={17} />
+      </div>
+      <div style={{
+        position: "absolute",
+        left: 12,
+        right: 12,
+        bottom: 12,
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "space-between",
+        gap: 12,
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            color: "var(--ink-1)",
+            fontSize: 13,
+            fontWeight: 650,
+            lineHeight: 1.25,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}>
+            {title}
+          </div>
+          <div style={{
+            color: "var(--ink-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10.5,
+            marginTop: 4,
+          }}>
+            {fmtCoord(lat)}, {fmtCoord(lng)}
+          </div>
+        </div>
+        <div style={{
+          color: "var(--ink-3)",
+          fontSize: 10.5,
+          fontFamily: "var(--font-mono)",
+          textTransform: "uppercase",
+          letterSpacing: "0.02em",
+          flexShrink: 0,
+        }}>
+          WGS84
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onClose }) {
@@ -43,7 +152,6 @@ export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onC
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState([]);
   const hasCoords = hasValidCoords({ lng, lat });
-  const mapUrl = hasCoords ? staticMapUrl({ lat, lng }) : "";
 
   function applyCandidate(item) {
     if (!item) return;
@@ -144,28 +252,7 @@ export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onC
               background: "var(--bg)",
               minHeight: 148,
             }}>
-              {mapUrl ? (
-                <iframe
-                  title={t("location.map_title")}
-                  src={mapUrl}
-                  style={{ width: "100%", height: 168, border: 0, display: "block", filter: "saturate(0.85) brightness(0.82) contrast(1.05)" }}
-                  loading="lazy"
-                />
-              ) : (
-                <div style={{
-                  minHeight: 148,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "var(--ink-3)",
-                  fontSize: 12,
-                  textAlign: "center",
-                  padding: 18,
-                  lineHeight: 1.5,
-                }}>
-                  {t("location.map_empty")}
-                </div>
-              )}
+              <LocationPreview hasCoords={hasCoords} name={name} lat={lat} lng={lng} t={t} />
               <button type="button" onClick={detect} disabled={detecting} title={t("location.detect_button")}
                 aria-label={t("location.detect_button")}
                 style={{

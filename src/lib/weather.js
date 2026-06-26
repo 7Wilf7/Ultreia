@@ -40,6 +40,96 @@ function stripCitySuffix(name) {
   return String(name || '').trim().replace(/(?:市|特别行政区)$/, '');
 }
 
+const KNOWN_CITY_ABBREVIATIONS = {
+  广州: 'GZ',
+  guangzhou: 'GZ',
+  深圳: 'SZ',
+  shenzhen: 'SZ',
+  上海: 'SH',
+  shanghai: 'SH',
+  北京: 'BJ',
+  beijing: 'BJ',
+  杭州: 'HZ',
+  hangzhou: 'HZ',
+  南京: 'NJ',
+  nanjing: 'NJ',
+  成都: 'CD',
+  chengdu: 'CD',
+  重庆: 'CQ',
+  chongqing: 'CQ',
+  武汉: 'WH',
+  wuhan: 'WH',
+  西安: 'XA',
+  xian: 'XA',
+  "xi'an": 'XA',
+  苏州: 'SZ',
+  suzhou: 'SZ',
+  香港: 'HK',
+  hongkong: 'HK',
+  "hong kong": 'HK',
+  澳门: 'MO',
+  macau: 'MO',
+  macao: 'MO',
+};
+
+const KNOWN_CITY_ALIASES = {
+  guangzhou: '广州',
+  shenzhen: '深圳',
+  shanghai: '上海',
+  beijing: '北京',
+  hangzhou: '杭州',
+  nanjing: '南京',
+  chengdu: '成都',
+  chongqing: '重庆',
+  wuhan: '武汉',
+  xian: '西安',
+  "xi'an": '西安',
+  suzhou: '苏州',
+  hongkong: '香港',
+  "hong kong": '香港',
+  macau: '澳门',
+  macao: '澳门',
+};
+
+const CITY_COORD_BOUNDS = [
+  { city: '广州', minLat: 22.45, maxLat: 23.95, minLng: 112.85, maxLng: 114.1 },
+  { city: '深圳', minLat: 22.35, maxLat: 22.9, minLng: 113.75, maxLng: 114.65 },
+  { city: '上海', minLat: 30.65, maxLat: 31.9, minLng: 120.85, maxLng: 122.15 },
+  { city: '北京', minLat: 39.4, maxLat: 41.1, minLng: 115.4, maxLng: 117.6 },
+  { city: '杭州', minLat: 29.2, maxLat: 30.6, minLng: 118.3, maxLng: 120.75 },
+  { city: '南京', minLat: 31.2, maxLat: 32.65, minLng: 118.35, maxLng: 119.25 },
+  { city: '成都', minLat: 30.05, maxLat: 31.45, minLng: 102.9, maxLng: 104.9 },
+  { city: '重庆', minLat: 28.1, maxLat: 32.2, minLng: 105.25, maxLng: 110.2 },
+  { city: '武汉', minLat: 29.95, maxLat: 31.35, minLng: 113.65, maxLng: 115.1 },
+  { city: '西安', minLat: 33.6, maxLat: 34.75, minLng: 107.4, maxLng: 109.5 },
+  { city: '苏州', minLat: 30.75, maxLat: 32.05, minLng: 119.9, maxLng: 121.35 },
+  { city: '香港', minLat: 22.13, maxLat: 22.57, minLng: 113.8, maxLng: 114.45 },
+  { city: '澳门', minLat: 22.05, maxLat: 22.25, minLng: 113.5, maxLng: 113.65 },
+];
+
+function knownCityFromText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  const compact = raw.replace(/\s+/g, '').toLowerCase();
+  const compactAscii = raw.toLowerCase().replace(/[^a-z]/g, '');
+  for (const key of Object.keys(KNOWN_CITY_ABBREVIATIONS)) {
+    const normalized = key.toLowerCase().replace(/\s+/g, '');
+    if (/[\u3400-\u9fff]/.test(key)) {
+      if (compact.includes(normalized)) return key;
+    } else if (compactAscii.includes(normalized.replace(/[^a-z]/g, ''))) {
+      return KNOWN_CITY_ALIASES[key] || key;
+    }
+  }
+  return '';
+}
+
+function looksSubCityPlaceName(name) {
+  const text = String(name || '').trim();
+  if (!text) return false;
+  return /(?:区|县|镇|乡|街道|街|村|社区|园区)$/u.test(text)
+    || /\b(?:subdistrict|district|county|township|town|village|community|neighborhood)\b/i.test(text);
+}
+
 export function cityFromLocationName(name) {
   const raw = String(name || '').trim();
   if (!raw) return '';
@@ -49,56 +139,51 @@ export function cityFromLocationName(name) {
   const afterProvince = compactRaw.replace(/^.*?(?:省|自治区)/u, '');
   const cityMatch = afterProvince.match(/([\p{Script=Han}A-Za-z][\p{Script=Han}A-Za-z·.' -]{0,12}?市)/u);
   if (cityMatch?.[1]) return stripCitySuffix(cityMatch[1]);
+  const known = knownCityFromText(raw);
+  if (known) return known;
   const parts = raw
     .split(/[,\s，、/]+/)
     .map(part => part.trim())
     .filter(Boolean)
     .filter(part => !/^(中国|China|中华人民共和国)$/i.test(part));
   const cityLike = parts.find(part => /市$/.test(part));
-  return stripCitySuffix(cityLike || parts[0] || '');
+  if (cityLike) return stripCitySuffix(cityLike);
+  const first = parts[0] || '';
+  if (looksSubCityPlaceName(raw)) return '';
+  return looksSubCityPlaceName(first) ? '' : stripCitySuffix(first);
 }
 
-export function cityAbbreviationFromLocationName(name, lang = 'zh') {
-  const city = cityFromLocationName(name);
+function cityFromCoords({ lng, lat } = {}) {
+  if (!hasValidCoords({ lng, lat })) return '';
+  const nLng = Number(lng);
+  const nLat = Number(lat);
+  const hit = CITY_COORD_BOUNDS.find(item => (
+    nLng >= item.minLng && nLng <= item.maxLng
+    && nLat >= item.minLat && nLat <= item.maxLat
+  ));
+  return hit?.city || '';
+}
+
+export function cityFromLocation(location) {
+  if (typeof location === 'string') return cityFromLocationName(location);
+  const fromName = cityFromLocationName(location?.name);
+  return fromName || cityFromCoords(location);
+}
+
+export function cityAbbreviationFromLocation(location, lang = 'zh') {
+  const city = cityFromLocation(location);
   if (!city) return lang === 'zh' ? '未设' : 'unset';
-  const known = {
-    广州: 'GZ',
-    guangzhou: 'GZ',
-    深圳: 'SZ',
-    shenzhen: 'SZ',
-    上海: 'SH',
-    shanghai: 'SH',
-    北京: 'BJ',
-    beijing: 'BJ',
-    杭州: 'HZ',
-    hangzhou: 'HZ',
-    南京: 'NJ',
-    nanjing: 'NJ',
-    成都: 'CD',
-    chengdu: 'CD',
-    重庆: 'CQ',
-    chongqing: 'CQ',
-    武汉: 'WH',
-    wuhan: 'WH',
-    西安: 'XA',
-    xian: 'XA',
-    "xi'an": 'XA',
-    苏州: 'SZ',
-    suzhou: 'SZ',
-    香港: 'HK',
-    hongkong: 'HK',
-    "hong kong": 'HK',
-    澳门: 'MO',
-    macau: 'MO',
-    macao: 'MO',
-  };
-  if (known[city]) return known[city];
+  if (KNOWN_CITY_ABBREVIATIONS[city]) return KNOWN_CITY_ABBREVIATIONS[city];
   const normalizedCity = city.toLowerCase().replace(/\s+/g, ' ').trim();
-  if (known[normalizedCity]) return known[normalizedCity];
+  if (KNOWN_CITY_ABBREVIATIONS[normalizedCity]) return KNOWN_CITY_ABBREVIATIONS[normalizedCity];
   const ascii = city.match(/[A-Za-z]/g);
   if (ascii?.length) return ascii.join('').slice(0, 3).toUpperCase();
   const compact = city.replace(/[^\p{L}\p{N}]/gu, '');
   return compact.slice(0, 2) || city.slice(0, 2);
+}
+
+export function cityAbbreviationFromLocationName(name, lang = 'zh') {
+  return cityAbbreviationFromLocation(name, lang);
 }
 
 // Returns { lng, lat, source } where source ∈ 'native' | 'browser' | 'default'.
@@ -707,8 +792,17 @@ function compactReverseLabel(data, localityLanguage) {
   if (!candidates.length) return '';
 
   if (localityLanguage === 'zh') {
-    const focused = candidates.slice(-3);
-    return focused.join('');
+    const cityPart = city || adminNames.find(name => /(市|自治州|地区|盟)$/u.test(name)) || '';
+    const districtPart = adminNames.find(name => (
+      name !== province
+      && name !== cityPart
+      && /(?:区|县|旗|县级市)$/u.test(name)
+    )) || '';
+    const localityPart = locality && ![province, cityPart, districtPart].includes(locality)
+      ? locality
+      : '';
+    const focused = uniqueParts([province, cityPart, districtPart, localityPart]).filter(Boolean);
+    return (focused.length ? focused : candidates.slice(-3)).join('');
   }
   return candidates.slice(-3).reverse().join(', ');
 }

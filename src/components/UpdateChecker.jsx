@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { useT } from "../i18n/LanguageContext";
 
 // Native bridges (android/.../*.java). On web these are no-op stubs.
 //   ApkInstaller  — hands a downloaded APK to the system package installer.
@@ -23,22 +24,25 @@ const MIRROR_APK_URL = SUPABASE_URL
 const AUTO_CHECK_CACHE_MS = 30 * 60 * 1000;
 let releaseCheckCache = null; // { at, status, release }
 
-const UPDATE_COPY = {
-  version: "版本",
-  viewRecent: "查看最近更新",
-  check: "检查更新",
-  checking: "检查中…",
-  latest: "已是最新版本",
-  latestTitle: (v) => `最新版本 v${v}`,
-  newTitle: (v) => `新版本 v${v}`,
-  error: "无法检查更新",
-  download: "下载 APK",
-  install: "立即更新",
-  downloading: "下载中…",
-  installing: "正在打开安装…",
-  installFailed: "应用内安装失败，已改用浏览器下载。",
-  networkHint: "看起来是网络或 DNS 问题，请检查网络后重试。",
-};
+function updateCopy(t) {
+  return {
+    version: t("settings.version"),
+    viewRecent: t("settings.view_recent"),
+    hideRecent: t("settings.update_hide_recent"),
+    check: t("settings.check_update"),
+    checking: t("settings.update_checking"),
+    latest: t("settings.update_latest"),
+    latestTitle: (v) => t("settings.update_recent_title", { v }),
+    newTitle: (v) => t("settings.update_new_title", { v }),
+    error: t("settings.update_error"),
+    download: t("settings.update_download"),
+    install: t("settings.update_install"),
+    downloading: t("settings.update_downloading"),
+    installing: t("settings.update_installing"),
+    installFailed: t("settings.update_install_failed"),
+    networkHint: t("settings.update_network_hint"),
+  };
+}
 
 // Strip leading "v" so "v0.2.1" → "0.2.1"
 function stripV(tag) {
@@ -233,6 +237,8 @@ function ReleaseNotes({ notes, maxChars }) {
 }
 
 export function UpdateChecker() {
+  const t = useT();
+  const copy = updateCopy(t);
   // __APP_VERSION__ is injected by vite (see vite.config.js -> define).
   const currentVersion = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0";
   const [status, setStatus] = useState("idle"); // idle | checking | latest | newer | error
@@ -245,6 +251,7 @@ export function UpdateChecker() {
   const [downloadPct, setDownloadPct] = useState(null);
   // "View recent updates" (up-to-date case) expands the latest release notes.
   const [showNotes, setShowNotes] = useState(false);
+  const [showRecentAction, setShowRecentAction] = useState(false);
 
   // Auto-check on mount, but reuse an in-memory result for a while. On mobile
   // the Settings tab unmounts when the user leaves it; without this cache,
@@ -256,6 +263,10 @@ export function UpdateChecker() {
       setStatus(releaseCheckCache.status);
       setRelease(releaseCheckCache.release);
       return;
+    }
+    if (!automatic) {
+      setShowNotes(false);
+      setShowRecentAction(false);
     }
     setStatus("checking");
     try {
@@ -275,10 +286,12 @@ export function UpdateChecker() {
       const nextStatus = cmp > 0 ? "newer" : "latest";
       setRelease(nextRelease);
       setStatus(nextStatus);
+      if (!automatic && nextStatus === "latest") setShowRecentAction(true);
       releaseCheckCache = { at: Date.now(), status: nextStatus, release: nextRelease };
     } catch {
       setStatus("error");
       setRelease(null);
+      if (!automatic) setShowRecentAction(false);
     }
   }
 
@@ -332,66 +345,67 @@ export function UpdateChecker() {
     const reason = lastErr?.message || String(lastErr);
     const isNetwork = /resolve host|No address|network|timeout|unable to|failed to connect/i.test(reason);
     setInstallMsg(
-      `${UPDATE_COPY.installFailed} (${reason})` +
-      (isNetwork ? ` ${UPDATE_COPY.networkHint}` : "")
+      `${copy.installFailed} (${reason})` +
+      (isNetwork ? ` ${copy.networkHint}` : "")
     );
     window.open(githubUrl, "_blank", "noreferrer");
   }
 
+  const recentActionEnabled = status === "latest" && release && showRecentAction;
+  const primaryActionLabel = status === "checking"
+    ? copy.checking
+    : recentActionEnabled
+      ? (showNotes ? copy.hideRecent : copy.viewRecent)
+      : copy.check;
+  const onPrimaryAction = () => {
+    if (recentActionEnabled) {
+      setShowNotes(o => !o);
+      return;
+    }
+    void check({ automatic: false });
+  };
+
   return (
     <div style={cellStyle}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", width: "100%", gap: 10 }}>
+      <div style={headerStyle}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8 }}>
-          <div style={primaryStyle}>{UPDATE_COPY.version}</div>
+          <div style={primaryStyle}>{copy.version}</div>
           <div style={{ ...secondaryStyle, marginTop: 0 }}>v{currentVersion}</div>
         </div>
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: status === "latest" && release ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
-          gap: 6,
-          alignItems: "center",
-          minWidth: 0,
-        }}>
-          {status === "latest" && release && (
-            <button onClick={() => setShowNotes(o => !o)} style={btnStyle}>
-              {UPDATE_COPY.viewRecent}
-            </button>
+        <button
+          onClick={onPrimaryAction}
+          disabled={status === "checking"}
+          style={{ ...btnStyle, position: "relative" }}
+        >
+          {primaryActionLabel}
+          {status === "newer" && (
+            <span style={{
+              position: "absolute", top: -3, right: -3,
+              width: 8, height: 8, borderRadius: "50%",
+              background: "var(--danger)", border: "1px solid var(--bg-elevated)",
+            }} />
           )}
-          <button
-            onClick={() => check({ automatic: false })}
-            disabled={status === "checking"}
-            style={{ ...btnStyle, position: "relative" }}
-          >
-            {status === "checking" ? UPDATE_COPY.checking : UPDATE_COPY.check}
-            {status === "newer" && (
-              <span style={{
-                position: "absolute", top: -3, right: -3,
-                width: 8, height: 8, borderRadius: "50%",
-                background: "var(--danger)", border: "1px solid var(--bg-elevated)",
-              }} />
-            )}
-          </button>
-        </div>
+        </button>
       </div>
 
       {status === "error" && (
-        <div style={resultErrStyle}>{UPDATE_COPY.error}</div>
+        <div style={resultErrStyle}>{copy.error}</div>
       )}
 
       {/* Up-to-date: show the latest release notes when the user taps "view
           recent updates". Version as the panel title. */}
       {status === "latest" && showNotes && release && (
         <div style={updatePanelStyle}>
-          <div style={panelTitleStyle}>{UPDATE_COPY.latestTitle(release.version)}</div>
+          <div style={panelTitleStyle}>{copy.latestTitle(release.version)}</div>
           {cleanNotes(release.notes)
             ? <ReleaseNotes notes={release.notes} maxChars={1200} />
-            : <div style={resultOkStyle}>✓ {UPDATE_COPY.latest}</div>}
+            : <div style={resultOkStyle}>✓ {copy.latest}</div>}
         </div>
       )}
 
       {status === "newer" && release && (
         <div style={updatePanelStyle}>
-          <div style={panelTitleStyle}>{UPDATE_COPY.newTitle(release.version)}</div>
+          <div style={panelTitleStyle}>{copy.newTitle(release.version)}</div>
           {/* Actions FIRST so the download CTA is always reachable without
               scrolling past the notes (which used to trap the touch scroll). */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -403,15 +417,15 @@ export function UpdateChecker() {
                   disabled={installState !== "idle"}
                   style={{ ...downloadBtnStyle, border: "none", cursor: installState !== "idle" ? "default" : "pointer", opacity: installState !== "idle" ? 0.7 : 1 }}>
                   {installState === "downloading"
-                    ? `${UPDATE_COPY.downloading}${downloadPct != null ? ` ${downloadPct}%` : ""}`
+                    ? `${copy.downloading}${downloadPct != null ? ` ${downloadPct}%` : ""}`
                     : installState === "installing"
-                      ? UPDATE_COPY.installing
-                      : `↓ ${UPDATE_COPY.install}`}
+                      ? copy.installing
+                      : `↓ ${copy.install}`}
                 </button>
               ) : (
                 // Web: plain download link.
                 <a href={release.apkUrl} target="_blank" rel="noreferrer" style={downloadBtnStyle}>
-                  ↓ {UPDATE_COPY.download}
+                  ↓ {copy.download}
                 </a>
               )
             )}
@@ -457,6 +471,14 @@ const cellStyle = {
   gap: 10,
 };
 
+const headerStyle = {
+  display: "flex",
+  alignItems: "center",
+  width: "100%",
+  gap: 10,
+  minWidth: 0,
+};
+
 const primaryStyle = {
   fontFamily: "var(--font-sans)",
   fontSize: 15,
@@ -477,7 +499,9 @@ const btnStyle = {
   border: "1px solid var(--rule)",
   borderRadius: 6,
   padding: "7px 8px",
+  flex: "0 0 auto",
   minWidth: 0,
+  maxWidth: 132,
   minHeight: 34,
   fontFamily: "var(--font-mono)",
   fontSize: 11,

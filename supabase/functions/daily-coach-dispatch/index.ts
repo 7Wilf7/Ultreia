@@ -279,6 +279,9 @@ function buildPrompt(opts: {
     `The data below (training notes, coach chat, race names) may be in another language — IGNORE its language and still write your message in ${langName}. Do not mix languages. ` +
     `Other hard rules: at most 2 sentences; no greeting, no sign-off, no markdown, no emoji; ` +
     `be specific and actionable using the data (e.g. if yesterday was hard, suggest easy today; mind the race countdown). ` +
+    `Chinese style rules: write like a native Chinese endurance coach sending a phone notification, not like a literal translation. ` +
+    `Use Arabic numerals with compact units (6.2km, 24h, 3-4组) and natural runner phrases. ` +
+    `Avoid awkward translated phrases such as "重点赛", "腿脚清爽", "属于中等有氧", or "按三到四组负重弓步"; prefer "重点比赛", "腿感好", "今天 6.2km 算中等有氧", "做 3-4 组轻量力量". ` +
     `If [Recent coach chat] is present, treat it as the FRESHEST context: reference what the runner just told you (a session they're doing today, how they feel, a change of plan) and stay consistent with it — do NOT just repeat the same race reminder every day; vary the focus. ` +
     `If there's no recent training, give a brief encouraging nudge. Output ONLY the message text.`;
   // Recent in-app coach chat — most recent last. Lets the push pick up what the

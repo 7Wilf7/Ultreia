@@ -83,6 +83,8 @@ git tag v0.2.0 && git push origin v0.2.0
 
 **推完即交付**：APK 发版只需要确认版本号 commit、`v*` tag 和 tag push 成功；GitHub Actions / Release 构建不用在当前对话里等到完成，Wilf 会自行更新检查。
 
+**tag 前 Android 原生检查**：推 APK / tag 前除了常规 `npm run test`、`npm run lint`、`npm run build`，还要跑一次 Android release 配置检查，至少覆盖 manifest 合并：`cd android && bash ./gradlew :app:processReleaseMainManifest --no-daemon`。如果本机缺 Java / Android SDK 跑不了，要在交付里明确说明未本地验证，并在推 tag 后用 `gh run view --log-failed` 跟进失败原因，不能只说 bump 成功。
+
 **版本号规则（pre-1.0，`0.MINOR.PATCH`，只增不跳号）**：每个 tag = 一次发版，判据只有一条——这次 tag 里**有没有用户能感知的新功能**。
 
 - **PATCH +1**（`0.7.0 → 0.7.1`）：bug 修复、样式 / 文案微调、性能优化、随代码改的文档——**不含**新的用户可感知功能。
@@ -224,6 +226,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - **天气行为变化**：同步更新 `docs/weather.md`。
 - **导入 / FIT / CSV / ZIP 行为变化**：同步更新 `docs/data-import.md`。
 - **训练类型、跑步分类、赛事类别、PR / 图表逻辑变化**：同步更新对应 `docs/training-log.md`、`docs/running.md`、`docs/races.md`、`docs/charts.md`。
+- **Android 原生配置变化**（`android/`、Capacitor 插件、Manifest、Gradle、推送 SDK、签名 / 发版 workflow）：除常规验证外，额外跑 `cd android && bash ./gradlew :app:processReleaseMainManifest --no-daemon`；如果改动涉及打包或签名，再跑 `assembleRelease` 或等 GitHub Actions 并检查日志。
 - **新增 / 删除 / 重命名顶层文件夹，或目录结构有重大调整**：同步更新根目录 `项目结构导览.html`。
 - **协作规则、发版流程、项目 source of truth 变化**：同步更新 `AGENTS.md` 和 `CLAUDE.md`；如果涉及项目边界、Aevum / Ultreia 归属或长期方向，也同步更新 `/Users/danxiao/Desktop/Wilf's 2nd Brain/ultreia/项目.md`。
 - **Supabase schema 变化**：先停下来给用户完整 SQL；用户跑完后再改前端 / DAL，并说明 `src/lib/db/*.js` 哪些字段映射变了。

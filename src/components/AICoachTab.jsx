@@ -2099,7 +2099,7 @@ export function AICoachTab({
 
                 {groupHeader(t("coach.group_actions"))}
                 {showManualAdjustmentShortcut && row(manualAdjustmentLabel, handleManualAdjustmentFromMenu)}
-                {agentActions.length > 0 && row(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)), { muted: true })}
+                {agentActions.length > 0 && row(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)))}
 
                 <button
                   type="button"
@@ -2166,7 +2166,7 @@ export function AICoachTab({
                     ] },
                     { header: t("coach.group_actions"), items: [
                       ...(showManualAdjustmentShortcut ? [{ id: "adjust", label: manualAdjustmentLabel }] : []),
-                      ...(agentActions.length > 0 ? [{ id: "actions", label: t("coach.recent_agent_actions"), muted: true }] : []),
+                      ...(agentActions.length > 0 ? [{ id: "actions", label: t("coach.recent_agent_actions") }] : []),
                     ] },
                     { header: t("coach.group_advanced"), items: [
                       { id: "prompt", label: t("coach.preview_prompt"), muted: true },

@@ -26,12 +26,13 @@
             android:id="@+id/keep_alive_left_top_value"
             style="@style/TextAppearance.Compat.Notification.Line2"
             android:layout_width="62dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:ellipsize="end"
-            android:gravity="start"
+            android:gravity="start|center_vertical"
             android:includeFontPadding="false"
             android:maxLines="1"
-            android:text="0" />
+            android:text="0"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/keep_alive_top_separator"
@@ -57,13 +58,14 @@
             android:id="@+id/keep_alive_right_top_value"
             style="@style/TextAppearance.Compat.Notification.Line2"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:ellipsize="end"
-            android:gravity="start"
+            android:gravity="start|center_vertical"
             android:includeFontPadding="false"
             android:maxLines="1"
-            android:text="0m" />
+            android:text="0m"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <LinearLayout
@@ -86,12 +88,13 @@
             android:id="@+id/keep_alive_left_bottom_value"
             style="@style/TextAppearance.Compat.Notification.Line2"
             android:layout_width="62dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:ellipsize="end"
-            android:gravity="start"
+            android:gravity="start|center_vertical"
             android:includeFontPadding="false"
             android:maxLines="1"
-            android:text="0.0km" />
+            android:text="0.0km"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/keep_alive_bottom_separator"
@@ -117,12 +120,13 @@
             android:id="@+id/keep_alive_right_bottom_value"
             style="@style/TextAppearance.Compat.Notification.Line2"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="match_parent"
             android:layout_weight="1"
             android:ellipsize="end"
-            android:gravity="start"
+            android:gravity="start|center_vertical"
             android:includeFontPadding="false"
             android:maxLines="1"
-            android:text="0m" />
+            android:text="0m"
+            android:textSize="14sp" />
     </LinearLayout>
 </LinearLayout>

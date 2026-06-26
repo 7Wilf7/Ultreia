@@ -4,6 +4,7 @@
 
 ## 2026-06-26
 
+- **安卓常驻通知数据更清楚**：通知栏常驻统计里的 Sessions / Time / Distance / Ascent 数值字号稍微放大，同时保持原来的两行分列垂直对齐。
 - **Hyrox Pro 双人组显示更短**：英文界面下赛事卡片把 Men's / Women's Doubles Pro 简写为 Doubles Pro，避免长 chip 挤占卡片宽度；底层组别仍按男双 / 女双保存。
 - **AI Coach 输入栏对齐**：手机端聊天输入框修正 textarea 基线留白导致的上移，输入框和图片 / 发送按钮回到同一条底线上。
 - **Version 更新日志固定中文**：Settings 里的 Version 模块改为始终显示中文文案；GitHub release 里的英文提交标题会先翻译，未知英文也会兜底成中文摘要。

@@ -699,7 +699,7 @@ export function buildPromptSkeleton(lang = "en") {
     return [
       "【教练指令】—— 本产品的核心提示词（专有，预览中隐藏）",
       "",
-      "【你的资料】姓名 / 训练经验 / 伤病史 / 默认位置",
+      "【你的资料】姓名 / 训练经验 / 伤病史",
       "【教练设置】你选择的风格 / 输出长度 / 干预程度",
       "【长期记忆】教练长期记住的关于你的要点",
       "",
@@ -723,7 +723,7 @@ export function buildPromptSkeleton(lang = "en") {
   return [
     "[Coach instructions] — this product's core prompt (proprietary, hidden in preview)",
     "",
-    "[Your Profile] name / training experience / injuries / default location",
+    "[Your Profile] name / training experience / injuries",
     "[Coach Settings] your chosen style / output length / intervention level",
     "[Long-term Memory] durable facts the coach remembers about you",
     "",

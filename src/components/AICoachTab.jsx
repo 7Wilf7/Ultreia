@@ -9,7 +9,7 @@ import {
 import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { hasValidCoords } from "../lib/weather";
+import { cityAbbreviationFromLocationName, cityFromLocationName, hasValidCoords } from "../lib/weather";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
@@ -1085,9 +1085,8 @@ export function AICoachTab({
     : (calendarImportOn ? "shown" : "hidden");
   const hasCoachImageAttachments = coachImages.length > 0;
   const canSubmitCoachMessage = chatInput.trim().length > 0 || hasCoachImageAttachments;
-  // Weather pill value + state. The pill is clickable when location is
-  // missing → opens the Settings → Default location modal so the user can
-  // fix it without hunting through menus.
+  // Weather pill value + state. When location is missing, the pill opens the
+  // AI Coach location panel so the user can set the weather place in-context.
   const wStatus = weatherCtx?.status || 'idle';
   const wTemp = weatherCtx?.currentWeather?.apparentC ?? weatherCtx?.currentWeather?.tempC;
   const weatherLabel = lang === "zh"
@@ -1103,11 +1102,8 @@ export function AICoachTab({
       : '—');
   const weatherActive = wStatus === 'ready';
   const hasDefaultLocation = hasValidCoords(defaultLocation);
-  const locationLabel = (() => {
-    const raw = String(defaultLocation?.name || "").trim();
-    if (!raw) return lang === "zh" ? "未设" : "unset";
-    return raw.length <= 8 ? raw : `${raw.slice(0, 8)}…`;
-  })();
+  const locationCity = cityFromLocationName(defaultLocation?.name);
+  const locationLabel = cityAbbreviationFromLocationName(defaultLocation?.name, lang);
   const runnerLastSeenIso = codexRunnerStatus?.last_seen_at || null;
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
   const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 20_000;
@@ -1543,7 +1539,7 @@ export function AICoachTab({
         {onOpenLocationSettings && (
           <button type="button" onClick={onOpenLocationSettings}
             title={hasDefaultLocation
-              ? (lang === "zh" ? `天气默认地点：${defaultLocation?.name || ""}` : `Default weather location: ${defaultLocation?.name || ""}`)
+              ? (lang === "zh" ? `天气城市：${locationCity || defaultLocation?.name || ""}；点开查看具体地点` : `Weather city: ${locationCity || defaultLocation?.name || ""}; open for details`)
               : (lang === "zh" ? "设置天气默认地点" : "Set default weather location")}
             aria-label={lang === "zh" ? "设置天气默认地点" : "Set default weather location"}
             style={{

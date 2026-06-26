@@ -29,6 +29,78 @@ export function hasValidCoords({ lng, lat } = {}) {
   return isValidCoordValue(lng, -180, 180) && isValidCoordValue(lat, -90, 90);
 }
 
+function uniqueParts(parts) {
+  return parts
+    .map(part => String(part || '').trim())
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
+}
+
+function stripCitySuffix(name) {
+  return String(name || '').trim().replace(/(?:市|特别行政区)$/, '');
+}
+
+export function cityFromLocationName(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return '';
+  const compactRaw = raw.replace(/\s+/g, '');
+  const municipalityMatch = compactRaw.match(/(北京市|上海市|天津市|重庆市|香港特别行政区|澳门特别行政区)/u);
+  if (municipalityMatch?.[1]) return stripCitySuffix(municipalityMatch[1]);
+  const afterProvince = compactRaw.replace(/^.*?(?:省|自治区)/u, '');
+  const cityMatch = afterProvince.match(/([\p{Script=Han}A-Za-z][\p{Script=Han}A-Za-z·.' -]{0,12}?市)/u);
+  if (cityMatch?.[1]) return stripCitySuffix(cityMatch[1]);
+  const parts = raw
+    .split(/[,\s，、/]+/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .filter(part => !/^(中国|China|中华人民共和国)$/i.test(part));
+  const cityLike = parts.find(part => /市$/.test(part));
+  return stripCitySuffix(cityLike || parts[0] || '');
+}
+
+export function cityAbbreviationFromLocationName(name, lang = 'zh') {
+  const city = cityFromLocationName(name);
+  if (!city) return lang === 'zh' ? '未设' : 'unset';
+  const known = {
+    广州: 'GZ',
+    guangzhou: 'GZ',
+    深圳: 'SZ',
+    shenzhen: 'SZ',
+    上海: 'SH',
+    shanghai: 'SH',
+    北京: 'BJ',
+    beijing: 'BJ',
+    杭州: 'HZ',
+    hangzhou: 'HZ',
+    南京: 'NJ',
+    nanjing: 'NJ',
+    成都: 'CD',
+    chengdu: 'CD',
+    重庆: 'CQ',
+    chongqing: 'CQ',
+    武汉: 'WH',
+    wuhan: 'WH',
+    西安: 'XA',
+    xian: 'XA',
+    "xi'an": 'XA',
+    苏州: 'SZ',
+    suzhou: 'SZ',
+    香港: 'HK',
+    hongkong: 'HK',
+    "hong kong": 'HK',
+    澳门: 'MO',
+    macau: 'MO',
+    macao: 'MO',
+  };
+  if (known[city]) return known[city];
+  const normalizedCity = city.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (known[normalizedCity]) return known[normalizedCity];
+  const ascii = city.match(/[A-Za-z]/g);
+  if (ascii?.length) return ascii.join('').slice(0, 3).toUpperCase();
+  const compact = city.replace(/[^\p{L}\p{N}]/gu, '');
+  return compact.slice(0, 2) || city.slice(0, 2);
+}
+
 // Returns { lng, lat, source } where source ∈ 'native' | 'browser' | 'default'.
 // Throws if no source is available — caller decides whether to surface or fall
 // back to "weather unavailable".
@@ -631,9 +703,7 @@ function compactReverseLabel(data, localityLanguage) {
   const province = String(data?.principalSubdivision || '').trim();
   const city = String(data?.city || '').trim();
   const locality = String(data?.locality || '').trim();
-  const candidates = [province, city, locality, ...adminNames]
-    .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i);
+  const candidates = uniqueParts([province, city, locality, ...adminNames]);
   if (!candidates.length) return '';
 
   if (localityLanguage === 'zh') {
@@ -678,15 +748,21 @@ export async function forwardGeocode(name, lang = 'zh') {
     const resp = await fetch(url);
     if (!resp.ok) return [];
     const d = await resp.json();
-    return (d.results || []).map(r => ({
-      name: r.name,
-      lat: r.latitude,
-      lng: r.longitude,
-      admin1: r.admin1 || '',
-      country: r.country || '',
-      // Disambiguation label, e.g. "广州市, 广东省, 中国" — dedupe repeats.
-      label: [r.name, r.admin1, r.country].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', '),
-    }));
+    return (d.results || []).map(r => {
+      const admin2 = r.admin2 || '';
+      const regionParts = uniqueParts([admin2, r.admin1, r.country]);
+      return {
+        name: r.name,
+        lat: r.latitude,
+        lng: r.longitude,
+        admin1: r.admin1 || '',
+        admin2,
+        country: r.country || '',
+        regionLabel: regionParts.join(', '),
+        // Disambiguation label, e.g. "白云山, 巴中市, 四川, 中国" — dedupe repeats.
+        label: uniqueParts([r.name, ...regionParts]).join(', '),
+      };
+    });
   } catch {
     return [];
   }

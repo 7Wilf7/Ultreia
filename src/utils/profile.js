@@ -59,8 +59,6 @@ const L = {
     profileTitle: "[User Profile]",
     age: "Age",
     gender: "Gender",
-    locatedIn: "Located in",
-    locatedHint: "(use this for terrain/venue suggestions if relevant)",
     dayJob: "Day job",
     otherPrefix: "Other —",
     yearsTraining: "Years of running training",
@@ -88,8 +86,6 @@ const L = {
     profileTitle: "[用户资料]",
     age: "年龄",
     gender: "性别",
-    locatedIn: "所在城市",
-    locatedHint: "（如相关，用于地形 / 场地建议）",
     dayJob: "日常工作",
     otherPrefix: "其他 ——",
     yearsTraining: "跑步训练年限",
@@ -126,7 +122,6 @@ export function profileBlock(profile, lang = "en") {
   const age = calculateAge(profile.birthDate);
   if (age != null) lines.push(`${L_.age}: ${age}`);
   if (profile.gender) lines.push(`${L_.gender}: ${labelFor(GENDERS, profile.gender)}`);
-  if (profile.city) lines.push(`${L_.locatedIn}: ${profile.city} ${L_.locatedHint}`);
   if (profile.occupation) {
     const occLabel = profile.occupation === "other" && profile.occupationOther
       ? `${L_.otherPrefix} ${profile.occupationOther.trim()}`

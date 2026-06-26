@@ -5,6 +5,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { getCurrentLocation, reverseGeocode, forwardGeocode, hasValidCoords } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
+import { PinIcon } from "./Icons";
 
 function cleanCoord(value, min, max) {
   if (value === "" || value == null) return null;
@@ -13,10 +14,20 @@ function cleanCoord(value, min, max) {
 }
 
 function shortCandidateLabel(item) {
-  return [item?.name, item?.admin1, item?.country]
+  return [item?.name, item?.admin2, item?.admin1, item?.country]
     .filter(Boolean)
     .filter((v, i, a) => a.indexOf(v) === i)
     .join(", ");
+}
+
+function staticMapUrl({ lat, lng }) {
+  if (!hasValidCoords({ lat, lng })) return "";
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${Number(lng) - 0.015}%2C${Number(lat) - 0.012}%2C${Number(lng) + 0.015}%2C${Number(lat) + 0.012}&layer=mapnik&marker=${lat}%2C${lng}`;
+}
+
+function fmtCoord(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(4) : "";
 }
 
 export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onClose }) {
@@ -32,6 +43,7 @@ export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onC
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState([]);
   const hasCoords = hasValidCoords({ lng, lat });
+  const mapUrl = hasCoords ? staticMapUrl({ lat, lng }) : "";
 
   function applyCandidate(item) {
     if (!item) return;
@@ -124,6 +136,60 @@ export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onC
           </p>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{
+              position: "relative",
+              border: "1px solid var(--rule)",
+              borderRadius: 8,
+              overflow: "hidden",
+              background: "var(--bg)",
+              minHeight: 148,
+            }}>
+              {mapUrl ? (
+                <iframe
+                  title={t("location.map_title")}
+                  src={mapUrl}
+                  style={{ width: "100%", height: 168, border: 0, display: "block", filter: "saturate(0.85) brightness(0.82) contrast(1.05)" }}
+                  loading="lazy"
+                />
+              ) : (
+                <div style={{
+                  minHeight: 148,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--ink-3)",
+                  fontSize: 12,
+                  textAlign: "center",
+                  padding: 18,
+                  lineHeight: 1.5,
+                }}>
+                  {t("location.map_empty")}
+                </div>
+              )}
+              <button type="button" onClick={detect} disabled={detecting} title={t("location.detect_button")}
+                aria-label={t("location.detect_button")}
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: 10,
+                  minWidth: 36,
+                  minHeight: 36,
+                  borderRadius: 8,
+                  border: "1px solid var(--rule)",
+                  background: "rgba(10, 15, 12, 0.82)",
+                  color: "var(--ink-1)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  opacity: detecting ? 0.65 : 1,
+                  backdropFilter: "blur(8px)",
+                  WebkitBackdropFilter: "blur(8px)",
+                }}>
+                {detecting ? <Spinner size={13} thickness={1.5} /> : <PinIcon size={15} />}
+              </button>
+            </div>
+
             <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
               <span style={s.label}>{t("location.name")}</span>
               <div style={{ display: "flex", gap: 8 }}>
@@ -168,7 +234,12 @@ export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onC
                       cursor: "pointer",
                     }}
                   >
-                    {shortCandidateLabel(item) || item.name}
+                    <span style={{ display: "block", color: "var(--ink-1)", fontWeight: 600 }}>
+                      {item.name || t("location.unnamed")}
+                    </span>
+                    <span style={{ display: "block", color: "var(--ink-3)", fontSize: 11, marginTop: 2 }}>
+                      {item.regionLabel || shortCandidateLabel(item) || "—"} · {fmtCoord(item.lat)}, {fmtCoord(item.lng)}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -204,7 +275,7 @@ export function LocationSettingsModal({ defaultLocation, setDefaultLocation, onC
 
             {hasCoords && (
               <div style={{ ...s.muted, fontSize: 11, lineHeight: 1.5 }}>
-                {t("location.current_summary", { name: name.trim() || t("location.unnamed"), lng, lat })}
+                {t("location.current_summary", { name: name.trim() || t("location.unnamed"), lng: fmtCoord(lng), lat: fmtCoord(lat) })}
               </div>
             )}
             {error && (

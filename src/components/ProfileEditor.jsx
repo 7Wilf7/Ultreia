@@ -11,8 +11,6 @@ import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
 
-// Profile city is optional context for AI coaching. Weather coordinates are
-// managed from the AI Coach location shortcut.
 export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
   const t = useT();
   const appDialog = useAppDialog();
@@ -95,19 +93,6 @@ export function ProfileEditor({ profile, setProfile, onClose, mode = "edit" }) {
               onChange={v => setDraft({ ...draft, gender: v })}
             />
           </div>
-        </div>
-
-        {/* Location — optional context for terrain/venue suggestions. Weather
-            coordinates live in the AI Coach location shortcut, not here. */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ ...s.label, marginBottom: 4 }}>
-            {t("profile.city")} <span style={{ color: "var(--ink-3)" }}>{t("common.optional")}</span>
-            <span style={{ ...s.muted, marginLeft: 6 }}>{t("profile.city_hint")}</span>
-          </div>
-          <input type="text" value={draft.city} placeholder={t("profile.city_placeholder")}
-            onChange={e => setDraft({ ...draft, city: e.target.value })}
-            style={{ ...s.input, maxWidth: 280 }} />
-          <div style={{ ...s.muted, fontSize: 11, marginTop: 6, lineHeight: 1.5 }}>{t("profile.loc_detect_hint")}</div>
         </div>
 
         {/* Occupation (with Other free-text) */}
@@ -298,7 +283,6 @@ export function ProfilePreview({ profile, onClose, onEdit }) {
   add(t("profile.display_name"), p.displayName);
   if (age != null) add(t("profile.age_label"), String(age));
   if (p.gender) add(t("profile.gender"), t(`enum.gender.${p.gender}`));
-  add(t("profile.city"), p.city);
   if (p.occupation) {
     add(t("profile.day_job"), p.occupation === "other" ? (p.occupationOther || t("enum.occ.other")) : t(`enum.occ.${p.occupation}`));
   }

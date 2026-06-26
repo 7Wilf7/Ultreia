@@ -255,7 +255,17 @@ function useElementSize(ref) {
   return size;
 }
 
-function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive = false, style, children }) {
+function StreetMapView({
+  center,
+  zoom,
+  onCenterChange,
+  onZoomChange,
+  onInteractionStart,
+  onInteractionEnd,
+  interactive = false,
+  style,
+  children,
+}) {
   const ref = useRef(null);
   const dragRef = useRef(null);
   const pointersRef = useRef(new Map());
@@ -302,6 +312,16 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
     });
   }
 
+  function flushCenterChange() {
+    if (frameRef.current) {
+      cancelFrame(frameRef.current);
+      frameRef.current = 0;
+    }
+    const pending = pendingCenterRef.current;
+    pendingCenterRef.current = null;
+    if (pending && onCenterChange) onCenterChange(pending);
+  }
+
   function activePointerList() {
     return [...pointersRef.current.values()];
   }
@@ -325,7 +345,9 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
   function pointerDown(e) {
     if (!interactive || !onCenterChange) return;
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    const wasIdle = pointersRef.current.size === 0;
     pointersRef.current.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
+    if (wasIdle) onInteractionStart?.();
     if (pointersRef.current.size >= 2) {
       dragRef.current = null;
       initPinch();
@@ -370,6 +392,8 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
       dragRef.current = { id: pt.id, x: pt.x, y: pt.y, ...viewRef.current };
     } else {
       pinchRef.current = null;
+      flushCenterChange();
+      onInteractionEnd?.();
     }
     e.currentTarget.releasePointerCapture?.(e.pointerId);
   }
@@ -419,34 +443,62 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
   );
 }
 
-function AmapSdkMapView({ center, zoom, onCenterChange, onZoomChange, onError, interactive = false, style, children }) {
+function AmapSdkMapView({
+  center,
+  zoom,
+  onCenterChange,
+  onZoomChange,
+  onInteractionStart,
+  onInteractionEnd,
+  onError,
+  interactive = false,
+  style,
+  children,
+}) {
   const hostRef = useRef(null);
   const mapRef = useRef(null);
   const frameRef = useRef(0);
-  const callbacksRef = useRef({ onCenterChange, onZoomChange, onError });
+  const callbacksRef = useRef({ onCenterChange, onZoomChange, onInteractionStart, onInteractionEnd, onError });
   const safeZoom = normalizeZoom(zoom);
   const safeCenter = validCoord(center) || toMapCoord(FALLBACK_WGS);
   const centerLng = safeCenter.lng;
   const centerLat = safeCenter.lat;
 
   useEffect(() => {
-    callbacksRef.current = { onCenterChange, onZoomChange, onError };
-  }, [onCenterChange, onError, onZoomChange]);
+    callbacksRef.current = { onCenterChange, onZoomChange, onInteractionStart, onInteractionEnd, onError };
+  }, [onCenterChange, onError, onInteractionEnd, onInteractionStart, onZoomChange]);
 
   useEffect(() => {
     let disposed = false;
+
+    function readMapState() {
+      const map = mapRef.current;
+      if (!map || disposed) return;
+      const mapCenter = map.getCenter();
+      const mapZoom = Number(map.getZoom());
+      callbacksRef.current.onCenterChange?.({ lng: mapCenter.lng, lat: mapCenter.lat });
+      if (Number.isFinite(mapZoom)) callbacksRef.current.onZoomChange?.(mapZoom);
+    }
 
     function syncFromMap() {
       if (frameRef.current) return;
       frameRef.current = requestFrame(() => {
         frameRef.current = 0;
-        const map = mapRef.current;
-        if (!map || disposed) return;
-        const mapCenter = map.getCenter();
-        const mapZoom = Number(map.getZoom());
-        callbacksRef.current.onCenterChange?.({ lng: mapCenter.lng, lat: mapCenter.lat });
-        if (Number.isFinite(mapZoom)) callbacksRef.current.onZoomChange?.(mapZoom);
+        readMapState();
       });
+    }
+
+    function startInteraction() {
+      callbacksRef.current.onInteractionStart?.();
+    }
+
+    function endInteraction() {
+      if (frameRef.current) {
+        cancelFrame(frameRef.current);
+        frameRef.current = 0;
+      }
+      readMapState();
+      callbacksRef.current.onInteractionEnd?.();
     }
 
     loadAmapSdk()
@@ -468,10 +520,14 @@ function AmapSdkMapView({ center, zoom, onCenterChange, onZoomChange, onError, i
           mapStyle: AMAP_MAP_STYLE,
         });
         mapRef.current = map;
+        map.on("movestart", startInteraction);
+        map.on("dragstart", startInteraction);
+        map.on("zoomstart", startInteraction);
         map.on("mapmove", syncFromMap);
-        map.on("moveend", syncFromMap);
+        map.on("moveend", endInteraction);
+        map.on("dragend", endInteraction);
         map.on("zoomchange", syncFromMap);
-        map.on("zoomend", syncFromMap);
+        map.on("zoomend", endInteraction);
       })
       .catch((err) => {
         if (!disposed) callbacksRef.current.onError?.(err);
@@ -644,15 +700,44 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
   const [error, setError] = useState("");
   const [sdkUnavailable, setSdkUnavailable] = useState(false);
   const centerWgs = useMemo(() => fromMapCoord(center), [center]);
+  const [mapInteracting, setMapInteracting] = useState(false);
+  const [addressPoint, setAddressPoint] = useState(() => fromMapCoord(center));
+  const mapInteractingRef = useRef(false);
+  const centerWgsRef = useRef(centerWgs);
   const useAmapSdk = hasAmapSdkConfig() && !sdkUnavailable;
+
+  useEffect(() => {
+    centerWgsRef.current = centerWgs;
+  }, [centerWgs]);
+
+  function updateCenter(nextCenter) {
+    setCenter(nextCenter);
+    const nextWgs = fromMapCoord(nextCenter);
+    centerWgsRef.current = nextWgs;
+    if (!mapInteractingRef.current) setAddressPoint(nextWgs);
+  }
+
+  function beginMapInteraction() {
+    mapInteractingRef.current = true;
+    setMapInteracting(true);
+    setAddressLoading(false);
+  }
+
+  function endMapInteraction() {
+    mapInteractingRef.current = false;
+    setMapInteracting(false);
+    setAddressPoint(centerWgsRef.current);
+  }
 
   async function locate(silent = false) {
     setLocating(true);
     if (!silent) setError("");
     try {
       const loc = await getCurrentLocation({ forceDevice: true, highAccuracy: true });
-      setCenter(toMapCoord(loc));
+      mapInteractingRef.current = false;
+      updateCenter(toMapCoord(loc));
       setZoom(16);
+      setMapInteracting(false);
     } catch {
       if (!silent) setError(t("location.error_no_permission"));
     } finally {
@@ -669,10 +754,11 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
 
   useEffect(() => {
     let active = true;
+    if (mapInteracting) return undefined;
     const timer = setTimeout(async () => {
       setAddressLoading(true);
       try {
-        const label = await reverseGeocode({ lng: centerWgs.lng, lat: centerWgs.lat, lang });
+        const label = await reverseGeocode({ lng: addressPoint.lng, lat: addressPoint.lat, lang });
         if (active) setAddress(label || "");
       } finally {
         if (active) setAddressLoading(false);
@@ -682,7 +768,7 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
       active = false;
       clearTimeout(timer);
     };
-  }, [centerWgs.lat, centerWgs.lng, lang]);
+  }, [addressPoint.lat, addressPoint.lng, lang, mapInteracting]);
 
   function confirm() {
     const point = validCoord(centerWgs);
@@ -729,8 +815,10 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
             <AmapSdkMapView
               center={center}
               zoom={zoom}
-              onCenterChange={setCenter}
+              onCenterChange={updateCenter}
               onZoomChange={setZoom}
+              onInteractionStart={beginMapInteraction}
+              onInteractionEnd={endMapInteraction}
               onError={(err) => {
                 console.warn("[map] AMap SDK unavailable, falling back to raster tiles:", err?.message || err);
                 setSdkUnavailable(true);
@@ -790,8 +878,10 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
             <StreetMapView
               center={center}
               zoom={zoom}
-              onCenterChange={setCenter}
+              onCenterChange={updateCenter}
               onZoomChange={setZoom}
+              onInteractionStart={beginMapInteraction}
+              onInteractionEnd={endMapInteraction}
               interactive
               style={{ position: "absolute", inset: 0 }}
             >
@@ -849,9 +939,13 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
         <div style={{
           padding: "12px 14px calc(env(safe-area-inset-bottom) + 14px)",
           borderTop: "1px solid var(--rule)",
-          background: "rgba(8, 11, 10, 0.92)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
+          background: "#0d1210",
+          boxShadow: "0 -1px 0 rgba(255,255,255,0.03)",
+          position: "relative",
+          zIndex: 3,
+          flexShrink: 0,
+          contain: "layout paint",
+          isolation: "isolate",
         }}>
           <div style={{
             display: "flex",
@@ -886,6 +980,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
+              background: "var(--accent)",
+              boxShadow: "none",
             }}>
               {t("location.confirm_point")}
             </button>

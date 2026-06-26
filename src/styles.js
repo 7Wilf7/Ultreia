@@ -176,11 +176,12 @@ export const s = {
     // the semi-transparent backdrop. Card-internal scroll keeps the backdrop
     // anchored to the viewport at all times.
     overscrollBehavior: "contain",
-    // Subtle backdrop blur + fade-in. Blur unifies the "second-level modal"
-    // feel across the app (inbox already blurred); fade is via ultreia-overlay-in.
+    // Backdrop blur unifies the "second-level modal" feel across the app.
+    // Entrance animation is intentionally disabled to avoid visible flashes on
+    // frequent settings / memory / prompt panel taps.
     backdropFilter: "blur(10px)",
     WebkitBackdropFilter: "blur(10px)",
-    animation: "ultreia-overlay-in 0.16s ease-out",
+    animation: "none",
   }),
   modalCard: (isMobile, { maxWidth = 600, bg = "var(--panel)", float = false } = {}) => {
     // Floating mobile card: behaves like the desktop centered card (border,
@@ -207,8 +208,7 @@ export const s = {
         ? "calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 24px)"
         : (floatMobile ? "20px 18px" : 24),
       boxSizing: "border-box",
-      // Grow-in entrance (see index.css ultreia-modal-in).
-      animation: "ultreia-modal-in 0.2s cubic-bezier(0.2,0.7,0.3,1)",
+      animation: "none",
       transformOrigin: "center center",
     };
   },

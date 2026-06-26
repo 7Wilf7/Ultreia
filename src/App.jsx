@@ -367,6 +367,22 @@ function proactiveAdjustmentSignaturesForSummaries(planSummary, recoverySummary)
   return Array.from(new Set([combinedSig, planSig, recoverySig].filter(Boolean)));
 }
 
+function isAbortLikeError(err, signal) {
+  return err?.code === "aborted" || err?.name === "AbortError" || signal?.aborted;
+}
+
+function throwIfAborted(signal) {
+  if (!signal?.aborted) return;
+  let err;
+  try {
+    err = new DOMException("Request aborted", "AbortError");
+  } catch {
+    err = new Error("Request aborted");
+    err.name = "AbortError";
+  }
+  throw err;
+}
+
 // Boot screen — deliberately mirrors the native Android splash (logo +
 // "Ultreia" on the cream background) so on the APK the native splash →
 // web-view handoff is visually seamless: the user sees ONE logo screen, then
@@ -1640,6 +1656,7 @@ function AppShell({
   const extractRunRef = useRef(0);
   const weeklyReportAbortRef = useRef(null);
   const weeklyReportRunRef = useRef(0);
+  const proactiveAdjustmentAbortRef = useRef(null);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
   const weeklyReportStatus = weeklyReportLoading ? "analyzing" : weeklyReportExtracting ? "extracting" : null;
   const refreshCodexRunnerStatus = useCallback(async () => {
@@ -1822,6 +1839,13 @@ function AppShell({
     weeklyReportAbortRef.current = null;
     weeklyReportRunRef.current += 1;
     setWeeklyReportLoading(false);
+  }
+
+  function stopProactiveTrainingAdjustment() {
+    proactiveAdjustmentAbortRef.current?.abort();
+    proactiveAdjustmentAbortRef.current = null;
+    setPlanRescueLoading(false);
+    setRecoveryGuardLoading(false);
   }
   // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
   // so it survives a tab switch — the nudge re-opens when the user returns.
@@ -2312,7 +2336,8 @@ Rules:
     }
   }
 
-  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, openProposal = true }) {
+  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, openProposal = true, signal }) {
+    throwIfAborted(signal);
     const data = plans
       ? null
       : await db.usage.coachProxy({
@@ -2320,7 +2345,9 @@ Rules:
         system: "",
         messages: [{ role: "user", content: prompt }],
         max_tokens: 8000,
+        signal,
       });
+    throwIfAborted(signal);
     const parsedPlans = plans || parsePlansFromLLM(
       data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "",
     );
@@ -2349,6 +2376,9 @@ Rules:
   async function proposePlanDeviationRescue(opts = {}) {
     const quiet = opts.quiet === true;
     if (planRescueLoading) return false;
+    const controller = new AbortController();
+    proactiveAdjustmentAbortRef.current?.abort();
+    proactiveAdjustmentAbortRef.current = controller;
     setPlanRescueLoading(true);
     try {
       let freshLogs = logs;
@@ -2357,6 +2387,8 @@ Rules:
       } catch (err) {
         console.warn("[AI Coach] refreshLogs failed before plan rescue, using cached state:", err);
       }
+
+      throwIfAborted(controller.signal);
 
       const summary = summarizePlanDeviation(freshLogs, now || new Date());
       if (!summary) {
@@ -2405,6 +2437,7 @@ Rules:
           },
         },
         openProposal: !quiet,
+        signal: controller.signal,
       });
       if (!action) {
         if (!quiet) appDialog.alert(t("coach.plan_rescue_no_plans"));
@@ -2412,10 +2445,12 @@ Rules:
       }
       return true;
     } catch (err) {
+      if (isAbortLikeError(err, controller.signal)) return false;
       console.error("[AI Coach] Plan rescue error:", err);
       if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       return false;
     } finally {
+      if (proactiveAdjustmentAbortRef.current === controller) proactiveAdjustmentAbortRef.current = null;
       setPlanRescueLoading(false);
     }
   }
@@ -2423,6 +2458,9 @@ Rules:
   async function proposeRecoveryGuard(opts = {}) {
     const quiet = opts.quiet === true;
     if (recoveryGuardLoading) return false;
+    const controller = new AbortController();
+    proactiveAdjustmentAbortRef.current?.abort();
+    proactiveAdjustmentAbortRef.current = controller;
     setRecoveryGuardLoading(true);
     try {
       let freshLogs = logs;
@@ -2431,6 +2469,8 @@ Rules:
       } catch (err) {
         console.warn("[AI Coach] refreshLogs failed before recovery guard, using cached state:", err);
       }
+
+      throwIfAborted(controller.signal);
 
       const summary = summarizeRecoveryGuard(freshLogs, dailyNotes, now || new Date());
       if (!summary) {
@@ -2481,6 +2521,7 @@ Rules:
           },
         },
         openProposal: !quiet,
+        signal: controller.signal,
       });
       if (!action) {
         if (!quiet) appDialog.alert(t("coach.recovery_guard_no_plans"));
@@ -2488,10 +2529,12 @@ Rules:
       }
       return true;
     } catch (err) {
+      if (isAbortLikeError(err, controller.signal)) return false;
       console.error("[AI Coach] Recovery guard error:", err);
       if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       return false;
     } finally {
+      if (proactiveAdjustmentAbortRef.current === controller) proactiveAdjustmentAbortRef.current = null;
       setRecoveryGuardLoading(false);
     }
   }
@@ -2499,6 +2542,9 @@ Rules:
   async function proposeCombinedTrainingAdjustment(opts = {}) {
     const quiet = opts.quiet === true;
     if (proactiveAdjustmentLoading) return false;
+    const controller = new AbortController();
+    proactiveAdjustmentAbortRef.current?.abort();
+    proactiveAdjustmentAbortRef.current = controller;
     setPlanRescueLoading(true);
     setRecoveryGuardLoading(true);
     try {
@@ -2508,6 +2554,8 @@ Rules:
       } catch (err) {
         console.warn("[AI Coach] refreshLogs failed before combined adjustment, using cached state:", err);
       }
+
+      throwIfAborted(controller.signal);
 
       const currentNow = now || new Date();
       const planSummary = summarizePlanDeviation(freshLogs, currentNow);
@@ -2569,6 +2617,7 @@ Rules:
           },
         },
         openProposal: !quiet,
+        signal: controller.signal,
       });
       if (!action) {
         if (!quiet) appDialog.alert(t("coach.proactive_no_plans"));
@@ -2576,10 +2625,12 @@ Rules:
       }
       return true;
     } catch (err) {
+      if (isAbortLikeError(err, controller.signal)) return false;
       console.error("[AI Coach] Combined adjustment error:", err);
       if (!quiet) appDialog.alert(t("coach.api_error", { msg: err?.message || String(err) }));
       return false;
     } finally {
+      if (proactiveAdjustmentAbortRef.current === controller) proactiveAdjustmentAbortRef.current = null;
       setPlanRescueLoading(false);
       setRecoveryGuardLoading(false);
     }
@@ -3064,6 +3115,7 @@ Rules:
           handledProactiveAdjustmentSignatures={handledProactiveAdjustmentSignatures}
           proactiveAdjustmentLoading={proactiveAdjustmentLoading}
           onProactiveTrainingAdjustmentRequest={proposeProactiveTrainingAdjustment}
+          onStopProactiveTrainingAdjustment={stopProactiveTrainingAdjustment}
           onOpenProactiveAction={openProactivePlanAction}
           raceBriefingLoading={raceBriefingLoading}
           onRaceBriefingRequest={proposeRaceBriefing}

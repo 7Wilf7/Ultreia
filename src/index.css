@@ -157,9 +157,8 @@ button {
     border-color 150ms var(--ease-out),
     background-color 150ms var(--ease-out),
     color 150ms var(--ease-out),
-    box-shadow 150ms var(--ease-out),
-    transform 90ms var(--ease-out),
-    filter 150ms var(--ease-out);
+    box-shadow 150ms var(--ease-out);
+  -webkit-tap-highlight-color: transparent;
 }
 button:disabled { cursor: default; }
 
@@ -177,7 +176,7 @@ button:disabled { cursor: default; }
 }
 
 button:not(:disabled):active {
-  transform: translateY(1px) scale(0.995);
+  transform: none;
 }
 
 /* Native-app feel: no long-press text selection or the Android WebView
@@ -330,12 +329,12 @@ summary::-webkit-details-marker { display: none; }
   to   { opacity: 1; transform: scale(1); }
 }
 .ultreia-overlay-in {
-  animation: ultreia-overlay-in 0.16s ease-out;
+  animation: none;
 }
 .ultreia-modal-in {
-  animation: ultreia-modal-in 0.2s cubic-bezier(0.2, 0.7, 0.3, 1);
+  animation: none;
   transform-origin: center center;
-  will-change: transform, opacity;
+  will-change: auto;
 }
 @media (prefers-reduced-motion: reduce) {
   .ultreia-overlay-in, .ultreia-modal-in { animation: none; }

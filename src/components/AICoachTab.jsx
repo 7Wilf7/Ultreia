@@ -124,6 +124,67 @@ function MobileTableCards({ headers, rows }) {
   );
 }
 
+function PromptLangSwitch({ value, onChange }) {
+  const isEn = value === "en";
+  const nextValue = isEn ? "zh" : "en";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isEn}
+      aria-label="Prompt language"
+      onClick={() => onChange(nextValue)}
+      style={{
+        position: "relative",
+        width: 76,
+        height: 30,
+        minHeight: 0,
+        padding: 0,
+        borderRadius: 15,
+        background: "var(--bg-sunken)",
+        border: "1px solid var(--rule)",
+        cursor: "pointer",
+        flexShrink: 0,
+        userSelect: "none",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      <span style={{
+        position: "absolute",
+        top: 2,
+        left: isEn ? 38 : 2,
+        width: 36,
+        height: 24,
+        borderRadius: 12,
+        background: "var(--accent)",
+        transition: "left 180ms cubic-bezier(0.2,0.7,0.3,1)",
+      }} />
+      <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
+        <span style={{
+          flex: 1,
+          textAlign: "center",
+          fontSize: 13,
+          fontFamily: "var(--font-sans)",
+          fontWeight: 600,
+          zIndex: 1,
+          transition: "color 180ms",
+          color: !isEn ? "var(--accent-ink)" : "var(--ink-3)",
+        }}>中</span>
+        <span style={{
+          flex: 1,
+          textAlign: "center",
+          fontSize: 11,
+          fontFamily: "var(--font-mono)",
+          fontWeight: 600,
+          zIndex: 1,
+          transition: "color 180ms",
+          color: isEn ? "var(--accent-ink)" : "var(--ink-3)",
+        }}>EN</span>
+      </span>
+    </button>
+  );
+}
+
 function makeMdComponents(isMobile) {
   return {
   table: (p) => {
@@ -318,7 +379,7 @@ export function AICoachTab({
   raceBriefingSummary = null,
   proactiveAutoPauseUntil = 0,
   handledProactiveAdjustmentSignatures = [],
-  proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onOpenProactiveAction,
+  proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onStopProactiveTrainingAdjustment, onOpenProactiveAction,
   raceBriefingLoading = false, onRaceBriefingRequest,
   agentActions = [], onDeleteAgentAction,
   memoryFacts = [], onMemoryFactStatus,
@@ -388,6 +449,7 @@ export function AICoachTab({
     try { return localStorage.getItem(RACE_BRIEFING_ATTEMPT_KEY) || ""; }
     catch { return ""; }
   });
+  const [confirmManualAdjustment, setConfirmManualAdjustment] = useState(false);
   const proactiveAdjustmentSnoozed = proactiveAdjustmentSnoozedUntil > runnerNowMs;
   const proactiveAutoPaused = Number(proactiveAutoPauseUntil) > runnerNowMs;
   const raceBriefingSnoozed = raceBriefingSnoozedUntil > runnerNowMs;
@@ -519,7 +581,7 @@ export function AICoachTab({
   const handleProactiveAdjustmentRequest = useCallback(async ({ quiet = false } = {}) => {
     if (!proactiveAdjustment?.kind) return;
     const generated = await onProactiveTrainingAdjustmentRequest?.(proactiveAdjustment.kind, { quiet });
-    if (proactiveAdjustment.signature) markProactiveAdjustmentAttempted(proactiveAdjustment.signature);
+    if (proactiveAdjustment.signature && (generated || quiet)) markProactiveAdjustmentAttempted(proactiveAdjustment.signature);
     return generated;
   }, [
     markProactiveAdjustmentAttempted,
@@ -604,31 +666,48 @@ export function AICoachTab({
     && !showProactiveAdjustment
     && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
   );
+  const handleStopProactiveAdjustment = useCallback(() => {
+    onStopProactiveTrainingAdjustment?.();
+    setConfirmManualAdjustment(false);
+  }, [onStopProactiveTrainingAdjustment]);
   const handleManualAdjustmentShortcut = useCallback(() => {
+    if (proactiveAdjustmentLoading) {
+      handleStopProactiveAdjustment();
+      return;
+    }
     if (proactiveAdjustment?.existingAction) {
       onOpenProactiveAction?.(proactiveAdjustment.existingAction);
       return;
     }
-    handleProactiveAdjustmentRequest();
-  }, [handleProactiveAdjustmentRequest, onOpenProactiveAction, proactiveAdjustment]);
+    setConfirmManualAdjustment(true);
+  }, [
+    handleStopProactiveAdjustment,
+    onOpenProactiveAction,
+    proactiveAdjustment,
+    proactiveAdjustmentLoading,
+  ]);
+  const handleConfirmManualAdjustment = useCallback(async () => {
+    await handleProactiveAdjustmentRequest();
+    setConfirmManualAdjustment(false);
+  }, [handleProactiveAdjustmentRequest]);
   const manualAdjustmentLabel = proactiveAdjustment?.existingAction
     ? t("coach.proactive_open")
     : proactiveAdjustmentLoading
-      ? t("coach.proactive_generating")
+      ? t("common.stop")
       : t("coach.proactive_manual");
-  const manualAdjustmentHint = proactiveAdjustment?.existingAction
+  const manualAdjustmentHint = proactiveAdjustmentLoading
+    ? t("common.stop")
+    : proactiveAdjustment?.existingAction
     ? t("coach.proactive_open")
     : t("coach.proactive_manual_hint");
   const handleManualAdjustmentFromMenu = useCallback(() => {
-    if (proactiveAdjustmentLoading) return;
     setShowCoachMenu(false);
     handleManualAdjustmentShortcut();
-  }, [handleManualAdjustmentShortcut, proactiveAdjustmentLoading]);
+  }, [handleManualAdjustmentShortcut]);
   const handleManualAdjustmentFromHub = useCallback(() => {
-    if (proactiveAdjustmentLoading) return;
     setShowCoachHub(false);
     handleManualAdjustmentShortcut();
-  }, [handleManualAdjustmentShortcut, proactiveAdjustmentLoading]);
+  }, [handleManualAdjustmentShortcut]);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -1192,20 +1271,8 @@ export function AICoachTab({
             <div style={s.modalCard(isMobile, { maxWidth: 680, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, gap: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.prompt_title")}</h2>
-                <div style={{ display: "flex", gap: 0, marginLeft: "auto" }}>
-                  <button onClick={() => setPreviewLang("en")}
-                    style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                      borderRight: "none",
-                      background: previewLang === "en" ? "var(--accent-soft)" : "transparent",
-                      color: previewLang === "en" ? "var(--accent-dark)" : "var(--ink-2)" }}>
-                    EN
-                  </button>
-                  <button onClick={() => setPreviewLang("zh")}
-                    style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                      background: previewLang === "zh" ? "var(--accent-soft)" : "transparent",
-                      color: previewLang === "zh" ? "var(--accent-dark)" : "var(--ink-2)" }}>
-                    中
-                  </button>
+                <div style={{ marginLeft: "auto" }}>
+                  <PromptLangSwitch value={previewLang} onChange={setPreviewLang} />
                 </div>
                 <button onClick={() => setShowPromptPreview(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
@@ -1215,6 +1282,77 @@ export function AICoachTab({
                 color: "var(--ink-1)", background: "var(--bg-elevated)",
               }}>{previewPrompt}</pre>
               <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.5 }}>{t("coach.prompt_hint")}{previewLang === "zh" ? ` ${t("coach.prompt_zh_note")}` : ""}</div>
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
+      {confirmManualAdjustment && (
+        <ModalRoot onClose={() => {
+          if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
+        }}>
+          <div
+            style={s.modalOverlay(isMobile, { float: true })}
+            onClick={() => {
+              if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
+            }}
+          >
+            <div
+              style={s.modalCard(isMobile, { maxWidth: 460, float: true })}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.proactive_confirm_title")}</h2>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
+                  }}
+                  disabled={proactiveAdjustmentLoading}
+                  style={{
+                    ...s.modalCloseBtn,
+                    opacity: proactiveAdjustmentLoading ? 0.35 : 1,
+                    cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+                  }}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              <div style={{ ...s.muted, lineHeight: 1.55, marginBottom: 16 }}>
+                {t("coach.proactive_confirm_body")}
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => setConfirmManualAdjustment(false)}
+                  disabled={proactiveAdjustmentLoading}
+                  style={{
+                    ...s.btnGhost,
+                    opacity: proactiveAdjustmentLoading ? 0.5 : 1,
+                    cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+                  }}
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={proactiveAdjustmentLoading ? handleStopProactiveAdjustment : handleConfirmManualAdjustment}
+                  style={{
+                    ...s.btn,
+                    minWidth: 112,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 7,
+                    background: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+                    borderColor: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+                  }}
+                >
+                  {proactiveAdjustmentLoading && <Spinner size={12} thickness={1.5} />}
+                  {proactiveAdjustmentLoading ? t("common.stop") : t("coach.proactive_confirm_primary")}
+                </button>
+              </div>
             </div>
           </div>
         </ModalRoot>
@@ -1310,7 +1448,6 @@ export function AICoachTab({
           <button
             type="button"
             onClick={handleManualAdjustmentShortcut}
-            disabled={proactiveAdjustmentLoading}
             title={manualAdjustmentHint}
             style={{
               ...s.btnGhost,
@@ -1319,8 +1456,9 @@ export function AICoachTab({
               fontSize: 11,
               whiteSpace: "nowrap",
               flex: "0 0 auto",
-              opacity: proactiveAdjustmentLoading ? 0.65 : 1,
-              cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+              color: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+              borderColor: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+              cursor: "pointer",
             }}>
             {manualAdjustmentLabel}
           </button>
@@ -1487,16 +1625,16 @@ export function AICoachTab({
             ) : (
               <button
                 type="button"
-                onClick={handleProactiveAdjustmentRequest}
-                disabled={proactiveAdjustmentLoading}
+                onClick={handleManualAdjustmentShortcut}
                 style={{
                   ...s.btn,
                   fontSize: 12,
                   padding: "6px 10px",
-                  opacity: proactiveAdjustmentLoading ? 0.65 : 1,
-                  cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+                  background: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+                  borderColor: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+                  cursor: "pointer",
                 }}>
-                {proactiveAdjustmentLoading ? t("coach.proactive_generating") : t("coach.proactive_retry")}
+                {proactiveAdjustmentLoading ? t("common.stop") : t("coach.proactive_retry")}
               </button>
             )}
             <button
@@ -2001,7 +2139,6 @@ export function AICoachTab({
                   <button
                     type="button"
                     onClick={handleManualAdjustmentFromMenu}
-                    disabled={proactiveAdjustmentLoading}
                     title={manualAdjustmentHint}
                     style={{
                       display: "flex", alignItems: "center", width: "100%", textAlign: "left",
@@ -2009,9 +2146,8 @@ export function AICoachTab({
                       borderTop: "1px solid var(--rule-soft)",
                       padding: "13px 16px 13px 28px", minHeight: 50,
                       fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 600, color: "var(--ink-1)",
-                      cursor: proactiveAdjustmentLoading ? "default" : "pointer",
+                      cursor: "pointer",
                       borderRadius: 0,
-                      opacity: proactiveAdjustmentLoading ? 0.65 : 1,
                       WebkitTapHighlightColor: "transparent",
                     }}>
                     <span style={{ flex: 1 }}>{manualAdjustmentLabel}</span>
@@ -2189,11 +2325,13 @@ export function AICoachTab({
                       <button
                         type="button"
                         onClick={handleManualAdjustmentFromHub}
-                        disabled={proactiveAdjustmentLoading || !showManualAdjustmentShortcut}
+                        disabled={!showManualAdjustmentShortcut}
                         style={{
                           ...s.btn,
-                          opacity: (proactiveAdjustmentLoading || !showManualAdjustmentShortcut) ? 0.65 : 1,
-                          cursor: (proactiveAdjustmentLoading || !showManualAdjustmentShortcut) ? "default" : "pointer",
+                          background: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+                          borderColor: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+                          opacity: !showManualAdjustmentShortcut ? 0.65 : 1,
+                          cursor: !showManualAdjustmentShortcut ? "default" : "pointer",
                         }}>
                         {manualAdjustmentLabel}
                       </button>
@@ -2248,16 +2386,7 @@ export function AICoachTab({
                   {coachHubTab === "prompt" && (
                     <div>
                       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                        <div style={{ display: "flex", gap: 0 }}>
-                          <button onClick={() => setPreviewLang("en")}
-                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px", borderRight: "none",
-                              background: previewLang === "en" ? "var(--accent-soft)" : "transparent",
-                              color: previewLang === "en" ? "var(--accent-dark)" : "var(--ink-2)" }}>EN</button>
-                          <button onClick={() => setPreviewLang("zh")}
-                            style={{ ...s.btnGhost, fontSize: 11, padding: "4px 10px",
-                              background: previewLang === "zh" ? "var(--accent-soft)" : "transparent",
-                              color: previewLang === "zh" ? "var(--accent-dark)" : "var(--ink-2)" }}>中</button>
-                        </div>
+                        <PromptLangSwitch value={previewLang} onChange={setPreviewLang} />
                       </div>
                       <pre style={{
                         ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,

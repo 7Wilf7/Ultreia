@@ -193,8 +193,35 @@ export const HYROX_SUBTYPES = [
   "Men Open", "Women Open",
   "Men Pro", "Women Pro",
   "Men Doubles", "Women Doubles", "Mixed Doubles",
-  "Relay",
+  "Men Doubles Pro", "Women Doubles Pro",
+  "Men Relay", "Women Relay", "Mixed Relay",
 ];
+
+const HYROX_SUBTYPE_GENDER = {
+  "Men Open": "male",
+  "Men Pro": "male",
+  "Men Doubles": "male",
+  "Men Doubles Pro": "male",
+  "Men Relay": "male",
+  "Women Open": "female",
+  "Women Pro": "female",
+  "Women Doubles": "female",
+  "Women Doubles Pro": "female",
+  "Women Relay": "female",
+};
+
+export function getHyroxSubtypesForGender(gender, currentSubtype = "") {
+  const normalizedGender = gender === "male" || gender === "female" ? gender : "";
+  const visibleSubtypes = HYROX_SUBTYPES.filter((subtype) => {
+    const subtypeGender = HYROX_SUBTYPE_GENDER[subtype];
+    return !normalizedGender || !subtypeGender || subtypeGender === normalizedGender;
+  });
+
+  if (currentSubtype && !visibleSubtypes.includes(currentSubtype)) {
+    return [currentSubtype, ...visibleSubtypes];
+  }
+  return visibleSubtypes;
+}
 
 // Race categories — used for PR auto-aggregation and as a list-view tag.
 // Order matters: PR bar + form dropdowns iterate this array, so this is the

@@ -3149,6 +3149,7 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           itraPI={itraPI}
           setItraPI={setItraPI}
+          profile={profile}
           mobileTopTab={racesTopTab}
           setMobileTopTab={setRacesTopTab}
           mobileSubTab={racesSubTab}

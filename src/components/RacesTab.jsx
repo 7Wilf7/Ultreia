@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
-import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR, HYROX_SUBTYPES } from "../constants";
+import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR, getHyroxSubtypesForGender } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { forwardGeocode, fetchRaceDayWeather, fetchHistoryRaceWeather, skyconMeta } from "../lib/weather";
 import { parseDistanceKm, inferRaceCategory } from "../utils/format";
@@ -73,6 +73,7 @@ const MOBILE_SUB_TAB_ORDER = { target: 0, history: 1 };
 
 export function RacesTab({
   races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
+  profile,
   // Lifted to AppShell so the chosen top/sub tab survives switching away to
   // another top-level tab and back (within one app session).
   mobileTopTab, setMobileTopTab, mobileSubTab, setMobileSubTab,
@@ -372,6 +373,14 @@ export function RacesTab({
 
   function updateRaceCategory(id, category) {
     updateRace(id, { category }).catch(() => {});
+  }
+
+  function updateDraftRaceCategory(category) {
+    setNewRace((prev) => ({
+      ...prev,
+      category,
+      subtype: category === prev.category ? prev.subtype : "",
+    }));
   }
 
   function tryAddRace() {
@@ -1083,6 +1092,7 @@ export function RacesTab({
     // fixed-indoor (Hyrox), or when the user picks a Spartan tier (tier
     // already carries the size signal). Trail still shows it.
     const showDistance = !isHyrox && !isRoadOnly && !isSpartan;
+    const hyroxSubtypeOptions = getHyroxSubtypesForGender(profile?.gender, isEdit ? newRace.subtype : "");
     // ITRA fields removed from the form per user request (2026-05). The DB
     // column is retained for backward compat with already-imported data.
     const showItra = false;
@@ -1137,7 +1147,7 @@ export function RacesTab({
                     label: c === "Half Marathon" ? t("enum.race_cat.Half Marathon_short") : t(`enum.race_cat.${c}`),
                   }))}
                   value={newRace.category}
-                  onChange={(v) => setNewRace({ ...newRace, category: v })}
+                  onChange={updateDraftRaceCategory}
                 />
               </div>
             </div>
@@ -1152,7 +1162,7 @@ export function RacesTab({
                 ariaLabel={t("races.category_label")}
                 options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
                 value={newRace.category}
-                onChange={(v) => setNewRace({ ...newRace, category: v })}
+                onChange={updateDraftRaceCategory}
               />
             </div>
             <div>
@@ -1204,7 +1214,7 @@ export function RacesTab({
             <Dropdown
               ariaLabel={t("races.hyrox_division")}
               placeholder="—"
-              options={HYROX_SUBTYPES.map(st => ({ value: st, label: t(`enum.hyrox.${st}`) }))}
+              options={hyroxSubtypeOptions.map(st => ({ value: st, label: t(`enum.hyrox.${st}`) }))}
               value={newRace.subtype || ""}
               onChange={(v) => setNewRace({ ...newRace, subtype: v })}
             />

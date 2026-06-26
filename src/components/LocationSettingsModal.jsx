@@ -96,7 +96,10 @@ export function LocationSettingsModal({
 
   async function deletePlace(place) {
     if (!place?.id) return;
-    const ok = await appDialog.confirm(t("location.delete_confirm", { name: placeTitle(place, t) }));
+    const ok = await appDialog.confirm(t("location.delete_confirm", { name: placeTitle(place, t) }), {
+      danger: true,
+      confirmLabel: t("common.delete"),
+    });
     if (!ok) return;
     setBusyId(place.id);
     setError("");

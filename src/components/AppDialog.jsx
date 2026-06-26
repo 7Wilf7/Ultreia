@@ -68,7 +68,7 @@ export function AppDialogProvider({ children }) {
           <div
             className="ultreia-overlay-in"
             onClick={() => close(false)}
-            style={s.modalOverlay(true, { float: true })}
+            style={{ ...s.modalOverlay(true, { float: true }), zIndex: 120000 }}
           >
             <div
               className="ultreia-modal-in"

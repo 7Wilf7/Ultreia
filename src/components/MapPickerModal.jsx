@@ -792,6 +792,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
         display: "flex",
         flexDirection: "column",
         fontFamily: "var(--font-sans)",
+        overflow: "hidden",
+        isolation: "isolate",
       }}>
         <div style={{
           padding: "calc(env(safe-area-inset-top) + 12px) 14px 10px",
@@ -816,6 +818,7 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
           flex: 1,
           minHeight: 0,
           marginBottom: MAP_PICKER_BOTTOM_OFFSET,
+          zIndex: 1,
         }}>
           {useAmapSdk ? (
             <AmapSdkMapView
@@ -942,16 +945,14 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
           background: "rgb(13, 18, 16)",
           color: "var(--ink-1)",
           boxShadow: "0 -1px 0 rgba(255,255,255,0.03)",
-          position: "fixed",
+          position: "absolute",
           left: 0,
           right: 0,
           bottom: 0,
-          zIndex: 10040,
+          zIndex: 6,
           boxSizing: "border-box",
           minHeight: 126,
           pointerEvents: "auto",
-          WebkitTransform: "translateZ(0)",
-          transform: "translateZ(0)",
         }}>
           <div style={{
             display: "flex",

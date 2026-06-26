@@ -51,14 +51,16 @@ function toRow(fact, userId) {
   };
 }
 
-export async function listMyFacts({ limit = 100, statuses = ['active', 'proposed'] } = {}) {
+export async function listMyFacts({ limit = null, statuses = ['active', 'proposed', 'archived'] } = {}) {
   const userId = await getCurrentUserId();
   let query = supabase
     .from('coach_memory_facts')
     .select('*')
     .eq('user_id', userId)
-    .order('updated_at', { ascending: false })
-    .limit(limit);
+    .order('updated_at', { ascending: false });
+  if (Number.isFinite(Number(limit)) && Number(limit) > 0) {
+    query = query.limit(Number(limit));
+  }
   if (Array.isArray(statuses) && statuses.length) {
     query = query.in('status', statuses);
   }
@@ -107,4 +109,22 @@ export async function updateFactStatus(fact, status) {
     throw new Error(error.message);
   }
   return fromRow(data);
+}
+
+export async function deleteFact(fact) {
+  if (!fact?.rowId && !fact?.id && !fact?.clientId) throw new Error('deleteFact: fact id is required');
+  const userId = await getCurrentUserId();
+  const base = supabase
+    .from('coach_memory_facts')
+    .delete()
+    .eq('user_id', userId);
+  const query = fact.rowId
+    ? base.eq('id', fact.rowId)
+    : base.eq('client_id', fact.clientId || fact.id);
+  const { error } = await query;
+  if (error) {
+    console.error('deleteFact failed:', error);
+    throw new Error(error.message);
+  }
+  return true;
 }

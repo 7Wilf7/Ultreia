@@ -445,7 +445,7 @@ export function AICoachTab({
   proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onStopProactiveTrainingAdjustment, onOpenProactiveAction,
   raceBriefingLoading = false, onRaceBriefingRequest,
   agentActions = [], onDeleteAgentAction,
-  memoryFacts = [], onMemoryFactStatus,
+  memoryFacts = [], onMemoryFactStatus, onMemoryFactDelete,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
@@ -1342,6 +1342,7 @@ export function AICoachTab({
                   facts={memoryFacts}
                   displayLang={memoryDisplayLang}
                   onStatus={onMemoryFactStatus}
+                  onDelete={onMemoryFactDelete}
                   t={t}
                 />
               )}
@@ -2533,6 +2534,7 @@ export function AICoachTab({
                           facts={memoryFacts}
                           displayLang={memoryDisplayLang}
                           onStatus={onMemoryFactStatus}
+                          onDelete={onMemoryFactDelete}
                           t={t}
                         />
                       )}
@@ -2758,7 +2760,7 @@ function MemoryReviewSetting({ enabled, onToggle, t }) {
   );
 }
 
-function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
+function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, t }) {
   const appDialog = useAppDialog();
   const [view, setView] = useState("current");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -2789,10 +2791,9 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
   const categoryExists = categorySummary.some(([category]) => category === categoryFilter);
   const selectedCategory = categoryFilter === "all" || categoryExists ? categoryFilter : "all";
   const visibleFacts = useMemo(() => {
-    const filtered = selectedCategory === "all"
+    return selectedCategory === "all"
       ? baseFacts
       : baseFacts.filter(fact => (fact.category || "other") === selectedCategory);
-    return filtered.slice(0, 20);
   }, [baseFacts, selectedCategory]);
   const categoryOptions = useMemo(() => {
     if (!baseFacts.length) return [];
@@ -2891,7 +2892,20 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, t }) {
                   </button>
                 )}
                 {fact.status === "archived" && (
-                  <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_restore")}</button>
+                  <>
+                    <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_restore")}</button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (await appDialog.confirm(t("coach.memory_fact_delete_confirm"), { danger: true, confirmLabel: t("common.delete") })) {
+                          onDelete?.(fact);
+                        }
+                      }}
+                      style={{ ...memoryFactButtonStyle, color: "var(--danger)", borderColor: "var(--danger)" }}
+                    >
+                      {t("coach.memory_fact_delete")}
+                    </button>
+                  </>
                 )}
               </div>
             </div>

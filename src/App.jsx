@@ -218,6 +218,12 @@ function removeAgentActionFromList(actions = [], action) {
   return (actions || []).filter(a => !keys.has(a?.id) && !keys.has(a?.rowId));
 }
 
+function removeMemoryFactFromList(facts = [], fact) {
+  if (!fact?.id && !fact?.rowId && !fact?.clientId) return facts || [];
+  const keys = new Set([fact.rowId, fact.clientId, fact.id].filter(Boolean));
+  return (facts || []).filter(f => !keys.has(f?.rowId) && !keys.has(f?.clientId) && !keys.has(f?.id));
+}
+
 function mergeMemoryFactList(facts = [], fact) {
   if (!fact?.id && !fact?.rowId && !fact?.clientId) return facts || [];
   const key = fact.rowId || fact.clientId || fact.id;
@@ -1747,6 +1753,17 @@ function AppShell({
       appDialog.alert(t("coach.memory_fact_update_failed", { msg: err?.message || String(err) }));
     }
   }
+  async function deleteMemoryFact(fact) {
+    if (!fact || fact.status !== "archived") return;
+    setMemoryFacts(prev => removeMemoryFactFromList(prev, fact));
+    try {
+      await db.memoryFacts.deleteFact(fact);
+    } catch (err) {
+      console.warn("[memory_facts] delete failed:", err);
+      setMemoryFacts(prev => mergeMemoryFactList(prev, fact));
+      appDialog.alert(t("coach.memory_fact_delete_failed", { msg: err?.message || String(err) }));
+    }
+  }
   async function deleteAgentAction(action) {
     if (!action?.id && !action?.rowId) return;
     setAgentActions(prev => removeAgentActionFromList(prev, action));
@@ -3126,6 +3143,7 @@ Rules:
           onDeleteAgentAction={deleteAgentAction}
           memoryFacts={memoryFacts}
           onMemoryFactStatus={setMemoryFactStatus}
+          onMemoryFactDelete={deleteMemoryFact}
           onStopChat={stopCoachChat}
           onStopExtraction={stopPlanExtraction}
           hasPlanImportCache={(msgId) => !!(msgId && planImportCache[msgId]?.plans?.length)}

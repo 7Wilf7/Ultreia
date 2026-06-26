@@ -1255,6 +1255,7 @@ const dict = {
   "coach.proactive_confirm_title": { en: "Generate a calendar adjustment?", zh: "生成日历调整建议？" },
   "coach.proactive_confirm_body": { en: "The coach will analyze the current plan deviation and recovery signals, then prepare one calendar suggestion. Nothing changes until you review and add it to Calendar.", zh: "教练会根据当前计划偏差和恢复信号整理一份日历建议。确认前不会改动日历；生成后你还需要审核再写入。" },
   "coach.proactive_confirm_primary": { en: "Generate suggestion", zh: "生成建议" },
+  "coach.plan_suggestion_ready_banner": { en: "Calendar suggestion is ready. Tap to review.", zh: "日历建议已生成，点这里查看" },
   "coach.proactive_dismiss": { en: "Snooze 3 days", zh: "3 天内不再提醒" },
   "coach.proactive_no_plans": { en: "The coach did not find a safe concrete adjustment. Nothing was changed.", zh: "教练没有整理出足够安全、具体的调整建议。没有改动任何数据。" },
   "coach.race_briefing_title": { en: "Race briefing", zh: "赛前简报" },

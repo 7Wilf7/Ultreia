@@ -742,12 +742,8 @@ export function AICoachTab({
     setConfirmManualAdjustment(false);
   }, [onStopProactiveTrainingAdjustment]);
   const closeManualAdjustmentConfirm = useCallback(() => {
-    if (proactiveAdjustmentLoading) {
-      handleStopProactiveAdjustment();
-      return;
-    }
     setConfirmManualAdjustment(false);
-  }, [handleStopProactiveAdjustment, proactiveAdjustmentLoading]);
+  }, []);
   const handleManualAdjustmentShortcut = useCallback(() => {
     if (proactiveAdjustmentLoading) {
       handleStopProactiveAdjustment();
@@ -1418,13 +1414,6 @@ export function AICoachTab({
                 {t("coach.proactive_confirm_body")}
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={closeManualAdjustmentConfirm}
-                  style={s.btnGhost}
-                >
-                  {t("common.cancel")}
-                </button>
                 <button
                   type="button"
                   onClick={proactiveAdjustmentLoading ? handleStopProactiveAdjustment : handleConfirmManualAdjustment}

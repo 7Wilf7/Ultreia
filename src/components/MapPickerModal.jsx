@@ -12,6 +12,7 @@ const MAX_PREFETCH_TILES = 72;
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
 const AMAP_REACT_SYNC_INTERVAL_MS = 90;
+const MAP_PICKER_BOTTOM_OFFSET = "calc(128px + env(safe-area-inset-bottom))";
 const FALLBACK_WGS = { lng: 113.2644, lat: 23.1291 }; // Guangzhou
 const AMAP_LOADER_URL = "https://webapi.amap.com/loader.js";
 const AMAP_MAP_STYLE = "amap://styles/normal";
@@ -810,7 +811,12 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
           <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
-        <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <div style={{
+          position: "relative",
+          flex: 1,
+          minHeight: 0,
+          marginBottom: MAP_PICKER_BOTTOM_OFFSET,
+        }}>
           {useAmapSdk ? (
             <AmapSdkMapView
               center={center}
@@ -933,13 +939,19 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
         <div style={{
           padding: "12px 14px calc(env(safe-area-inset-bottom) + 14px)",
           borderTop: "1px solid var(--rule)",
-          background: "#0d1210",
+          background: "rgb(13, 18, 16)",
+          color: "var(--ink-1)",
           boxShadow: "0 -1px 0 rgba(255,255,255,0.03)",
-          position: "relative",
-          zIndex: 3,
-          flexShrink: 0,
-          contain: "layout paint",
-          isolation: "isolate",
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 10040,
+          boxSizing: "border-box",
+          minHeight: 126,
+          pointerEvents: "auto",
+          WebkitTransform: "translateZ(0)",
+          transform: "translateZ(0)",
         }}>
           <div style={{
             display: "flex",
@@ -974,7 +986,9 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
-              background: "var(--accent)",
+              background: "rgb(103, 133, 96)",
+              color: "var(--accent-ink)",
+              borderColor: "rgb(103, 133, 96)",
               boxShadow: "none",
             }}>
               {t("location.confirm_point")}

@@ -1805,6 +1805,7 @@ function AppShell({
   const [raceBriefingLoading, setRaceBriefingLoading] = useState(false);
   const proactiveAdjustmentLoading = planRescueLoading || recoveryGuardLoading;
   const [planProposal, setPlanProposal] = useState(null);
+  const [showPlanProposalReview, setShowPlanProposalReview] = useState(false);
   const [planImportCache, setPlanImportCache] = useState(() => {
     try {
       const raw = localStorage.getItem("ultreia.coachPlanImportCache.v1");
@@ -2489,6 +2490,7 @@ function AppShell({
       const cached = planImportCache[msgId];
       const action = cached.action || buildCreatePlansAction(cached.plans, { sourceMessageId: msgId });
       setPlanProposal({ msgId, assistantContent, action });
+      setShowPlanProposalReview(true);
       return;
     }
     const controller = new AbortController();
@@ -2576,6 +2578,7 @@ Rules:
       saveAgentAction(action);
       if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans, action } }));
       setPlanProposal({ msgId, assistantContent, action });
+      setShowPlanProposalReview(true);
     } catch (err) {
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== extractRunRef.current) return;
       console.error("[AI Coach] Plan-extract error:", err);
@@ -2620,7 +2623,8 @@ Rules:
     };
     saveAgentAction(action);
     if (openProposal) {
-      setPlanProposal({ msgId: null, assistantContent: "", action });
+      setPlanProposal({ msgId: null, assistantContent: "", action, deferredReview: true });
+      setShowPlanProposalReview(false);
     }
     return action;
   }
@@ -2982,6 +2986,7 @@ Rules:
   function openProactivePlanAction(action) {
     if (!action?.id) return;
     setPlanProposal({ msgId: null, assistantContent: "", action });
+    setShowPlanProposalReview(true);
   }
 
   function applyPlanRestTags(restDates = [], workoutDates = []) {
@@ -3048,17 +3053,20 @@ Rules:
       },
     });
     setPlanProposal(null);
+    setShowPlanProposalReview(false);
   }
 
   function rejectPlanProposal() {
     updatePlanActionRecord(planProposal?.action, action => markAgentActionStatus(action, AGENT_ACTION_STATUS.REJECTED));
     setPlanProposal(null);
+    setShowPlanProposalReview(false);
   }
 
   function reExtractPlanProposal() {
     if (!planProposal?.msgId || !planProposal?.assistantContent) return;
     const { msgId, assistantContent } = planProposal;
     setPlanProposal(null);
+    setShowPlanProposalReview(false);
     importToCalendar(assistantContent, msgId, { force: true });
   }
 
@@ -3501,6 +3509,24 @@ Rules:
           <span>{t("coach.memory_ready_banner")}</span>
         </button>
       )}
+      {planProposal?.deferredReview && !showPlanProposalReview && (
+        <button
+          onClick={() => { setTab(TAB_COACH); setShowPlanProposalReview(true); }}
+          className="ultreia-overlay-in"
+          style={{
+            position: "fixed", top: 0, left: 0, right: 0, zIndex: 9997,
+            background: "linear-gradient(180deg, oklch(0.58 0.060 138), var(--accent))",
+            color: "var(--accent-ink)", border: "none",
+            padding: "calc(env(safe-area-inset-top) + 10px) 16px 10px",
+            fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 650,
+            cursor: "pointer", textAlign: "center", width: "100%",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+            boxShadow: "var(--shadow-soft), 0 0 30px oklch(0.40 0.060 138 / 0.22)",
+          }}>
+          <span aria-hidden="true">📅</span>
+          <span>{t("coach.plan_suggestion_ready_banner")}</span>
+        </button>
+      )}
       <ConfirmDeleteModal
         confirmDelete={confirmDelete}
         setConfirmDelete={setConfirmDelete}
@@ -3643,14 +3669,14 @@ Rules:
       {/* Plan-import review modal — rendered at AppShell level (not inside
           AICoachTab) so the user sees it pop up even if they walked away
           from the AI Coach tab while the extraction was running. */}
-      {planProposal && (
+      {planProposal && showPlanProposalReview && (
         <CoachPlanImportModal
           action={planProposal.action}
           assistantContent={planProposal.assistantContent}
           plans={getCreatePlans(planProposal.action)}
           existingPlans={logs.filter(l => l?.isPlanned)}
           onConfirm={confirmImportPlans}
-          onCancel={() => setPlanProposal(null)}
+          onCancel={() => { setPlanProposal(null); setShowPlanProposalReview(false); }}
           onReject={rejectPlanProposal}
           onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}
         />

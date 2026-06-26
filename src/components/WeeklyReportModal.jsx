@@ -221,7 +221,7 @@ export function WeeklyReportPage({
         <div style={{
           borderTop: "1px solid var(--rule)",
           background: "var(--bg)",
-          padding: "10px 12px calc(max(env(safe-area-inset-bottom), 0px) + 10px)",
+          padding: "8px 12px calc(max(env(safe-area-inset-bottom), 0px) + 2px)",
           display: "flex",
           gap: 8,
           alignItems: "flex-end",

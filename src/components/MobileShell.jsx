@@ -86,8 +86,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
     { key: "tabs.calendar", idx: 1, Icon: CalendarIcon },
-    { key: "tabs.races",    idx: 2, Icon: TrophyIcon },
-    { key: "tabs.ai_coach", idx: 3, Icon: CoachIcon },
+    { key: "tabs.ai_coach", idx: 2, Icon: CoachIcon },
+    { key: "tabs.races",    idx: 3, Icon: TrophyIcon },
     { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
@@ -309,7 +309,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }}>
         {TABS.map(({ key, idx, Icon }) => {
           const active = tab === idx;
-          const showSpinner = idx === 3 && coachBusy;
+          const showSpinner = idx === 2 && coachBusy;
           return (
             <button
               key={key}

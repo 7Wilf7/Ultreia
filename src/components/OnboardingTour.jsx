@@ -45,17 +45,6 @@ const STEPS = [
   },
   {
     tab: 2,
-    title: { zh: "比赛 Races", en: "Races" },
-    lead: { zh: "管理目标赛和历史成绩。", en: "Manage target races and past results." },
-    bullets: [
-      { zh: "给目标赛标 A/B/C 优先级，自动显示倒计时", en: "Tag goal races A/B/C; a countdown shows automatically." },
-      { zh: "顶部 PR 栏自动列出每个项目（10K / 半马 / 全马 / 越野 / 斯巴达 / Hyrox）的最好成绩", en: "The PR bar lists your best per event type (10K / Half / Marathon / Trail / Spartan / Hyrox)." },
-      { zh: "填了地点的赛事会带上比赛日天气", en: "Add a location and the race shows its race-day weather." },
-      { zh: "这些都会喂给 AI 教练，围绕你的目标赛来规划", en: "All of this feeds the AI coach so it plans around your goal race." },
-    ],
-  },
-  {
-    tab: 3,
     emphasis: true,
     title: { zh: "AI 教练 AI Coach", en: "AI Coach" },
     lead: {
@@ -69,6 +58,17 @@ const STEPS = [
       { zh: "长期记忆：它会记住你的持久偏好，越聊越懂你", en: "Long-term memory: it remembers your durable preferences and gets to know you over time." },
       { zh: "信息填得越全（资料 / 训练 / 目标赛），回复越定制", en: "The more you fill in (profile / training / goal races), the more tailored the replies." },
       { zh: "AI Coach 优先使用 Codex，失败时自动回退 DeepSeek，不用自己申请第三方密钥", en: "AI Coach prefers Codex and falls back to DeepSeek automatically. No third-party key setup is needed." },
+    ],
+  },
+  {
+    tab: 3,
+    title: { zh: "比赛 Races", en: "Races" },
+    lead: { zh: "管理目标赛和历史成绩。", en: "Manage target races and past results." },
+    bullets: [
+      { zh: "给目标赛标 A/B/C 优先级，自动显示倒计时", en: "Tag goal races A/B/C; a countdown shows automatically." },
+      { zh: "顶部 PR 栏自动列出每个项目（10K / 半马 / 全马 / 越野 / 斯巴达 / Hyrox）的最好成绩", en: "The PR bar lists your best per event type (10K / Half / Marathon / Trail / Spartan / Hyrox)." },
+      { zh: "填了地点的赛事会带上比赛日天气", en: "Add a location and the race shows its race-day weather." },
+      { zh: "这些都会喂给 AI 教练，围绕你的目标赛来规划", en: "All of this feeds the AI coach so it plans around your goal race." },
     ],
   },
   {

@@ -52,19 +52,34 @@ function compactDateLabel(date) {
   return m ? `${m[2]}-${m[3]}` : (date || "—");
 }
 
+function weekdayLabel(date, lang) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || ""))) return "";
+  const d = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  const zh = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+  const en = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return (lang === "zh" ? zh : en)[d.getDay()];
+}
+
+function dateWithWeekdayLabel(date, lang) {
+  const dateLabel = compactDateLabel(date);
+  const weekday = weekdayLabel(date, lang);
+  return weekday ? `${weekday} ${dateLabel}` : dateLabel;
+}
+
 function parseAscentMeters(notes) {
   const m = String(notes || "").match(/\+?\s*(\d+(?:\.\d+)?)\s*m\b/i);
   const n = m ? Number(m[1]) : 0;
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-function planSummary(it, t) {
+function planSummary(it, t, lang) {
   if (isRestPlanItem(it)) {
-    const bits = [compactDateLabel(it.date), t("calendar.planned_rest_label")];
+    const bits = [dateWithWeekdayLabel(it.date, lang), t("calendar.planned_rest_label")];
     if (it.notes) bits.push(it.notes);
     return bits.filter(Boolean).join(" · ");
   }
-  const bits = [compactDateLabel(it.date), t(`enum.activity.${it.type}`)];
+  const bits = [dateWithWeekdayLabel(it.date, lang), t(`enum.activity.${it.type}`)];
   if (it.runType) bits.push(t(`enum.subtype.${it.runType}`));
   if ((it.subTypes || []).length) bits.push(it.subTypes.map(st => t(`enum.subtype.${st}`)).join(" / "));
   if (it.distance) bits.push(`${it.distance} km`);
@@ -183,8 +198,8 @@ function coachReasonLines(action, selectedItems, assistantContent, t, lang) {
   return lines.slice(0, 4);
 }
 
-function dateImpactText(row, t) {
-  const date = compactDateLabel(row.date);
+function dateImpactText(row, t, lang) {
+  const date = dateWithWeekdayLabel(row.date, lang);
   if (row.dateWideReplace && row.existingPlanCount > 0) {
     if (row.restCount > 0 && row.createCount === 0) {
       return row.existingPlanCount === 1
@@ -216,6 +231,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const actionPlans = getCreatePlans(agentAction);
   const [items, setItems] = useState(() => actionPlans.map(buildDraft));
   const [importing, setImporting] = useState(false);
+  const [showMeta, setShowMeta] = useState(false);
 
   function patch(id, p) {
     setItems(items.map(it => it._id === id ? { ...it, ...p } : it));
@@ -240,6 +256,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
   const reasonLines = coachReasonLines(agentAction, selectedItems, assistantContent, t, lang);
   const dateImpactRows = impact.dateImpacts || [];
+  const actionMetaTitle = t("coach.action_meta_toggle");
 
   async function doImport() {
     // Validate: every selected row needs a date + type.
@@ -350,42 +367,71 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
             alignItems: "center",
             justifyContent: "space-between",
             gap: 10,
-            marginBottom: 8,
+            marginBottom: showMeta ? 8 : 0,
           }}>
             <div style={{ fontSize: 14, fontWeight: 650, color: "var(--ink-1)" }}>
               {t("coach.action_card_title")}
             </div>
-            <div style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: 10,
-              color: "var(--ink-2)",
-              border: "1px solid var(--rule)",
-              padding: "3px 7px",
-              whiteSpace: "nowrap",
-            }}>
-              {t(`coach.action_risk_${displayRisk}`)}
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowMeta(v => !v)}
+              aria-label={actionMetaTitle}
+              title={actionMetaTitle}
+              aria-expanded={showMeta}
+              style={{
+                width: 24,
+                height: 24,
+                minHeight: 0,
+                borderRadius: "50%",
+                border: "1px solid var(--rule)",
+                background: showMeta ? "var(--accent-soft)" : "var(--bg)",
+                color: showMeta ? "var(--accent-dark)" : "var(--ink-2)",
+                fontFamily: "var(--font-mono)",
+                fontSize: 14,
+                fontWeight: 700,
+                lineHeight: 1,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                padding: 0,
+                flex: "0 0 auto",
+              }}
+            >
+              !
+            </button>
           </div>
-          <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--ink-2)" }}>
-            {t("coach.action_create_plans_reason", { n: selectedCount, workouts: selectedWorkoutCount, updates: selectedUpdateCount, rests: selectedRestCount })}
-          </div>
-          <div style={{ ...s.muted, fontSize: 12, marginTop: 8 }}>
-            {t("coach.action_requires_confirmation")}
-          </div>
-          <div style={{ ...s.muted, fontSize: 12, marginTop: 5 }}>
-            {t(`coach.action_risk_help_${displayRisk}`)}
-          </div>
-          {actionStatus !== "proposed" && (
+          {showMeta && (
             <div style={{
               marginTop: 8,
-              padding: "7px 9px",
+              padding: "9px 10px",
               border: "1px solid var(--rule)",
-              background: actionStatus === "executed" ? "var(--moss-bg)" : "var(--bg)",
-              color: actionStatus === "executed" ? "var(--moss-deep)" : "var(--ink-3)",
+              background: "var(--bg)",
               fontSize: 12,
               lineHeight: 1.45,
             }}>
-              {t(`coach.action_status_${actionStatus}`)}
+              <div style={{ fontFamily: "var(--font-mono)", color: "var(--ink-3)", marginBottom: 6 }}>
+                {t("coach.action_meta_title")} · {t(`coach.action_risk_${displayRisk}`)}
+              </div>
+              <div style={{ color: "var(--ink-2)" }}>
+                {t("coach.action_create_plans_reason", { n: selectedCount, workouts: selectedWorkoutCount, updates: selectedUpdateCount, rests: selectedRestCount })}
+              </div>
+              <div style={{ ...s.muted, fontSize: 12, marginTop: 6 }}>
+                {t("coach.action_requires_confirmation")}
+              </div>
+              <div style={{ ...s.muted, fontSize: 12, marginTop: 4 }}>
+                {t(`coach.action_risk_help_${displayRisk}`)}
+              </div>
+              {actionStatus !== "proposed" && (
+                <div style={{
+                  marginTop: 7,
+                  paddingTop: 7,
+                  borderTop: "1px solid var(--rule)",
+                  color: actionStatus === "executed" ? "var(--moss-deep)" : "var(--ink-3)",
+                }}>
+                  {t(`coach.action_status_${actionStatus}`)}
+                </div>
+              )}
             </div>
           )}
           <div style={{
@@ -430,7 +476,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
             {dateImpactRows.length > 0 && (
               <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.55 }}>
                 {dateImpactRows.map(row => (
-                  <li key={row.date}>{dateImpactText(row, t)}</li>
+                  <li key={row.date}>{dateImpactText(row, t, lang)}</li>
                 ))}
               </ul>
             )}
@@ -455,7 +501,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
             ) : (
               <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ink-2)", fontSize: 12, lineHeight: 1.55 }}>
                 {selectedItems.slice(0, 4).map(it => (
-                  <li key={it._id}>{planSummary(it, t)}</li>
+                  <li key={it._id}>{planSummary(it, t, lang)}</li>
                 ))}
                 {selectedItems.length > 4 && (
                   <li>{t("coach.action_more_items", { n: selectedItems.length - 4 })}</li>
@@ -481,6 +527,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
               const color = isRest ? "var(--ink-3)" : (TYPE_COLOR[it.type] || "var(--ink-2)");
               const f = isRest ? {} : planFields(it.type);
               const itemReason = displayItemReason(it, agentAction, t, lang);
+              const dateColumn = lang === "zh" ? "102px" : "108px";
               return (
                 <div key={it._id} style={{
                   border: "1px solid var(--rule)",
@@ -549,7 +596,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                       metric inputs switch per type (planFields). */}
                   <div style={{
                     display: "grid",
-                    gridTemplateColumns: isRest ? "86px minmax(126px, 1fr)" : "86px minmax(126px, 1fr) 72px",
+                    gridTemplateColumns: isRest ? `${dateColumn} minmax(126px, 1fr)` : `${dateColumn} minmax(126px, 1fr) 72px`,
                     gap: 8,
                     alignItems: "end",
                   }}>
@@ -563,7 +610,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                           position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)",
                           pointerEvents: "none", fontFamily: "var(--font-mono)", fontSize: 12,
                           color: it.date ? "var(--ink-1)" : "var(--ink-3)",
-                        }}>{compactDateLabel(it.date)}</span>
+                        }}>{dateWithWeekdayLabel(it.date, lang)}</span>
                       </label>
                     </div>
                     {isRest ? (

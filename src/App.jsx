@@ -3,7 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
-  TABS, DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
+  DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
   DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
   RUN_GROUP_TYPES, WEATHER_RELEVANT_TYPES,
 } from "./constants";
@@ -83,7 +83,7 @@ import {
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
-import { buildImportFeelingNote, mergeImportFeelingNote } from "./utils/importReviewNotes";
+import { buildImportSelfReviewNote, mergeImportFeelingNote } from "./utils/importReviewNotes";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -94,6 +94,12 @@ function localDateKey(d = new Date()) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+const TAB_TRAINING = 0;
+const TAB_CALENDAR = 1;
+const TAB_COACH = 2;
+const TAB_RACES = 3;
+const TAB_SETTINGS = 4;
 
 function planSummarySignature(summary) {
   return planAdjustmentSignature(summary);
@@ -2123,6 +2129,7 @@ function AppShell({
       isStreaming: true,
     }]);
 
+    let finalReplyText;
     try {
       const data = await db.usage.coachProxyStream({
         system: systemPrompt,
@@ -2138,6 +2145,7 @@ function AppShell({
       });
       if (controller.signal.aborted || runId !== chatRunRef.current) return false;
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
+      finalReplyText = reply;
       const providerId = data.provider || "deepseek";
       setLastCoachProvider({
         id: providerId,
@@ -2192,7 +2200,7 @@ function AppShell({
         setChatLoading(false);
       }
     }
-    return true;
+    return finalReplyText || true;
   }
 
   // ── Lifted importToCalendar — second-pass LLM call: take an assistant
@@ -2751,8 +2759,8 @@ Rules:
     importToCalendar(assistantContent, msgId, { force: true });
   }
 
-  async function writeImportFeelingNotes(reviewed, rawNote) {
-    const feelingNote = buildImportFeelingNote(rawNote, lang);
+  async function writeImportFeelingNotes(reviewed, rawNote, coachReply = "") {
+    const feelingNote = buildImportSelfReviewNote(rawNote, coachReply, lang);
     if (!feelingNote) return;
     const rows = (Array.isArray(reviewed) ? reviewed : [reviewed])
       .filter(w => w?.id && !String(w.id).startsWith("temp-") && !String(w.id).startsWith("bulk-"));
@@ -2777,13 +2785,13 @@ Rules:
     const handledSignatures = collectPostImportHandledProactiveSignatures(reviewed);
     setCoachReviewPrompt(null);
     setProactiveAutoPauseUntil(Date.now() + POST_IMPORT_REVIEW_PROACTIVE_PAUSE_MS);
-    setTab(3);
+    setTab(TAB_COACH);
     // Guarantee the just-reviewed sessions are in the prompt's training-load
     // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
-    const sent = await sendChat(displayText, { ensureLogs: reviewed, modelMessage: modelText });
-    if (sent) {
+    const coachReply = await sendChat(displayText, { ensureLogs: reviewed, modelMessage: modelText });
+    if (coachReply) {
       if (handledSignatures.length) setHandledProactiveAdjustmentSignatures(handledSignatures);
-      writeImportFeelingNotes(reviewed, note).catch((err) => {
+      writeImportFeelingNotes(reviewed, note, typeof coachReply === "string" ? coachReply : "").catch((err) => {
         console.warn("[coach review] feeling note writeback failed:", err);
       });
     }
@@ -2934,10 +2942,10 @@ Rules:
 
   const titleText = t("header.title_empty");
   const desktopTabs = [
-    { label: TABS[0], key: "tabs.training", Icon: FootIcon },
-    { label: TABS[1], key: "tabs.calendar", Icon: CalendarIcon },
-    { label: TABS[2], key: "tabs.races", Icon: TrophyIcon },
-    { label: TABS[3], key: "tabs.ai_coach", Icon: CoachIcon },
+    { key: "tabs.training", Icon: FootIcon },
+    { key: "tabs.calendar", Icon: CalendarIcon },
+    { key: "tabs.ai_coach", Icon: CoachIcon },
+    { key: "tabs.races", Icon: TrophyIcon },
   ];
   const headerCell = {
     border: "1px solid var(--rule)",
@@ -2970,7 +2978,7 @@ Rules:
   // neighbor simultaneously during a finger-follow swipe. Index 4 is the
   // mobile-only Settings page (desktop has no Settings tab; it never asks for 4).
   const renderTab = (which) => {
-    if (which === 0) return (
+    if (which === TAB_TRAINING) return (
         <TrainingTab
           logs={logs}
           addLog={addLog}
@@ -2993,7 +3001,7 @@ Rules:
           onWeeklyReportPromptRequest={requestWeeklyReportAfterImport}
         />
     );
-    if (which === 1) return (
+    if (which === TAB_CALENDAR) return (
         <CalendarTab
           logs={logs}
           addLog={addLog}
@@ -3012,22 +3020,7 @@ Rules:
           weatherFlashToken={calWeatherFlash}
         />
     );
-    if (which === 2) return (
-        <RacesTab
-          races={races}
-          addRace={addRace}
-          updateRace={updateRace}
-          now={now}
-          setConfirmDelete={setConfirmDelete}
-          itraPI={itraPI}
-          setItraPI={setItraPI}
-          mobileTopTab={racesTopTab}
-          setMobileTopTab={setRacesTopTab}
-          mobileSubTab={racesSubTab}
-          setMobileSubTab={setRacesSubTab}
-        />
-    );
-    if (which === 3) return (
+    if (which === TAB_COACH) return (
         <AICoachTab
           logs={logs}
           races={races}
@@ -3040,10 +3033,10 @@ Rules:
           setConfirmDelete={setConfirmDelete}
           dailyNotes={dailyNotes}
           onEditProfile={goToProfileSettings}
-          onGoToTraining={() => setTab(0)}
-          onGoToRaces={() => setTab(2)}
+          onGoToTraining={() => setTab(TAB_TRAINING)}
+          onGoToRaces={() => setTab(TAB_RACES)}
           /* Weather pill → jump to the calendar and flash today's card. */
-          onGoToWeather={() => { setTab(1); setCalWeatherFlash(n => n + 1); }}
+          onGoToWeather={() => { setTab(TAB_CALENDAR); setCalWeatherFlash(n => n + 1); }}
           coachHintsPending={coachHintsPending}
           setCoachHintsPending={setCoachHintsPending}
           /* Lifted state + handlers — see AppShell top for definitions. */
@@ -3095,8 +3088,23 @@ Rules:
           proposeMemoryUpdate={proposeMemoryUpdate}
         />
     );
+    if (which === TAB_RACES) return (
+        <RacesTab
+          races={races}
+          addRace={addRace}
+          updateRace={updateRace}
+          now={now}
+          setConfirmDelete={setConfirmDelete}
+          itraPI={itraPI}
+          setItraPI={setItraPI}
+          mobileTopTab={racesTopTab}
+          setMobileTopTab={setRacesTopTab}
+          mobileSubTab={racesSubTab}
+          setMobileSubTab={setRacesSubTab}
+        />
+    );
     // Index 4 — mobile-only Settings page (desktop puts these in the top-right).
-    if (which === 4) return (
+    if (which === TAB_SETTINGS) return (
       showWeeklyReport ? (
         <WeeklyReportPage
           now={now}
@@ -3112,12 +3120,12 @@ Rules:
           onStopImport={stopPlanExtraction}
           onImportPlan={(text, id) => {
             setShowWeeklyReport(false);
-            setTab(3);
+            setTab(TAB_COACH);
             importToCalendar(text, `weekly-report:${id}`, { force: true });
           }}
           onDiscussReport={(_report, message) => {
             setShowWeeklyReport(false);
-            setTab(3);
+            setTab(TAB_COACH);
             sendChat(message);
           }}
         />
@@ -3171,7 +3179,7 @@ Rules:
           Tapping jumps to the AI Coach tab and opens the Memory modal. */}
       {memoryProposal && !showMemory && (
         <button
-          onClick={() => { setTab(3); setShowMemory(true); }}
+          onClick={() => { setTab(TAB_COACH); setShowMemory(true); }}
           className="ultreia-overlay-in"
           style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
@@ -3442,7 +3450,7 @@ Rules:
              This tells the shell where each inner toggle currently sits. */
           getInnerPager={(which) =>
             which === 0 ? { index: trainingView === "charts" ? 1 : 0, count: 2 }
-            : which === 2 ? { index: racesTopTab === "pr" ? 1 : 0, count: 2 }
+            : which === TAB_RACES ? { index: racesTopTab === "pr" ? 1 : 0, count: 2 }
             : null}
           onRefresh={tab === 0 ? refresh : null} refreshing={refreshing} />
         {modals}
@@ -3574,11 +3582,11 @@ Rules:
         WebkitBackdropFilter: "blur(16px) saturate(1.12)",
         overflowX: "auto", WebkitOverflowScrolling: "touch",
       }}>
-        {desktopTabs.map(({ label, key, Icon }, i) => {
+        {desktopTabs.map(({ key, Icon }, i) => {
           const active = tab === i;
-          const showSpinner = i === 3 && coachBusy;
+          const showSpinner = i === TAB_COACH && coachBusy;
           return (
-            <button key={label} onClick={() => setTab(i)} style={{
+            <button key={key} onClick={() => setTab(i)} style={{
               flex: 1, textAlign: "center",
               background: active ? "linear-gradient(180deg, oklch(0.27 0.045 138 / 0.92), var(--accent-soft))" : "transparent",
               border: active ? "1px solid var(--accent)" : "1px solid transparent",

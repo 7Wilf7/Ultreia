@@ -8,6 +8,8 @@ import { PinIcon } from "./Icons";
 
 const TILE_SIZE = 256;
 const PRELOAD_TILE_BUFFER = 2;
+const ADJACENT_ZOOM_PRELOAD_BUFFER = 1;
+const MAX_PREFETCH_TILES = 72;
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
 const FALLBACK_WGS = { lng: 113.2644, lat: 23.1291 }; // Guangzhou
@@ -95,7 +97,88 @@ function worldToLngLat(x, y, zoom) {
 
 function tileUrl(x, y, z) {
   const subdomain = (Math.abs(x + y) % 4) + 1;
-  return `https://webrd0${subdomain}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x=${x}&y=${y}&z=${z}`;
+  return `https://webrd0${subdomain}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=2&style=8&x=${x}&y=${y}&z=${z}`;
+}
+
+const warmedTileUrls = new Set();
+
+function normalizeZoom(zoom) {
+  const n = Number(zoom);
+  return clamp(Number.isFinite(n) ? n : 16, MIN_ZOOM, MAX_ZOOM);
+}
+
+function tileZoomFor(zoom) {
+  return clamp(Math.round(normalizeZoom(zoom)), MIN_ZOOM, MAX_ZOOM);
+}
+
+function mapTilesForView(center, size, zoom, buffer = PRELOAD_TILE_BUFFER) {
+  if (!size.width || !size.height) {
+    return { tiles: [], centerWorld: lngLatToWorld(center.lng, center.lat, tileZoomFor(zoom)), tileZoom: tileZoomFor(zoom), tileScale: 1 };
+  }
+  const safeZoom = normalizeZoom(zoom);
+  const tileZoom = tileZoomFor(safeZoom);
+  const tileScale = 2 ** (safeZoom - tileZoom);
+  const centerWorld = lngLatToWorld(center.lng, center.lat, tileZoom);
+  const topLeft = {
+    x: centerWorld.x - size.width / (2 * tileScale),
+    y: centerWorld.y - size.height / (2 * tileScale),
+  };
+  const minX = Math.floor(topLeft.x / TILE_SIZE) - buffer;
+  const maxX = Math.floor((topLeft.x + size.width / tileScale) / TILE_SIZE) + buffer;
+  const minY = Math.floor(topLeft.y / TILE_SIZE) - buffer;
+  const maxY = Math.floor((topLeft.y + size.height / tileScale) / TILE_SIZE) + buffer;
+  const tileCount = 2 ** tileZoom;
+  const tiles = [];
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      if (y < 0 || y >= tileCount) continue;
+      const wrappedX = ((x % tileCount) + tileCount) % tileCount;
+      tiles.push({
+        key: `${tileZoom}:${x}:${y}`,
+        url: tileUrl(wrappedX, y, tileZoom),
+        left: (x * TILE_SIZE - topLeft.x) * tileScale,
+        top: (y * TILE_SIZE - topLeft.y) * tileScale,
+        size: TILE_SIZE * tileScale,
+      });
+    }
+  }
+  return { tiles, centerWorld, tileZoom, tileScale };
+}
+
+function tileUrlsForZoom(center, size, tileZoom, buffer = ADJACENT_ZOOM_PRELOAD_BUFFER) {
+  if (!size.width || !size.height) return [];
+  const centerWorld = lngLatToWorld(center.lng, center.lat, tileZoom);
+  const topLeft = {
+    x: centerWorld.x - size.width / 2,
+    y: centerWorld.y - size.height / 2,
+  };
+  const minX = Math.floor(topLeft.x / TILE_SIZE) - buffer;
+  const maxX = Math.floor((topLeft.x + size.width) / TILE_SIZE) + buffer;
+  const minY = Math.floor(topLeft.y / TILE_SIZE) - buffer;
+  const maxY = Math.floor((topLeft.y + size.height) / TILE_SIZE) + buffer;
+  const tileCount = 2 ** tileZoom;
+  const urls = [];
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      if (y < 0 || y >= tileCount) continue;
+      const wrappedX = ((x % tileCount) + tileCount) % tileCount;
+      urls.push(tileUrl(wrappedX, y, tileZoom));
+    }
+  }
+  return urls;
+}
+
+function warmTileUrls(urls) {
+  if (typeof Image === "undefined") return;
+  for (const url of urls.slice(0, MAX_PREFETCH_TILES)) {
+    if (!url || warmedTileUrls.has(url)) continue;
+    if (warmedTileUrls.size > 900) warmedTileUrls.clear();
+    warmedTileUrls.add(url);
+    const img = new Image();
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    img.src = url;
+  }
 }
 
 function fmtCoord(value) {
@@ -145,47 +228,43 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
   const frameRef = useRef(0);
   const pendingCenterRef = useRef(null);
   const size = useElementSize(ref);
-  const safeZoom = clamp(Math.round(Number(zoom) || 16), MIN_ZOOM, MAX_ZOOM);
+  const safeZoom = normalizeZoom(zoom);
   const safeCenter = validCoord(center) || toMapCoord(FALLBACK_WGS);
-  const centerWorld = lngLatToWorld(safeCenter.lng, safeCenter.lat, safeZoom);
-  const centerWorldRef = useRef(centerWorld);
+  const centerLng = safeCenter.lng;
+  const centerLat = safeCenter.lat;
+  const mapWidth = size.width;
+  const mapHeight = size.height;
+  const view = useMemo(
+    () => mapTilesForView({ lng: centerLng, lat: centerLat }, { width: mapWidth, height: mapHeight }, safeZoom, PRELOAD_TILE_BUFFER),
+    [centerLat, centerLng, mapHeight, mapWidth, safeZoom],
+  );
+  const { tiles, centerWorld, tileZoom, tileScale } = view;
+  const viewRef = useRef({ centerWorld, tileZoom, tileScale });
   const zoomRef = useRef(safeZoom);
+
+  const prefetchUrls = useMemo(() => {
+    if (!mapWidth || !mapHeight) return [];
+    const candidates = [tileZoom - 1, tileZoom + 1]
+      .filter(z => z >= MIN_ZOOM && z <= MAX_ZOOM);
+    return [...new Set(candidates.flatMap(z => tileUrlsForZoom(
+      { lng: centerLng, lat: centerLat },
+      { width: mapWidth, height: mapHeight },
+      z,
+    )))];
+  }, [centerLat, centerLng, mapHeight, mapWidth, tileZoom]);
 
   useEffect(() => () => {
     if (frameRef.current) cancelFrame(frameRef.current);
   }, []);
 
   useEffect(() => {
-    centerWorldRef.current = centerWorld;
+    viewRef.current = { centerWorld, tileZoom, tileScale };
     zoomRef.current = safeZoom;
-  }, [centerWorld, safeZoom]);
+  }, [centerWorld, safeZoom, tileScale, tileZoom]);
 
-  const tiles = useMemo(() => {
-    if (!size.width || !size.height) return [];
-    const topLeft = {
-      x: centerWorld.x - size.width / 2,
-      y: centerWorld.y - size.height / 2,
-    };
-    const minX = Math.floor(topLeft.x / TILE_SIZE) - PRELOAD_TILE_BUFFER;
-    const maxX = Math.floor((topLeft.x + size.width) / TILE_SIZE) + PRELOAD_TILE_BUFFER;
-    const minY = Math.floor(topLeft.y / TILE_SIZE) - PRELOAD_TILE_BUFFER;
-    const maxY = Math.floor((topLeft.y + size.height) / TILE_SIZE) + PRELOAD_TILE_BUFFER;
-    const tileCount = 2 ** safeZoom;
-    const out = [];
-    for (let x = minX; x <= maxX; x += 1) {
-      for (let y = minY; y <= maxY; y += 1) {
-        if (y < 0 || y >= tileCount) continue;
-        const wrappedX = ((x % tileCount) + tileCount) % tileCount;
-        out.push({
-          key: `${safeZoom}:${x}:${y}`,
-          url: tileUrl(wrappedX, y, safeZoom),
-          left: x * TILE_SIZE - topLeft.x,
-          top: y * TILE_SIZE - topLeft.y,
-        });
-      }
-    }
-    return out;
-  }, [centerWorld.x, centerWorld.y, safeZoom, size.height, size.width]);
+  useEffect(() => {
+    warmTileUrls([...tiles.map(tile => tile.url), ...prefetchUrls]);
+  }, [prefetchUrls, tiles]);
 
   function scheduleCenterChange(nextCenter) {
     if (!onCenterChange) return;
@@ -228,7 +307,7 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
       initPinch();
       return;
     }
-    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, centerWorld: centerWorldRef.current };
+    dragRef.current = { id: e.pointerId, x: e.clientX, y: e.clientY, ...viewRef.current };
   }
 
   function pointerMove(e) {
@@ -241,15 +320,19 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
       const pinch = pinchRef.current;
       if (!pinch || pts.length < 2 || !onZoomChange) return;
       const ratio = pointerDistance(pts[0], pts[1]) / pinch.startDistance;
-      const nextZoom = clamp(Math.round(pinch.startZoom + Math.log2(Math.max(0.25, ratio))), MIN_ZOOM, MAX_ZOOM);
-      if (nextZoom !== zoomRef.current) onZoomChange(nextZoom);
+      const nextZoom = clamp(pinch.startZoom + Math.log2(Math.max(0.25, ratio)), MIN_ZOOM, MAX_ZOOM);
+      if (Math.abs(nextZoom - zoomRef.current) >= 0.01) onZoomChange(nextZoom);
       return;
     }
     const drag = dragRef.current;
     if (!drag || drag.id !== e.pointerId || !onCenterChange) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
-    scheduleCenterChange(worldToLngLat(drag.centerWorld.x - dx, drag.centerWorld.y - dy, zoomRef.current));
+    scheduleCenterChange(worldToLngLat(
+      drag.centerWorld.x - dx / drag.tileScale,
+      drag.centerWorld.y - dy / drag.tileScale,
+      drag.tileZoom,
+    ));
   }
 
   function pointerUp(e) {
@@ -260,7 +343,7 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
     } else if (pointersRef.current.size === 1) {
       pinchRef.current = null;
       const pt = activePointerList()[0];
-      dragRef.current = { id: pt.id, x: pt.x, y: pt.y, centerWorld: centerWorldRef.current };
+      dragRef.current = { id: pt.id, x: pt.x, y: pt.y, ...viewRef.current };
     } else {
       pinchRef.current = null;
     }
@@ -277,7 +360,7 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
       style={{
         position: "relative",
         overflow: "hidden",
-        background: "#dfe7dd",
+        background: "#e7e7e2",
         touchAction: interactive ? "none" : "auto",
         cursor: interactive ? "grab" : "default",
         userSelect: "none",
@@ -299,9 +382,11 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
             position: "absolute",
             left: tile.left,
             top: tile.top,
-            width: TILE_SIZE,
-            height: TILE_SIZE,
+            width: tile.size,
+            height: tile.size,
             pointerEvents: "none",
+            transform: "translateZ(0)",
+            backfaceVisibility: "hidden",
           }}
         />
       ))}

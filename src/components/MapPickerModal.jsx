@@ -8,7 +8,6 @@ import { PinIcon } from "./Icons";
 
 const TILE_SIZE = 256;
 const PRELOAD_TILE_BUFFER = 2;
-const ADJACENT_ZOOM_PRELOAD_BUFFER = 1;
 const MAX_PREFETCH_TILES = 72;
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
@@ -174,42 +173,11 @@ function tileZoomFor(zoom) {
 }
 
 function mapTilesForView(center, size, zoom, buffer = PRELOAD_TILE_BUFFER) {
+  const tileZoom = tileZoomFor(zoom);
+  const centerWorld = lngLatToWorld(center.lng, center.lat, tileZoom);
   if (!size.width || !size.height) {
-    return { tiles: [], centerWorld: lngLatToWorld(center.lng, center.lat, tileZoomFor(zoom)), tileZoom: tileZoomFor(zoom), tileScale: 1 };
+    return { tiles: [], centerWorld, tileZoom };
   }
-  const safeZoom = normalizeZoom(zoom);
-  const tileZoom = tileZoomFor(safeZoom);
-  const tileScale = 2 ** (safeZoom - tileZoom);
-  const centerWorld = lngLatToWorld(center.lng, center.lat, tileZoom);
-  const topLeft = {
-    x: centerWorld.x - size.width / (2 * tileScale),
-    y: centerWorld.y - size.height / (2 * tileScale),
-  };
-  const minX = Math.floor(topLeft.x / TILE_SIZE) - buffer;
-  const maxX = Math.floor((topLeft.x + size.width / tileScale) / TILE_SIZE) + buffer;
-  const minY = Math.floor(topLeft.y / TILE_SIZE) - buffer;
-  const maxY = Math.floor((topLeft.y + size.height / tileScale) / TILE_SIZE) + buffer;
-  const tileCount = 2 ** tileZoom;
-  const tiles = [];
-  for (let x = minX; x <= maxX; x += 1) {
-    for (let y = minY; y <= maxY; y += 1) {
-      if (y < 0 || y >= tileCount) continue;
-      const wrappedX = ((x % tileCount) + tileCount) % tileCount;
-      tiles.push({
-        key: `${tileZoom}:${x}:${y}`,
-        url: tileUrl(wrappedX, y, tileZoom),
-        left: (x * TILE_SIZE - topLeft.x) * tileScale,
-        top: (y * TILE_SIZE - topLeft.y) * tileScale,
-        size: TILE_SIZE * tileScale,
-      });
-    }
-  }
-  return { tiles, centerWorld, tileZoom, tileScale };
-}
-
-function tileUrlsForZoom(center, size, tileZoom, buffer = ADJACENT_ZOOM_PRELOAD_BUFFER) {
-  if (!size.width || !size.height) return [];
-  const centerWorld = lngLatToWorld(center.lng, center.lat, tileZoom);
   const topLeft = {
     x: centerWorld.x - size.width / 2,
     y: centerWorld.y - size.height / 2,
@@ -219,15 +187,20 @@ function tileUrlsForZoom(center, size, tileZoom, buffer = ADJACENT_ZOOM_PRELOAD_
   const minY = Math.floor(topLeft.y / TILE_SIZE) - buffer;
   const maxY = Math.floor((topLeft.y + size.height) / TILE_SIZE) + buffer;
   const tileCount = 2 ** tileZoom;
-  const urls = [];
+  const tiles = [];
   for (let x = minX; x <= maxX; x += 1) {
     for (let y = minY; y <= maxY; y += 1) {
       if (y < 0 || y >= tileCount) continue;
       const wrappedX = ((x % tileCount) + tileCount) % tileCount;
-      urls.push(tileUrl(wrappedX, y, tileZoom));
+      tiles.push({
+        key: `${tileZoom}:${x}:${y}`,
+        url: tileUrl(wrappedX, y, tileZoom),
+        left: x * TILE_SIZE - topLeft.x,
+        top: y * TILE_SIZE - topLeft.y,
+      });
     }
   }
-  return urls;
+  return { tiles, centerWorld, tileZoom };
 }
 
 function warmTileUrls(urls) {
@@ -300,33 +273,22 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
     () => mapTilesForView({ lng: centerLng, lat: centerLat }, { width: mapWidth, height: mapHeight }, safeZoom, PRELOAD_TILE_BUFFER),
     [centerLat, centerLng, mapHeight, mapWidth, safeZoom],
   );
-  const { tiles, centerWorld, tileZoom, tileScale } = view;
-  const viewRef = useRef({ centerWorld, tileZoom, tileScale });
+  const { tiles, centerWorld, tileZoom } = view;
+  const viewRef = useRef({ centerWorld, tileZoom });
   const zoomRef = useRef(safeZoom);
-
-  const prefetchUrls = useMemo(() => {
-    if (!mapWidth || !mapHeight) return [];
-    const candidates = [tileZoom - 1, tileZoom + 1]
-      .filter(z => z >= MIN_ZOOM && z <= MAX_ZOOM);
-    return [...new Set(candidates.flatMap(z => tileUrlsForZoom(
-      { lng: centerLng, lat: centerLat },
-      { width: mapWidth, height: mapHeight },
-      z,
-    )))];
-  }, [centerLat, centerLng, mapHeight, mapWidth, tileZoom]);
 
   useEffect(() => () => {
     if (frameRef.current) cancelFrame(frameRef.current);
   }, []);
 
   useEffect(() => {
-    viewRef.current = { centerWorld, tileZoom, tileScale };
+    viewRef.current = { centerWorld, tileZoom };
     zoomRef.current = safeZoom;
-  }, [centerWorld, safeZoom, tileScale, tileZoom]);
+  }, [centerWorld, safeZoom, tileZoom]);
 
   useEffect(() => {
-    warmTileUrls([...tiles.map(tile => tile.url), ...prefetchUrls]);
-  }, [prefetchUrls, tiles]);
+    warmTileUrls(tiles.map(tile => tile.url));
+  }, [tiles]);
 
   function scheduleCenterChange(nextCenter) {
     if (!onCenterChange) return;
@@ -391,8 +353,8 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
     scheduleCenterChange(worldToLngLat(
-      drag.centerWorld.x - dx / drag.tileScale,
-      drag.centerWorld.y - dy / drag.tileScale,
+      drag.centerWorld.x - dx,
+      drag.centerWorld.y - dy,
       drag.tileZoom,
     ));
   }
@@ -444,8 +406,8 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
             position: "absolute",
             left: tile.left,
             top: tile.top,
-            width: tile.size,
-            height: tile.size,
+            width: TILE_SIZE,
+            height: TILE_SIZE,
             pointerEvents: "none",
             transform: "translateZ(0)",
             backfaceVisibility: "hidden",
@@ -892,12 +854,11 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
           WebkitBackdropFilter: "blur(14px)",
         }}>
           <div style={{
-            display: "grid",
-            gridTemplateColumns: "1fr auto",
-            gap: 12,
-            alignItems: "center",
+            display: "flex",
+            flexDirection: "column",
+            gap: 10,
           }}>
-            <div style={{ minWidth: 0 }}>
+            <div style={{ minWidth: 0, width: "100%" }}>
               <div style={{
                 color: address ? "var(--ink-1)" : "var(--ink-3)",
                 fontSize: 13,
@@ -918,7 +879,14 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 {fmtCoord(centerWgs.lat)}, {fmtCoord(centerWgs.lng)} · WGS84
               </div>
             </div>
-            <button type="button" onClick={confirm} style={{ ...s.btn, minHeight: 40 }}>
+            <button type="button" onClick={confirm} style={{
+              ...s.btn,
+              width: "100%",
+              minHeight: 42,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
               {t("location.confirm_point")}
             </button>
           </div>

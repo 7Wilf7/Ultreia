@@ -117,8 +117,9 @@ export function LocationSettingsModal({
         zIndex: 10010,
         background: "var(--bg)",
         color: "var(--ink-1)",
-        display: "flex",
-        flexDirection: "column",
+        overflowY: "auto",
+        WebkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
         fontFamily: "var(--font-sans)",
       }}>
         <div style={{
@@ -128,10 +129,7 @@ export function LocationSettingsModal({
           justifyContent: "space-between",
           gap: 12,
           borderBottom: "1px solid var(--rule)",
-          background: "rgba(8, 11, 10, 0.94)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
-          zIndex: 1,
+          background: "var(--bg)",
         }}>
           <div style={{ minWidth: 0 }}>
             <h2 style={{ fontSize: 19, fontWeight: 650, margin: 0 }}>{t("location.title")}</h2>
@@ -143,10 +141,6 @@ export function LocationSettingsModal({
         </div>
 
         <div style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          WebkitOverflowScrolling: "touch",
           padding: "14px 14px calc(env(safe-area-inset-bottom) + 18px)",
         }}>
           <div style={{

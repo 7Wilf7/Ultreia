@@ -3,6 +3,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import {
+  coachComposerIconButtonStyle,
+  coachComposerInputStyle,
+  coachComposerSendButtonStyle,
+} from "./CoachComposerControls";
+import {
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
   DEFAULT_COACH_CONFIG,
 } from "../constants";
@@ -736,6 +741,13 @@ export function AICoachTab({
     onStopProactiveTrainingAdjustment?.();
     setConfirmManualAdjustment(false);
   }, [onStopProactiveTrainingAdjustment]);
+  const closeManualAdjustmentConfirm = useCallback(() => {
+    if (proactiveAdjustmentLoading) {
+      handleStopProactiveAdjustment();
+      return;
+    }
+    setConfirmManualAdjustment(false);
+  }, [handleStopProactiveAdjustment, proactiveAdjustmentLoading]);
   const handleManualAdjustmentShortcut = useCallback(() => {
     if (proactiveAdjustmentLoading) {
       handleStopProactiveAdjustment();
@@ -1382,14 +1394,10 @@ export function AICoachTab({
       )}
 
       {confirmManualAdjustment && (
-        <ModalRoot onClose={() => {
-          if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
-        }}>
+        <ModalRoot onClose={closeManualAdjustmentConfirm}>
           <div
             style={{ ...s.modalOverlay(isMobile, { float: true }), zIndex: 10010 }}
-            onClick={() => {
-              if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
-            }}
+            onClick={closeManualAdjustmentConfirm}
           >
             <div
               style={s.modalCard(isMobile, { maxWidth: 460, float: true })}
@@ -1399,15 +1407,8 @@ export function AICoachTab({
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.proactive_confirm_title")}</h2>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!proactiveAdjustmentLoading) setConfirmManualAdjustment(false);
-                  }}
-                  disabled={proactiveAdjustmentLoading}
-                  style={{
-                    ...s.modalCloseBtn,
-                    opacity: proactiveAdjustmentLoading ? 0.35 : 1,
-                    cursor: proactiveAdjustmentLoading ? "default" : "pointer",
-                  }}
+                  onClick={closeManualAdjustmentConfirm}
+                  style={s.modalCloseBtn}
                   aria-label="Close"
                 >
                   ×
@@ -1419,13 +1420,8 @@ export function AICoachTab({
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={() => setConfirmManualAdjustment(false)}
-                  disabled={proactiveAdjustmentLoading}
-                  style={{
-                    ...s.btnGhost,
-                    opacity: proactiveAdjustmentLoading ? 0.5 : 1,
-                    cursor: proactiveAdjustmentLoading ? "default" : "pointer",
-                  }}
+                  onClick={closeManualAdjustmentConfirm}
+                  style={s.btnGhost}
                 >
                   {t("common.cancel")}
                 </button>
@@ -2133,23 +2129,11 @@ export function AICoachTab({
           <textarea
             ref={chatInputRef}
             rows={isMobile ? 1 : 9}
-            placeholder={t("coach.input_placeholder")}
             value={chatInput}
             onChange={e => setChatInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
             style={{
-              ...s.input,
-              resize: isMobile ? "none" : "vertical",
-              fontFamily: "var(--font-sans)",
-              display: "block",
-              width: "100%",
-              lineHeight: isMobile ? 1.35 : 1.45,
-              padding: isMobile ? "6px 9px" : undefined,
-              minHeight: isMobile ? 32 : undefined,
-              height: isMobile ? 32 : undefined,
-              maxHeight: isMobile ? "calc(13px * 1.35 * 7 + 18px)" : undefined,
-              overflowY: isMobile ? "auto" : undefined,
-              "--mobile-input-fs": isMobile ? "13px" : undefined,
+              ...coachComposerInputStyle({ isMobile }),
             }} />
         </div>
         {isMobile ? (
@@ -2160,34 +2144,12 @@ export function AICoachTab({
               disabled={chatLoading || coachImages.length >= COACH_IMAGE_LIMIT}
               aria-label={t("coach.attach_image")}
               title={t("coach.attach_image")}
-              style={{
-                ...s.btnGhost,
-                width: 36,
-                height: 32,
-                padding: 0,
-                minHeight: 32,
-                flexShrink: 0,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                opacity: (chatLoading || coachImages.length >= COACH_IMAGE_LIMIT) ? 0.45 : 1,
-              }}>
+              style={coachComposerIconButtonStyle({ disabled: chatLoading || coachImages.length >= COACH_IMAGE_LIMIT })}>
               <ImageIcon size={15} />
             </button>
             <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !canSubmitCoachMessage}
               aria-label={chatLoading ? t("coach.stop_generating") : t("coach.send")}
-              style={{
-                ...s.btn,
-                width: 40,
-                height: 32,
-                padding: 0,
-                fontSize: 20,
-                lineHeight: 1,
-                minHeight: 32,
-                flexShrink: 0,
-                opacity: (!chatLoading && !canSubmitCoachMessage) ? 0.4 : 1,
-                display: "inline-flex", alignItems: "center", justifyContent: "center",
-              }}>
+              style={coachComposerSendButtonStyle({ disabled: !chatLoading && !canSubmitCoachMessage })}>
               {chatLoading ? "×" : "⏎"}
             </button>
           </>

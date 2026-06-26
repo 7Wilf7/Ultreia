@@ -4,6 +4,10 @@ import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { weekWindow } from "../utils/weeklyReport";
+import {
+  coachComposerInputStyle,
+  coachComposerSendButtonStyle,
+} from "./CoachComposerControls";
 
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
@@ -226,30 +230,16 @@ export function WeeklyReportPage({
           <textarea
             value={discussionText}
             onChange={e => setDiscussionText(e.target.value)}
-            placeholder={t("weekly_report.discuss_placeholder")}
             rows={1}
             style={{
-              ...s.input,
+              ...coachComposerInputStyle({ isMobile: true }),
               flex: 1,
-              minHeight: 36,
-              maxHeight: 96,
-              resize: "vertical",
-              fontSize: 13,
-              lineHeight: 1.35,
-              padding: "8px 10px",
-              "--mobile-input-fs": "13px",
             }}
           />
           <button
             onClick={sendDiscussion}
             disabled={!canDiscuss}
-            style={{
-              ...s.btn,
-              minHeight: 36,
-              padding: "0 12px",
-              whiteSpace: "nowrap",
-              opacity: canDiscuss ? 1 : 0.45,
-            }}>
+            style={coachComposerSendButtonStyle({ disabled: !canDiscuss, text: true, minWidth: 118 })}>
             {t("weekly_report.discuss_send")}
           </button>
         </div>

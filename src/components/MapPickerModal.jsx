@@ -11,6 +11,7 @@ const PRELOAD_TILE_BUFFER = 2;
 const MAX_PREFETCH_TILES = 72;
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
+const AMAP_REACT_SYNC_INTERVAL_MS = 90;
 const FALLBACK_WGS = { lng: 113.2644, lat: 23.1291 }; // Guangzhou
 const AMAP_LOADER_URL = "https://webapi.amap.com/loader.js";
 const AMAP_MAP_STYLE = "amap://styles/normal";
@@ -458,6 +459,7 @@ function AmapSdkMapView({
   const hostRef = useRef(null);
   const mapRef = useRef(null);
   const frameRef = useRef(0);
+  const lastMapSyncRef = useRef(0);
   const callbacksRef = useRef({ onCenterChange, onZoomChange, onInteractionStart, onInteractionEnd, onError });
   const safeZoom = normalizeZoom(zoom);
   const safeCenter = validCoord(center) || toMapCoord(FALLBACK_WGS);
@@ -471,9 +473,12 @@ function AmapSdkMapView({
   useEffect(() => {
     let disposed = false;
 
-    function readMapState() {
+    function readMapState({ force = false } = {}) {
       const map = mapRef.current;
       if (!map || disposed) return;
+      const now = Date.now();
+      if (!force && now - lastMapSyncRef.current < AMAP_REACT_SYNC_INTERVAL_MS) return;
+      lastMapSyncRef.current = now;
       const mapCenter = map.getCenter();
       const mapZoom = Number(map.getZoom());
       callbacksRef.current.onCenterChange?.({ lng: mapCenter.lng, lat: mapCenter.lat });
@@ -497,7 +502,7 @@ function AmapSdkMapView({
         cancelFrame(frameRef.current);
         frameRef.current = 0;
       }
-      readMapState();
+      readMapState({ force: true });
       callbacksRef.current.onInteractionEnd?.();
     }
 
@@ -650,8 +655,6 @@ export function LocationMapPreview({ location, onOpen }) {
               borderRadius: 8,
               padding: "6px 9px",
               fontSize: 12,
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
             }}>
               {t("location.open_map")}
             </span>
@@ -661,8 +664,6 @@ export function LocationMapPreview({ location, onOpen }) {
             background: "rgba(8, 11, 10, 0.78)",
             borderRadius: 8,
             padding: "9px 10px",
-            backdropFilter: "blur(10px)",
-            WebkitBackdropFilter: "blur(10px)",
           }}>
             <div style={{
               fontSize: 13,
@@ -798,10 +799,9 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
           justifyContent: "space-between",
           gap: 10,
           borderBottom: "1px solid var(--rule)",
-          background: "rgba(8, 11, 10, 0.88)",
-          backdropFilter: "blur(14px)",
-          WebkitBackdropFilter: "blur(14px)",
+          background: "#0d1210",
           zIndex: 2,
+          flexShrink: 0,
         }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 17, fontWeight: 650 }}>{t("location.map_fullscreen_title")}</div>
@@ -844,9 +844,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: "rgba(8, 11, 10, 0.82)",
-                  backdropFilter: "blur(10px)",
-                  WebkitBackdropFilter: "blur(10px)",
+                  background: "#151b18",
+                  boxShadow: "none",
                 }} aria-label={t("location.detect_button")} title={t("location.detect_button")}>
                   {locating ? <Spinner size={14} thickness={1.5} /> : <PinIcon size={17} />}
                 </button>
@@ -857,9 +856,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                   minHeight: 42,
                   padding: 0,
                   fontSize: 20,
-                  background: "rgba(8, 11, 10, 0.82)",
-                  backdropFilter: "blur(10px)",
-                  WebkitBackdropFilter: "blur(10px)",
+                  background: "#151b18",
+                  boxShadow: "none",
                 }} aria-label={t("location.zoom_in")}>+</button>
                 <button type="button" onClick={() => setZoom(z => clamp(z - 1, MIN_ZOOM, MAX_ZOOM))} style={{
                   ...s.btnGhost,
@@ -868,9 +866,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                   minHeight: 42,
                   padding: 0,
                   fontSize: 22,
-                  background: "rgba(8, 11, 10, 0.82)",
-                  backdropFilter: "blur(10px)",
-                  WebkitBackdropFilter: "blur(10px)",
+                  background: "#151b18",
+                  boxShadow: "none",
                 }} aria-label={t("location.zoom_out")}>-</button>
               </div>
             </AmapSdkMapView>
@@ -903,9 +900,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: "rgba(8, 11, 10, 0.82)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
+                background: "#151b18",
+                boxShadow: "none",
               }} aria-label={t("location.detect_button")} title={t("location.detect_button")}>
                 {locating ? <Spinner size={14} thickness={1.5} /> : <PinIcon size={17} />}
               </button>
@@ -916,9 +912,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 minHeight: 42,
                 padding: 0,
                 fontSize: 20,
-                background: "rgba(8, 11, 10, 0.82)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
+                background: "#151b18",
+                boxShadow: "none",
               }} aria-label={t("location.zoom_in")}>+</button>
               <button type="button" onClick={() => setZoom(z => clamp(z - 1, MIN_ZOOM, MAX_ZOOM))} style={{
                 ...s.btnGhost,
@@ -927,9 +922,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 minHeight: 42,
                 padding: 0,
                 fontSize: 22,
-                background: "rgba(8, 11, 10, 0.82)",
-                backdropFilter: "blur(10px)",
-                WebkitBackdropFilter: "blur(10px)",
+                background: "#151b18",
+                boxShadow: "none",
               }} aria-label={t("location.zoom_out")}>-</button>
             </div>
             </StreetMapView>

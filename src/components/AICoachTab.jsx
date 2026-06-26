@@ -9,13 +9,14 @@ import {
 import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { hasValidCoords } from "../lib/weather";
 import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
-import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon } from "./Icons";
+import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon, PinIcon } from "./Icons";
 import { ItemActionModal } from "./ItemActionModal";
 import { useAppDialog } from "./AppDialogContext";
 import { Dropdown } from "./Dropdown";
@@ -449,7 +450,7 @@ export function AICoachTab({
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
   // preview's [Current Weather] / [Upcoming Forecast] sections.
-  weatherCtx, onOpenLocationSettings,
+  weatherCtx, defaultLocation, onOpenLocationSettings,
   // Inbox (delivered coach pushes) — entry lives top-right of this tab's
   // header. Opens the InboxModal owned by AppShell; inboxUnread drives the
   // badge.
@@ -1023,6 +1024,7 @@ export function AICoachTab({
     if (cfgDefault) out.push("config");
     if (logs.filter(l => !l.isPlanned).length < 3) out.push("workouts");
     if (!races.some(r => r.isTarget)) out.push("races");
+    if (!hasDefaultLocation) out.push("location");
     return out;
   }
   function markHintsSeen() {
@@ -1100,6 +1102,12 @@ export function AICoachTab({
       : wStatus === 'error' ? 'error'
       : '—');
   const weatherActive = wStatus === 'ready';
+  const hasDefaultLocation = hasValidCoords(defaultLocation);
+  const locationLabel = (() => {
+    const raw = String(defaultLocation?.name || "").trim();
+    if (!raw) return lang === "zh" ? "未设" : "unset";
+    return raw.length <= 8 ? raw : `${raw.slice(0, 8)}…`;
+  })();
   const runnerLastSeenIso = codexRunnerStatus?.last_seen_at || null;
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
   const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 20_000;
@@ -1531,6 +1539,32 @@ export function AICoachTab({
             <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherLabel}</span>
           </button>
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
+
+        {onOpenLocationSettings && (
+          <button type="button" onClick={onOpenLocationSettings}
+            title={hasDefaultLocation
+              ? (lang === "zh" ? `天气默认地点：${defaultLocation?.name || ""}` : `Default weather location: ${defaultLocation?.name || ""}`)
+              : (lang === "zh" ? "设置天气默认地点" : "Set default weather location")}
+            aria-label={lang === "zh" ? "设置天气默认地点" : "Set default weather location"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              minHeight: 26, padding: "4px 9px",
+              border: `1px solid ${hasDefaultLocation ? "var(--rule)" : "var(--warn)"}`,
+              borderRadius: 2,
+              background: hasDefaultLocation ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)",
+              color: hasDefaultLocation ? "var(--ink-2)" : "var(--warn)",
+              fontSize: 11, fontFamily: "var(--font-sans)",
+              cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
+              flex: "0 0 auto",
+            }}>
+            <span style={{ color: hasDefaultLocation ? "var(--moss)" : "var(--warn)", display: "inline-flex" }}>
+              <PinIcon size={12} />
+            </span>
+            <span style={{ color: hasDefaultLocation ? "var(--ink-1)" : "var(--warn)", fontWeight: 600 }}>
+              {locationLabel}
+            </span>
+          </button>
+        )}
 
         <span style={{ flex: 1, minWidth: 6 }} />
         {!isMobile && showManualAdjustmentShortcut && (
@@ -2219,6 +2253,7 @@ export function AICoachTab({
           config:   { text: t("coach.hint_config"),   jump: () => jumpTo(() => setShowCoachConfig(true)) },
           workouts: { text: t("coach.hint_workouts"), jump: () => jumpTo(() => onGoToTraining?.()) },
           races:    { text: t("coach.hint_races"),    jump: () => jumpTo(() => onGoToRaces?.()) },
+          location: { text: t("coach.hint_location"), jump: () => jumpTo(() => onOpenLocationSettings?.()) },
         };
         return (
           <ModalRoot onClose={dismiss}>

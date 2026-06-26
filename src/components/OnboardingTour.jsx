@@ -53,6 +53,7 @@ const STEPS = [
     },
     bullets: [
       { zh: "它实时看到你的资料、近期训练、目标赛、长期记忆，给出**个性化**建议", en: "It sees your profile, recent training, goal races and long-term memory — and gives personalized advice." },
+      { zh: "第一次使用时，点 AI Coach 顶部的定位图标设置默认天气地点；以后天气和教练建议会按这个地点刷新", en: "On first use, tap the location pin in AI Coach to set your default weather place; weather and coach context use that place." },
       { zh: "直接问它：今天该怎么练？这周量合理吗？赛前怎么调整？", en: "Just ask: what should I run today? Is this week's load OK? How do I taper?" },
       { zh: "把它给的训练建议整理成日历草案，确认后再**加入日历**", en: "Turn its plan suggestions into a calendar draft, then add them after checking." },
       { zh: "长期记忆：它会记住你的持久偏好，越聊越懂你", en: "Long-term memory: it remembers your durable preferences and gets to know you over time." },

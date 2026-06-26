@@ -19,6 +19,16 @@ function roundCoord(n) {
   return Math.round(Number(n) * 10000) / 10000;
 }
 
+export function isValidCoordValue(value, min, max) {
+  if (value === "" || value == null) return false;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= min && n <= max;
+}
+
+export function hasValidCoords({ lng, lat } = {}) {
+  return isValidCoordValue(lng, -180, 180) && isValidCoordValue(lat, -90, 90);
+}
+
 // Returns { lng, lat, source } where source ∈ 'native' | 'browser' | 'default'.
 // Throws if no source is available — caller decides whether to surface or fall
 // back to "weather unavailable".
@@ -28,20 +38,18 @@ function roundCoord(n) {
 // Android's "Location Accuracy" (Google Play Services) dialog — and a runner's
 // training spot rarely moves, so a manual default is both quieter and more
 // accurate. Pass `forceDevice: true` (the explicit "use current location"
-// affordance) to deliberately opt into GPS and refresh the saved coords.
-export async function getCurrentLocation({ defaultLng, defaultLat, forceDevice = false } = {}) {
-  const hasDefault = Number.isFinite(Number(defaultLng)) && Number.isFinite(Number(defaultLat));
+// affordance) to deliberately opt into GPS and refresh the saved coords. That
+// explicit tap uses high accuracy; passive auto-refresh stays quiet/coarse.
+export async function getCurrentLocation({ defaultLng, defaultLat, forceDevice = false, highAccuracy = false } = {}) {
+  const hasDefault = hasValidCoords({ lng: defaultLng, lat: defaultLat });
   if (hasDefault && !forceDevice) {
     return { lng: roundCoord(defaultLng), lat: roundCoord(defaultLat), source: 'default' };
   }
   if (isNative()) {
     try {
-      // Low accuracy on purpose: city-level is all weather needs, and
-      // enableHighAccuracy:true is what triggers Android's "Location Accuracy"
-      // (Google Play Services) upsell dialog. Network/coarse location is fine.
       const pos = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: false,
-        timeout: 8000,
+        enableHighAccuracy: !!(forceDevice || highAccuracy),
+        timeout: forceDevice || highAccuracy ? 12000 : 8000,
       });
       return {
         lng: roundCoord(pos.coords.longitude),
@@ -612,15 +620,38 @@ export function useWeatherContext({ defaultLng, defaultLat, autoUpdate = true, i
   return { ...state, refetch: run };
 }
 
-// Reverse-geocode WGS84 coords → a short, localized place label (district /
-// city level, e.g. "广东省 广州市" or "Guangzhou, Guangdong"). Uses
+function compactReverseLabel(data, localityLanguage) {
+  const administrative = Array.isArray(data?.localityInfo?.administrative)
+    ? data.localityInfo.administrative
+    : [];
+  const adminNames = administrative
+    .map(item => String(item?.name || item?.isoName || '').trim())
+    .filter(Boolean)
+    .filter(name => !/^(中国|China|中华人民共和国)$/i.test(name));
+  const province = String(data?.principalSubdivision || '').trim();
+  const city = String(data?.city || '').trim();
+  const locality = String(data?.locality || '').trim();
+  const candidates = [province, city, locality, ...adminNames]
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i);
+  if (!candidates.length) return '';
+
+  if (localityLanguage === 'zh') {
+    const focused = candidates.slice(-3);
+    return focused.join('');
+  }
+  return candidates.slice(-3).reverse().join(', ');
+}
+
+// Reverse-geocode WGS84 coords → a short, localized place label (usually
+// district/city level, e.g. "广东省广州市白云区" or "Baiyun, Guangzhou"). Uses
 // BigDataCloud's free reverse-geocode-client endpoint: no API key, CORS-
 // enabled (works in the browser AND the Capacitor WebView), and localized via
-// localityLanguage. District/city granularity is intentional — street-level is
-// unnecessary for coaching/weather context and more privacy-sensitive.
+// localityLanguage. The label is only for display; the precise weather lookup
+// uses the coordinates.
 // Returns "" on any failure so callers can fall back to manual entry.
 export async function reverseGeocode({ lng, lat, lang = 'zh' }) {
-  if (!Number.isFinite(Number(lng)) || !Number.isFinite(Number(lat))) return '';
+  if (!hasValidCoords({ lng, lat })) return '';
   const localityLanguage = lang === 'en' ? 'en' : 'zh';
   const url = `https://api.bigdatacloud.net/data/reverse-geocode-client`
     + `?latitude=${roundCoord(lat)}&longitude=${roundCoord(lng)}&localityLanguage=${localityLanguage}`;
@@ -628,16 +659,7 @@ export async function reverseGeocode({ lng, lat, lang = 'zh' }) {
     const resp = await fetch(url);
     if (!resp.ok) return '';
     const d = await resp.json();
-    const province = (d.principalSubdivision || '').trim();
-    const city = (d.city || d.locality || '').trim();
-    if (!province && !city) return (d.locality || '').trim();
-    if (localityLanguage === 'zh') {
-      // Chinese addresses concatenate without separators; dedupe if the API
-      // returns the same string for both (e.g. municipalities like 上海市).
-      return province === city ? city : `${province}${city}`;
-    }
-    // English: "City, Province"
-    return [city, province].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+    return compactReverseLabel(d, localityLanguage);
   } catch {
     return '';
   }
@@ -686,7 +708,7 @@ function _pushNum(arr, v) { const n = Number(v); if (Number.isFinite(n)) arr.pus
 // included because that's what matters for heat planning. Returns a
 // forecast-shaped object (source:'climate') so existing formatters work, or null.
 export async function fetchClimateNormal({ lat, lng, date }) {
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  if (!hasValidCoords({ lng, lat }) || !date) return null;
   const target = new Date(`${date}T00:00:00`);
   if (isNaN(target.getTime())) return null;
   const tMonth = target.getMonth();
@@ -742,7 +764,7 @@ export async function fetchClimateNormal({ lat, lng, date }) {
 // stand-in for start temp (history races don't store a start time). Returns a
 // forecast-shaped object { source:'archive', ... } or null.
 export async function fetchActualDailyWeather({ lat, lng, date }) {
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  if (!hasValidCoords({ lng, lat }) || !date) return null;
   const target = new Date(`${date}T00:00:00`);
   if (isNaN(target.getTime())) return null;
   const url = `https://archive-api.open-meteo.com/v1/archive`
@@ -777,7 +799,7 @@ export async function fetchActualDailyWeather({ lat, lng, date }) {
 // immutable, so cache for 30 days (a refetch only matters if coords/date
 // change, which busts the key anyway). Returns { kind:'archive', ... } or null.
 export async function fetchHistoryRaceWeather({ lat, lng, date }) {
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  if (!hasValidCoords({ lng, lat }) || !date) return null;
   const cached = _readRaceWx(lat, lng, date);
   if (cached) return cached;
   const actual = await fetchActualDailyWeather({ lat, lng, date });
@@ -822,7 +844,7 @@ function _writeRaceWx(lat, lng, date, value) {
 // repeated Races-tab visits don't refetch. Returns
 // { kind: 'forecast' | 'climate', ...forecastLike } or null.
 export async function fetchRaceDayWeather({ lat, lng, date }) {
-  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng)) || !date) return null;
+  if (!hasValidCoords({ lng, lat }) || !date) return null;
   const cached = _readRaceWx(lat, lng, date);
   if (cached) return cached;
 

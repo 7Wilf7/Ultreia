@@ -51,6 +51,7 @@ import { Spinner } from "./components/Spinner";
 import { ModalRoot } from "./components/ModalRoot";
 import { WalletModal } from "./components/WalletModal";
 import { WeatherSettingsModal } from "./components/WeatherSettingsModal";
+import { LocationSettingsModal } from "./components/LocationSettingsModal";
 import { WeeklyReportSettingsModal } from "./components/WeeklyReportSettingsModal";
 import { AppDialogProvider } from "./components/AppDialog";
 import { useAppDialog } from "./components/AppDialogContext";
@@ -1457,6 +1458,7 @@ function AppShell({
   const [mobileSettingsFocus, setMobileSettingsFocus] = useState(null);
   const [showPushSettings, setShowPushSettings] = useState(false);
   const [showWeatherSettings, setShowWeatherSettings] = useState(false);
+  const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [showWeeklyReportSettings, setShowWeeklyReportSettings] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
   const [weeklyReports, setWeeklyReports] = useState(() => loadStoredReports(user?.id));
@@ -3172,9 +3174,8 @@ Rules:
           onRaceBriefingRequest={proposeRaceBriefing}
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
-          /* "need location" weather pill now routes to the profile editor,
-             where location (address + coords) lives. */
-          onOpenLocationSettings={() => setProfileEditorMode("edit")}
+          defaultLocation={defaultLocation}
+          onOpenLocationSettings={() => setShowLocationSettings(true)}
           /* Inbox entry — top-right of the AI Coach header. */
           onOpenInbox={() => setShowInbox(true)}
           inboxUnread={inboxUnread}
@@ -3308,7 +3309,6 @@ Rules:
       {profileEditorMode === "preview" && (
         <ProfilePreview
           profile={profile}
-          defaultLocation={defaultLocation}
           onClose={() => setProfileEditorMode(null)}
           onEdit={() => setProfileEditorMode("edit")}
         />
@@ -3319,8 +3319,6 @@ Rules:
           setProfile={setProfile}
           mode={profileEditorMode}
           onClose={() => setProfileEditorMode(null)}
-          defaultLocation={defaultLocation}
-          setDefaultLocation={setDefaultLocation}
         />
       )}
 
@@ -3390,6 +3388,14 @@ Rules:
           weatherIntervalHours={weatherSettings.intervalHours}
           setWeatherSettings={setWeatherSettings}
           onClose={() => setShowWeatherSettings(false)}
+        />
+      )}
+
+      {showLocationSettings && (
+        <LocationSettingsModal
+          defaultLocation={defaultLocation}
+          setDefaultLocation={setDefaultLocation}
+          onClose={() => setShowLocationSettings(false)}
         />
       )}
 

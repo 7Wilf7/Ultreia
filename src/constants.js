@@ -351,7 +351,7 @@ export const DEFAULT_PROFILE = {
   notes: "",              // free-form extra context
 };
 
-export const PROFILE_REQUIRED_FIELDS = ["displayName", "birthDate", "gender", "city", "experience"];
+export const PROFILE_REQUIRED_FIELDS = ["displayName", "birthDate", "gender", "experience"];
 
 // Two common ways to split HRR into 5 zones. Both apply on top of the Karvonen
 // formula: target HR = (MaxHR − RestHR) × intensity% + RestHR.

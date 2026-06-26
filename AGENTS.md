@@ -102,6 +102,9 @@ git tag v0.2.0 && git push origin v0.2.0
 | `ANDROID_KEY_PASSWORD` | key 密码（跟 store 密码一致）|
 | `VITE_SUPABASE_URL` | build 时注入前端；缺了 APP 启动白屏 |
 | `VITE_SUPABASE_ANON_KEY` | 同上 |
+| `VITE_AMAP_JSAPI_KEY` | 可选；启用位置选择器里的高德 JSAPI 地图 |
+| `VITE_AMAP_SECURITY_JS_CODE` | 可选；高德 JSAPI 安全密钥，和上面的 key 一起配置 |
+| `VITE_AMAP_SERVICE_HOST` | 可选；如果后续用代理保护高德安全密钥，用这个服务地址替代前端 security code |
 
 keystore 文件如需本地放置，建议用 `android/app/ultreia-release.jks`（gitignored），passwords 永远不进 repo。
 

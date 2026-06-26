@@ -13,6 +13,8 @@ const MAX_PREFETCH_TILES = 72;
 const MIN_ZOOM = 12;
 const MAX_ZOOM = 18;
 const FALLBACK_WGS = { lng: 113.2644, lat: 23.1291 }; // Guangzhou
+const AMAP_LOADER_URL = "https://webapi.amap.com/loader.js";
+const AMAP_MAP_STYLE = "amap://styles/normal";
 const PI = Math.PI;
 const EARTH_A = 6378245.0;
 const EARTH_EE = 0.006693421622965943;
@@ -97,10 +99,70 @@ function worldToLngLat(x, y, zoom) {
 
 function tileUrl(x, y, z) {
   const subdomain = (Math.abs(x + y) % 4) + 1;
-  return `https://webrd0${subdomain}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=2&style=8&x=${x}&y=${y}&z=${z}`;
+  return `https://webrd0${subdomain}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x=${x}&y=${y}&z=${z}`;
 }
 
 const warmedTileUrls = new Set();
+let amapLoaderScriptPromise = null;
+let amapSdkPromise = null;
+
+function getAmapSdkConfig() {
+  const env = import.meta.env || {};
+  return {
+    key: String(env.VITE_AMAP_JSAPI_KEY || "").trim(),
+    securityJsCode: String(env.VITE_AMAP_SECURITY_JS_CODE || "").trim(),
+    serviceHost: String(env.VITE_AMAP_SERVICE_HOST || "").trim(),
+  };
+}
+
+function hasAmapSdkConfig() {
+  const config = getAmapSdkConfig();
+  return !!config.key && (!!config.securityJsCode || !!config.serviceHost);
+}
+
+function loadAmapLoaderScript() {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return Promise.reject(new Error("amap_browser_unavailable"));
+  }
+  if (window.AMapLoader) return Promise.resolve(window.AMapLoader);
+  if (amapLoaderScriptPromise) return amapLoaderScriptPromise;
+
+  amapLoaderScriptPromise = new Promise((resolve, reject) => {
+    const existing = [...document.scripts].find(script => script.src === AMAP_LOADER_URL);
+    const script = existing || document.createElement("script");
+    const onLoad = () => resolve(window.AMapLoader);
+    const onError = () => reject(new Error("amap_loader_failed"));
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    if (!existing) {
+      script.src = AMAP_LOADER_URL;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  });
+  return amapLoaderScriptPromise;
+}
+
+async function loadAmapSdk() {
+  if (typeof window === "undefined") throw new Error("amap_browser_unavailable");
+  if (window.AMap?.Map) return window.AMap;
+  if (amapSdkPromise) return amapSdkPromise;
+  const config = getAmapSdkConfig();
+  if (!config.key) throw new Error("amap_key_missing");
+  if (config.serviceHost) {
+    window._AMapSecurityConfig = { serviceHost: config.serviceHost };
+  } else if (config.securityJsCode) {
+    window._AMapSecurityConfig = { securityJsCode: config.securityJsCode };
+  } else {
+    throw new Error("amap_security_missing");
+  }
+  amapSdkPromise = loadAmapLoaderScript().then((AMapLoader) => AMapLoader.load({
+    key: config.key,
+    version: "2.0",
+    plugins: [],
+  }));
+  return amapSdkPromise;
+}
 
 function normalizeZoom(zoom) {
   const n = Number(zoom);
@@ -364,7 +426,7 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
         touchAction: interactive ? "none" : "auto",
         cursor: interactive ? "grab" : "default",
         userSelect: "none",
-        contain: "layout paint size",
+        contain: "layout paint",
         isolation: "isolate",
         ...style,
       }}
@@ -390,6 +452,108 @@ function StreetMapView({ center, zoom, onCenterChange, onZoomChange, interactive
           }}
         />
       ))}
+      {children}
+    </div>
+  );
+}
+
+function AmapSdkMapView({ center, zoom, onCenterChange, onZoomChange, onError, interactive = false, style, children }) {
+  const hostRef = useRef(null);
+  const mapRef = useRef(null);
+  const frameRef = useRef(0);
+  const callbacksRef = useRef({ onCenterChange, onZoomChange, onError });
+  const safeZoom = normalizeZoom(zoom);
+  const safeCenter = validCoord(center) || toMapCoord(FALLBACK_WGS);
+  const centerLng = safeCenter.lng;
+  const centerLat = safeCenter.lat;
+
+  useEffect(() => {
+    callbacksRef.current = { onCenterChange, onZoomChange, onError };
+  }, [onCenterChange, onError, onZoomChange]);
+
+  useEffect(() => {
+    let disposed = false;
+
+    function syncFromMap() {
+      if (frameRef.current) return;
+      frameRef.current = requestFrame(() => {
+        frameRef.current = 0;
+        const map = mapRef.current;
+        if (!map || disposed) return;
+        const mapCenter = map.getCenter();
+        const mapZoom = Number(map.getZoom());
+        callbacksRef.current.onCenterChange?.({ lng: mapCenter.lng, lat: mapCenter.lat });
+        if (Number.isFinite(mapZoom)) callbacksRef.current.onZoomChange?.(mapZoom);
+      });
+    }
+
+    loadAmapSdk()
+      .then((AMap) => {
+        if (disposed || !hostRef.current) return;
+        const map = new AMap.Map(hostRef.current, {
+          center: [centerLng, centerLat],
+          zoom: safeZoom,
+          zooms: [MIN_ZOOM, MAX_ZOOM],
+          viewMode: "2D",
+          resizeEnable: true,
+          dragEnable: interactive,
+          zoomEnable: interactive,
+          touchZoom: interactive,
+          doubleClickZoom: interactive,
+          keyboardEnable: false,
+          jogEnable: false,
+          animateEnable: true,
+          mapStyle: AMAP_MAP_STYLE,
+        });
+        mapRef.current = map;
+        map.on("mapmove", syncFromMap);
+        map.on("moveend", syncFromMap);
+        map.on("zoomchange", syncFromMap);
+        map.on("zoomend", syncFromMap);
+      })
+      .catch((err) => {
+        if (!disposed) callbacksRef.current.onError?.(err);
+      });
+
+    return () => {
+      disposed = true;
+      if (frameRef.current) cancelFrame(frameRef.current);
+      const map = mapRef.current;
+      mapRef.current = null;
+      try { map?.destroy?.(); } catch { /* ignore SDK cleanup failure */ }
+    };
+    // The SDK map is created once; later center/zoom changes are pushed below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    try {
+      const currentCenter = map.getCenter();
+      if (Math.abs(Number(currentCenter.lng) - centerLng) > 0.000001 || Math.abs(Number(currentCenter.lat) - centerLat) > 0.000001) {
+        map.setCenter([centerLng, centerLat]);
+      }
+      if (Math.abs(Number(map.getZoom()) - safeZoom) > 0.02) {
+        map.setZoom(safeZoom);
+      }
+    } catch { /* AMap may briefly reject calls while resizing */ }
+  }, [centerLat, centerLng, safeZoom]);
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        background: "#e7e7e2",
+        touchAction: interactive ? "none" : "auto",
+        userSelect: "none",
+        contain: "layout paint",
+        isolation: "isolate",
+        ...style,
+      }}
+    >
+      <div ref={hostRef} style={{ position: "absolute", inset: 0 }} />
       {children}
     </div>
   );
@@ -516,7 +680,9 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
   const [address, setAddress] = useState("");
   const [addressLoading, setAddressLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sdkUnavailable, setSdkUnavailable] = useState(false);
   const centerWgs = useMemo(() => fromMapCoord(center), [center]);
+  const useAmapSdk = hasAmapSdkConfig() && !sdkUnavailable;
 
   async function locate(silent = false) {
     setLocating(true);
@@ -597,14 +763,76 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
         </div>
 
         <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-          <StreetMapView
-            center={center}
-            zoom={zoom}
-            onCenterChange={setCenter}
-            onZoomChange={setZoom}
-            interactive
-            style={{ position: "absolute", inset: 0 }}
-          >
+          {useAmapSdk ? (
+            <AmapSdkMapView
+              center={center}
+              zoom={zoom}
+              onCenterChange={setCenter}
+              onZoomChange={setZoom}
+              onError={(err) => {
+                console.warn("[map] AMap SDK unavailable, falling back to raster tiles:", err?.message || err);
+                setSdkUnavailable(true);
+              }}
+              interactive
+              style={{ position: "absolute", inset: 0 }}
+            >
+              <CenterPin />
+              <div style={{
+                position: "absolute",
+                right: 12,
+                top: 12,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+              }}>
+                <button type="button" onClick={() => locate(false)} disabled={locating} style={{
+                  ...s.btnGhost,
+                  width: 42,
+                  height: 42,
+                  minHeight: 42,
+                  padding: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: "rgba(8, 11, 10, 0.82)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
+                }} aria-label={t("location.detect_button")} title={t("location.detect_button")}>
+                  {locating ? <Spinner size={14} thickness={1.5} /> : <PinIcon size={17} />}
+                </button>
+                <button type="button" onClick={() => setZoom(z => clamp(z + 1, MIN_ZOOM, MAX_ZOOM))} style={{
+                  ...s.btnGhost,
+                  width: 42,
+                  height: 42,
+                  minHeight: 42,
+                  padding: 0,
+                  fontSize: 20,
+                  background: "rgba(8, 11, 10, 0.82)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
+                }} aria-label={t("location.zoom_in")}>+</button>
+                <button type="button" onClick={() => setZoom(z => clamp(z - 1, MIN_ZOOM, MAX_ZOOM))} style={{
+                  ...s.btnGhost,
+                  width: 42,
+                  height: 42,
+                  minHeight: 42,
+                  padding: 0,
+                  fontSize: 22,
+                  background: "rgba(8, 11, 10, 0.82)",
+                  backdropFilter: "blur(10px)",
+                  WebkitBackdropFilter: "blur(10px)",
+                }} aria-label={t("location.zoom_out")}>-</button>
+              </div>
+            </AmapSdkMapView>
+          ) : (
+            <StreetMapView
+              center={center}
+              zoom={zoom}
+              onCenterChange={setCenter}
+              onZoomChange={setZoom}
+              interactive
+              style={{ position: "absolute", inset: 0 }}
+            >
             <CenterPin />
             <div style={{
               position: "absolute",
@@ -652,7 +880,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 WebkitBackdropFilter: "blur(10px)",
               }} aria-label={t("location.zoom_out")}>-</button>
             </div>
-          </StreetMapView>
+            </StreetMapView>
+          )}
         </div>
 
         <div style={{

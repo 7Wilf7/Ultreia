@@ -50,6 +50,9 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_AMAP_JSAPI_KEY: ${{ secrets.VITE_AMAP_JSAPI_KEY }}
+          VITE_AMAP_SECURITY_JS_CODE: ${{ secrets.VITE_AMAP_SECURITY_JS_CODE }}
+          VITE_AMAP_SERVICE_HOST: ${{ secrets.VITE_AMAP_SERVICE_HOST }}
         run: npm run build
 
       - name: Diagnose dist/ output

@@ -2106,6 +2106,7 @@ export function AICoachTab({
               ...s.input,
               resize: isMobile ? "none" : "vertical",
               fontFamily: "var(--font-sans)",
+              display: "block",
               width: "100%",
               lineHeight: isMobile ? 1.35 : 1.45,
               padding: isMobile ? "6px 9px" : undefined,

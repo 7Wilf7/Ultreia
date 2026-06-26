@@ -900,13 +900,9 @@ export function RacesTab({
             overflow: "hidden",
             touchAction: "manipulation",
           }}>
-          {/* Row 1: date · priority · category · subtype · countdown.
+          {/* Row 1: priority · category · subtype · countdown.
               Edit/Delete moved to a long-press action modal (no inline ✕). */}
-          <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
-            <span style={{
-              fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
-              fontVariantNumeric: "tabular-nums", flexShrink: 0,
-            }}>{r.date || "—"}</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0, flexWrap: "wrap" }}>
             {r.isTarget && r.priority && (
               <span style={{
                 fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 600,
@@ -923,8 +919,12 @@ export function RacesTab({
             {countdown}
             <div style={{ flex: 1, minWidth: 0 }} />
           </div>
-          {/* Row 2: name (truncate) + time/ascent suffix (right-aligned) */}
+          {/* Row 2: date + name (truncate) + time/ascent suffix (right-aligned) */}
           <div style={{ display: "flex", gap: 10, alignItems: "baseline", minWidth: 0 }}>
+            <span style={{
+              fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--ink-3)",
+              fontVariantNumeric: "tabular-nums", flexShrink: 0,
+            }}>{r.date || "—"}</span>
             <span
               title={r.name}
               style={{

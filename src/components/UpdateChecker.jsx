@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { useT } from "../i18n/LanguageContext";
 
 // Native bridges (android/.../*.java). On web these are no-op stubs.
 //   ApkInstaller  — hands a downloaded APK to the system package installer.
@@ -23,6 +22,23 @@ const MIRROR_APK_URL = SUPABASE_URL
   : null;
 const AUTO_CHECK_CACHE_MS = 30 * 60 * 1000;
 let releaseCheckCache = null; // { at, status, release }
+
+const UPDATE_COPY = {
+  version: "版本",
+  viewRecent: "查看最近更新",
+  check: "检查更新",
+  checking: "检查中…",
+  latest: "已是最新版本",
+  latestTitle: (v) => `最新版本 v${v}`,
+  newTitle: (v) => `新版本 v${v}`,
+  error: "无法检查更新",
+  download: "下载 APK",
+  install: "立即更新",
+  downloading: "下载中…",
+  installing: "正在打开安装…",
+  installFailed: "应用内安装失败，已改用浏览器下载。",
+  networkHint: "看起来是网络或 DNS 问题，请检查网络后重试。",
+};
 
 // Strip leading "v" so "v0.2.1" → "0.2.1"
 function stripV(tag) {
@@ -64,10 +80,18 @@ function pickApkAsset(assets) {
 }
 
 const NOTE_TRANSLATIONS = {
-  "replace product logo assets": "更换 Ultreia 新 logo 并同步图标资源",
-  "refine poster mark background cleanup": "精修分享海报背景 mark",
+  "add image support to ai coach": "智能教练支持图片附件",
+  "update hyrox race divisions": "补齐 Hyrox 比赛组别",
+  "fix security scan findings": "修复安全扫描问题",
+  "align recent coach suggestion menu color": "统一最近教练建议菜单字体颜色",
+  "refine coach settings and poster background": "精简教练设置并调整分享海报背景",
+  "improve coach adjustment controls": "优化教练综合调整控制",
+  "polish coach review suggestions": "精简教练日历建议弹窗",
+  "document git pull update reporting": "补充拉取更新后的汇报规则",
+  "replace product logo assets": "更换 Ultreia 新标志并同步图标资源",
+  "refine poster mark background cleanup": "精修分享海报背景标志",
   "poster mark: centre the watermark": "分享海报水印位置居中",
-  "poster mark: extract the real logo line-art, themed per finish": "分享海报背景改用真实 logo 线稿，并跟随风格切换",
+  "poster mark: extract the real logo line-art, themed per finish": "分享海报背景改用真实标志线稿，并跟随风格切换",
   "poster background: brand mark (bold peaks + dots + green tick), drop contours": "分享海报背景改为品牌山形标志",
   "poster: title case headings, keep data labels uppercase": "分享海报标题改为首字母大写，数据标签保留全大写",
   "pwa cache-clear, fresh acwr on review, poster contour+mountain & fixes": "修复 PWA 缓存、训练负荷刷新和海报细节",
@@ -81,10 +105,10 @@ const NOTE_TRANSLATIONS = {
   "add horizontal tab motion and cleaner update notes": "优化移动端横滑动画，并清理更新日志",
   "optimize mobile tab gestures and update notes": "优化移动端 tab 手势和更新日志",
   "remove unused legacy logo resources": "清理不再使用的旧 logo 资源",
-  "optimize logo assets and poster line background": "优化 logo 资源与海报背景线条",
-  "use original product logo assets": "统一使用正确的产品 logo",
-  "refine poster logo treatment": "调整分享海报 logo 细节",
-  "fix poster logo rendering": "修正分享海报 logo 显示",
+  "optimize logo assets and poster line background": "优化标志资源与海报背景线条",
+  "use original product logo assets": "统一使用正确的产品标志",
+  "refine poster logo treatment": "调整分享海报标志细节",
+  "fix poster logo rendering": "修正分享海报标志显示",
   "separate day and night poster themes": "区分分享海报 Day / Night 样式",
   "improve poster background and readability": "优化分享海报背景和可读性",
   "improve mobile settings and tab gestures": "优化移动端设置页和 tab 手势",
@@ -102,7 +126,48 @@ const NOTE_TRANSLATIONS = {
   "add configurable weather auto updates": "新增天气每日自动更新与频率设置",
   "add getui push for payment reminders": "接入个推，提升国内充值提醒系统推送",
   "hide public account and wallet surfaces": "隐藏面向公开用户的钱包、注册和管理入口",
+  "unify post-import coach review adjustments": "统一导入后教练点评与后续调整口径",
+  "tighten strength import review and coach adjustment timing": "收紧力量训练导入审核和教练调整触发时机",
+  "polish coach header and weekly report layout": "优化教练页顶栏和周复盘布局",
+  "document desktop runner launcher": "补充本机运行器启动说明",
 };
+
+function hasCjk(text) {
+  return /[\u3400-\u9fff]/.test(text);
+}
+
+function normalizeChineseTerms(text) {
+  return text
+    .replace(/\bAI Coach\b/gi, "智能教练")
+    .replace(/\bcoach\b/gi, "教练")
+    .replace(/\bweekly report\b/gi, "周复盘")
+    .replace(/\bdesktop runner\b/gi, "本机运行器")
+    .replace(/\brunner\b/gi, "运行器")
+    .replace(/\bposter\b/gi, "分享海报")
+    .replace(/\blogo\b/gi, "标志")
+    .replace(/\bmark\b/gi, "标志")
+    .replace(/\blayout\b/gi, "布局")
+    .replace(/\breview\b/gi, "点评")
+    .replace(/\bsettings\b/gi, "设置")
+    .replace(/\bsetting\b/gi, "设置")
+    .trim();
+}
+
+function fallbackChineseNote(text) {
+  const lower = text.toLowerCase();
+  if (/security/.test(lower)) return "修复安全扫描问题";
+  if (/hyrox|division/.test(lower)) return "更新 Hyrox 比赛组别";
+  if (/image|photo|picture/.test(lower)) return "新增图片相关支持";
+  if (/poster|logo|mark/.test(lower)) return "优化分享海报和品牌标志";
+  if (/runner|launcher/.test(lower)) return "更新本机运行器说明";
+  if (/weekly report/.test(lower)) return "优化周复盘体验";
+  if (/coach/.test(lower)) return "优化智能教练体验";
+  if (/weather/.test(lower)) return "优化天气相关体验";
+  if (/doc|readme|guide/.test(lower)) return "更新使用说明";
+  if (/fix|repair|resolve/.test(lower)) return "修复应用问题";
+  if (/add|support|enable|new/.test(lower)) return "新增应用功能";
+  return "优化应用细节";
+}
 
 function localizeNoteLine(line) {
   if (/^\s*full changelog\s*:/i.test(line)) return "";
@@ -124,8 +189,9 @@ function localizeNoteLine(line) {
     .replace(/\s{2,}/g, " ")
     .trim();
   if (!text) return "";
-  const translated = NOTE_TRANSLATIONS[text.toLowerCase()] || text;
-  return `${prefix}${translated}`;
+  const translated = normalizeChineseTerms(NOTE_TRANSLATIONS[text.toLowerCase()] || text);
+  const finalText = hasCjk(translated) ? translated : fallbackChineseNote(text);
+  return `${prefix}${finalText}`;
 }
 
 // The release notes come from raw git commit subjects, which sometimes mention
@@ -167,7 +233,6 @@ function ReleaseNotes({ notes, maxChars }) {
 }
 
 export function UpdateChecker() {
-  const t = useT();
   // __APP_VERSION__ is injected by vite (see vite.config.js -> define).
   const currentVersion = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0.0.0";
   const [status, setStatus] = useState("idle"); // idle | checking | latest | newer | error
@@ -267,8 +332,8 @@ export function UpdateChecker() {
     const reason = lastErr?.message || String(lastErr);
     const isNetwork = /resolve host|No address|network|timeout|unable to|failed to connect/i.test(reason);
     setInstallMsg(
-      `${t("settings.update_install_failed")} (${reason})` +
-      (isNetwork ? ` ${t("settings.update_network_hint")}` : "")
+      `${UPDATE_COPY.installFailed} (${reason})` +
+      (isNetwork ? ` ${UPDATE_COPY.networkHint}` : "")
     );
     window.open(githubUrl, "_blank", "noreferrer");
   }
@@ -277,7 +342,7 @@ export function UpdateChecker() {
     <div style={cellStyle}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", width: "100%", gap: 10 }}>
         <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8 }}>
-          <div style={primaryStyle}>{t("settings.version")}</div>
+          <div style={primaryStyle}>{UPDATE_COPY.version}</div>
           <div style={{ ...secondaryStyle, marginTop: 0 }}>v{currentVersion}</div>
         </div>
         <div style={{
@@ -289,7 +354,7 @@ export function UpdateChecker() {
         }}>
           {status === "latest" && release && (
             <button onClick={() => setShowNotes(o => !o)} style={btnStyle}>
-              {t("settings.view_recent")}
+              {UPDATE_COPY.viewRecent}
             </button>
           )}
           <button
@@ -297,7 +362,7 @@ export function UpdateChecker() {
             disabled={status === "checking"}
             style={{ ...btnStyle, position: "relative" }}
           >
-            {status === "checking" ? t("settings.update_checking") : t("settings.check_update")}
+            {status === "checking" ? UPDATE_COPY.checking : UPDATE_COPY.check}
             {status === "newer" && (
               <span style={{
                 position: "absolute", top: -3, right: -3,
@@ -310,23 +375,23 @@ export function UpdateChecker() {
       </div>
 
       {status === "error" && (
-        <div style={resultErrStyle}>{t("settings.update_error")}</div>
+        <div style={resultErrStyle}>{UPDATE_COPY.error}</div>
       )}
 
       {/* Up-to-date: show the latest release notes when the user taps "view
           recent updates". Version as the panel title. */}
       {status === "latest" && showNotes && release && (
         <div style={updatePanelStyle}>
-          <div style={panelTitleStyle}>{t("settings.update_recent_title", { v: release.version })}</div>
+          <div style={panelTitleStyle}>{UPDATE_COPY.latestTitle(release.version)}</div>
           {cleanNotes(release.notes)
             ? <ReleaseNotes notes={release.notes} maxChars={1200} />
-            : <div style={resultOkStyle}>✓ {t("settings.update_latest")}</div>}
+            : <div style={resultOkStyle}>✓ {UPDATE_COPY.latest}</div>}
         </div>
       )}
 
       {status === "newer" && release && (
         <div style={updatePanelStyle}>
-          <div style={panelTitleStyle}>{t("settings.update_new_title", { v: release.version })}</div>
+          <div style={panelTitleStyle}>{UPDATE_COPY.newTitle(release.version)}</div>
           {/* Actions FIRST so the download CTA is always reachable without
               scrolling past the notes (which used to trap the touch scroll). */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -338,15 +403,15 @@ export function UpdateChecker() {
                   disabled={installState !== "idle"}
                   style={{ ...downloadBtnStyle, border: "none", cursor: installState !== "idle" ? "default" : "pointer", opacity: installState !== "idle" ? 0.7 : 1 }}>
                   {installState === "downloading"
-                    ? `${t("settings.update_downloading")}${downloadPct != null ? ` ${downloadPct}%` : ""}`
+                    ? `${UPDATE_COPY.downloading}${downloadPct != null ? ` ${downloadPct}%` : ""}`
                     : installState === "installing"
-                      ? t("settings.update_installing")
-                      : `↓ ${t("settings.update_install")}`}
+                      ? UPDATE_COPY.installing
+                      : `↓ ${UPDATE_COPY.install}`}
                 </button>
               ) : (
                 // Web: plain download link.
                 <a href={release.apkUrl} target="_blank" rel="noreferrer" style={downloadBtnStyle}>
-                  ↓ {t("settings.update_download")}
+                  ↓ {UPDATE_COPY.download}
                 </a>
               )
             )}

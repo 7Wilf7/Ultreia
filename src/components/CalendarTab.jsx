@@ -878,6 +878,7 @@ function LogPill({ log, t }) {
     metrics.push(log.subTypes.map(st => t(`enum.subtype.${st}`)).join(" · "));
   }
   if (isPlanned && log.planDetail?.location?.name) metrics.push(log.planDetail.location.name);
+  if (isPlanned && log.planDetail?.keySession) metrics.push(t("calendar.plan_key_session_short"));
 
   return (
     <div style={{

@@ -94,6 +94,8 @@ Rules:
 - Resolve both issues in ONE proposal. Do not generate separate conflicting rescue and recovery plans.
 - Recovery and load protection outrank making up missed volume.
 - Do NOT stack missed mileage on top of current training. Prefer lowering stress, moving work, or adding rest.
+- Plans marked key_session=true are protected anchor workouts. Prefer adjusting surrounding non-key easy/recovery/support sessions first.
+- Do NOT update, replace, or rest out a key_session=true plan unless there is a clear reason such as injury/illness signs, severe recovery/load risk, severe weather, or target-race conflict. If you change one, notes must explicitly explain why the key session is being changed.
 - Keep the proposal small: usually 1-3 items, never more than 5.
 - Do NOT diagnose injury or illness. Only adjust training stress and recovery.
 - Use action="update" only for a future planned session that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.

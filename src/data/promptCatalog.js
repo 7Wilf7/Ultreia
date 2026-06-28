@@ -63,6 +63,7 @@ Output a JSON array. Each item:
 
 Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday). Resolve weekdays to the next upcoming occurrence from today.
+- Planned sessions may include key_session=true. If the coach clearly changes a key session, emit action="update" with its exact targetPlanId and preserve the coach's reason in notes. Do NOT turn a key-session change into a broad create/rest item that would replace the whole date.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
   - Road Run: "distance"; run type in "subTypes" (Easy/Aerobic/Tempo/Interval) when named. No "duration".
   - Trail Run / Hiking: "distance" + "ascent" (m). No "duration".
@@ -135,7 +136,7 @@ const DATA_BLOCK_SECTIONS = `每条消息实时拼上的你的数据（有内容
 [Recent Activities (last 10)] 最近 10 条训练（RPE / 备注 / 当时天气）
 [Day Notes] 最近 21 天当日标记
 [Plan Adherence] 近 14 天计划 vs 完成/部分/漏/跳过
-[Planned Sessions] 今天和未来约 21 天计划（只代表已安排，不代表已完成；距离/爬升/速度/预报）
+[Planned Sessions] 今天和未来约 21 天计划（只代表已安排，不代表已完成；距离/爬升/速度/主课标记/预报）
 [Coaching Focus This Message] 本次触发的周期/热适应/负荷/漏练提醒`;
 
 // Each entry: { id, title, when, source, blocks: [{ label, text }] }

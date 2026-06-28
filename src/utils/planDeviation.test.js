@@ -29,6 +29,22 @@ describe("plan deviation helpers", () => {
     expect(summary.futurePlans.map(p => p.planId)).toEqual(["p4", "p5"]);
   });
 
+  it("carries key session markers into future plan context", () => {
+    const now = new Date("2026-06-24T10:00:00+08:00");
+    const logs = [
+      { id: "p1", isPlanned: true, date: "2026-06-20", type: "Road Run", distance: 10 },
+      { id: "p-key", isPlanned: true, date: "2026-06-28", type: "Trail Run", distance: 24, ascent: 1200, planDetail: { keySession: true } },
+    ];
+
+    const summary = summarizePlanDeviation(logs, now);
+
+    expect(summary.futurePlans[0]).toMatchObject({
+      planId: "p-key",
+      keySession: true,
+    });
+    expect(summary.futurePlans[0].line).toContain("key_session=true");
+  });
+
   it("returns null when all past plans are completed", () => {
     const now = new Date("2026-06-24T10:00:00+08:00");
     const logs = [
@@ -53,6 +69,7 @@ describe("plan deviation helpers", () => {
     });
 
     expect(prompt).toContain("plan_id=p1 2026-06-20 Road Run 10km -> missed");
+    expect(prompt).toContain("Plans marked key_session=true are protected anchor workouts");
     expect(prompt).toContain("targetPlanId");
     expect(prompt).toContain("Output the JSON array ONLY");
   });

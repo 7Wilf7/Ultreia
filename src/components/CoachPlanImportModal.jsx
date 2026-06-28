@@ -44,6 +44,7 @@ function buildDraft(p, idx) {
     subTypes: f.strength ? subs.filter(st => STRENGTH_SUBS.includes(st)) : [],
     timeOfDay: (p.timeOfDay === "am" || p.timeOfDay === "pm") ? p.timeOfDay : "",
     notes: p.notes || "",
+    keySession: p.keySession === true,
   };
 }
 
@@ -67,6 +68,45 @@ function dateWithWeekdayLabel(date, lang) {
   return weekday ? `${weekday} ${dateLabel}` : dateLabel;
 }
 
+function isExistingKeySession(plan) {
+  return plan?.isPlanned && plan?.planDetail?.keySession === true;
+}
+
+function keySessionPlanLabel(plan, t, lang) {
+  if (!plan) return "";
+  const f = planFields(plan.type);
+  const bits = [dateWithWeekdayLabel(plan.date, lang), t(`enum.activity.${plan.type}`)];
+  if (Array.isArray(plan.subTypes) && plan.subTypes.length) {
+    bits.push(plan.subTypes.map(st => t(`enum.subtype.${st}`)).join(" / "));
+  }
+  if (f.distance && Number(plan.distance) > 0) bits.push(`${Number(plan.distance)} km`);
+  if (f.ascent && Number(plan.ascent) > 0) bits.push(`+${Number(plan.ascent)} m`);
+  if (f.speed && Number(plan.planDetail?.speed) > 0) bits.push(`${Number(plan.planDetail.speed)} km/h`);
+  if (f.duration && Number(plan.duration) > 0) bits.push(`${Math.round(Number(plan.duration) / 60)} ${t("form.minutes")}`);
+  return bits.filter(Boolean).join(" · ");
+}
+
+function keySessionImpactsForItems(items, existingPlans, t, lang) {
+  const existing = Array.isArray(existingPlans) ? existingPlans.filter(Boolean) : [];
+  const byId = new Map(existing.map(plan => [String(plan.id || ""), plan]));
+  const hits = new Map();
+  for (const item of items || []) {
+    if (!item?._selected) continue;
+    if (isPlanUpdateItem(item)) {
+      const target = byId.get(getPlanTargetId(item));
+      if (isExistingKeySession(target)) hits.set(target.id, keySessionPlanLabel(target, t, lang));
+      continue;
+    }
+    if (!item.date) continue;
+    for (const plan of existing) {
+      if (plan?.date === item.date && isExistingKeySession(plan)) {
+        hits.set(plan.id, keySessionPlanLabel(plan, t, lang));
+      }
+    }
+  }
+  return [...hits.values()].filter(Boolean);
+}
+
 function parseAscentMeters(notes) {
   const m = String(notes || "").match(/\+?\s*(\d+(?:\.\d+)?)\s*m\b/i);
   const n = m ? Number(m[1]) : 0;
@@ -87,6 +127,7 @@ function planSummary(it, t, lang) {
   if (it.speed) bits.push(`${it.speed} km/h`);
   if (it.durationMin) bits.push(`${it.durationMin} ${t("form.minutes")}`);
   if (it.timeOfDay) bits.push(t(`calendar.plan_tod_${it.timeOfDay}`));
+  if (it.keySession) bits.push(t("calendar.plan_key_session_short"));
   return bits.filter(Boolean).join(" · ");
 }
 
@@ -250,10 +291,11 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   });
   const impact = describeCreatePlansImpact(previewAction, existingPlans);
   const actionStatus = agentAction.status || "proposed";
-  const displayRisk = impact.overwrittenDates.length > 0 || selectedItems.length > 1 ? "medium" : "low";
   const selectedUpdateCount = selectedItems.filter(isPlanUpdateItem).length;
   const selectedWorkoutCount = selectedItems.filter(it => !isRestPlanItem(it) && !isPlanUpdateItem(it)).length;
   const selectedRestCount = selectedItems.filter(isRestPlanItem).length;
+  const keySessionImpacts = keySessionImpactsForItems(selectedItems, existingPlans, t, lang);
+  const displayRisk = keySessionImpacts.length > 0 || impact.overwrittenDates.length > 0 || selectedItems.length > 1 ? "medium" : "low";
   const reasonLines = coachReasonLines(agentAction, selectedItems, assistantContent, t, lang);
   const dateImpactRows = impact.dateImpacts || [];
   const actionMetaTitle = t("coach.action_meta_toggle");
@@ -271,6 +313,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
     // add-plan form (planFields). Fields not shown for a type stay zeroed.
     const restDates = selected.filter(isRestPlanItem).map(it => it.date);
     const workoutItems = selected.filter(it => !isRestPlanItem(it));
+    const existingById = new Map((existingPlans || []).map(plan => [String(plan.id || ""), plan]));
     const replacePlannedDates = workoutItems.filter(it => !isPlanUpdateItem(it)).map(it => it.date);
     const replacePlannedIds = workoutItems.map(getPlanTargetId).filter(Boolean);
     const workouts = workoutItems.map(it => {
@@ -289,6 +332,10 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
         subTypes = it.subTypes || [];
       }
       if (f.speed && speed > 0) planDetail = { ...(planDetail || {}), speed };
+      const targetPlan = existingById.get(getPlanTargetId(it));
+      if (it.keySession === true || isExistingKeySession(targetPlan)) {
+        planDetail = { ...(planDetail || {}), keySession: true };
+      }
       return {
         date: it.date,
         type: it.type,
@@ -479,6 +526,19 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                   <li key={row.date}>{dateImpactText(row, t, lang)}</li>
                 ))}
               </ul>
+            )}
+            {keySessionImpacts.length > 0 && (
+              <div style={{
+                marginTop: 9,
+                border: "1px solid var(--warn)",
+                background: "rgba(182, 119, 45, 0.12)",
+                color: "var(--ink-1)",
+                padding: "8px 9px",
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}>
+                {t("coach.action_key_session_warning", { sessions: keySessionImpacts.join(lang === "zh" ? "、" : ", ") })}
+              </div>
             )}
           </div>
           <div style={{

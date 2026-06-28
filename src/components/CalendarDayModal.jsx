@@ -33,6 +33,7 @@ export function planHeadline(l, t) {
     } else if (l.duration > 0) parts.push(formatPlanDuration(l.duration));
   }
   if (l.planDetail?.location?.name) parts.push(l.planDetail.location.name);
+  if (l.planDetail?.keySession) parts.push(t("calendar.plan_key_session_short"));
   return parts.join(" · ") || "—";
 }
 import { skyconMeta } from "../lib/weather";
@@ -141,6 +142,7 @@ export function CalendarDayModal({
   const [planRunType, setPlanRunType] = useState("");      // Road Run: Easy/Aerobic/Tempo/Interval
   const [planTimeOfDay, setPlanTimeOfDay] = useState(""); // "" | "am" | "pm"
   const [planLocationId, setPlanLocationId] = useState("");
+  const [planKeySession, setPlanKeySession] = useState(false);
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
   const [editingId, setEditingId] = useState(null);
   // Long-press a workout row → a centered Edit/Delete action card (same
@@ -179,6 +181,7 @@ export function CalendarDayModal({
     setPlanRunType("");
     setPlanTimeOfDay("");
     setPlanLocationId("");
+    setPlanKeySession(false);
     setPlanSubTypes([]);
     setEditingId(null);
   }
@@ -195,6 +198,7 @@ export function CalendarDayModal({
     setPlanRunType(l.type === "Road Run" ? (subs.find(s => RUN_PACE_TYPES.includes(s)) || "") : "");
     setPlanTimeOfDay(startedAtToTimeOfDay(l.startedAt) || "");
     setPlanLocationId(l.planDetail?.location?.id || "");
+    setPlanKeySession(l.planDetail?.keySession === true);
     setPlanSubTypes(subs);
     setActionTarget(null);
     setPanel("plan");
@@ -236,6 +240,7 @@ export function CalendarDayModal({
         },
       };
     }
+    if (planKeySession) planDetail = { ...(planDetail || {}), keySession: true };
 
     // HIIT is valid with nothing but a time-of-day; every other type needs at
     // least one target so the plan means something.
@@ -585,6 +590,32 @@ export function CalendarDayModal({
                       />
                     </div>
                   )}
+                  <label style={{
+                    gridColumn: "1 / -1",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    border: "1px solid var(--rule)",
+                    background: planKeySession ? "var(--moss-bg)" : "var(--bg-elevated)",
+                    padding: "9px 10px",
+                    cursor: "pointer",
+                  }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 650, color: "var(--ink-1)" }}>
+                        {t("calendar.plan_key_session")}
+                      </span>
+                      <span style={{ display: "block", marginTop: 2, fontSize: 11, color: "var(--ink-3)", lineHeight: 1.35 }}>
+                        {t("calendar.plan_key_session_hint")}
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={planKeySession}
+                      onChange={e => setPlanKeySession(e.target.checked)}
+                      style={{ width: 18, height: 18, accentColor: "var(--moss)" }}
+                    />
+                  </label>
                   {planF.distance && (
                     <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.distance")} (km)</div>

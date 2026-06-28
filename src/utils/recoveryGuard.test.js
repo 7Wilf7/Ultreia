@@ -24,7 +24,7 @@ describe("recovery guard helpers", () => {
       completed("2026-06-19", 2, 8, { note: "legs are sore and achilles tight" }),
       completed("2026-06-21", 2, 8),
       completed("2026-06-23", 2, 8),
-      { id: "p1", isPlanned: true, date: "2026-06-26", type: "Road Run", distance: 16, subTypes: ["Tempo Run"] },
+      { id: "p1", isPlanned: true, date: "2026-06-26", type: "Road Run", distance: 16, subTypes: ["Tempo Run"], planDetail: { keySession: true } },
     ];
     const dailyNotes = [
       { date: "2026-06-24", readiness: { sleep: 1, legs: 1, energy: 2 }, tags: [] },
@@ -45,6 +45,8 @@ describe("recovery guard helpers", () => {
     ]));
     expect(summary.trainingLoad.ramp).toBe("danger");
     expect(summary.futurePlans[0].planId).toBe("p1");
+    expect(summary.futurePlans[0].keySession).toBe(true);
+    expect(summary.futurePlans[0].line).toContain("key_session=true");
   });
 
   it("returns null when there is risk but nothing upcoming to guard", () => {
@@ -79,6 +81,7 @@ describe("recovery guard helpers", () => {
     expect(prompt).toContain("High recent RPE: 2026-06-23 RPE 9");
     expect(prompt).toContain("targetPlanId");
     expect(prompt).toContain("Do NOT diagnose injury or illness");
+    expect(prompt).toContain("Plans marked key_session=true are protected anchor workouts");
     expect(prompt).toContain("Output the JSON array ONLY");
   });
 });

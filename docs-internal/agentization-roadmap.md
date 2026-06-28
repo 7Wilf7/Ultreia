@@ -289,6 +289,7 @@ archived_at
 - **3 天静默 + 主动入口**：用户点“3 天内不再提醒”后，自动提醒安静 3 天，避免每天填写晨间状态时反复弹；AI Coach 顶部保留“一键综合调整”按钮，用户可主动生成当前建议。
 - 生成动作时会同时读取未来计划、天气、近期训练、目标赛事、Memory facts 和最近 Agent 动作反馈。
 - 计划偏差和恢复风险同时出现时，生成一份 `combined_training_adjustment` 综合建议；恢复 / 负荷保护优先，避免“补漏练”和“降负荷”两张卡互相冲突。
+- Calendar 计划可标记 `key_session=true` 作为本周主课；计划偏差补救、恢复负荷守门和综合调整都默认保护主课，优先改周围的轻松 / 恢复 / 辅助课。若建议修改或覆盖主课，必须给出明确理由，Action Card 审核页也会提示用户确认。
 - 新增活动后的 Coach 点评会被视为一次完整教练回合：同一轮里点评新增活动，并对下一次相关计划给出唯一口径；当下相关 proactive signatures 会记为已处理，避免点评后短时间内又自动生成相反的计划偏差 / 恢复负荷建议。
 - 执行仍复用 `create_plans` Action Card：可新增计划、安排明确休息日，或在能定位到未来计划时修改单条计划。
 - 状态会写入 Agent Action Log，来源标记为“计划偏差补救”“恢复负荷守门”或“综合调整建议”，可在 Recent Agent Actions 中回看。
@@ -298,6 +299,7 @@ archived_at
 第一版边界：
 
 - 不自动补跑，不把漏掉的量机械堆回未来几天。
+- 不轻易动用户标记的主课；只有恢复风险、伤病 / 生病、严重天气、目标赛事冲突等理由足够强时，才建议修改主课。
 - 不后台静默改日历，必须用户确认。
 - 不把健康风险写成诊断，只给训练安排层面的解释和建议。
 - 赛前简报第一版只生成报告 / checklist；如需调整减量计划，仍另外走可确认的日历建议。
@@ -423,3 +425,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-25：赛前简报 / 装备检查第一版落地。目标赛进入 14 天窗口且地点 / 天气上下文足够时，AI Coach 顶部会自动生成 `race_briefing` 简报并写入 Agent Action Log；A / B / C 都触发，同一天多场时才按 A > B > C 排优先级；Hyrox 可无天气生成；简报可从顶部卡片和 Recent Agent Actions 查看、继续追问，支持 3 天静默，第一版不自动改 Calendar。
 - 2026-06-26：AI Coach 设置入口按「教练 / 动作 / 高级」收敛；Recent Agent Actions 仅在已有记录时显示。AI 周复盘移除多段正文注解入口，保留底部追问；分享海报去掉 Day 模式，统一使用暗色 logo 水印背景。
 - 2026-06-26：AI Coach 对话支持图片附件。前端发送前压缩图片；`coach-proxy` 带图时强制走 desktop Codex runner；runner 写入临时文件并通过 `codex exec --image` 交给 Codex。图片请求失败时不回退 DeepSeek，`ai_jobs.payload` 在 runner claim / 完成 / 失败 / 超时后会 redacted，只保留图片名和 media type。
+- 2026-06-28：Calendar 计划新增主课标记，AI Coach prompt、计划偏差补救、恢复负荷守门、综合调整和计划提炼器都把 `key_session=true` 当作需要保护的锚点；Action Card 触碰主课时会在审核页提醒用户确认理由。

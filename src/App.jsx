@@ -2775,6 +2775,7 @@ Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
 - If the reply changes an existing planned session shown in [Planned Sessions], emit action="update" and targetPlanId with the exact plan_id. Output the FULL replacement plan after the change, not just the changed field.
 - If you cannot confidently match the suggestion to exactly one existing plan_id, do NOT use update; emit a normal create item instead.
+- Planned sessions may include key_session=true. If the coach clearly changes a key session, emit action="update" with its exact targetPlanId and preserve the coach's reason in notes. Do NOT turn a key-session change into a broad create/rest item that would replace the whole date.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
   - Road Run: "distance"; put the run type in "subTypes" as exactly one of "Easy Run"/"Aerobic Run"/"Tempo Run"/"Interval Run" when the coach names an intensity. Do NOT emit "duration" for Road Run.
   - Trail Run / Hiking: "distance" and "ascent" (metres). Do NOT emit "duration".

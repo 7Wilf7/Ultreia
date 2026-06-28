@@ -21,7 +21,7 @@ const FIELD_MAP = {
   tags:       'tags',          // text[]  — e.g. ['massage', 'stretching']
   startedAt:  'started_at',    // timestamptz — when the activity actually started; null = unknown
   weather:    'weather',       // jsonb — snapshot from src/lib/weather.js (tempC, apparentC, humidity, skycon, ...)
-  planDetail: 'plan_detail',   // jsonb — planned-only structured extras that have no column: { speed (km/h, cycling), subTypeDurations ({area:min}, strength) }
+  planDetail: 'plan_detail',   // jsonb — planned-only structured extras: { speed, subTypeDurations, location, keySession, ... }
   hrZoneSeconds: 'hr_zone_seconds', // jsonb — [z1,z2,z3,z4,z5] seconds in each HR zone (FIT import only)
   gpsTrack:   'gps_track',     // jsonb — downsampled [[lat,lng],...] route (FIT import only)
   createdAt:  'created_at',

@@ -30,6 +30,10 @@ function planMetric(plan) {
   return "";
 }
 
+function isKeySession(plan) {
+  return plan?.planDetail?.keySession === true;
+}
+
 function planLine(plan) {
   const parts = [
     plan.id ? `plan_id=${plan.id}` : "",
@@ -37,6 +41,7 @@ function planLine(plan) {
     plan.type,
     Array.isArray(plan.subTypes) && plan.subTypes.length ? `(${plan.subTypes.join(", ")})` : "",
     planMetric(plan),
+    isKeySession(plan) ? "key_session=true" : "",
   ].filter(Boolean);
   return parts.join(" ");
 }
@@ -48,6 +53,7 @@ function compactPlan(plan) {
     type: plan.type || "",
     subTypes: Array.isArray(plan.subTypes) ? plan.subTypes.filter(Boolean) : [],
     target: planMetric(plan),
+    keySession: isKeySession(plan),
     line: planLine(plan),
   };
 }
@@ -267,6 +273,8 @@ Rules:
 - Keep the proposal small: usually 1-3 items, never more than 4.
 - Do NOT diagnose injury or illness. Only adjust training stress and recovery.
 - Do NOT add intensity, volume, or race-pace work. This card is for backing off, reshaping, or protecting recovery.
+- Plans marked key_session=true are protected anchor workouts. Prefer adjusting surrounding non-key easy/recovery/support sessions first.
+- Do NOT update, replace, or rest out a key_session=true plan unless there is a clear reason such as injury/illness signs, severe recovery/load risk, severe weather, or target-race conflict. If you change one, notes must explicitly explain why the key session is being changed.
 - Prefer modifying an existing risky future plan to easier/shorter work, or replacing it with a planned rest day when justified.
 - Use action="update" only for a future planned session that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
 - If no exact future plan should be changed, create a new dated easy/recovery item or a dated rest day instead.

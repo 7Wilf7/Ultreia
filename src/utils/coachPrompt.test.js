@@ -138,3 +138,29 @@ describe("buildMemoryFactsBlock", () => {
     expect(block).toContain("Prefers direct, data-first coaching");
   });
 });
+
+describe("buildDataBlock", () => {
+  it("marks planned key sessions in the coach context", () => {
+    const block = buildDataBlock({
+      logs: [
+        {
+          id: "p-key",
+          isPlanned: true,
+          date: "2026-06-28",
+          type: "Trail Run",
+          distance: 24,
+          ascent: 1200,
+          subTypes: [],
+          planDetail: { keySession: true },
+        },
+      ],
+      races: [],
+      dailyNotes: [],
+      now: new Date("2026-06-24T08:00:00+08:00"),
+    });
+
+    expect(block).toContain("[Planned Sessions");
+    expect(block).toContain("plan_id=p-key");
+    expect(block).toContain("key_session=true");
+  });
+});

@@ -650,6 +650,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
       if (l.distance > 0) planParts.push(`${l.distance}km`);
       if (l.ascent > 0) planParts.push(`+${l.ascent}m`);
       if (l.planDetail?.speed > 0) planParts.push(`${l.planDetail.speed}km/h`);
+      if (l.planDetail?.keySession === true) planParts.push("key_session=true");
       const partDur = l.planDetail?.subTypeDurations;
       if (partDur && typeof partDur === "object") {
         const segs = Object.entries(partDur).filter(([, v]) => v > 0).map(([k, v]) => `${k} ${v}min`);

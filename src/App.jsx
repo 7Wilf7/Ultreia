@@ -481,6 +481,9 @@ function throwIfAborted(signal) {
   throw err;
 }
 
+const BOOT_REVEAL_MS = 2800;
+const APP_BOOT_STARTED_AT = Date.now();
+
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
   position: fixed;
@@ -492,41 +495,104 @@ const BOOT_MOTION_CSS = `
   padding: 0 24px;
   overflow: hidden;
   isolation: isolate;
+  --boot-duration: 2800ms;
+  --boot-delay: calc(-1 * var(--boot-elapsed, 0ms));
 }
 .ultreia-boot-stack {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: min(4vmin, 22px);
-  transform: translateY(-4vmin);
+  gap: min(2.8vmin, 16px);
+  transform: translateY(-3.4vmin);
   text-align: center;
 }
-.ultreia-boot-logo {
-  width: min(28vmin, 140px);
-  height: min(28vmin, 140px);
+.ultreia-boot-logo-stage {
+  position: relative;
+  width: min(31vmin, 152px);
+  height: min(31vmin, 152px);
+}
+.ultreia-boot-logo-final,
+.ultreia-boot-logo-build {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.ultreia-boot-logo-final {
   object-fit: contain;
   transform-origin: center;
 }
-.ultreia-boot-word {
-  position: relative;
-  overflow: hidden;
-  font-family: TSSign, "Segoe Script", cursive;
-  font-size: min(12vmin, 62px);
-  font-weight: 400;
-  color: var(--ink-1);
-  letter-spacing: 0;
-  line-height: 1;
-  padding: 0 0.08em 0.06em;
-  margin-top: -0.8vmin;
+.ultreia-boot-logo-build {
+  overflow: visible;
 }
-.ultreia-boot-word::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent 0%, oklch(0.86 0.045 138 / 0.28) 48%, transparent 100%);
-  transform: translateX(-115%);
-  pointer-events: none;
+.ultreia-boot-tile {
+  fill: oklch(0.11 0.008 145);
+  stroke: oklch(0.80 0.03 138 / 0.72);
+  stroke-width: 3.2;
+}
+.ultreia-logo-contour {
+  fill: none;
+  stroke: oklch(0.72 0.045 138 / 0.46);
+  stroke-width: 1.35;
+  stroke-linecap: round;
+}
+.ultreia-logo-ridge {
+  fill: none;
+  stroke: oklch(0.80 0.055 138 / 0.72);
+  stroke-width: 5.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 9px oklch(0.55 0.08 138 / 0.32));
+}
+.ultreia-logo-trail {
+  fill: none;
+  stroke: oklch(0.82 0.06 138 / 0.9);
+  stroke-width: 14;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 14px oklch(0.55 0.09 138 / 0.34));
+}
+.ultreia-logo-trail-core {
+  fill: none;
+  stroke: oklch(0.93 0.045 138 / 0.92);
+  stroke-width: 4.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ultreia-boot-word-svg {
+  width: min(52vmin, 270px);
+  height: auto;
+  overflow: visible;
+  margin-top: -0.4vmin;
+}
+.ultreia-word-drawn,
+.ultreia-word-final {
+  font-family: TSSign, "Segoe Script", cursive;
+  font-weight: 400;
+  font-size: 76px;
+  letter-spacing: 0;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+.ultreia-word-drawn {
+  fill: var(--ink-1);
+}
+.ultreia-word-final {
+  fill: var(--ink-1);
+  opacity: 0;
+}
+.ultreia-word-mask-path {
+  fill: none;
+  stroke: white;
+  stroke-width: 34;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ultreia-word-pen {
+  fill: oklch(0.88 0.055 138);
+  filter: drop-shadow(0 0 9px oklch(0.58 0.09 138 / 0.42));
+  opacity: 0;
 }
 .ultreia-boot-greeting {
   display: flex;
@@ -561,35 +627,81 @@ const BOOT_MOTION_CSS = `
   letter-spacing: 0.04em;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ultreia-boot-logo {
-    opacity: 0;
-    transform: translateY(18px) scale(0.78);
-    filter: blur(8px);
-    animation: ultreiaLogoArrive 720ms cubic-bezier(0.34, 0, 0.14, 1) 80ms both;
+  .ultreia-boot-logo-stage,
+  .ultreia-boot-logo-build,
+  .ultreia-boot-logo-final,
+  .ultreia-boot-tile,
+  .ultreia-logo-contour,
+  .ultreia-logo-ridge,
+  .ultreia-logo-trail,
+  .ultreia-logo-trail-core,
+  .ultreia-word-mask-path,
+  .ultreia-word-final,
+  .ultreia-word-pen,
+  .ultreia-boot-greeting,
+  .ultreia-boot-built {
+    animation-duration: var(--boot-duration);
+    animation-delay: var(--boot-delay);
+    animation-fill-mode: both;
+    animation-timing-function: linear;
+  }
+  .ultreia-boot-logo-stage {
+    animation-name: ultreiaLogoStage;
+    will-change: transform, opacity;
+  }
+  .ultreia-boot-logo-build {
+    animation-name: ultreiaBuildLayer;
+  }
+  .ultreia-boot-logo-final {
+    animation-name: ultreiaFinalLogo;
     will-change: transform, opacity, filter;
   }
-  .ultreia-boot-word {
-    clip-path: inset(0 100% 0 0);
-    animation: ultreiaWordWrite 780ms cubic-bezier(0.16, 1, 0.3, 1) 520ms both;
-    will-change: clip-path, transform, opacity;
+  .ultreia-boot-tile {
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 1;
+    animation-name: ultreiaTileDraw;
   }
-  .ultreia-boot-word::after {
-    animation: ultreiaWordSheen 620ms cubic-bezier(0.16, 1, 0.3, 1) 560ms both;
+  .ultreia-logo-contour {
+    stroke-dasharray: 1 1.12;
+    stroke-dashoffset: 1.08;
+    animation-name: ultreiaContourDraw;
+  }
+  .ultreia-logo-contour:nth-of-type(3) {
+    animation-name: ultreiaContourDrawLate;
+  }
+  .ultreia-logo-ridge {
+    stroke-dasharray: 1 1.12;
+    stroke-dashoffset: 1.08;
+    animation-name: ultreiaRidgeDraw;
+  }
+  .ultreia-logo-trail,
+  .ultreia-logo-trail-core {
+    stroke-dasharray: 1 1.12;
+    stroke-dashoffset: 1.08;
+    animation-name: ultreiaTrailDraw;
+  }
+  .ultreia-word-mask-path {
+    stroke-dasharray: 1 1.18;
+    stroke-dashoffset: 1.08;
+    animation-name: ultreiaWordInk;
+  }
+  .ultreia-word-final {
+    animation-name: ultreiaWordSettle;
+  }
+  .ultreia-word-pen {
+    animation-name: ultreiaWordPen;
   }
   .ultreia-boot-greeting {
-    opacity: 0;
-    transform: translateY(10px);
-    animation: ultreiaGreetingIn 560ms cubic-bezier(0.16, 1, 0.3, 1) 1120ms both;
+    animation-name: ultreiaGreetingIn;
     will-change: transform, opacity;
   }
   .ultreia-boot-built {
-    opacity: 0;
-    animation: ultreiaBuiltIn 480ms cubic-bezier(0.4, 0, 0.2, 1) 1360ms both;
+    animation-name: ultreiaBuiltIn;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ultreia-boot-logo,
-  .ultreia-boot-word,
+  .ultreia-boot-logo-final,
+  .ultreia-word-final,
   .ultreia-boot-greeting,
   .ultreia-boot-built {
     opacity: 1;
@@ -597,57 +709,81 @@ const BOOT_MOTION_CSS = `
     filter: none;
     clip-path: none;
   }
-}
-@keyframes ultreiaLogoArrive {
-  0% {
+  .ultreia-boot-logo-build,
+  .ultreia-word-drawn,
+  .ultreia-word-pen {
     opacity: 0;
-    transform: translateY(18px) scale(0.78);
-    filter: blur(8px);
-  }
-  22% {
-    opacity: 0;
-    transform: translateY(22px) scale(0.74);
-    filter: blur(8px);
-  }
-  66% {
-    opacity: 1;
-    transform: translateY(-2px) scale(1.025);
-    filter: blur(0);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
   }
 }
-@keyframes ultreiaWordWrite {
-  0% {
-    opacity: 0.85;
-    clip-path: inset(0 100% 0 0);
-    transform: translateX(-4px);
-  }
-  76% {
-    opacity: 1;
-    clip-path: inset(0 0 0 0);
-    transform: translateX(1px);
-  }
-  100% {
-    opacity: 1;
-    clip-path: inset(0 0 0 0);
-    transform: translateX(0);
-  }
+@keyframes ultreiaLogoStage {
+  0% { opacity: 0; transform: translateY(14px) scale(0.86); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  8% { opacity: 1; transform: translateY(14px) scale(0.84); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  42% { opacity: 1; transform: translateY(-1px) scale(1.02); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  62% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
-@keyframes ultreiaWordSheen {
-  0% { transform: translateX(-115%); opacity: 0; }
-  28% { opacity: 1; }
-  100% { transform: translateX(115%); opacity: 0; }
+@keyframes ultreiaTileDraw {
+  0%, 7% { opacity: 0; stroke-dashoffset: 1; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  25% { opacity: 1; stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  76% { opacity: 0.78; stroke-dashoffset: 0; }
+  100% { opacity: 0; stroke-dashoffset: 0; }
 }
-@keyframes ultreiaGreetingIn {
-  0% { opacity: 0; transform: translateY(10px); }
+@keyframes ultreiaContourDraw {
+  0%, 14% { opacity: 0; stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  46% { opacity: 0.8; stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  75% { opacity: 0.36; stroke-dashoffset: 0; }
+  100% { opacity: 0; stroke-dashoffset: 0; }
+}
+@keyframes ultreiaContourDrawLate {
+  0%, 20% { opacity: 0; stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  52% { opacity: 0.72; stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  78% { opacity: 0.3; stroke-dashoffset: 0; }
+  100% { opacity: 0; stroke-dashoffset: 0; }
+}
+@keyframes ultreiaRidgeDraw {
+  0%, 23% { opacity: 0; stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  56% { opacity: 0.86; stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  76% { opacity: 0.28; stroke-dashoffset: 0; }
+  100% { opacity: 0; stroke-dashoffset: 0; }
+}
+@keyframes ultreiaTrailDraw {
+  0%, 31% { opacity: 0; stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  67% { opacity: 0.94; stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  78% { opacity: 0.32; stroke-dashoffset: 0; }
+  100% { opacity: 0; stroke-dashoffset: 0; }
+}
+@keyframes ultreiaBuildLayer {
+  0%, 70% { opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  88%, 100% { opacity: 0; }
+}
+@keyframes ultreiaFinalLogo {
+  0%, 58% { opacity: 0; transform: scale(0.965); filter: blur(5px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  76% { opacity: 1; transform: scale(1.012); filter: blur(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+@keyframes ultreiaWordInk {
+  0%, 50% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  82% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes ultreiaWordSettle {
+  0%, 74% { opacity: 0; transform: translateY(2px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  86% { opacity: 1; transform: translateY(-1px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: translateY(0); }
 }
+@keyframes ultreiaWordPen {
+  0%, 50% { opacity: 0; transform: translate(34px, 58px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  58% { opacity: 0.72; transform: translate(96px, 64px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  68% { opacity: 0.86; transform: translate(177px, 58px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  79% { opacity: 0.72; transform: translate(314px, 62px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  84%, 100% { opacity: 0; transform: translate(384px, 56px); }
+}
+@keyframes ultreiaGreetingIn {
+  0%, 78% { opacity: 0; transform: translateY(10px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  94%, 100% { opacity: 1; transform: translateY(0); }
+}
 @keyframes ultreiaBuiltIn {
-  0% { opacity: 0; }
+  0%, 88% { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
   100% { opacity: 1; }
 }
 `;
@@ -669,9 +805,12 @@ function LoadingScreen({ userId = null }) {
   const hello = timeGreeting(lang) + (name ? `，${name}` : "");
   const greeting = useMemo(() => pickGreeting(new Date(), userId), [userId]);
   const line = greeting[lang === "zh" ? "zh" : "en"];
+  const [bootElapsedMs] = useState(() => (
+    Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT))
+  ));
 
   return (
-    <div className="ultreia-boot-screen">
+    <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
       {/* Lightweight (384px) display version of the product logo. The native
           Android splash renders the SAME artwork from a separate hi-res source
@@ -679,12 +818,37 @@ function LoadingScreen({ userId = null }) {
           native-splash → web-view handoff still reads as one logo screen —
           when swapping the logo, update both assets (see src/assets/logo.js). */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
-        <img
-          className="ultreia-boot-logo"
-          src={productLogoUrl}
-          alt="Ultreia"
-        />
-        <div className="ultreia-boot-word">Ultreia</div>
+        <div className="ultreia-boot-logo-stage">
+          <svg className="ultreia-boot-logo-build" viewBox="0 0 512 512" aria-hidden="true">
+            <rect className="ultreia-boot-tile" x="30" y="30" width="452" height="452" rx="88" pathLength="1" />
+            <path className="ultreia-logo-contour" pathLength="1" d="M52 126 C112 82 160 154 214 100 C252 62 317 66 382 94 C429 114 455 88 476 63" />
+            <path className="ultreia-logo-contour" pathLength="1" d="M40 226 C92 190 141 218 171 174 C207 122 251 155 281 192 C327 249 405 168 472 199" />
+            <path className="ultreia-logo-contour" pathLength="1" d="M38 356 C104 315 172 368 224 314 C278 257 319 305 369 334 C411 358 445 333 474 302" />
+            <path className="ultreia-logo-ridge" pathLength="1" d="M78 382 C136 295 189 225 247 172 L287 215 L324 156 L401 334" />
+            <path className="ultreia-logo-trail" pathLength="1" d="M216 462 C245 376 300 317 346 282 C303 262 265 241 273 211 C282 176 334 175 358 132" />
+            <path className="ultreia-logo-trail-core" pathLength="1" d="M216 462 C245 376 300 317 346 282 C303 262 265 241 273 211 C282 176 334 175 358 132" />
+          </svg>
+          <img
+            className="ultreia-boot-logo-final"
+            src={productLogoUrl}
+            alt="Ultreia"
+          />
+        </div>
+        <svg className="ultreia-boot-word-svg" viewBox="0 0 420 120" aria-label="Ultreia">
+          <defs>
+            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse">
+              <rect x="0" y="0" width="420" height="120" fill="black" />
+              <path
+                className="ultreia-word-mask-path"
+                pathLength="1"
+                d="M38 61 C51 88 83 91 98 66 C112 42 99 25 87 38 C74 52 78 85 108 82 C135 80 146 55 139 42 C130 25 110 43 118 65 C127 91 169 86 181 61 C191 41 177 31 164 44 C151 58 160 82 190 78 C217 74 235 48 223 37 C211 26 193 39 198 61 C204 88 243 83 257 59 C269 39 255 31 242 43 C229 55 235 79 264 78 C292 77 308 53 302 39 M298 68 C315 87 350 85 365 61 C378 41 361 29 346 42 C330 56 338 81 368 78 C390 76 402 62 408 50"
+              />
+            </mask>
+          </defs>
+          <text className="ultreia-word-drawn" x="210" y="62" mask="url(#ultreiaBootWordMask)">Ultreia</text>
+          <text className="ultreia-word-final" x="210" y="62">Ultreia</text>
+          <circle className="ultreia-word-pen" r="3.8" />
+        </svg>
         <div className="ultreia-boot-greeting">
           <div className="ultreia-boot-hello">
             {hello}
@@ -833,10 +997,18 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [wallet, setWallet] = useState({ balanceCents: 0, currency: "CNY", ledger: [] });
   const [dataLoading, setDataLoading] = useState(true);
   const [dataLoadError, setDataLoadError] = useState(null);
+  const [bootRevealComplete, setBootRevealComplete] = useState(() => Date.now() - APP_BOOT_STARTED_AT >= BOOT_REVEAL_MS);
 
   // Pull-to-refresh in flight (Training tab). Separate from dataLoading so a
   // refresh shows a small top spinner instead of the full LoadingScreen.
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (bootRevealComplete) return;
+    const remaining = Math.max(0, BOOT_REVEAL_MS - (Date.now() - APP_BOOT_STARTED_AT));
+    const t = setTimeout(() => setBootRevealComplete(true), remaining);
+    return () => clearTimeout(t);
+  }, [bootRevealComplete]);
 
   // Fetch + apply all user data. Reused by the boot effect AND pull-to-refresh.
   // Throws on error so each caller can handle it (boot alerts; refresh is quiet).
@@ -1635,7 +1807,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   return (
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppDialogProvider>
-        {dataLoading ? (
+        {dataLoading || !bootRevealComplete ? (
           <LoadingScreen userId={user?.id} />
         ) : dataLoadError ? (
           <DataLoadErrorScreen

@@ -13,9 +13,9 @@
 // weekday/time, writes the full report to coach_reports, then sends a short
 // inbox/system notification. No calendar or Memory data is changed.
 //   { "mode": "memory_update", "force": true, "user_id": "..." }
-// runs a nightly Memory review: if the user has opted in and has new coach
-// chat today, create a pending memory_update Action Card. It does NOT write
-// coach_memory_facts; the app opens the normal review UI next launch.
+// runs a nightly Memory review: if the user has opted in and had new coach
+// chat on the previous local day, create a pending memory_update Action Card.
+// It does NOT write coach_memory_facts; the app opens the normal review UI next launch.
 // Daily dedup is enforced by push_log (unique on user_id + local date).
 // Weekly recap dedup is enforced by an existing ready auto report for the same
 // report period; failed/interrupted attempts remain retryable.
@@ -860,7 +860,7 @@ Deno.serve(async (req) => {
     for (const u of settings || []) {
       const tz = u.push_timezone || "Asia/Shanghai";
       const parts = localParts(tz);
-      const date = body.date || parts.date;
+      const date = body.date || (mode === "memory_update" && !body.force ? dateAdd(parts.date, -1) : parts.date);
       const preference = providerPreference(u.ai_provider_preference);
       if (mode === "memory_update") {
         if (u.coach_config?.nightlyMemoryReview !== true && !body.force) continue;

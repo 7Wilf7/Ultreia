@@ -3809,17 +3809,28 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
     const probe = line.trim().toLowerCase();
     return probe.length > 0 && !oldFactText.includes(probe.slice(0, Math.min(probe.length, 30)));
   };
+  const [saving, setSaving] = useState(false);
   function toggle(i) {
+    if (saving) return;
     if (isMemorySectionHeading(displayLines[i])) return;
     setKept(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
   }
-  function accept() {
+  async function accept() {
+    if (saving || kept.size === 0) return;
     const keep = (lines) => lines.filter((line, i) => isMemorySectionHeading(line) || kept.has(i)).join("\n");
     const normalizeEn = (text) => fillEmptyMemorySections(text, "en");
     const normalizeZh = (text) => fillEmptyMemorySections(text, "zh");
-    if (aligned) { onAccept(normalizeEn(keep(enLines)), normalizeZh(keep(zhLines))); return; }
-    if (displayLang === "zh") onAccept(normalizeEn(proposal.en), normalizeZh(keep(zhLines)));
-    else onAccept(normalizeEn(keep(enLines)), normalizeZh(proposal.zh));
+    setSaving(true);
+    try {
+      if (aligned) {
+        await onAccept(normalizeEn(keep(enLines)), normalizeZh(keep(zhLines)));
+        return;
+      }
+      if (displayLang === "zh") await onAccept(normalizeEn(proposal.en), normalizeZh(keep(zhLines)));
+      else await onAccept(normalizeEn(keep(enLines)), normalizeZh(proposal.zh));
+    } finally {
+      setSaving(false);
+    }
   }
   return (
     <>
@@ -3864,7 +3875,7 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
               {isHeading ? (
                 <span style={{ width: 13, marginTop: 4, flexShrink: 0 }} />
               ) : (
-                <input type="checkbox" checked={kept.has(i)} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
+                <input type="checkbox" checked={kept.has(i)} disabled={saving} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
               )}
               <span style={{
                 flex: 1, fontSize: 13, lineHeight: 1.5,
@@ -3886,9 +3897,12 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={accept}
-          disabled={kept.size === 0}
-          style={{ ...s.btn, opacity: kept.size === 0 ? 0.5 : 1 }}>{t("coach.memory_accept")}</button>
-        <button onClick={onReject} style={s.btnGhost}>{t("coach.memory_reject")}</button>
+          disabled={kept.size === 0 || saving}
+          style={{ ...s.btn, opacity: (kept.size === 0 || saving) ? 0.55 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+          {saving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+          {saving ? t("coach.memory_importing") : t("coach.memory_accept")}
+        </button>
+        <button onClick={onReject} disabled={saving} style={{ ...s.btnGhost, opacity: saving ? 0.5 : 1 }}>{t("coach.memory_reject")}</button>
       </div>
     </>
   );

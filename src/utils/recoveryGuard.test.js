@@ -62,6 +62,23 @@ describe("recovery guard helpers", () => {
     expect(summarizeRecoveryGuard(logs, [], now)).toBeNull();
   });
 
+  it("does not guard a plan dated today after the day is already in progress", () => {
+    const now = new Date("2026-06-28T23:30:00+08:00");
+    const logs = [
+      completed("2026-06-26", 2, 9, { note: "legs sore" }),
+      completed("2026-06-28", 3, 8),
+      { id: "p-today", isPlanned: true, date: "2026-06-28", type: "Trail Run", distance: 24, ascent: 900 },
+      { id: "p-next", isPlanned: true, date: "2026-06-29", type: "Road Run", distance: 6 },
+    ];
+    const dailyNotes = [
+      { date: "2026-06-28", readiness: { sleep: 1, legs: 1, energy: 2 }, tags: [] },
+    ];
+
+    const summary = summarizeRecoveryGuard(logs, dailyNotes, now);
+
+    expect(summary.futurePlans.map(p => p.planId)).toEqual(["p-next"]);
+  });
+
   it("builds a JSON-only recovery guard prompt with plan ids", () => {
     const summary = {
       lookbackDays: 7,

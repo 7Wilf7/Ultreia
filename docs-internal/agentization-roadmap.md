@@ -427,3 +427,4 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 - 2026-06-26：AI Coach 对话支持图片附件。前端发送前压缩图片；`coach-proxy` 带图时强制走 desktop Codex runner；runner 写入临时文件并通过 `codex exec --image` 交给 Codex。图片请求失败时不回退 DeepSeek，`ai_jobs.payload` 在 runner claim / 完成 / 失败 / 超时后会 redacted，只保留图片名和 media type。
 - 2026-06-28：Calendar 计划新增主课标记，AI Coach prompt、计划偏差补救、恢复负荷守门、综合调整和计划提炼器都把 `key_session=true` 当作需要保护的锚点；Action Card 触碰主课时会在审核页提醒用户确认理由。
 - 2026-06-28：导入后 Coach 点评和周日周报提示改为排队，避免两个弹窗同时抢焦点；导入自评备注改为只压缩用户原始输入，不再拼接 Coach 回复。`coach-proxy` 对 `coach_chat` / `weekly_report` 增加更贴近 xhigh Codex 的等待窗口，runner late completion 不再覆盖已 fallback 的 job 状态，便于诊断 Codex 在线但超时回退的情况。
+- 2026-06-28：主动训练调整 Action Card 的可执行范围收紧为明天及之后，summary、prompt、前端解析结果和审核页都会过滤当天 / 过去日期，避免用户完成当天训练后又被建议回改当天计划。

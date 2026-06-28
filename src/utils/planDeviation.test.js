@@ -26,7 +26,20 @@ describe("plan deviation helpers", () => {
     });
     expect(summary.items.map(i => i.outcome)).toEqual(["partial", "missed"]);
     expect(summary.items.map(i => i.planId)).toEqual(["p1", "p2"]);
-    expect(summary.futurePlans.map(p => p.planId)).toEqual(["p4", "p5"]);
+    expect(summary.futurePlans.map(p => p.planId)).toEqual(["p5"]);
+  });
+
+  it("does not treat today's plan as an actionable future adjustment", () => {
+    const now = new Date("2026-06-28T23:30:00+08:00");
+    const logs = [
+      { id: "p-old", isPlanned: true, date: "2026-06-22", type: "Road Run", distance: 10 },
+      { id: "p-today", isPlanned: true, date: "2026-06-28", type: "Trail Run", distance: 24, ascent: 900 },
+      { id: "p-next", isPlanned: true, date: "2026-06-29", type: "Road Run", distance: 6 },
+    ];
+
+    const summary = summarizePlanDeviation(logs, now);
+
+    expect(summary.futurePlans.map(p => p.planId)).toEqual(["p-next"]);
   });
 
   it("carries key session markers into future plan context", () => {

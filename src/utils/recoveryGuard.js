@@ -108,7 +108,7 @@ export function summarizeRecoveryGuard(logs = [], dailyNotes = [], now = new Dat
   const futurePlanRows = safeLogs
     .filter(l => l?.isPlanned && l.date)
     .map(l => ({ plan: l, ms: dateKeyMs(l.date) }))
-    .filter(x => x.ms != null && x.ms >= todayMs && x.ms <= futureEndMs)
+    .filter(x => x.ms != null && x.ms > todayMs && x.ms <= futureEndMs)
     .sort((a, b) => (a.plan.date || "").localeCompare(b.plan.date || ""));
   const futurePlans = futurePlanRows.map(x => compactPlan(x.plan));
 
@@ -276,9 +276,9 @@ Rules:
 - Plans marked key_session=true are protected anchor workouts. Prefer adjusting surrounding non-key easy/recovery/support sessions first.
 - Do NOT update, replace, or rest out a key_session=true plan unless there is a clear reason such as injury/illness signs, severe recovery/load risk, severe weather, or target-race conflict. If you change one, notes must explicitly explain why the key session is being changed.
 - Prefer modifying an existing risky future plan to easier/shorter work, or replacing it with a planned rest day when justified.
-- Use action="update" only for a future planned session that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
+- Use action="update" only for a future planned session from tomorrow onward that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
 - If no exact future plan should be changed, create a new dated easy/recovery item or a dated rest day instead.
-- Date all items between today and the next ${summary?.futureDays || 7} days.
+- Date all items after today and within the next ${summary?.futureDays || 7} days.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
   - Road Run: "distance"; put run intensity in "subTypes" as exactly one of "Easy Run"/"Aerobic Run"/"Tempo Run"/"Interval Run" when needed. Do NOT emit "duration" for Road Run.
   - Trail Run / Hiking: "distance" and "ascent" (metres). Do NOT emit "duration".

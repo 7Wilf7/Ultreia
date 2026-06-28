@@ -17,6 +17,7 @@ import {
   recoveryAdjustmentSignature,
   trainingAdjustmentSignature,
 } from "./utils/proactiveTrainingAdjustment";
+import { filterActionableProactivePlans } from "./utils/actionPlanFilters";
 import { buildRaceBriefingPrompt, summarizeRaceBriefingTarget } from "./utils/raceBriefing";
 import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
@@ -2852,8 +2853,9 @@ Rules:
     const parsedPlans = plans || parsePlansFromLLM(
       data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "",
     );
-    if (parsedPlans.length === 0) return null;
-    const baseAction = buildCreatePlansAction(parsedPlans, {
+    const actionablePlans = filterActionableProactivePlans(parsedPlans, source, now || new Date());
+    if (actionablePlans.length === 0) return null;
+    const baseAction = buildCreatePlansAction(actionablePlans, {
       id: `${source}-${Date.now()}`,
       source,
       risk: actionMeta.risk || "medium",

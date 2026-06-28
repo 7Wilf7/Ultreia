@@ -102,7 +102,7 @@ export function summarizePlanDeviation(logs = [], now = new Date(), opts = {}) {
   if (affectedCount === 0) return null;
 
   const futurePlans = planned
-    .filter(x => x.ms >= todayMs && x.ms <= futureEndMs)
+    .filter(x => x.ms > todayMs && x.ms <= futureEndMs)
     .map(x => x.plan)
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
     .map(p => ({
@@ -184,9 +184,9 @@ Rules:
 - Plans marked key_session=true are protected anchor workouts. Prefer adjusting surrounding non-key easy/recovery/support sessions first.
 - Do NOT update, replace, or rest out a key_session=true plan unless there is a clear reason such as injury/illness signs, severe recovery/load risk, severe weather, or target-race conflict. If you change one, notes must explicitly explain why the key session is being changed.
 - Prefer realistic redistribution, easy aerobic work, rest, or reducing a future session when recent deviation suggests fatigue / time pressure.
-- Use action="update" only for a future planned session that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
+- Use action="update" only for a future planned session from tomorrow onward that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
 - If no exact future plan should be changed, create a new dated item or a dated rest day instead.
-- Date all items between today and the next 7 days unless a target race context clearly justifies a slightly later date.
+- Date all items after today and within the next 7 days unless a target race context clearly justifies a slightly later date.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
   - Road Run: "distance"; put run intensity in "subTypes" as exactly one of "Easy Run"/"Aerobic Run"/"Tempo Run"/"Interval Run" when needed. Do NOT emit "duration" for Road Run.
   - Trail Run / Hiking: "distance" and "ascent" (metres). Do NOT emit "duration".

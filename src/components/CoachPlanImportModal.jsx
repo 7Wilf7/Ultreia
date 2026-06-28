@@ -5,6 +5,7 @@ import { useLanguage, useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
 import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, getPlanTargetId, isPlanUpdateItem, isRestPlanItem } from "../utils/agentActions";
+import { filterActionableProactivePlans } from "../utils/actionPlanFilters";
 import { planFields } from "../utils/planFields";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -269,7 +270,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const agentAction = action || buildCreatePlansAction(plans);
-  const actionPlans = getCreatePlans(agentAction);
+  const actionPlans = filterActionableProactivePlans(getCreatePlans(agentAction), agentAction);
   const [items, setItems] = useState(() => actionPlans.map(buildDraft));
   const [importing, setImporting] = useState(false);
   const [showMeta, setShowMeta] = useState(false);
@@ -588,6 +589,15 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
               const f = isRest ? {} : planFields(it.type);
               const itemReason = displayItemReason(it, agentAction, t, lang);
               const dateColumn = lang === "zh" ? "102px" : "108px";
+              const fieldLabelStyle = {
+                ...s.muted,
+                fontSize: 11,
+                marginBottom: 3,
+                lineHeight: 1.18,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              };
               return (
                 <div key={it._id} style={{
                   border: "1px solid var(--rule)",
@@ -656,12 +666,16 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                       metric inputs switch per type (planFields). */}
                   <div style={{
                     display: "grid",
-                    gridTemplateColumns: isRest ? `${dateColumn} minmax(126px, 1fr)` : `${dateColumn} minmax(126px, 1fr) 72px`,
+                    gridTemplateColumns: isRest
+                      ? `${dateColumn} minmax(126px, 1fr)`
+                      : (isMobile
+                        ? `${dateColumn} minmax(112px, 1fr) minmax(80px, 0.72fr)`
+                        : `${dateColumn} minmax(126px, 1fr) 84px`),
                     gap: 8,
                     alignItems: "end",
                   }}>
                     <div>
-                      <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.date")}</div>
+                      <div style={fieldLabelStyle}>{t("form.date")}</div>
                       <label style={{ display: "block", position: "relative" }}>
                         <input type="date" value={it.date}
                           onChange={e => patch(it._id, { date: e.target.value })}
@@ -675,7 +689,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                     </div>
                     {isRest ? (
                       <div>
-                        <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
+                        <div style={fieldLabelStyle}>{t("form.type")}</div>
                         <div style={{
                           ...s.input,
                           height: 30,
@@ -690,7 +704,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                     ) : (
                       <>
                         <div>
-                          <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("form.type")}</div>
+                          <div style={fieldLabelStyle}>{t("form.type")}</div>
                           <Dropdown
                             ariaLabel={t("form.type")}
                             options={ACTIVITY_TYPES.map(at => ({ value: at, label: t(`enum.activity.${at}`) }))}
@@ -701,7 +715,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                           />
                         </div>
                         <div>
-                          <div style={{ ...s.muted, fontSize: 11, marginBottom: 3 }}>{t("calendar.plan_time_of_day")}</div>
+                          <div style={fieldLabelStyle}>{t("calendar.plan_time_of_day")}</div>
                           <Dropdown
                             ariaLabel={t("calendar.plan_time_of_day")}
                             options={[

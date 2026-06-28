@@ -65,6 +65,14 @@ export function normalizeTokenUsage(usage) {
   };
 }
 
+export function estimateTextTokens(value = "") {
+  const text = String(value || "");
+  if (!text) return 0;
+  const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  const asciiLike = text.replace(/[\u3400-\u9fff\uf900-\ufaff]/g, "");
+  return Math.max(0, Math.ceil(cjk + asciiLike.length / 4));
+}
+
 // Locale-aware headers for the dynamic data block (current date / target races /
 // race history / recent activities). Numbers + race names stay as-is — only the
 // section titles + the priority label change. The "en" version is canonical

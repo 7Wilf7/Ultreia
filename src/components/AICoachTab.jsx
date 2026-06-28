@@ -15,7 +15,8 @@ import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { cityAbbreviationFromLocation, cityFromLocation, hasValidCoords } from "../lib/weather";
-import { buildPromptSkeleton, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
+import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
+import { buildSystemPrompt } from "../utils/profile";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
@@ -265,12 +266,10 @@ function makeMdComponents(isMobile) {
   };
 }
 
-// At this many persisted messages, surface a soft hint suggesting the user
-// distill Memory + clear the chat. This is NOT a context-window limit — the
-// providers we use carry far more than this — it's an attention/cost heuristic:
-// older turns start competing with the system prompt for the model's focus.
-// 40 (~20 exchanges) keeps the nudge from firing on every short session.
-const LONG_CHAT_HINT_THRESHOLD = 40;
+const COACH_CONTEXT_WINDOW_TOKENS = 200_000;
+const COACH_CONTEXT_WARN_REMAINING_TOKENS = 20_000;
+const COACH_CONTEXT_FIXED_OVERHEAD_TOKENS = 2_500;
+const COACH_IMAGE_ESTIMATE_TOKENS = 1_500;
 const PROACTIVE_ADJUSTMENT_SNOOZE_KEY = "ultreia.proactiveAdjustment.snoozedUntil";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_KEY = "ultreia.proactiveAdjustment.attemptedSignature";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_LIMIT = 20;
@@ -358,6 +357,12 @@ function formatRunnerClock(iso, lang) {
   }
 }
 
+function formatTokenK(tokens) {
+  const n = Math.max(0, Math.round(Number(tokens) || 0));
+  if (n >= 1000) return `${Math.round(n / 1000)}K`;
+  return String(n);
+}
+
 function runnerAgeMs(iso, nowMs) {
   if (!iso) return null;
   const ms = Date.parse(iso);
@@ -429,8 +434,11 @@ async function prepareCoachImageAttachment(file) {
 
 export function AICoachTab({
   coachConfig, setCoachConfig,
+  profile = null,
   chatMessages,
   logs = [], races = [],
+  now = new Date(),
+  dailyNotes = [],
   setConfirmDelete,
   onEditProfile,
   // Jump to other tabs from the first-send guidance nudge. coachHintsPending
@@ -512,6 +520,7 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
+  const [showContextUsage, setShowContextUsage] = useState(false);
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
   const [raceBriefingAction, setRaceBriefingAction] = useState(null);
@@ -1173,6 +1182,61 @@ export function AICoachTab({
     : coachProviderFallback
       ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
       : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`);
+  const contextUsage = useMemo(() => {
+    let systemTokens;
+    try {
+      const dataBlock = buildDataBlock({
+        logs,
+        races,
+        now,
+        lang: "en",
+        currentWeather: weatherCtx?.currentWeather || null,
+        forecastByDate: weatherCtx?.forecastByDate || null,
+        dailyNotes,
+        agentActions,
+        memoryFacts,
+      });
+      const systemPrompt = buildSystemPrompt({
+        profile,
+        coachConfig,
+        dataBlock,
+        lang: "en",
+      });
+      systemTokens = estimateTextTokens(systemPrompt);
+    } catch {
+      systemTokens = COACH_CONTEXT_FIXED_OVERHEAD_TOKENS;
+    }
+    const historyTokens = chatMessages.reduce((sum, m) => (
+      sum + estimateTextTokens(`[${m.role || "user"}]\n${messageContentForCoach(m.content)}`)
+    ), 0);
+    const draft = String(chatInput || "").trim();
+    const draftTokens = draft ? estimateTextTokens(`[user]\n${draft}`) : 0;
+    const imageTokens = Math.max(0, coachImages.length) * COACH_IMAGE_ESTIMATE_TOKENS;
+    const usedTokens = Math.max(0, Math.round(
+      systemTokens
+      + historyTokens
+      + draftTokens
+      + imageTokens
+      + COACH_CONTEXT_FIXED_OVERHEAD_TOKENS
+    ));
+    const remainingTokens = Math.max(0, COACH_CONTEXT_WINDOW_TOKENS - usedTokens);
+    const ratio = Math.min(1, usedTokens / COACH_CONTEXT_WINDOW_TOKENS);
+    return {
+      usedTokens,
+      remainingTokens,
+      totalTokens: COACH_CONTEXT_WINDOW_TOKENS,
+      ratio,
+      usedLabel: formatTokenK(usedTokens),
+      remainingLabel: formatTokenK(remainingTokens),
+      totalLabel: formatTokenK(COACH_CONTEXT_WINDOW_TOKENS),
+      nearLimit: remainingTokens <= COACH_CONTEXT_WARN_REMAINING_TOKENS,
+    };
+  }, [agentActions, chatInput, chatMessages, coachConfig, coachImages.length, dailyNotes, logs, memoryFacts, now, profile, races, weatherCtx]);
+  const contextUsageAccent = contextUsage.nearLimit
+    ? "var(--danger)"
+    : contextUsage.ratio >= 0.75
+      ? "var(--warn)"
+      : "var(--moss)";
   const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
@@ -1466,20 +1530,40 @@ export function AICoachTab({
             flex: "0 0 auto",
           }}
         />
-        <span
+        <button
+          type="button"
+          onClick={() => setShowContextUsage(v => !v)}
           title={providerTitle}
+          aria-expanded={showContextUsage}
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
             border: "1px solid var(--rule)", borderRadius: 2,
             background: "var(--bg-elevated)", color: "var(--ink-2)",
             fontSize: 11, fontFamily: "var(--font-sans)",
-            whiteSpace: "nowrap",
+            whiteSpace: "nowrap", cursor: "pointer",
+            flex: "0 0 auto",
           }}>
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
           {!isMobile && <span style={{ color: "var(--ink-3)" }}>Model</span>}
           <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{displayProviderLabel}</span>
-        </span>
+          <span aria-hidden="true" style={{
+            width: 14,
+            height: 14,
+            borderRadius: 999,
+            background: `conic-gradient(${contextUsageAccent} ${Math.round(contextUsage.ratio * 360)}deg, var(--panel-3) 0deg)`,
+            boxShadow: "inset 0 0 0 1px var(--rule)",
+            display: "inline-block",
+            position: "relative",
+          }}>
+            <span style={{
+              position: "absolute",
+              inset: 4,
+              borderRadius: 999,
+              background: "var(--bg-elevated)",
+            }} />
+          </span>
+        </button>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has
             room so it keeps all four. */}
@@ -1611,14 +1695,66 @@ export function AICoachTab({
           </button>
         )}
       </div>
-      {/* Soft hint once chat history grows past the threshold. Two states:
+      {showContextUsage && (
+        <div style={{
+          marginBottom: 10,
+          padding: "9px 11px",
+          border: "1px solid var(--rule)",
+          borderRadius: 6,
+          background: "var(--bg-elevated)",
+          color: "var(--ink-2)",
+          display: "grid",
+          gap: 6,
+        }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            fontSize: 12,
+            fontFamily: "var(--font-sans)",
+          }}>
+            <span style={{ color: "var(--ink-3)" }}>{t("coach.context_used")}</span>
+            <span style={{ color: "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
+              ≈ {contextUsage.usedLabel} / {contextUsage.totalLabel}
+            </span>
+          </div>
+          <div style={{
+            height: 5,
+            borderRadius: 999,
+            background: "var(--bg-sunken)",
+            overflow: "hidden",
+          }}>
+            <div style={{
+              width: `${Math.min(100, Math.round(contextUsage.ratio * 100))}%`,
+              height: "100%",
+              borderRadius: 999,
+              background: contextUsageAccent,
+            }} />
+          </div>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 10,
+            fontSize: 12,
+            fontFamily: "var(--font-sans)",
+          }}>
+            <span style={{ color: "var(--ink-3)" }}>{t("coach.context_remaining")}</span>
+            <span style={{ color: contextUsage.nearLimit ? "var(--danger)" : "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
+              ≈ {contextUsage.remainingLabel}
+            </span>
+          </div>
+        </div>
+      )}
+      {/* Soft hint once estimated context usage approaches the safe limit. Two states:
           • EXPANDED (default) — full banner with the "consider distilling
             to memory" explanation + Open Memory button + ✕ dismiss
           • COLLAPSED — single-line chip that still nudges the user but
             doesn't take vertical real estate; tap to re-expand.
           Per-session state so the chip reappears full-size on next page
-          load when chat is still long. */}
-      {chatMessages.length >= LONG_CHAT_HINT_THRESHOLD && !showMemory && (
+          load when context usage is still high. */}
+      {contextUsage.nearLimit && !showMemory && (
         longChatHintCollapsed ? (
           <button
             onClick={() => setLongChatHintCollapsed(false)}
@@ -1633,7 +1769,7 @@ export function AICoachTab({
               alignSelf: "flex-start",
             }}>
             <span>⚠</span>
-            <span>{t("coach.long_chat_chip", { n: chatMessages.length })}</span>
+            <span>{t("coach.long_chat_chip", { used: contextUsage.usedLabel, total: contextUsage.totalLabel })}</span>
           </button>
         ) : (
           <div style={{
@@ -1644,7 +1780,7 @@ export function AICoachTab({
             flexWrap: "wrap",
           }}>
             <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, flex: 1, minWidth: 220 }}>
-              {t("coach.long_chat_hint", { n: chatMessages.length })}
+              {t("coach.long_chat_hint", { used: contextUsage.usedLabel, total: contextUsage.totalLabel, remaining: contextUsage.remainingLabel })}
             </div>
             <button onClick={() => setShowMemory(true)}
               style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0 }}>

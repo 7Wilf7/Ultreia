@@ -4,6 +4,7 @@ import {
   buildAgentActionsBlock,
   buildDataBlock,
   buildMemoryFactsBlock,
+  estimateTextTokens,
   messageContentForCoach,
   normalizeTokenUsage,
   parseCoachMessageMeta,
@@ -53,6 +54,13 @@ describe("normalizeTokenUsage", () => {
   it("returns null for empty or non-numeric usage", () => {
     expect(normalizeTokenUsage(null)).toBeNull();
     expect(normalizeTokenUsage({ input_tokens: "nope" })).toBeNull();
+  });
+});
+
+describe("estimateTextTokens", () => {
+  it("counts mixed Chinese and ASCII text conservatively", () => {
+    expect(estimateTextTokens("广州 10km easy")).toBeGreaterThan(4);
+    expect(estimateTextTokens("")).toBe(0);
   });
 });
 

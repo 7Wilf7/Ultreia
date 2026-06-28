@@ -481,16 +481,181 @@ function throwIfAborted(signal) {
   throw err;
 }
 
-// Boot screen — deliberately mirrors the native Android splash (logo +
-// "Ultreia" on the cream background) so on the APK the native splash →
-// web-view handoff is visually seamless: the user sees ONE logo screen, then
-// the app. Now also a warm time-of-day greeting + a random sport line.
-// Logo + text use vmin units so they track the stretched native splash size.
-// `boot` (auth-init, before login): a calm logo + wordmark screen that mirrors
-// the native Android splash for a seamless handoff, with a "Built with" credit
-// pinned to the bottom. Non-boot (post-login data load): the warm personalized
-// greeting + random sport line.
-function LoadingScreen({ userId = null, boot = false }) {
+const BOOT_MOTION_CSS = `
+.ultreia-boot-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 0 24px;
+  overflow: hidden;
+  isolation: isolate;
+}
+.ultreia-boot-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: min(4vmin, 22px);
+  transform: translateY(-4vmin);
+  text-align: center;
+}
+.ultreia-boot-logo {
+  width: min(28vmin, 140px);
+  height: min(28vmin, 140px);
+  object-fit: contain;
+  transform-origin: center;
+}
+.ultreia-boot-word {
+  position: relative;
+  overflow: hidden;
+  font-family: TSSign, "Segoe Script", cursive;
+  font-size: min(12vmin, 62px);
+  font-weight: 400;
+  color: var(--ink-1);
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 0 0.08em 0.06em;
+  margin-top: -0.8vmin;
+}
+.ultreia-boot-word::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, oklch(0.86 0.045 138 / 0.28) 48%, transparent 100%);
+  transform: translateX(-115%);
+  pointer-events: none;
+}
+.ultreia-boot-greeting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: min(1.8vmin, 8px);
+  margin-top: min(1.8vmin, 10px);
+}
+.ultreia-boot-hello {
+  font-family: var(--font-sans);
+  font-size: min(5.1vmin, 24px);
+  font-weight: 560;
+  color: var(--ink-1);
+  letter-spacing: 0.02em;
+}
+.ultreia-boot-line {
+  font-family: var(--font-sans);
+  font-size: min(3.5vmin, 15px);
+  color: var(--ink-3);
+  max-width: min(78vw, 360px);
+  line-height: 1.5;
+}
+.ultreia-boot-built {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(5vmin, env(safe-area-inset-bottom, 0px));
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: min(3.1vmin, 12px);
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ultreia-boot-logo {
+    opacity: 0;
+    transform: translateY(18px) scale(0.78);
+    filter: blur(8px);
+    animation: ultreiaLogoArrive 720ms cubic-bezier(0.34, 0, 0.14, 1) 80ms both;
+    will-change: transform, opacity, filter;
+  }
+  .ultreia-boot-word {
+    clip-path: inset(0 100% 0 0);
+    animation: ultreiaWordWrite 780ms cubic-bezier(0.16, 1, 0.3, 1) 520ms both;
+    will-change: clip-path, transform, opacity;
+  }
+  .ultreia-boot-word::after {
+    animation: ultreiaWordSheen 620ms cubic-bezier(0.16, 1, 0.3, 1) 560ms both;
+  }
+  .ultreia-boot-greeting {
+    opacity: 0;
+    transform: translateY(10px);
+    animation: ultreiaGreetingIn 560ms cubic-bezier(0.16, 1, 0.3, 1) 1120ms both;
+    will-change: transform, opacity;
+  }
+  .ultreia-boot-built {
+    opacity: 0;
+    animation: ultreiaBuiltIn 480ms cubic-bezier(0.4, 0, 0.2, 1) 1360ms both;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ultreia-boot-logo,
+  .ultreia-boot-word,
+  .ultreia-boot-greeting,
+  .ultreia-boot-built {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    clip-path: none;
+  }
+}
+@keyframes ultreiaLogoArrive {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.78);
+    filter: blur(8px);
+  }
+  22% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.74);
+    filter: blur(8px);
+  }
+  66% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.025);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+@keyframes ultreiaWordWrite {
+  0% {
+    opacity: 0.85;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-4px);
+  }
+  76% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(1px);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+@keyframes ultreiaWordSheen {
+  0% { transform: translateX(-115%); opacity: 0; }
+  28% { opacity: 1; }
+  100% { transform: translateX(115%); opacity: 0; }
+}
+@keyframes ultreiaGreetingIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes ultreiaBuiltIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+`;
+
+// React boot and post-login data loading now share one branded loading scene:
+// logo, wordmark, greeting, and build credit. That removes the old in-app
+// handoff from a wordmark-only screen to a separate greeting screen.
+function LoadingScreen({ userId = null }) {
   // Read directly from localStorage — this renders before LanguageProvider /
   // profile are available (during auth + first data load). Name is cached when
   // the profile loads. Cache is per auth user so switching accounts cannot leak
@@ -506,74 +671,30 @@ function LoadingScreen({ userId = null, boot = false }) {
   const line = greeting[lang === "zh" ? "zh" : "en"];
 
   return (
-    <div style={{
-      position: "fixed", inset: 0,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      gap: "5vmin", background: "var(--bg)", padding: "0 24px",
-    }}>
-      {boot && <style>{POSTER_FONT_CSS}</style>}
+    <div className="ultreia-boot-screen">
+      <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
       {/* Lightweight (384px) display version of the product logo. The native
           Android splash renders the SAME artwork from a separate hi-res source
           (resources/splash-logo.png via scripts/make-splash.mjs) so the
           native-splash → web-view handoff still reads as one logo screen —
           when swapping the logo, update both assets (see src/assets/logo.js). */}
-      <img
-        src={productLogoUrl}
-        alt="Ultreia"
-        style={{
-          width: "min(30vmin, 150px)",
-          height: "min(30vmin, 150px)",
-          objectFit: "contain",
-        }}
-      />
-      {boot ? (
-        <div style={{
-          fontFamily: "TSSign, 'Segoe Script', cursive",
-          fontSize: "min(12vmin, 62px)",
-          fontWeight: 400,
-          color: "var(--ink-1)",
-          letterSpacing: 0,
-          lineHeight: 1,
-          marginTop: "-1vmin",
-        }}>
-          Ultreia
-        </div>
-      ) : (
-        <>
-          <div style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "min(5.2vmin, 24px)",
-            fontWeight: 500,
-            color: "var(--ink-1)",
-            letterSpacing: "0.02em",
-          }}>
+      <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
+        <img
+          className="ultreia-boot-logo"
+          src={productLogoUrl}
+          alt="Ultreia"
+        />
+        <div className="ultreia-boot-word">Ultreia</div>
+        <div className="ultreia-boot-greeting">
+          <div className="ultreia-boot-hello">
             {hello}
           </div>
-          <div style={{
-            fontFamily: "var(--font-sans)",
-            fontSize: "min(3.6vmin, 15px)",
-            color: "var(--ink-3)",
-            textAlign: "center",
-            maxWidth: 360,
-            lineHeight: 1.5,
-            marginTop: "-2vmin",
-          }}>
+          <div className="ultreia-boot-line">
             {line}
           </div>
-        </>
-      )}
-      {boot && (
-        <div style={{
-          position: "absolute", left: 0, right: 0, bottom: "max(5vmin, env(safe-area-inset-bottom, 0px))",
-          textAlign: "center",
-          fontFamily: "var(--font-sans)",
-          fontSize: "min(3.1vmin, 12px)",
-          color: "var(--ink-3)",
-          letterSpacing: "0.04em",
-        }}>
-          Built with Claude Code &amp; Codex
         </div>
-      )}
+      </div>
+      <div className="ultreia-boot-built">built with codex and Claude Code</div>
     </div>
   );
 }
@@ -651,7 +772,7 @@ export default function App() {
     return () => clearTimeout(t);
   }, [loading]);
 
-  if (loading) return <LoadingScreen userId={user?.id} boot />;
+  if (loading) return <LoadingScreen userId={user?.id} />;
   if (recoveryMode) {
     return (
       <PasswordRecoveryModal

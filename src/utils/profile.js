@@ -6,6 +6,9 @@ import {
   HR_ZONE_METHODS,
 } from "../constants";
 
+const TRAINING_PREFERENCE_DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const TRAINING_PREFERENCE_SLOTS = ["am", "pm"];
+
 export function calculateAge(birthDate, today = new Date()) {
   if (!birthDate) return null;
   const d = new Date(birthDate);
@@ -78,6 +81,18 @@ const L = {
     style: "Style",
     outputLen: "Output length",
     riskReminders: "Risk reminders",
+    trainingPrefTitle: "[Weekly Training Preferences]",
+    trainingPrefHint: "Use these as default planning anchors when the user gives no newer conflict. They are not hard constraints; if the user says they are unavailable, or recovery/race/weather context requires a change, adjust and explain why.",
+    trainingPrefDays: {
+      0: "Sunday",
+      1: "Monday",
+      2: "Tuesday",
+      3: "Wednesday",
+      4: "Thursday",
+      5: "Friday",
+      6: "Saturday",
+    },
+    trainingPrefSlots: { am: "AM", pm: "PM" },
 
     memoryTitle: "[Long-term Memory]",
     memoryHint: "Durable facts about this user accumulated over time. Treat these as ground truth unless the user corrects them.",
@@ -105,11 +120,38 @@ const L = {
     style: "风格",
     outputLen: "输出长度",
     riskReminders: "风险提醒",
+    trainingPrefTitle: "[每周训练偏好]",
+    trainingPrefHint: "没有新的冲突信息时，把这些作为默认排课锚点；这不是硬约束。用户说某天不方便，或恢复 / 比赛 / 天气上下文要求调整时，可以改动并说明原因。",
+    trainingPrefDays: {
+      0: "周日",
+      1: "周一",
+      2: "周二",
+      3: "周三",
+      4: "周四",
+      5: "周五",
+      6: "周六",
+    },
+    trainingPrefSlots: { am: "上午", pm: "下午" },
 
     memoryTitle: "[长期记忆]",
     memoryHint: "在多次对话中积累的、关于用户的稳定事实。视为基础真相，除非用户主动更正。",
   },
 };
+
+function trainingPreferenceLines(trainingPreferences, L_) {
+  const template = trainingPreferences?.weeklyTemplate && typeof trainingPreferences.weeklyTemplate === "object"
+    ? trainingPreferences.weeklyTemplate
+    : {};
+  const lines = [];
+  for (const day of TRAINING_PREFERENCE_DAY_ORDER) {
+    const dayPrefs = template[String(day)] || template[day] || {};
+    for (const slot of TRAINING_PREFERENCE_SLOTS) {
+      const text = String(dayPrefs?.[slot] || "").trim();
+      if (text) lines.push(`${L_.trainingPrefDays[day]} ${L_.trainingPrefSlots[slot]}: ${text}`);
+    }
+  }
+  return lines;
+}
 
 /**
  * Profile block — short, structured, NOT a wall of text.
@@ -165,10 +207,17 @@ export function coachConfigBlock(cfg, lang = "en") {
   const styleLabel = labelFor(COACH_STYLES, cfg.style);
   const lengthLabel = labelFor(OUTPUT_LENGTHS, cfg.outputLength);
   const interventionLabel = labelFor(INTERVENTION_LEVELS, cfg.intervention);
-  return `${L_.coachTitle}
-${L_.style}: ${styleLabel}
-${L_.outputLen}: ${lengthLabel}
-${L_.riskReminders}: ${interventionLabel}`;
+  const lines = [
+    L_.coachTitle,
+    `${L_.style}: ${styleLabel}`,
+    `${L_.outputLen}: ${lengthLabel}`,
+    `${L_.riskReminders}: ${interventionLabel}`,
+  ];
+  const prefLines = trainingPreferenceLines(cfg.trainingPreferences, L_);
+  if (prefLines.length) {
+    lines.push("", L_.trainingPrefTitle, L_.trainingPrefHint, ...prefLines);
+  }
+  return lines.join("\n");
 }
 
 /**

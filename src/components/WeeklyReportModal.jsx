@@ -74,9 +74,13 @@ export function WeeklyReportPage({
   const [discussionText, setDiscussionText] = useState("");
   const range = useMemo(() => weekWindow(now || new Date(), rangeMode === "last" ? -1 : 0), [now, rangeMode]);
   const selected = useMemo(() => {
-    const modeReports = (reports || []).filter(r => r.rangeMode === rangeMode);
-    return modeReports.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
-  }, [reports, rangeMode]);
+    const rangeReports = (reports || []).filter(r => (
+      r.rangeMode === rangeMode
+      && r.start === range.start
+      && r.end === range.end
+    ));
+    return rangeReports.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
+  }, [reports, rangeMode, range.start, range.end]);
   const canDiscuss = !!selected && discussionText.trim().length > 0;
 
   function sendDiscussion() {

@@ -452,6 +452,9 @@ export const DEFAULT_COACH_CONFIG = {
   intervention: "standard",
   showCalendarButton: true,
   nightlyMemoryReview: false,
+  trainingPreferences: {
+    weeklyTemplate: {},
+  },
 };
 
 export const COACH_STYLES = [

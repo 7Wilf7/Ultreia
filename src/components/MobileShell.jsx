@@ -292,20 +292,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         </div>
       </main>
 
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: 0,
-          height: "calc(82px + max(env(safe-area-inset-bottom, 0px), 0px))",
-          zIndex: 18,
-          pointerEvents: "none",
-          background: "linear-gradient(180deg, oklch(0.18 0.014 145 / 0.99), oklch(0.08 0.010 145 / 1))",
-        }}
-      />
-
       {/* ── Bottom tab bar ───────────────────────────────────────────────── */}
       <nav style={{
         position: "fixed", left: 0, right: 0, bottom: 0,

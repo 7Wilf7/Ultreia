@@ -42,6 +42,25 @@ import { Dropdown } from "./Dropdown";
 // We don't need it for any of these renderers — drop it before spreading so
 // React doesn't warn about unknown DOM attributes.
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
+const TRAINING_PREFERENCE_DAYS = [1, 2, 3, 4, 5, 6, 0];
+const TRAINING_PREFERENCE_SLOTS = ["am", "pm"];
+
+function normalizeTrainingPreferences(value) {
+  const template = value?.weeklyTemplate && typeof value.weeklyTemplate === "object"
+    ? value.weeklyTemplate
+    : {};
+  const weeklyTemplate = {};
+  for (const day of TRAINING_PREFERENCE_DAYS) {
+    const source = template[String(day)] || template[day] || {};
+    const entry = {};
+    for (const slot of TRAINING_PREFERENCE_SLOTS) {
+      const text = String(source?.[slot] || "").trim();
+      if (text) entry[slot] = text;
+    }
+    if (Object.keys(entry).length) weeklyTemplate[String(day)] = entry;
+  }
+  return { weeklyTemplate };
+}
 
 // Walk a hast subtree and collapse to plain text. Preserves newlines. Used
 // by the mobile table renderer — cells inside coach tables are usually
@@ -440,7 +459,6 @@ export function AICoachTab({
   now = new Date(),
   dailyNotes = [],
   setConfirmDelete,
-  onEditProfile,
   // Jump to other tabs from the first-send guidance nudge. coachHintsPending
   // (lifted to AppShell so it survives a tab switch) re-opens the nudge when the
   // user comes back from a setting, so multi-item nudges can be worked through.
@@ -449,7 +467,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  chatLoading, contextCompressing = false, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   codexRunnerStatus = null,
   planDeviationSummary = null,
   recoveryGuardSummary = null,
@@ -487,6 +505,7 @@ export function AICoachTab({
     return () => clearInterval(timer);
   }, []);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
+  const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showAgentActions, setShowAgentActions] = useState(false);
   const [showPromptPreview, setShowPromptPreview] = useState(false);
@@ -1017,6 +1036,9 @@ export function AICoachTab({
   function setIntervention(id) { setCoachConfig({ ...coachConfig, intervention: id }); }
   function setShowCalendarButton(v) { setCoachConfig({ ...coachConfig, showCalendarButton: v }); }
   function setNightlyMemoryReview(v) { setCoachConfig({ ...coachConfig, nightlyMemoryReview: v }); }
+  function setTrainingPreferences(next) {
+    setCoachConfig({ ...coachConfig, trainingPreferences: normalizeTrainingPreferences(next) });
+  }
 
   // Dynamic data block injected into the system prompt. Only the section titles
   // are localized; values (dates, race names, numbers) stay verbatim across
@@ -1075,7 +1097,7 @@ export function AICoachTab({
   async function handleSend() {
     const userMsg = chatInput.trim();
     const attachments = coachImages;
-    if ((!userMsg && !attachments.length) || chatLoading) return;
+    if ((!userMsg && !attachments.length) || chatLoading || contextCompressing) return;
     let seen = true;
     try { seen = !!localStorage.getItem(HINTS_FLAG); } catch { /* private mode */ }
     if (!seen && !attachments.length) {
@@ -1086,9 +1108,9 @@ export function AICoachTab({
     setChatInput("");
     setCoachImages([]);
     const sent = await sendChat(userMsg || t("coach.image_only_message"), { imageAttachments: attachments });
-    if (!sent && attachments.length) {
+    if (!sent) {
       setChatInput(userMsg);
-      setCoachImages(attachments);
+      if (attachments.length) setCoachImages(attachments);
     }
   }
 
@@ -1114,7 +1136,7 @@ export function AICoachTab({
     ? (calendarImportOn ? "显示" : "隐藏")
     : (calendarImportOn ? "shown" : "hidden");
   const hasCoachImageAttachments = coachImages.length > 0;
-  const canSubmitCoachMessage = chatInput.trim().length > 0 || hasCoachImageAttachments;
+  const canSubmitCoachMessage = !contextCompressing && (chatInput.trim().length > 0 || hasCoachImageAttachments);
   // Weather pill value + state. When location is missing, the pill opens the
   // AI Coach location panel so the user can set the weather place in-context.
   const wStatus = weatherCtx?.status || 'idle';
@@ -1305,6 +1327,32 @@ export function AICoachTab({
                 onOutputLength={setOutputLength}
                 onIntervention={setIntervention}
                 t={t}
+              />
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
+      {showTrainingPreferences && (
+        <ModalRoot onClose={() => setShowTrainingPreferences(false)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowTrainingPreferences(false)}>
+            <div
+              style={{
+                ...s.modalCard(isMobile, { maxWidth: 720, float: true }),
+                maxHeight: isMobile ? "min(82dvh, 720px)" : "min(82vh, 760px)",
+                overflowY: "auto",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.training_preferences")}</h2>
+                <button onClick={() => setShowTrainingPreferences(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <TrainingPreferenceEditor
+                value={coachConfig.trainingPreferences}
+                onChange={setTrainingPreferences}
+                t={t}
+                isMobile={isMobile}
               />
             </div>
           </div>
@@ -2278,8 +2326,10 @@ export function AICoachTab({
             value={chatInput}
             onChange={e => setChatInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
+            disabled={contextCompressing}
             style={{
               ...coachComposerInputStyle({ isMobile }),
+              opacity: contextCompressing ? 0.62 : undefined,
             }} />
         </div>
         {isMobile ? (
@@ -2287,15 +2337,15 @@ export function AICoachTab({
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
-              disabled={chatLoading || coachImages.length >= COACH_IMAGE_LIMIT}
+              disabled={chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT}
               aria-label={t("coach.attach_image")}
               title={t("coach.attach_image")}
-              style={coachComposerIconButtonStyle({ disabled: chatLoading || coachImages.length >= COACH_IMAGE_LIMIT })}>
+              style={coachComposerIconButtonStyle({ disabled: chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT })}>
               <ImageIcon size={15} />
             </button>
-            <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !canSubmitCoachMessage}
+            <button onClick={chatLoading ? onStopChat : handleSend} disabled={contextCompressing || (!chatLoading && !canSubmitCoachMessage)}
               aria-label={chatLoading ? t("coach.stop_generating") : t("coach.send")}
-              style={coachComposerSendButtonStyle({ disabled: !chatLoading && !canSubmitCoachMessage })}>
+              style={coachComposerSendButtonStyle({ disabled: contextCompressing || (!chatLoading && !canSubmitCoachMessage) })}>
               {chatLoading ? "×" : "⏎"}
             </button>
           </>
@@ -2311,7 +2361,7 @@ export function AICoachTab({
               <button
                 type="button"
                 onClick={() => imageInputRef.current?.click()}
-                disabled={chatLoading || coachImages.length >= COACH_IMAGE_LIMIT}
+                disabled={chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT}
                 aria-label={t("coach.attach_image")}
                 title={t("coach.attach_image")}
                 style={{
@@ -2321,18 +2371,18 @@ export function AICoachTab({
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  opacity: (chatLoading || coachImages.length >= COACH_IMAGE_LIMIT) ? 0.45 : 1,
+                  opacity: (chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT) ? 0.45 : 1,
                 }}>
                 <ImageIcon size={14} />
               </button>
             </div>
-            <button onClick={chatLoading ? onStopChat : handleSend} disabled={!chatLoading && !canSubmitCoachMessage}
+            <button onClick={chatLoading ? onStopChat : handleSend} disabled={contextCompressing || (!chatLoading && !canSubmitCoachMessage)}
               style={{
                 ...s.btn, padding: "10px 20px",
-                opacity: (!chatLoading && !canSubmitCoachMessage) ? 0.5 : 1,
+                opacity: (contextCompressing || (!chatLoading && !canSubmitCoachMessage)) ? 0.5 : 1,
                 flex: 1,
               }}>
-              {chatLoading ? t("common.stop") : t("coach.send")}
+              {contextCompressing ? t("coach.context_compressing_short") : chatLoading ? t("common.stop") : t("coach.send")}
             </button>
           </div>
         )}
@@ -2449,8 +2499,8 @@ export function AICoachTab({
 
                 {groupHeader(t("coach.group_coach"))}
                 {row(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
+                {row(t("coach.training_preferences"), () => openSub(() => setShowTrainingPreferences(true)))}
                 {row(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), { badge: memoryReady })}
-                {row(t("coach.edit_profile"), () => pick(onEditProfile))}
 
                 {groupHeader(t("coach.group_actions"))}
                 {showManualAdjustmentShortcut && row(manualAdjustmentLabel, handleManualAdjustmentFromMenu)}
@@ -2516,8 +2566,8 @@ export function AICoachTab({
                   {[
                     { header: t("coach.group_coach"), items: [
                       { id: "config", label: t("coach.show_config") },
+                      { id: "trainingPrefs", label: t("coach.training_preferences") },
                       { id: "memory", label: t("coach.show_memory") + (memoryReady ? " ●" : "") },
-                      { id: "profile", label: t("coach.edit_profile") },
                     ] },
                     { header: t("coach.group_actions"), items: [
                       ...(showManualAdjustmentShortcut ? [{ id: "adjust", label: manualAdjustmentLabel }] : []),
@@ -2563,17 +2613,6 @@ export function AICoachTab({
 
                 {/* Right content pane */}
                 <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "18px 22px" }}>
-                  {coachHubTab === "profile" && (
-                    <div>
-                      <p style={{ ...s.muted, lineHeight: 1.6, marginTop: 0 }}>
-                        {t("coach.profile_hub_hint")}
-                      </p>
-                      <button onClick={() => { setShowCoachHub(false); onEditProfile(); }} style={s.btn}>
-                        {t("coach.edit_profile")}
-                      </button>
-                    </div>
-                  )}
-
                   {coachHubTab === "config" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
@@ -2585,6 +2624,15 @@ export function AICoachTab({
                         t={t}
                       />
                     </div>
+                  )}
+
+                  {coachHubTab === "trainingPrefs" && (
+                    <TrainingPreferenceEditor
+                      value={coachConfig.trainingPreferences}
+                      onChange={setTrainingPreferences}
+                      t={t}
+                      isMobile={false}
+                    />
                   )}
 
                   {coachHubTab === "calendar" && (
@@ -2791,6 +2839,92 @@ function CoachConfigDropdowns({ coachConfig, onStyle, onOutputLength, onInterven
           ariaLabel={t("coach.intervention")}
           triggerStyle={triggerStyle}
         />
+      </div>
+    </div>
+  );
+}
+
+function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
+  const prefs = normalizeTrainingPreferences(value);
+  const template = prefs.weeklyTemplate || {};
+  const slotLabels = {
+    am: t("calendar.plan_tod_am"),
+    pm: t("calendar.plan_tod_pm"),
+  };
+  const write = (day, slot, text) => {
+    const nextTemplate = {};
+    for (const dayId of TRAINING_PREFERENCE_DAYS) {
+      const source = template[String(dayId)] || {};
+      const nextDay = {};
+      for (const slotId of TRAINING_PREFERENCE_SLOTS) {
+        const current = dayId === day && slotId === slot ? text : source[slotId];
+        const clean = String(current || "").trim();
+        if (clean) nextDay[slotId] = clean;
+      }
+      if (Object.keys(nextDay).length) nextTemplate[String(dayId)] = nextDay;
+    }
+    onChange?.({ weeklyTemplate: nextTemplate });
+  };
+  const clearAll = () => onChange?.({ weeklyTemplate: {} });
+
+  return (
+    <div style={{ display: "grid", gap: 14 }}>
+      <div style={{ ...s.muted, lineHeight: 1.55, fontSize: 13 }}>
+        {t("coach.training_preferences_hint")}
+      </div>
+      <div style={{ display: "grid", gap: 8 }}>
+        {TRAINING_PREFERENCE_DAYS.map(day => {
+          const dayPrefs = template[String(day)] || {};
+          return (
+            <div
+              key={day}
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "74px minmax(0, 1fr) minmax(0, 1fr)",
+                gap: isMobile ? 7 : 10,
+                alignItems: "center",
+                padding: isMobile ? "10px 0" : "8px 0",
+                borderTop: "1px solid var(--rule-soft)",
+              }}
+            >
+              <div style={{ ...s.label, margin: 0, color: "var(--ink-2)" }}>
+                {t(`weekly_settings.day_${day}`)}
+              </div>
+              {TRAINING_PREFERENCE_SLOTS.map(slot => (
+                <label
+                  key={slot}
+                  style={{
+                    display: "grid",
+                    gap: 4,
+                    minWidth: 0,
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.2 }}>
+                    {slotLabels[slot]}
+                  </span>
+                  <input
+                    value={dayPrefs[slot] || ""}
+                    onChange={e => write(day, slot, e.target.value)}
+                    placeholder={t("coach.training_preferences_placeholder")}
+                    style={{
+                      ...s.input,
+                      minHeight: 38,
+                      padding: "8px 10px",
+                      fontSize: 13,
+                      lineHeight: 1.35,
+                      width: "100%",
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <button type="button" onClick={clearAll} style={{ ...s.btnGhost, minHeight: 0, padding: "7px 11px", fontSize: 12 }}>
+          {t("coach.training_preferences_clear")}
+        </button>
       </div>
     </div>
   );

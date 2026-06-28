@@ -81,6 +81,8 @@ import { initPushNotifications, notifyTaskDone, setPushKeepAliveEnabled } from "
 import { productLogoUrl } from "./assets/logo";
 import {
   appendCoachMessageMeta,
+  estimateTextTokens,
+  loadPreciseTextTokenCounter,
   messageContentForCoach,
   normalizeTokenUsage,
   parseCoachMessageMeta,
@@ -253,6 +255,12 @@ function cleanWeeklyReportWeekday(value) {
 
 const WEEKLY_REPORT_LIST_LIMIT = 50;
 const POST_IMPORT_REVIEW_PROACTIVE_PAUSE_MS = 12 * 60 * 60 * 1000;
+const COACH_CONTEXT_WINDOW_TOKENS = 200_000;
+const COACH_CONTEXT_AUTO_COMPRESS_TOKENS = 180_000;
+const COACH_CONTEXT_FIXED_OVERHEAD_TOKENS = 2_500;
+const COACH_IMAGE_ESTIMATE_TOKENS = 1_500;
+const COACH_CONTEXT_COMPRESS_KEEP_MESSAGES = 12;
+const COACH_CONTEXT_COMPRESS_MAX_OUTPUT_TOKENS = 3_500;
 
 function monthStartKey(now = new Date()) {
   const d = new Date(now);
@@ -2043,6 +2051,7 @@ function AppShell({
   }
   const [chatLoading, setChatLoading] = useState(false);
   const [coachChatDraft, setCoachChatDraft] = useState("");
+  const [contextCompressing, setContextCompressing] = useState(false);
   const [lastCoachProvider, setLastCoachProvider] = useState({ id: "deepseek", label: "DeepSeek", fallback: null });
   const [codexRunnerStatus, setCodexRunnerStatus] = useState({ state: "loading", provider: "desktop_codex" });
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
@@ -2545,10 +2554,154 @@ function AppShell({
     }
   }
 
+  async function loadCoachContextTokenCounter() {
+    try {
+      return await loadPreciseTextTokenCounter();
+    } catch {
+      return estimateTextTokens;
+    }
+  }
+
+  function estimateCoachContextTokens({ systemPrompt, messages, pendingUserMessage = "", imageCount = 0, countTokens }) {
+    const historyTokens = (messages || []).reduce((sum, m) => (
+      sum + countTokens(`[${m.role || "user"}]\n${messageContentForCoach(m.content)}`)
+    ), 0);
+    const pendingTokens = pendingUserMessage
+      ? countTokens(`[user]\n${pendingUserMessage}`)
+      : 0;
+    return Math.max(0, Math.round(
+      countTokens(systemPrompt || "")
+      + historyTokens
+      + pendingTokens
+      + Math.max(0, imageCount) * COACH_IMAGE_ESTIMATE_TOKENS
+      + COACH_CONTEXT_FIXED_OVERHEAD_TOKENS
+    ));
+  }
+
+  function contextSummaryCreatedAt(keptMessages = []) {
+    const firstKept = keptMessages.find(m => m?.createdAt)?.createdAt;
+    const ms = firstKept ? Date.parse(firstKept) : NaN;
+    if (Number.isFinite(ms)) return new Date(Math.max(0, ms - 1)).toISOString();
+    return new Date().toISOString();
+  }
+
+  function buildContextCompressionPrompt({ messages, usedTokens }) {
+    const transcript = (messages || []).map((m, idx) => {
+      const role = m.role === "assistant" ? "assistant" : "user";
+      const at = m.createdAt ? ` · ${m.createdAt}` : "";
+      return `### ${idx + 1}. ${role}${at}\n${messageContentForCoach(m.content)}`;
+    }).join("\n\n");
+    const languageHint = lang === "zh"
+      ? "Write the visible summary in Simplified Chinese, but keep race names, workout types, dates, numbers, paces, zones, and product terms as originally written."
+      : "Write the visible summary in English, but preserve race names, workout types, dates, numbers, paces, zones, and product terms as originally written.";
+    return {
+      system: [
+        "You compress an AI running coach conversation so future turns keep the important context while using far fewer tokens.",
+        "Keep durable facts, explicit user preferences, corrections, current goals, recent decisions, planned workouts, injuries/risks, weather/location assumptions, and unresolved questions.",
+        "Do not invent data. Do not turn this into motivational prose. Make it useful as working memory for the next coach response.",
+        "Use concise Markdown headings and bullets.",
+        languageHint,
+      ].join("\n"),
+      user: [
+        `Estimated context before compression: about ${Math.round(usedTokens / 1000)}K tokens. The app's displayed context window is ${Math.round(COACH_CONTEXT_WINDOW_TOKENS / 1000)}K tokens and auto-compression starts at ${Math.round(COACH_CONTEXT_AUTO_COMPRESS_TOKENS / 1000)}K.`,
+        "Compress the older conversation below into one durable context summary. The newest messages will remain available separately, so focus on what must survive from this older segment.",
+        "",
+        transcript,
+      ].join("\n"),
+    };
+  }
+
+  function buildCompressedContextMessage(summaryText, compressedCount) {
+    const stamp = new Date().toLocaleString(lang === "zh" ? "zh-CN" : "en-GB", { hour12: false });
+    if (lang === "zh") {
+      return [
+        `【上下文已自动压缩 · ${stamp}】`,
+        `较早的 ${compressedCount} 条 AI Coach 对话已压缩成下面这份摘要，之后的对话会继续带上这份摘要和最近原文。`,
+        "",
+        String(summaryText || "").trim(),
+      ].join("\n");
+    }
+    return [
+      `[Context compressed automatically · ${stamp}]`,
+      `${compressedCount} earlier AI Coach message(s) were compressed into this summary. Future turns keep this summary plus the latest original messages.`,
+      "",
+      String(summaryText || "").trim(),
+    ].join("\n");
+  }
+
+  async function maybeCompressCoachContext({ systemPrompt, pendingUserMessage = "", imageCount = 0 }) {
+    const persistedMessages = chatMessages.filter(m => m?.id && !m.isLocal && !m.isStreaming);
+    if (persistedMessages.length < 8) return chatMessages;
+
+    const roughUsedTokens = estimateCoachContextTokens({
+      systemPrompt,
+      messages: chatMessages,
+      pendingUserMessage,
+      imageCount,
+      countTokens: estimateTextTokens,
+    });
+    if (roughUsedTokens < COACH_CONTEXT_AUTO_COMPRESS_TOKENS * 0.82) return chatMessages;
+
+    const countTokens = await loadCoachContextTokenCounter();
+    const usedTokens = estimateCoachContextTokens({
+      systemPrompt,
+      messages: chatMessages,
+      pendingUserMessage,
+      imageCount,
+      countTokens,
+    });
+    if (usedTokens < COACH_CONTEXT_AUTO_COMPRESS_TOKENS) return chatMessages;
+
+    const keepCount = persistedMessages.length > COACH_CONTEXT_COMPRESS_KEEP_MESSAGES + 4
+      ? COACH_CONTEXT_COMPRESS_KEEP_MESSAGES
+      : Math.max(4, Math.floor(persistedMessages.length / 3));
+    const messagesToCompress = persistedMessages.slice(0, -keepCount);
+    const keptMessages = persistedMessages.slice(-keepCount);
+    if (messagesToCompress.length < 2) {
+      appDialog.alert(t("coach.context_compress_not_enough"));
+      throw new Error("context_compression_not_enough_history");
+    }
+
+    setContextCompressing(true);
+    let savedSummary = null;
+    try {
+      const { system, user } = buildContextCompressionPrompt({ messages: messagesToCompress, usedTokens });
+      const data = await db.usage.coachProxy({
+        kind: "coach_chat",
+        system,
+        messages: [{ role: "user", content: user }],
+        max_tokens: COACH_CONTEXT_COMPRESS_MAX_OUTPUT_TOKENS,
+      });
+      const summaryText = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
+      if (!summaryText.trim()) throw new Error("empty compression summary");
+
+      const summaryContent = buildCompressedContextMessage(summaryText, messagesToCompress.length);
+      savedSummary = await db.coachMessages.appendMessage("assistant", summaryContent, {
+        createdAt: contextSummaryCreatedAt(keptMessages),
+      });
+      await db.coachMessages.deleteMessages(messagesToCompress.map(m => m.id));
+
+      const removedIds = new Set(messagesToCompress.map(m => m.id));
+      const nonPersisted = chatMessages.filter(m => !m?.id || m.isLocal || m.isStreaming);
+      const nextMessages = [savedSummary, ...keptMessages, ...nonPersisted]
+        .filter(m => !removedIds.has(m.id))
+        .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
+      setChatMessages(nextMessages);
+      return nextMessages;
+    } catch (err) {
+      if (savedSummary?.id) {
+        try { await db.coachMessages.deleteMessages([savedSummary.id]); } catch { /* best-effort rollback */ }
+      }
+      throw err;
+    } finally {
+      setContextCompressing(false);
+    }
+  }
+
   async function sendChat(userMsg, opts = {}) {
     const imageAttachments = Array.isArray(opts.imageAttachments) ? opts.imageAttachments : [];
     const rawUserMsg = String(userMsg || "").trim();
-    if ((!rawUserMsg && !imageAttachments.length) || chatLoading) return false;
+    if ((!rawUserMsg && !imageAttachments.length) || chatLoading || contextCompressing) return false;
 
     const attachmentMarker = imageAttachments.length
       ? t("coach.image_message_marker", { count: imageAttachments.length })
@@ -2567,13 +2720,44 @@ function AppShell({
       String(opts.modelMessage || rawUserMsg || t("coach.image_only_message")).trim(),
       imageModelMarker,
     ].filter(Boolean).join("\n\n");
+    let chatHistoryForSend;
+    try {
+      const preliminarySystemPrompt = buildSystemPrompt({
+        profile,
+        coachConfig,
+        dataBlock: buildDataBlock({
+          logs,
+          races,
+          now,
+          lang: "en",
+          currentWeather: weatherCtx?.currentWeather || null,
+          forecastByDate: weatherCtx?.forecastByDate || null,
+          dailyNotes,
+          agentActions,
+          memoryFacts,
+        }),
+        lang: "en",
+      });
+      chatHistoryForSend = await maybeCompressCoachContext({
+        systemPrompt: preliminarySystemPrompt,
+        pendingUserMessage: modelUserMsg,
+        imageCount: imageAttachments.length,
+      });
+    } catch (err) {
+      console.error("[AI Coach] context compression failed:", err);
+      if (err?.message !== "context_compression_not_enough_history") {
+        appDialog.alert(t("coach.context_compress_failed", { msg: err?.message || String(err) }));
+      }
+      return false;
+    }
+
     const controller = new AbortController();
     const runId = chatRunRef.current + 1;
     chatRunRef.current = runId;
     chatAbortRef.current = controller;
     const optimisticId = `pending-${Date.now()}`;
     const messagesToSend = [
-      ...chatMessages.map(m => ({ role: m.role, content: messageContentForCoach(m.content) })),
+      ...chatHistoryForSend.map(m => ({ role: m.role, content: messageContentForCoach(m.content) })),
       { role: "user", content: modelUserMsg },
     ];
     setChatMessages(prev => [...prev, { id: optimisticId, role: "user", content: visibleUserMsg, isLocal: true }]);
@@ -3411,7 +3595,7 @@ Rules:
   // True when ANY long-running AI Coach operation is in flight. Used to
   // render the spinner badge on the AI Coach tab label so the user knows
   // the model is still working even when they've switched to another tab.
-  const coachBusy = chatLoading || !!extractingForMsgId || memoryUpdating;
+  const coachBusy = chatLoading || contextCompressing || !!extractingForMsgId || memoryUpdating;
 
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
@@ -3607,6 +3791,7 @@ Rules:
           setCoachHintsPending={setCoachHintsPending}
           /* Lifted state + handlers — see AppShell top for definitions. */
           chatLoading={chatLoading}
+          contextCompressing={contextCompressing}
           chatInput={coachChatDraft}
           setChatInput={setCoachChatDraft}
           coachProviderLabel={lastCoachProvider.label}
@@ -3741,6 +3926,50 @@ Rules:
 
   const modals = (
     <>
+      {contextCompressing && (
+        <ModalRoot>
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 10020,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 22,
+              background: "oklch(0 0 0 / 0.70)",
+              WebkitBackdropFilter: "none",
+              backdropFilter: "none",
+              pointerEvents: "auto",
+            }}
+          >
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                width: "min(360px, 100%)",
+                border: "1px solid var(--rule)",
+                borderRadius: 8,
+                background: "linear-gradient(180deg, var(--paper), var(--paper-2))",
+                boxShadow: "var(--shadow-soft)",
+                padding: "20px 18px",
+                display: "grid",
+                gap: 10,
+                justifyItems: "center",
+                textAlign: "center",
+              }}
+            >
+              <Spinner size={26} thickness={2.2} color="var(--accent)" />
+              <div style={{ fontSize: 17, fontWeight: 700, color: "var(--ink-1)" }}>
+                {t("coach.context_compressing_title")}
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.55, color: "var(--ink-2)" }}>
+                {t("coach.context_compressing_body")}
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
+      )}
       {/* Memory-update-ready banner — appears at the top of the app once the
           background memory proposal lands and the Memory modal isn't open, so
           the user can wander off while it runs and get pulled back to review.

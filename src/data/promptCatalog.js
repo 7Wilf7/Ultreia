@@ -130,7 +130,7 @@ const DATA_BLOCK_SECTIONS = `每条消息实时拼上的你的数据（有内容
 [Next Race Weather] 下一场目标赛的赛日天气
 [Race History] 比赛历史（每类最近一场 + PR）
 [Weekly Load] 最近 8 周跑量 + 爬升 + 次数
-[Training Load] sRPE 急性:慢性 + ACWR
+[Training Load] 平滑 sRPE ACWR（7天 EWMA / 4周 EWMA）
 [Morning Readiness] 最近几天睡眠/腿感/精力自评
 [Recent Activities (last 10)] 最近 10 条训练（RPE / 备注 / 当时天气）
 [Day Notes] 最近 21 天当日标记

@@ -248,7 +248,7 @@ export function TrainingTab({
   // Calendar tab only). Planned rows would inflate PR / weekly km / averages.
   const actualLogs = useMemo(() => logs.filter(l => !l.isPlanned), [logs]);
 
-  // Whole-body training load (sRPE acute:chronic) — computed from ALL completed
+  // Whole-body smoothed ACWR (sRPE) — computed from ALL completed
   // activities, not the type-filtered set, since load is total stress. Recomputes
   // whenever the activity list changes (e.g. right after an import with RPE).
   const load = useMemo(() => computeTrainingLoad(actualLogs, new Date()), [actualLogs]);

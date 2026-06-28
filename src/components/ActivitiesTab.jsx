@@ -1437,10 +1437,15 @@ function ExpandedMetrics({ log: l }) {
         </div>
       )}
       {String(l.note || "").trim() && (
-        <div style={{
+        <div title={String(l.note).trim()} style={{
           color: "var(--ink-2)",
+          display: "-webkit-box",
           fontSize: 12,
           lineHeight: 1.5,
+          overflow: "hidden",
+          overflowWrap: "anywhere",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: 2,
           whiteSpace: "pre-wrap",
         }}>
           {String(l.note).trim()}

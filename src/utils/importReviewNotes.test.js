@@ -18,8 +18,9 @@ describe("import review note helpers", () => {
   it("uses the coach reply to condense the writeback after review", () => {
     const raw = "今天前半段腿很沉，第三公里以后才慢慢打开，最后两公里心率稳定但不想再加速";
     const coach = "整体强度可控，但腿部疲劳信号明显。下次保留 easy，不建议追配速。";
-    const note = buildImportSelfReviewNote(raw, coach, "zh", 80);
+    const note = buildImportSelfReviewNote(raw, coach, "zh");
     expect(note).toBe("自评：今天前半段腿很沉，第三公里以后才慢慢打开；整体强度可控，但腿部疲劳信号明显");
+    expect(note.length).toBeLessThanOrEqual(56);
     expect(note).not.toContain("最后两公里心率稳定但不想再加速");
   });
 

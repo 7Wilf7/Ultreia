@@ -115,7 +115,7 @@ export const DATA_LABELS = {
     targets: "[Target Races]",
     history: "[Race History — recent + PR per type]",
     weeklyTrend: "[Weekly Load — last 8 wks: run distance + ascent + count; watch week-over-week spikes]",
-    trainingLoad: "[Training Load — session-RPE acute:chronic; ACWR sweet spot 0.8–1.3, >1.5 = spike/injury risk]",
+    trainingLoad: "[Training Load — smoothed session-RPE ACWR; acute=7d EWMA, chronic=4w EWMA, sweet spot 0.8–1.3, >1.5 = spike/injury risk]",
     readiness: "[Morning Readiness — runner self-rated, 1=poor 2=ok 3=good]",
     recent: "[Recent Activities (last 10) — RPE=1–10 effort; note=runner's comment; weather=at training time]",
     dayNotes: "[Day Notes — recovery/context flags]",
@@ -135,7 +135,7 @@ export const DATA_LABELS = {
     targets: "[目标比赛]",
     history: "[比赛历史 —— 每类最近一场 + PR]",
     weeklyTrend: "[周训练量 —— 最近 8 周：跑步距离 + 爬升 + 次数；关注周环比突增]",
-    trainingLoad: "[训练负荷 —— sRPE 急性:慢性；ACWR 安全区 0.8–1.3，>1.5 为骤增/伤病风险]",
+    trainingLoad: "[训练负荷 —— 平滑 sRPE ACWR；急性=7天 EWMA，慢性=4周 EWMA，安全区 0.8–1.3，>1.5 为骤增/伤病风险]",
     readiness: "[晨间状态 —— 跑者自评，1=差 2=一般 3=好]",
     recent: "[近期活动（最近 10 条）—— RPE=1–10 自觉用力；note=跑者备注；weather=训练当时天气]",
     dayNotes: "[当日标记 —— 恢复/状态标记]",
@@ -495,7 +495,7 @@ function buildFocusDirectives({ races, now, load, raceDayWeather, missedCount })
     }
   }
   if (load && (load.ramp === "high" || load.ramp === "danger")) {
-    lines.push(`Training load is ramping ${load.ramp === "danger" ? "sharply" : "fast"} (ACWR ${load.acwr}). Call out the spike and prefer holding or easing volume over piling more on.`);
+    lines.push(`Smoothed training load is ramping ${load.ramp === "danger" ? "sharply" : "fast"} (EWMA ACWR ${load.acwr}). Call out the spike and prefer holding or easing volume over piling more on.`);
   }
   if (missedCount > 0) {
     lines.push(`The runner missed ${missedCount} planned session(s) in the last 2 weeks — ask what happened (fatigue, time, a niggle) before prescribing more; don't just re-stack the plan.`);
@@ -761,7 +761,7 @@ export function buildPromptSkeleton(lang = "en") {
       "【目标赛事 + 最近一场的比赛日天气】",
       "【比赛历史】（按类别精选）",
       "【最近 8 周周训练量】",
-      "【训练负荷】sRPE 急性:慢性 + ACWR 骤增风险",
+      "【训练负荷】平滑 sRPE ACWR（7天 EWMA / 4周 EWMA）+ 骤增风险",
       "【晨间状态】最近几天的自评",
       "【最近 10 条训练】含 RPE / 备注 / 当时天气",
       "【最近当日标记】计划休息 / 按摩 / 拉伸 / 生病",
@@ -785,7 +785,7 @@ export function buildPromptSkeleton(lang = "en") {
     "[Target Races + next race's race-day weather]",
     "[Race History] (curated per category)",
     "[Weekly Trend — last 8 weeks]",
-    "[Training Load — sRPE acute:chronic + ACWR spike risk]",
+    "[Training Load — smoothed sRPE ACWR spike risk]",
     "[Morning Readiness — recent self-ratings]",
     "[Recent Activities (last 10)] with RPE / notes / weather",
     "[Recent Day Notes] recovery / sick / mobility",

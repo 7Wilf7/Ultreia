@@ -122,7 +122,7 @@ export function summarizeRecoveryGuard(logs = [], dailyNotes = [], now = new Dat
       id: `load_${load.ramp}`,
       level: load.ramp === "danger" ? 3 : 2,
       label: "Training load spike",
-      detail: `ACWR ${load.acwr} (${load.ramp}); acute ${load.acute}, chronic ${load.chronicWeekly}`,
+      detail: `EWMA ACWR ${load.acwr} (${load.ramp}); acute ${load.acute}, chronic ${load.chronicWeekly}`,
     });
   }
 

@@ -1,4 +1,4 @@
-const DEFAULT_MAX_SELF_REVIEW_CHARS = 120;
+const DEFAULT_MAX_SELF_REVIEW_CHARS = 56;
 
 const SELF_REVIEW_KEYWORDS = {
   zh: ["自评", "感觉", "状态", "恢复", "疲劳", "腿", "心率", "rpe", "配速", "强度", "保留", "降量", "取消", "调整", "下次", "建议"],
@@ -59,15 +59,16 @@ export function buildImportSelfReviewNote(raw, coachReply = "", lang = "zh", max
   const cleaned = cleanFeelingText(raw);
   if (!cleaned) return "";
   const limit = Math.max(20, Number(maxChars) || DEFAULT_MAX_SELF_REVIEW_CHARS);
-  const rawLimit = Math.min(56, Math.max(24, Math.floor(limit * 0.46)));
+  const prefix = lang === "zh" ? "自评：" : "selfreview: ";
+  const bodyLimit = Math.max(20, limit - prefix.length);
+  const rawLimit = Math.min(bodyLimit, Math.max(18, Math.floor(bodyLimit * 0.46)));
   const rawSummary = shorten(compactRawSelfReview(cleaned, lang), rawLimit);
   const coachLine = pickCoachSelfReviewLine(coachReply, lang);
   const separator = lang === "zh" ? "；" : "; ";
-  const remaining = Math.max(20, limit - rawSummary.length - separator.length);
+  const remaining = Math.max(20, bodyLimit - rawSummary.length - separator.length);
   const summary = coachLine
-    ? shorten(`${rawSummary}${separator}${shorten(coachLine, remaining)}`, limit)
-    : shorten(rawSummary, limit);
-  const prefix = lang === "zh" ? "自评：" : "selfreview: ";
+    ? shorten(`${rawSummary}${separator}${shorten(coachLine, remaining)}`, bodyLimit)
+    : shorten(rawSummary, bodyLimit);
   return `${prefix}${summary}`;
 }
 

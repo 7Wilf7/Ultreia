@@ -567,6 +567,8 @@ const BOOT_MOTION_CSS = `
   height: auto;
   overflow: visible;
   margin-top: -0.4vmin;
+  contain: paint;
+  transform: translateZ(0);
 }
 .ultreia-word-final {
   font-family: TSSign, "Segoe Script", cursive;
@@ -754,18 +756,20 @@ const BOOT_MOTION_CSS = `
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
 @keyframes ultreiaWordInkMain {
-  0%, 7% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  84% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 7% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  15% { stroke-dashoffset: 0.98; animation-timing-function: linear; }
+  78% { stroke-dashoffset: 0.11; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  88% { stroke-dashoffset: 0; animation-timing-function: linear; }
   100% { stroke-dashoffset: 0; }
 }
 @keyframes ultreiaWordInkCross {
-  0%, 82% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  90% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 84% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  92% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
   100% { stroke-dashoffset: 0; }
 }
 @keyframes ultreiaWordInkDot {
-  0%, 88% { opacity: 0; transform: scale(0.2); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  93% { opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 90% { opacity: 0; transform: scale(0.72); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  94% { opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
   100% { opacity: 1; transform: scale(1); }
 }
 `;
@@ -818,7 +822,7 @@ function LoadingScreen({ userId = null }) {
         </div>
         <svg className="ultreia-boot-word-svg" viewBox="0 0 420 120" aria-label="Ultreia">
           <defs>
-            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse">
+            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
               <rect x="0" y="0" width="420" height="120" fill="black" />
               <path
                 className="ultreia-word-mask-path ultreia-word-mask-main"

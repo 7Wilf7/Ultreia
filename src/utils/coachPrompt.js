@@ -9,6 +9,13 @@ import { evaluatePlanOutcome } from "./planMatch";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COACH_META_RE = /<!--\s*ultreia-meta:(.*?)\s*-->/s;
+let preciseTokenCounterPromise = null;
+
+function estimateTextTokensFallback(text) {
+  const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
+  const asciiLike = text.replace(/[\u3400-\u9fff\uf900-\ufaff]/g, "");
+  return Math.max(0, Math.ceil(cjk + asciiLike.length / 4));
+}
 
 export function parseCoachMessageMeta(content = "") {
   const raw = String(content || "");
@@ -68,9 +75,31 @@ export function normalizeTokenUsage(usage) {
 export function estimateTextTokens(value = "") {
   const text = String(value || "");
   if (!text) return 0;
-  const cjk = (text.match(/[\u3400-\u9fff\uf900-\ufaff]/g) || []).length;
-  const asciiLike = text.replace(/[\u3400-\u9fff\uf900-\ufaff]/g, "");
-  return Math.max(0, Math.ceil(cjk + asciiLike.length / 4));
+  return estimateTextTokensFallback(text);
+}
+
+export function loadPreciseTextTokenCounter() {
+  if (!preciseTokenCounterPromise) {
+    preciseTokenCounterPromise = Promise.all([
+      import("js-tiktoken/lite"),
+      import("js-tiktoken/ranks/o200k_base"),
+    ]).then(([{ Tiktoken }, rankModule]) => {
+      const encoder = new Tiktoken(rankModule.default);
+      return (value = "") => {
+        const text = String(value || "");
+        if (!text) return 0;
+        try {
+          return encoder.encode(text).length;
+        } catch {
+          return estimateTextTokensFallback(text);
+        }
+      };
+    }).catch((err) => {
+      preciseTokenCounterPromise = null;
+      throw err;
+    });
+  }
+  return preciseTokenCounterPromise;
 }
 
 // Locale-aware headers for the dynamic data block (current date / target races /

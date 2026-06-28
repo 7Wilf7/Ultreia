@@ -5,6 +5,7 @@ import {
   buildDataBlock,
   buildMemoryFactsBlock,
   estimateTextTokens,
+  loadPreciseTextTokenCounter,
   messageContentForCoach,
   normalizeTokenUsage,
   parseCoachMessageMeta,
@@ -61,6 +62,16 @@ describe("estimateTextTokens", () => {
   it("counts mixed Chinese and ASCII text conservatively", () => {
     expect(estimateTextTokens("广州 10km easy")).toBeGreaterThan(4);
     expect(estimateTextTokens("")).toBe(0);
+  });
+
+  it("can load the OpenAI-compatible o200k tokenizer on demand", async () => {
+    const countTokens = await loadPreciseTextTokenCounter();
+
+    expect(countTokens("hello world")).toBe(2);
+    expect(countTokens("")).toBe(0);
+
+    const preciseMixed = countTokens("广州 10km easy");
+    expect(preciseMixed).toBeGreaterThan(0);
   });
 });
 

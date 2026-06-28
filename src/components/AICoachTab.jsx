@@ -15,7 +15,7 @@ import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { cityAbbreviationFromLocation, cityFromLocation, hasValidCoords } from "../lib/weather";
-import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
+import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTextTokenCounter, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { buildSystemPrompt } from "../utils/profile";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
@@ -521,6 +521,7 @@ export function AICoachTab({
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
   const [showContextUsage, setShowContextUsage] = useState(false);
+  const [preciseTextTokenCounter, setPreciseTextTokenCounter] = useState(null);
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
   const [raceBriefingAction, setRaceBriefingAction] = useState(null);
@@ -530,6 +531,17 @@ export function AICoachTab({
     catch { return ""; }
   });
   const [confirmManualAdjustment, setConfirmManualAdjustment] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadPreciseTextTokenCounter()
+      .then((countTokens) => {
+        if (!cancelled) setPreciseTextTokenCounter(() => countTokens);
+      })
+      .catch(() => {
+        if (!cancelled) setPreciseTextTokenCounter(null);
+      });
+    return () => { cancelled = true; };
+  }, []);
   const proactiveAdjustmentSnoozed = proactiveAdjustmentSnoozedUntil > runnerNowMs;
   const proactiveAutoPaused = Number(proactiveAutoPauseUntil) > runnerNowMs;
   const raceBriefingSnoozed = raceBriefingSnoozedUntil > runnerNowMs;
@@ -1183,6 +1195,7 @@ export function AICoachTab({
       ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
       : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`);
   const contextUsage = useMemo(() => {
+    const countTokens = preciseTextTokenCounter || estimateTextTokens;
     let systemTokens;
     try {
       const dataBlock = buildDataBlock({
@@ -1202,15 +1215,15 @@ export function AICoachTab({
         dataBlock,
         lang: "en",
       });
-      systemTokens = estimateTextTokens(systemPrompt);
+      systemTokens = countTokens(systemPrompt);
     } catch {
       systemTokens = COACH_CONTEXT_FIXED_OVERHEAD_TOKENS;
     }
     const historyTokens = chatMessages.reduce((sum, m) => (
-      sum + estimateTextTokens(`[${m.role || "user"}]\n${messageContentForCoach(m.content)}`)
+      sum + countTokens(`[${m.role || "user"}]\n${messageContentForCoach(m.content)}`)
     ), 0);
     const draft = String(chatInput || "").trim();
-    const draftTokens = draft ? estimateTextTokens(`[user]\n${draft}`) : 0;
+    const draftTokens = draft ? countTokens(`[user]\n${draft}`) : 0;
     const imageTokens = Math.max(0, coachImages.length) * COACH_IMAGE_ESTIMATE_TOKENS;
     const usedTokens = Math.max(0, Math.round(
       systemTokens
@@ -1231,7 +1244,7 @@ export function AICoachTab({
       totalLabel: formatTokenK(COACH_CONTEXT_WINDOW_TOKENS),
       nearLimit: remainingTokens <= COACH_CONTEXT_WARN_REMAINING_TOKENS,
     };
-  }, [agentActions, chatInput, chatMessages, coachConfig, coachImages.length, dailyNotes, logs, memoryFacts, now, profile, races, weatherCtx]);
+  }, [agentActions, chatInput, chatMessages, coachConfig, coachImages.length, dailyNotes, logs, memoryFacts, now, preciseTextTokenCounter, profile, races, weatherCtx]);
   const contextUsageAccent = contextUsage.nearLimit
     ? "var(--danger)"
     : contextUsage.ratio >= 0.75

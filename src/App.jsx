@@ -822,7 +822,7 @@ function LoadingScreen({ userId = null }) {
         </div>
         <svg className="ultreia-boot-word-svg" viewBox="0 0 420 120" aria-label="Ultreia">
           <defs>
-            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
+            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse">
               <rect x="0" y="0" width="420" height="120" fill="black" />
               <path
                 className="ultreia-word-mask-path ultreia-word-mask-main"

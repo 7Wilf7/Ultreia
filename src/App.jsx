@@ -637,6 +637,7 @@ const BOOT_MOTION_CSS = `
   .ultreia-logo-ridge,
   .ultreia-logo-trail,
   .ultreia-logo-trail-core,
+  .ultreia-word-drawn,
   .ultreia-word-mask-path,
   .ultreia-word-final,
   .ultreia-word-pen {
@@ -689,6 +690,9 @@ const BOOT_MOTION_CSS = `
     stroke-dasharray: 1 1.18;
     stroke-dashoffset: 1.08;
     animation-name: ultreiaWordInkTail;
+  }
+  .ultreia-word-drawn {
+    animation-name: ultreiaWordGuide;
   }
   .ultreia-word-final {
     animation-name: ultreiaWordSettle;
@@ -768,6 +772,10 @@ const BOOT_MOTION_CSS = `
   0%, 64% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
   88% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { stroke-dashoffset: 0; }
+}
+@keyframes ultreiaWordGuide {
+  0%, 82% { opacity: 0.92; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  90%, 100% { opacity: 0; }
 }
 @keyframes ultreiaWordSettle {
   0%, 84% { opacity: 0; transform: translateY(2px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
@@ -865,7 +873,7 @@ function LoadingScreen({ userId = null }) {
           </div>
         </div>
       </div>
-      <div className="ultreia-boot-built">built with codex and Claude Code</div>
+      <div className="ultreia-boot-built">Built with Codex and Claude Code</div>
     </div>
   );
 }

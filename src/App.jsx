@@ -755,17 +755,17 @@ const BOOT_MOTION_CSS = `
 }
 @keyframes ultreiaWordInkMain {
   0%, 7% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  67% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  84% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { stroke-dashoffset: 0; }
 }
 @keyframes ultreiaWordInkCross {
-  0%, 65% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  72% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 82% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  90% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { stroke-dashoffset: 0; }
 }
 @keyframes ultreiaWordInkDot {
-  0%, 71% { opacity: 0; transform: scale(0.2); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  76% { opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 88% { opacity: 0; transform: scale(0.2); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  93% { opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: scale(1); }
 }
 `;

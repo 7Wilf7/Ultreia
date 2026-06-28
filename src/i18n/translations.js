@@ -879,6 +879,8 @@ const dict = {
   "activities.import_weather": { en: "Fetch weather for activities within the last 24h", zh: "为 24 小时内的活动获取天气" },
   "activities.import_done":   { en: "✓ Imported {n} activities.", zh: "✓ 已导入 {n} 条活动。" },
   "activities.import_saving": { en: "Saving activities…", zh: "正在保存活动…" },
+  "activities.import_uploading_title": { en: "Uploading", zh: "上载中" },
+  "activities.import_uploading_body": { en: "Saving your activities. Please wait and do not import again.", zh: "正在保存活动，请稍等，不要重复点击。" },
   "activities.duplicate_pending": { en: "These activities are already being saved. Wait a moment before importing again.", zh: "这批活动正在保存中，请稍等片刻，不要重复导入。" },
   "activities.import_review_title": { en: "Finish import", zh: "完成导入" },
   "activities.import_review_body":  { en: "{n} activity/activities selected. Check weather, RPE, and coach review before saving.", zh: "已选 {n} 条活动。保存前确认天气、RPE 和教练点评。" },

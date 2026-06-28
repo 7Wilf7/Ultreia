@@ -10,7 +10,8 @@
 //   npx supabase functions deploy coach-proxy
 //
 // Secrets: SHARED_DEEPSEEK_KEY (set in Dashboard → Edge Functions → Secrets).
-// Optional tuning: DESKTOP_CODEX_WAIT_MS, DESKTOP_CODEX_TASK_WAIT_MS,
+// Optional tuning: DESKTOP_CODEX_WAIT_MS, DESKTOP_CODEX_CHAT_WAIT_MS,
+// DESKTOP_CODEX_TASK_WAIT_MS, DESKTOP_CODEX_WEEKLY_WAIT_MS,
 // DESKTOP_CODEX_PREFER_WAIT_MS.
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
@@ -399,8 +400,9 @@ async function scrubDesktopJobPayload(admin: any, jobId: string, redactedPayload
 
 function desktopWaitMs(kind: string, stream: boolean, preference: "auto" | "prefer_codex" | "deepseek_only"): number {
   if (preference === "prefer_codex") return numberEnv("DESKTOP_CODEX_PREFER_WAIT_MS", 90_000);
+  if (kind === "coach_chat") return numberEnv("DESKTOP_CODEX_CHAT_WAIT_MS", 60_000);
   if (stream) return numberEnv("DESKTOP_CODEX_WAIT_MS", 35_000);
-  if (kind === "coach_chat") return numberEnv("DESKTOP_CODEX_TASK_WAIT_MS", 60_000);
+  if (kind === "weekly_report") return numberEnv("DESKTOP_CODEX_WEEKLY_WAIT_MS", 135_000);
   return numberEnv("DESKTOP_CODEX_TASK_WAIT_MS", 90_000);
 }
 

@@ -14,6 +14,7 @@ import { ActivityImportReviewModal } from "./ActivityImportReviewModal";
 import { Dropdown } from "./Dropdown";
 import { ItemActionModal } from "./ItemActionModal";
 import { ModalRoot } from "./ModalRoot";
+import { Spinner } from "./Spinner";
 import {
   ClockIcon, HeartIcon, PeakIcon, FootIcon, RouteIcon, RunnerIcon,
   PlusIcon, UploadIcon, CheckSquareIcon,
@@ -434,6 +435,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
 
   async function importParsed() {
+    if (importSubmitting) return;
     // Strip every staging-only key (anything prefixed with `_`) plus the
     // client-side numeric id — Supabase generates a uuid for each new row.
     const toAdd = parsedRows.filter(r => r._selected).map(r => {
@@ -474,7 +476,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           setParsedRows(null);
           setUploadMsg(t("activities.import_done", { n: workouts.length }));
           setTimeout(() => setUploadMsg(""), 4000);
-          if (askCoach && onCoachReviewRequest && created?.length) {
+          const willAskCoach = askCoach && !!onCoachReviewRequest && !!created?.length;
+          if (willAskCoach) {
             const coachLimit = workouts.length <= 5 ? workouts.length : 3;
             onCoachReviewRequest(created.slice(0, coachLimit), {
               count: created.length,
@@ -483,7 +486,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             });
           }
           if (onWeeklyReportPromptRequest && created?.length) {
-            onWeeklyReportPromptRequest(created, { source: "import" });
+            onWeeklyReportPromptRequest(created, { source: "import", deferUntilCoachReview: willAskCoach });
           }
         },
         onFailed: () => {
@@ -498,6 +501,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
 
   function cancelParsedImport() {
+    if (importSubmitting) return;
     setParsedRows(null);
     setUploadMsg("");
     setParseProgress(null);
@@ -691,11 +695,16 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <div style={{ ...s.section, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>{t("activities.review", { sel: parsedRows.filter(r => r._selected).length, total: parsedRows.length })}</span>
             <div style={{ display: "flex", gap: 6 }}>
-              <button onClick={cancelParsedImport} style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>{t("common.cancel")}</button>
+              <button
+                onClick={cancelParsedImport}
+                disabled={importSubmitting}
+                style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", opacity: importSubmitting ? 0.5 : 1 }}>
+                {t("common.cancel")}
+              </button>
               <button
                 onClick={importParsed}
-                disabled={parsedRows.filter(r => r._selected).length === 0}
-                style={{ ...s.btn, fontSize: 12, padding: "5px 12px", opacity: parsedRows.filter(r => r._selected).length === 0 ? 0.5 : 1 }}>
+                disabled={importSubmitting || parsedRows.filter(r => r._selected).length === 0}
+                style={{ ...s.btn, fontSize: 12, padding: "5px 12px", opacity: importSubmitting || parsedRows.filter(r => r._selected).length === 0 ? 0.5 : 1 }}>
                 {t("activities.import")}
               </button>
             </div>
@@ -754,6 +763,33 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           onClose={closeImportReview}
           onConfirm={confirmImportReview}
         />
+      )}
+
+      {importSubmitting && (
+        <ModalRoot>
+          <div style={{
+            ...s.modalOverlay(isMobile, { float: true }),
+            cursor: "wait",
+          }}>
+            <div style={{
+              ...s.modalCard(isMobile, { maxWidth: 360, float: true }),
+              textAlign: "center",
+              display: "grid",
+              justifyItems: "center",
+              gap: 12,
+            }}>
+              <Spinner size={28} thickness={3} color="var(--moss)" />
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 6px" }}>
+                  {t("activities.import_uploading_title")}
+                </h2>
+                <p style={{ ...s.muted, margin: 0, lineHeight: 1.5 }}>
+                  {t("activities.import_uploading_body")}
+                </p>
+              </div>
+            </div>
+          </div>
+        </ModalRoot>
       )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { s } from "../styles";
 import { STRENGTH_SUBS, WEATHER_RELEVANT_TYPES } from "../constants";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -48,7 +48,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
   );
   const [fetchWeather, setFetchWeather] = useState(initialFetchWeather);
   const [askCoach, setAskCoach] = useState(workouts.length <= DETAIL_LIMIT);
-  const [coachNotes, setCoachNotes] = useState("");
+  const coachNotesRef = useRef(null);
   const [rpeByIndex, setRpeByIndex] = useState({});
   const [bulkRpe, setBulkRpe] = useState("");
   const [strengthSubsByIndex, setStrengthSubsByIndex] = useState({});
@@ -116,7 +116,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
       workouts: patched,
       fetchWeather: fetchWeather && weatherEligibleCount > 0,
       askCoach,
-      coachNotes: coachNotes.trim(),
+      coachNotes: String(coachNotesRef.current?.value || "").trim(),
     });
   }
 
@@ -297,16 +297,16 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
               </label>
               {askCoach && (
                 <textarea
+                  ref={coachNotesRef}
                   rows={3}
                   lang={lang === "zh" ? "zh-CN" : "en"}
                   dir="auto"
                   inputMode="text"
                   enterKeyHint="done"
                   autoCapitalize="none"
-                  autoCorrect="on"
+                  autoCorrect="off"
+                  autoComplete="off"
                   spellCheck={false}
-                  value={coachNotes}
-                  onChange={e => setCoachNotes(e.target.value)}
                   placeholder={t("activities.import_review_coach_placeholder")}
                   style={{ ...s.input, marginTop: 8, resize: "vertical", minHeight: 74, lineHeight: 1.45 }}
                 />

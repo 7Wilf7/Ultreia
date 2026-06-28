@@ -198,7 +198,7 @@ async function processJob(job) {
   try {
     const payload = validatePayload(job.payload);
     const result = await runCodex(payload, job);
-    await updateJob(job.id, {
+    const saved = await finishRunningJob(job.id, {
       status: "completed",
       provider_actual: "desktop_codex",
       result,
@@ -213,12 +213,12 @@ async function processJob(job) {
       lastCodexErrorAt: null,
       lastCodexError: null,
     }).catch(err => console.warn("[runner] health update failed:", err.message));
-    console.log(`[runner] completed ${job.id}`);
+    console.log(saved ? `[runner] completed ${job.id}` : `[runner] completed late after fallback ${job.id}`);
   } catch (err) {
     const message = err?.message || String(err);
     const publicMessage = publicErrorMessage(message);
     const codexStatus = codexFailureStatus(message);
-    await updateJob(job.id, {
+    const saved = await finishRunningJob(job.id, {
       status: "failed",
       provider_actual: "desktop_codex",
       payload: redactedPayload,
@@ -231,7 +231,7 @@ async function processJob(job) {
       lastCodexErrorAt: new Date().toISOString(),
       lastCodexError: publicMessage,
     }).catch(healthErr => console.warn("[runner] health update failed:", healthErr.message));
-    console.error(`[runner] failed ${job.id}:`, publicMessage);
+    console.error(saved ? `[runner] failed ${job.id}:` : `[runner] failed late after fallback ${job.id}:`, publicMessage);
   } finally {
     clearInterval(keepalive);
   }
@@ -259,6 +259,19 @@ async function updateJob(id, patch) {
     .update(patch)
     .eq("id", id);
   if (error) throw new Error(`update job ${id} failed: ${error.message}`);
+}
+
+async function finishRunningJob(id, patch) {
+  const { data, error } = await supabase
+    .from("ai_jobs")
+    .update(patch)
+    .eq("id", id)
+    .eq("runner_id", RUNNER_ID)
+    .in("status", ["claimed", "running"])
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`finish job ${id} failed: ${error.message}`);
+  return !!data?.id;
 }
 
 function validatePayload(payload) {

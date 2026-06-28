@@ -439,7 +439,7 @@ function buildWorkoutReviewDraft(workouts, meta = {}) {
 - 如果结论是【保留】，就不要再建议把同一条计划降量或取消。
 - 如果结论是【降量】或【取消】，必须说明是因为新增活动后的恢复 / 负荷 / 身体部位影响，还是因为近期计划偏差。
 - 不要重写完整训练计划，不要机械补回漏掉的训练量；恢复和负荷保护优先于补量。
-- 如果你总结“自评 / selfreview”给应用回写备注，只给一句极短摘要：中文最多 40 个字，英文最多 18 words；只保留主观状态和一个训练判断，不要塞完整建议。
+- 不要替应用生成或改写“自评 / Self review”备注；应用会单独把用户原始自评压缩保存。
 ${noteLine}
 
 [New Activities]
@@ -1856,6 +1856,7 @@ function AppShell({
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState("");
   const [weeklyImportPrompt, setWeeklyImportPrompt] = useState(null);
+  const [pendingWeeklyImportPrompt, setPendingWeeklyImportPrompt] = useState(null);
   const [showInbox, setShowInbox] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
@@ -1964,6 +1965,18 @@ function AppShell({
       displayText: buildWorkoutReviewDisplayText(rows, reviewMeta),
       modelText: buildWorkoutReviewDraft(rows, reviewMeta),
     });
+  }
+
+  function revealPendingWeeklyImportPrompt(delayMs = 350) {
+    if (!pendingWeeklyImportPrompt) return;
+    const nextPrompt = pendingWeeklyImportPrompt;
+    setPendingWeeklyImportPrompt(null);
+    setTimeout(() => setWeeklyImportPrompt(nextPrompt), delayMs);
+  }
+
+  function dismissCoachReviewPrompt() {
+    setCoachReviewPrompt(null);
+    revealPendingWeeklyImportPrompt();
   }
 
   // Jump from the inbox to the daily-push setting. On mobile that's the
@@ -3332,12 +3345,16 @@ Rules:
     setTab(TAB_COACH);
     // Guarantee the just-reviewed sessions are in the prompt's training-load
     // math even if the DB read hasn't caught up yet (see sendChat ensureLogs).
-    const coachReply = await sendChat(displayText, { ensureLogs: reviewed, modelMessage: modelText });
-    if (coachReply) {
-      if (handledSignatures.length) setHandledProactiveAdjustmentSignatures(handledSignatures);
-      writeImportFeelingNotes(reviewed, note, typeof coachReply === "string" ? coachReply : "").catch((err) => {
-        console.warn("[coach review] feeling note writeback failed:", err);
-      });
+    try {
+      const coachReply = await sendChat(displayText, { ensureLogs: reviewed, modelMessage: modelText });
+      if (coachReply) {
+        if (handledSignatures.length) setHandledProactiveAdjustmentSignatures(handledSignatures);
+        writeImportFeelingNotes(reviewed, note, typeof coachReply === "string" ? coachReply : "").catch((err) => {
+          console.warn("[coach review] feeling note writeback failed:", err);
+        });
+      }
+    } finally {
+      revealPendingWeeklyImportPrompt(450);
     }
   }
 
@@ -3372,10 +3389,12 @@ Rules:
       ? Math.max(...importedTimestamps)
       : Date.now();
     if (latest && Date.parse(latest.generatedAt || latest.createdAt || "") >= newestImportedAt) return;
-    setWeeklyImportPrompt({
+    const prompt = {
       count: created.length,
       mode: latest ? "refresh" : "generate",
-    });
+    };
+    if (meta.deferUntilCoachReview) setPendingWeeklyImportPrompt(prompt);
+    else setWeeklyImportPrompt(prompt);
   }
 
   function analyzeWeeklyReportFromPrompt() {
@@ -3952,8 +3971,8 @@ Rules:
       )}
 
       {coachReviewPrompt && (
-        <ModalRoot onClose={() => setCoachReviewPrompt(null)}>
-          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setCoachReviewPrompt(null)}>
+        <ModalRoot onClose={dismissCoachReviewPrompt}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={dismissCoachReviewPrompt}>
             <div style={s.modalCard(isMobile, { maxWidth: 420, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -3967,7 +3986,7 @@ Rules:
                     })}
                   </p>
                 </div>
-                <button onClick={() => setCoachReviewPrompt(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button onClick={dismissCoachReviewPrompt} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{
                 border: "1px solid var(--rule)",
@@ -3992,7 +4011,7 @@ Rules:
                 ))}
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button onClick={() => setCoachReviewPrompt(null)} style={s.btnGhost}>
+                <button onClick={dismissCoachReviewPrompt} style={s.btnGhost}>
                   {t("common.cancel")}
                 </button>
                 <button

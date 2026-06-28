@@ -68,9 +68,6 @@ function shouldSkipRaceSwipe(target) {
   return !!target?.closest?.("button,input,textarea,select,a,[role='button'],[data-dropdown-menu]");
 }
 
-const MOBILE_TOP_TAB_ORDER = { races: 0, pr: 1 };
-const MOBILE_SUB_TAB_ORDER = { target: 0, history: 1 };
-
 export function RacesTab({
   races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
   profile,
@@ -84,33 +81,15 @@ export function RacesTab({
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const topSwipe = useRef(null);
-  const topDragX = useRef(0);
-  const [topMotion, setTopMotion] = useState({ dir: 0, seq: 0 });
-  const [subMotion, setSubMotion] = useState({ dir: 0, seq: 0 });
-  const [topDrag, setTopDrag] = useState({ x: 0, active: false });
-
-  function setTopDragX(x, active = true) {
-    topDragX.current = x;
-    setTopDrag({ x, active });
-  }
 
   function changeMobileTopTab(nextTab) {
     if (nextTab === mobileTopTab) return;
-    setTopDragX(0, false);
-    setTopMotion(prev => ({
-      dir: MOBILE_TOP_TAB_ORDER[nextTab] > MOBILE_TOP_TAB_ORDER[mobileTopTab] ? 1 : -1,
-      seq: prev.seq + 1,
-    }));
     setMobileTopTab(nextTab);
   }
 
   function changeMobileSubTab(nextTab) {
     if (nextTab === mobileSubTab) return;
     if (addingMode) cancelAdd();
-    setSubMotion(prev => ({
-      dir: MOBILE_SUB_TAB_ORDER[nextTab] > MOBILE_SUB_TAB_ORDER[mobileSubTab] ? 1 : -1,
-      seq: prev.seq + 1,
-    }));
     setMobileSubTab(nextTab);
   }
 
@@ -140,7 +119,6 @@ export function RacesTab({
         const dir = dx < 0 ? 1 : -1;
         const canMove = (dir > 0 && mobileTopTab === "races") || (dir < 0 && mobileTopTab === "pr");
         st.mode = canMove ? "inner" : "pass";
-        if (st.mode === "inner") setTopDragX(0, true);
       } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
         st.mode = "scroll";
       } else {
@@ -150,7 +128,6 @@ export function RacesTab({
     if (st.mode === "inner") {
       e.stopPropagation();
       e.preventDefault?.();
-      setTopDragX(dx, true);
     }
   }
 
@@ -159,7 +136,6 @@ export function RacesTab({
     const st = topSwipe.current;
     topSwipe.current = null;
     if (st.mode !== "inner") {
-      setTopDragX(0, false);
       return;
     }
     const p = e.changedTouches?.[0];
@@ -171,7 +147,6 @@ export function RacesTab({
     const threshold = Math.min((st.w || 1) * 0.16, 58);
     const shouldCommit = Math.abs(dx) >= threshold || Math.abs(velocity) > 0.38;
     if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
-      setTopDragX(0, false);
       return;
     }
     if (dx < 0 && mobileTopTab === "races") {
@@ -181,7 +156,7 @@ export function RacesTab({
       e.stopPropagation();
       changeMobileTopTab("races");
     } else {
-      setTopDragX(0, false);
+      return;
     }
   }
 
@@ -690,20 +665,12 @@ export function RacesTab({
   // sub-tabs Target / History; the count lives in the sub-tab label so the
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
-    const topMotionClass = topMotion.dir > 0 ? "ultreia-tab-in-right" : topMotion.dir < 0 ? "ultreia-tab-in-left" : undefined;
-    const subMotionClass = subMotion.dir > 0 ? "ultreia-tab-in-right" : subMotion.dir < 0 ? "ultreia-tab-in-left" : undefined;
     return (
       <div
-        key={`${mobileTopTab}-${topMotion.seq}`}
-        className={topMotionClass}
+        className="ultreia-no-motion-surface"
         onTouchStart={onTopSwipeStart}
         onTouchMove={onTopSwipeMove}
         onTouchEnd={onTopSwipeEnd}
-        style={{
-          transform: `translateX(${topDrag.x}px)`,
-          transition: topDrag.active ? "none" : "transform 240ms cubic-bezier(0.18,0.86,0.24,1)",
-          willChange: topDrag.active ? "transform" : undefined,
-        }}
       >
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
             Side margins bleed past main's 14px gutters. Negative `top`
@@ -737,6 +704,7 @@ export function RacesTab({
                   borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
                   marginBottom: -1,
                   borderRadius: 0,
+                  transition: "none",
                 }}>
                 {tab.label}
               </button>
@@ -772,6 +740,7 @@ export function RacesTab({
                     fontWeight: active ? 600 : 500,
                     textAlign: "center",
                     cursor: "pointer", borderRadius: 0,
+                    transition: "none",
                   }}>
                   {tab.label} ({tab.count})
                 </button>
@@ -798,7 +767,7 @@ export function RacesTab({
               </div>
             )}
 
-            <div key={`${mobileSubTab}-${subMotion.seq}`} className={subMotionClass}>
+            <div>
               {mobileSubTab === "target" && renderMobileSection({
                 kind: "target",
                 list: targetRacesList,

@@ -306,6 +306,39 @@ summary::-webkit-details-marker { display: none; }
   body::before, .ultreia-ambient-layer, .ultreia-flash, .ultreia-flash-ring { animation: none; }
   .ultreia-ambient-layer { transform: none; opacity: 0.62; }
 }
+
+@media (max-width: 767px) {
+  body {
+    background-attachment: scroll;
+  }
+
+  body::before,
+  .ultreia-ambient-layer {
+    animation: none;
+    filter: none;
+  }
+
+  .ultreia-ambient-layer {
+    opacity: 0.52;
+    transform: none;
+  }
+
+  .ultreia-tab-in-right,
+  .ultreia-tab-in-left,
+  .ultreia-msg-in {
+    animation: none;
+  }
+}
+
+.ultreia-scroll-stable {
+  -webkit-overflow-scrolling: touch;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.ultreia-no-motion-surface button {
+  transition: none !important;
+}
 .ultreia-spinner {
   display: inline-block;
   vertical-align: middle;

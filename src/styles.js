@@ -179,8 +179,11 @@ export const s = {
     // Backdrop blur unifies the "second-level modal" feel across the app.
     // Entrance animation is intentionally disabled to avoid visible flashes on
     // frequent settings / memory / prompt panel taps.
-    backdropFilter: "blur(10px)",
-    WebkitBackdropFilter: "blur(10px)",
+    // Android WebView pays a real compositing cost for backdrop blur while a
+    // full-screen card scrolls. Keep the desktop blur, use a flat dim layer on
+    // mobile so long AI / memory / import sheets stay smooth.
+    backdropFilter: isMobile ? "none" : "blur(10px)",
+    WebkitBackdropFilter: isMobile ? "none" : "blur(10px)",
     animation: "none",
   }),
   modalCard: (isMobile, { maxWidth = 600, bg = "var(--panel)", float = false } = {}) => {

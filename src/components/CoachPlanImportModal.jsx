@@ -367,6 +367,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
     >
       <div
         onClick={e => e.stopPropagation()}
+        className="ultreia-scroll-stable ultreia-no-motion-surface"
         style={{
           ...s.modalCard(isMobile, { maxWidth: 720, bg: "var(--bg)" }),
           maxHeight: isMobile ? "none" : "90vh",
@@ -669,7 +670,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                     gridTemplateColumns: isRest
                       ? `${dateColumn} minmax(126px, 1fr)`
                       : (isMobile
-                        ? `${dateColumn} minmax(112px, 1fr) minmax(80px, 0.72fr)`
+                        ? `${dateColumn} minmax(0, 1fr)`
                         : `${dateColumn} minmax(126px, 1fr) 84px`),
                     gap: 8,
                     alignItems: "end",
@@ -714,7 +715,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                             triggerStyle={{ padding: "5px 8px", height: 30, minHeight: 0, fontSize: 12 }}
                           />
                         </div>
-                        <div>
+                        <div style={{ gridColumn: isMobile ? "1 / -1" : undefined }}>
                           <div style={fieldLabelStyle}>{t("calendar.plan_time_of_day")}</div>
                           <Dropdown
                             ariaLabel={t("calendar.plan_time_of_day")}

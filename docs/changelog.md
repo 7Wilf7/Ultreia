@@ -2,6 +2,11 @@
 
 > Ultreia 的"装修日志" —— 从 2026-05-13 闲来无事点了下 artifacts 开始，到今天每一天加了什么、改了什么、拆了什么。
 
+## 2026-06-29
+
+- **移动端滚动与闪动优化**：移动端关闭高成本背景 blur / ambient 动画，AI Coach 历史对话滚动时不再每帧更新跳转按钮；Memory facts 和 Races 移动端页签去掉切换动画，减少 Android WebView 上的轻微闪动。
+- **日历建议表单再修复**：AI Coach 提炼到日历的建议审核里，移动端 `Time of day` 字段改为独占一行，不再挤出屏幕。
+
 ## 2026-06-28
 
 - **AI Coach 上下文用量提示**：AI Coach 顶部 Codex / Model chip 增加上下文小圆环，点击后只显示“已用 / 200K”和“剩余”；长对话提醒改为按估算 token 余量触发，不再固定按 40 条消息触发，并改用 OpenAI 兼容 tokenizer 提升估算精度。

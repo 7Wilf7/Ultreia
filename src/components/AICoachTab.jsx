@@ -819,6 +819,7 @@ export function AICoachTab({
   const [showJumpTop, setShowJumpTop] = useState(false);
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const hideJumpTimer = useRef(null);
+  const scrollIdleTimer = useRef(null);
   // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
   // events too — mute the button logic briefly so they don't flash the arrows.
   const suppressJumpUntil = useRef(0);
@@ -865,19 +866,15 @@ export function AICoachTab({
     el.scrollTo({ top: 0, behavior: "smooth" });
   }, [muteAndHideJumps]);
 
-  // rAF-throttle the scroll handler: updateJumpButtons reads scrollHeight +
-  // clientHeight, and firing that on every scroll event during a SLOW drag
-  // forces repeated layout reads → the stutter felt only on slow drags (fast
-  // flings coalesce events so it wasn't noticeable). One read per frame is
-  // plenty for showing/hiding the arrows.
-  const scrollRaf = useRef(false);
+  // Do not read layout or set React state on every scroll tick. On 120Hz
+  // Android screens that still means many forced measurements per second. Wait
+  // for the drag/fling to settle, then decide whether the jump buttons are
+  // needed.
   const onChatScroll = useCallback(() => {
-    if (scrollRaf.current) return;
-    scrollRaf.current = true;
-    requestAnimationFrame(() => {
-      scrollRaf.current = false;
+    clearTimeout(scrollIdleTimer.current);
+    scrollIdleTimer.current = setTimeout(() => {
       updateJumpButtons();
-    });
+    }, 120);
   }, [updateJumpButtons]);
 
   // Pin to the latest message on mount (tab switch) and whenever the list
@@ -894,7 +891,10 @@ export function AICoachTab({
     return () => cancelAnimationFrame(id);
   }, [chatMessages.length, muteAndHideJumps]);
   // Drop the pending hide timer if the tab unmounts mid-countdown.
-  useEffect(() => () => clearTimeout(hideJumpTimer.current), []);
+  useEffect(() => () => {
+    clearTimeout(hideJumpTimer.current);
+    clearTimeout(scrollIdleTimer.current);
+  }, []);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -1381,7 +1381,9 @@ export function AICoachTab({
       {showMemory && (
         <ModalRoot onClose={() => setShowMemory(false)}>
           <div style={s.modalOverlay(isMobile)} onClick={() => setShowMemory(false)}>
-            <div style={{
+            <div
+              className="ultreia-scroll-stable ultreia-no-motion-surface"
+              style={{
               ...s.modalCard(isMobile, { maxWidth: 860 }),
               maxWidth: isMobile ? "none" : 860,
               ...(!isMobile ? {
@@ -1995,7 +1997,7 @@ export function AICoachTab({
         maxHeight: isMobile ? undefined : 500,
         display: "flex", flexDirection: "column", minWidth: 0,
       }}>
-      <div ref={chatScrollRef} onScroll={onChatScroll} style={{
+      <div ref={chatScrollRef} onScroll={onChatScroll} className="ultreia-scroll-stable" style={{
         ...s.card,
         marginBottom: 0,
         flex: 1,
@@ -2004,6 +2006,12 @@ export function AICoachTab({
         overscrollBehavior: "contain",
         WebkitOverflowScrolling: "touch",
         contain: "layout paint",
+        ...(isMobile ? {
+          background: "var(--bg-elevated)",
+          backdropFilter: "none",
+          WebkitBackdropFilter: "none",
+          boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.035)",
+        } : {}),
       }}>
         {chatMessages.length === 0 ? (
           <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, lineHeight: 1.6 }}>
@@ -3057,6 +3065,8 @@ const memoryFactFilterButtonStyle = {
   padding: "5px 10px",
   fontSize: 11,
   borderRadius: 999,
+  transition: "none",
+  boxShadow: "none",
 };
 
 const memoryFactCategoryChipStyle = {
@@ -3072,6 +3082,8 @@ const memoryFactCategoryChipStyle = {
   background: "var(--bg-elevated)",
   color: "var(--ink-2)",
   cursor: "pointer",
+  transition: "none",
+  boxShadow: "none",
 };
 
 const memoryFactButtonStyle = {
@@ -3079,6 +3091,8 @@ const memoryFactButtonStyle = {
   minHeight: 0,
   padding: "4px 8px",
   fontSize: 11,
+  transition: "none",
+  boxShadow: "none",
 };
 
 function CoachActionMatrix({ matrix = [], lang = "zh", t }) {

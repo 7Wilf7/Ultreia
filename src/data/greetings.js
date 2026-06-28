@@ -97,75 +97,9 @@ const BASE_GREETINGS = [
   { en: "Go further, quietly.", zh: "安静地，向更远处去。" },
 ];
 
-const GREETING_ACTIONS = [
-  { en: "Keep the easy effort", zh: "守住轻松强度" },
-  { en: "Respect the warm-up", zh: "认真热身" },
-  { en: "Start softer than you want", zh: "开头比想象中再轻一点" },
-  { en: "Let cadence settle", zh: "让步频自己稳下来" },
-  { en: "Check your shoulders", zh: "放松肩膀" },
-  { en: "Leave one gear unused", zh: "留一档余力" },
-  { en: "Build the aerobic engine", zh: "继续打磨有氧发动机" },
-  { en: "Bank another honest session", zh: "存下一次扎实训练" },
-  { en: "Protect the recovery", zh: "保护好恢复" },
-  { en: "Drink before thirst", zh: "口渴前先补水" },
-  { en: "Fuel before the fade", zh: "掉速前先补给" },
-  { en: "Let the first kilometer pass", zh: "先让第一公里过去" },
-  { en: "Keep the breathing quiet", zh: "把呼吸放轻" },
-  { en: "Run tall", zh: "把身体跑高一点" },
-  { en: "Save the sprint for later", zh: "把冲刺留到后面" },
-  { en: "Listen to the legs", zh: "听听腿怎么说" },
-  { en: "Check the ego at the door", zh: "把逞强留在门口" },
-  { en: "Stack another calm rep", zh: "再叠一组稳定输出" },
-  { en: "Smooth the downhill", zh: "把下坡跑顺" },
-  { en: "Own the climb", zh: "把坡拿下来" },
-  { en: "Hold the line", zh: "守住路线" },
-  { en: "Keep the watch in context", zh: "别被手表带偏" },
-  { en: "Let pace follow effort", zh: "让配速跟着体感走" },
-  { en: "Make room for sleep", zh: "给睡眠留位置" },
-  { en: "Train the quiet parts", zh: "把不起眼的部分练好" },
-  { en: "Finish with form", zh: "带着动作质量收尾" },
-  { en: "Keep one promise to yourself", zh: "兑现一个给自己的承诺" },
-  { en: "Win the boring minutes", zh: "赢下那些无聊的分钟" },
-  { en: "Adjust without drama", zh: "该调整就调整" },
-  { en: "Use patience as pace", zh: "把耐心当配速" },
-  { en: "Keep the stride light", zh: "让步子轻一点" },
-  { en: "Make the route smaller", zh: "先把路跑近一点" },
-  { en: "Let consistency do the work", zh: "让稳定发挥作用" },
-  { en: "Sharpen the engine gently", zh: "温和地把状态磨亮" },
-  { en: "Keep the long view", zh: "把眼光放长" },
-  { en: "Do the next right thing", zh: "做好下一件对的事" },
-  { en: "Close the loop", zh: "把今天这环扣上" },
-  { en: "Carry the quiet effort", zh: "带着安静的努力" },
-  { en: "Hold your direction", zh: "守住方向" },
-  { en: "Let the mountain wait", zh: "让山在前面等着" },
-  { en: "Make the next step clean", zh: "把下一步走干净" },
-  { en: "Keep the engine warm", zh: "让发动机保持温度" },
-  { en: "Leave the noise behind", zh: "把噪音留在身后" },
-  { en: "Choose the steady line", zh: "选择稳定的线" },
-  { en: "Practice the durable version", zh: "练那个更耐用的自己" },
-];
+export const GREETINGS = BASE_GREETINGS;
 
-const GREETING_CONTEXTS = [
-  { en: "today", zh: "今天" },
-  { en: "this morning", zh: "这个早晨" },
-  { en: "before the day gets loud", zh: "在一天变吵之前" },
-  { en: "one step at a time", zh: "一步一步来" },
-  { en: "with calm legs", zh: "带着安静的腿" },
-  { en: "without chasing numbers", zh: "先别追数字" },
-  { en: "for tomorrow's body", zh: "为了明天的身体" },
-  { en: "on purpose", zh: "有意识地做" },
-];
-
-const GENERATED_GREETINGS = GREETING_ACTIONS.flatMap(action =>
-  GREETING_CONTEXTS.map(context => ({
-    en: `${action.en} ${context.en}.`,
-    zh: `${context.zh}，${action.zh}。`,
-  }))
-);
-
-export const GREETINGS = [...BASE_GREETINGS, ...GENERATED_GREETINGS];
-
-const GREETING_POOL_VERSION = 2;
+const GREETING_POOL_VERSION = 3;
 
 function dayOfYear(date) {
   const localDay = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());

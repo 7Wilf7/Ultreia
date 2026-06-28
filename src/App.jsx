@@ -483,6 +483,9 @@ function throwIfAborted(signal) {
 
 const BOOT_REVEAL_MS = 3600;
 const APP_BOOT_STARTED_AT = Date.now();
+const BOOT_WORD_MAIN_PATH = "M51 34 C35 59 38 94 66 93 C94 92 106 52 91 42 C78 34 70 47 75 65 C82 92 118 88 128 66 C137 45 125 36 112 44 C99 53 104 77 126 78 C153 79 167 50 152 40 C139 31 127 47 137 67 C150 92 188 83 197 58 C204 39 190 32 176 45 C162 59 170 81 198 78 C226 75 245 49 232 38 C219 27 199 43 207 64 C217 90 255 82 266 58 C276 39 260 32 248 44 C235 57 243 81 271 77 C300 73 317 51 307 39 C298 28 281 43 288 65 C298 91 337 83 350 60 C362 40 347 31 333 43 C318 56 326 80 355 78 C383 76 400 60 409 47";
+const BOOT_WORD_CROSS_PATH = "M112 42 C126 37 145 38 160 43";
+const BOOT_WORD_DOT_PATH = "M302 35 C306 29 316 31 316 38 C316 45 304 47 301 40 C300 38 300 36 302 35";
 
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
@@ -579,9 +582,18 @@ const BOOT_MOTION_CSS = `
 .ultreia-word-mask-path {
   fill: none;
   stroke: white;
-  stroke-width: 48;
+  stroke-width: 34;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.ultreia-word-mask-cross {
+  stroke-width: 18;
+}
+.ultreia-word-mask-dot {
+  fill: white;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 .ultreia-word-pen {
   fill: oklch(0.88 0.055 138);
@@ -630,7 +642,7 @@ const BOOT_MOTION_CSS = `
   .ultreia-logo-trail,
   .ultreia-logo-trail-core,
   .ultreia-word-mask-path,
-  .ultreia-word-pen {
+  .ultreia-word-mask-dot {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
     animation-fill-mode: both;
@@ -674,12 +686,17 @@ const BOOT_MOTION_CSS = `
   .ultreia-word-mask-path {
     stroke-dasharray: 1 1.22;
     stroke-dashoffset: 1.08;
-    animation-name: ultreiaWordInk;
     will-change: stroke-dashoffset;
   }
-  .ultreia-word-pen {
-    animation-name: ultreiaWordPen;
-    will-change: transform, opacity;
+  .ultreia-word-mask-main {
+    animation-name: ultreiaWordInkMain;
+  }
+  .ultreia-word-mask-cross {
+    animation-name: ultreiaWordInkCross;
+  }
+  .ultreia-word-mask-dot {
+    animation-name: ultreiaWordInkDot;
+    will-change: opacity, transform;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -694,7 +711,7 @@ const BOOT_MOTION_CSS = `
   }
   .ultreia-boot-logo-build,
   .ultreia-word-pen {
-    opacity: 0;
+    display: none;
   }
 }
 @keyframes ultreiaLogoStage {
@@ -743,19 +760,20 @@ const BOOT_MOTION_CSS = `
   76% { opacity: 1; transform: scale(1.012); filter: blur(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
-@keyframes ultreiaWordInk {
-  0%, 16% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  74% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes ultreiaWordInkMain {
+  0%, 7% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  67% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { stroke-dashoffset: 0; }
 }
-@keyframes ultreiaWordPen {
-  0%, 16% { opacity: 0; transform: translate(34px, 60px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  24% { opacity: 0.72; transform: translate(78px, 79px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  36% { opacity: 0.82; transform: translate(132px, 52px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  48% { opacity: 0.86; transform: translate(200px, 64px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  62% { opacity: 0.78; transform: translate(286px, 58px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  74% { opacity: 0.56; transform: translate(382px, 57px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  80%, 100% { opacity: 0; transform: translate(400px, 54px); }
+@keyframes ultreiaWordInkCross {
+  0%, 65% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  72% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes ultreiaWordInkDot {
+  0%, 71% { opacity: 0; transform: scale(0.2); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  76% { opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 1; transform: scale(1); }
 }
 `;
 
@@ -779,6 +797,7 @@ function LoadingScreen({ userId = null }) {
   const [bootElapsedMs] = useState(() => (
     Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT))
   ));
+  const bootMotionBegin = bootElapsedMs > 0 ? `-${bootElapsedMs}ms` : "0ms";
 
   return (
     <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
@@ -807,17 +826,85 @@ function LoadingScreen({ userId = null }) {
         </div>
         <svg className="ultreia-boot-word-svg" viewBox="0 0 420 120" aria-label="Ultreia">
           <defs>
+            <path id="ultreiaWordMainPath" d={BOOT_WORD_MAIN_PATH} />
+            <path id="ultreiaWordCrossPath" d={BOOT_WORD_CROSS_PATH} />
+            <path id="ultreiaWordDotPath" d={BOOT_WORD_DOT_PATH} />
             <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse">
               <rect x="0" y="0" width="420" height="120" fill="black" />
               <path
-                className="ultreia-word-mask-path"
+                className="ultreia-word-mask-path ultreia-word-mask-main"
                 pathLength="1"
-                d="M34 58 C43 90 90 94 107 67 C121 45 107 30 93 43 C79 56 85 82 112 79 C139 76 151 52 141 39 C132 28 114 42 121 65 C130 91 170 85 185 61 C196 42 181 32 167 45 C153 59 162 82 192 78 C221 74 239 48 225 38 C212 29 195 43 201 64 C210 90 248 83 262 59 C274 39 258 32 246 44 C233 57 240 80 268 77 C296 74 313 51 304 38 C296 29 279 43 286 65 C295 90 334 83 349 60 C362 40 346 31 331 43 C316 56 323 80 352 78 C382 76 399 61 408 48"
+                d={BOOT_WORD_MAIN_PATH}
               />
+              <path
+                className="ultreia-word-mask-path ultreia-word-mask-cross"
+                pathLength="1"
+                d={BOOT_WORD_CROSS_PATH}
+              />
+              <circle className="ultreia-word-mask-dot" cx="309" cy="38" r="16" />
             </mask>
           </defs>
           <text className="ultreia-word-final" x="210" y="62" mask="url(#ultreiaBootWordMask)">Ultreia</text>
-          <circle className="ultreia-word-pen" r="3.8" />
+          <circle className="ultreia-word-pen" r="4.1">
+            <animate
+              attributeName="opacity"
+              dur={`${BOOT_REVEAL_MS}ms`}
+              begin={bootMotionBegin}
+              fill="freeze"
+              values="0;0;1;1;0;0"
+              keyTimes="0;0.07;0.1;0.66;0.68;1"
+            />
+            <animateMotion
+              dur={`${BOOT_REVEAL_MS}ms`}
+              begin={bootMotionBegin}
+              fill="freeze"
+              calcMode="linear"
+              keyPoints="0;0;1;1"
+              keyTimes="0;0.07;0.67;1"
+            >
+              <mpath href="#ultreiaWordMainPath" />
+            </animateMotion>
+          </circle>
+          <circle className="ultreia-word-pen" r="4.1">
+            <animate
+              attributeName="opacity"
+              dur={`${BOOT_REVEAL_MS}ms`}
+              begin={bootMotionBegin}
+              fill="freeze"
+              values="0;0;0.92;0.92;0;0"
+              keyTimes="0;0.65;0.66;0.72;0.74;1"
+            />
+            <animateMotion
+              dur={`${BOOT_REVEAL_MS}ms`}
+              begin={bootMotionBegin}
+              fill="freeze"
+              calcMode="linear"
+              keyPoints="0;0;1;1"
+              keyTimes="0;0.65;0.72;1"
+            >
+              <mpath href="#ultreiaWordCrossPath" />
+            </animateMotion>
+          </circle>
+          <circle className="ultreia-word-pen" r="4.1">
+            <animate
+              attributeName="opacity"
+              dur={`${BOOT_REVEAL_MS}ms`}
+              begin={bootMotionBegin}
+              fill="freeze"
+              values="0;0;0.95;0.95;0;0"
+              keyTimes="0;0.71;0.72;0.76;0.78;1"
+            />
+            <animateMotion
+              dur={`${BOOT_REVEAL_MS}ms`}
+              begin={bootMotionBegin}
+              fill="freeze"
+              calcMode="linear"
+              keyPoints="0;0;1;1"
+              keyTimes="0;0.71;0.76;1"
+            >
+              <mpath href="#ultreiaWordDotPath" />
+            </animateMotion>
+          </circle>
         </svg>
         <div className="ultreia-boot-greeting">
           <div className="ultreia-boot-hello">

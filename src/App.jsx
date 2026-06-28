@@ -483,8 +483,6 @@ function throwIfAborted(signal) {
 
 const BOOT_REVEAL_MS = 3600;
 const APP_BOOT_STARTED_AT = Date.now();
-const BOOT_WORD_MAIN_PATH = "M51 34 C35 59 38 94 66 93 C94 92 106 52 91 42 C78 34 70 47 75 65 C82 92 118 88 128 66 C137 45 125 36 112 44 C99 53 104 77 126 78 C153 79 167 50 152 40 C139 31 127 47 137 67 C150 92 188 83 197 58 C204 39 190 32 176 45 C162 59 170 81 198 78 C226 75 245 49 232 38 C219 27 199 43 207 64 C217 90 255 82 266 58 C276 39 260 32 248 44 C235 57 243 81 271 77 C300 73 317 51 307 39 C298 28 281 43 288 65 C298 91 337 83 350 60 C362 40 347 31 333 43 C318 56 326 80 355 78 C383 76 400 60 409 47";
-const BOOT_WORD_CROSS_PATH = "M112 42 C126 37 145 38 160 43";
 
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
@@ -562,10 +560,14 @@ const BOOT_MOTION_CSS = `
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.ultreia-boot-word-svg {
+.ultreia-boot-word {
+  position: relative;
   width: min(52vmin, 270px);
-  height: auto;
-  overflow: visible;
+  aspect-ratio: 420 / 120;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
   margin-top: -0.4vmin;
   contain: paint;
   transform: translateZ(0);
@@ -573,28 +575,13 @@ const BOOT_MOTION_CSS = `
 .ultreia-word-final {
   font-family: TSSign, "Segoe Script", cursive;
   font-weight: 400;
-  font-size: 76px;
+  font-size: min(12.5vmin, 49px);
+  line-height: 1;
   letter-spacing: 0;
-  dominant-baseline: middle;
-  fill: var(--ink-1);
+  color: var(--ink-1);
   opacity: 1;
-  text-anchor: middle;
-}
-.ultreia-word-mask-path {
-  fill: none;
-  stroke: white;
-  stroke-width: 34;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.ultreia-word-mask-cross {
-  stroke-width: 18;
-}
-.ultreia-word-mask-dot {
-  fill: white;
-  opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
+  white-space: nowrap;
+  transform: translateZ(0);
 }
 .ultreia-boot-greeting {
   display: flex;
@@ -637,8 +624,7 @@ const BOOT_MOTION_CSS = `
   .ultreia-logo-ridge,
   .ultreia-logo-trail,
   .ultreia-logo-trail-core,
-  .ultreia-word-mask-path,
-  .ultreia-word-mask-dot {
+  .ultreia-word-final {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
     animation-fill-mode: both;
@@ -679,20 +665,9 @@ const BOOT_MOTION_CSS = `
     stroke-dashoffset: 1.08;
     animation-name: ultreiaTrailDraw;
   }
-  .ultreia-word-mask-path {
-    stroke-dasharray: 1 1.22;
-    stroke-dashoffset: 1.08;
-    will-change: stroke-dashoffset;
-  }
-  .ultreia-word-mask-main {
-    animation-name: ultreiaWordInkMain;
-  }
-  .ultreia-word-mask-cross {
-    animation-name: ultreiaWordInkCross;
-  }
-  .ultreia-word-mask-dot {
-    animation-name: ultreiaWordInkDot;
-    will-change: opacity, transform;
+  .ultreia-word-final {
+    animation-name: ultreiaWordReveal;
+    will-change: clip-path, opacity, transform;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -755,22 +730,11 @@ const BOOT_MOTION_CSS = `
   76% { opacity: 1; transform: scale(1.012); filter: blur(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
-@keyframes ultreiaWordInkMain {
-  0%, 7% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  15% { stroke-dashoffset: 0.98; animation-timing-function: linear; }
-  78% { stroke-dashoffset: 0.11; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  88% { stroke-dashoffset: 0; animation-timing-function: linear; }
-  100% { stroke-dashoffset: 0; }
-}
-@keyframes ultreiaWordInkCross {
-  0%, 84% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  92% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  100% { stroke-dashoffset: 0; }
-}
-@keyframes ultreiaWordInkDot {
-  0%, 90% { opacity: 0; transform: scale(0.72); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  94% { opacity: 1; transform: scale(1); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  100% { opacity: 1; transform: scale(1); }
+@keyframes ultreiaWordReveal {
+  0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  24% { opacity: 1; clip-path: inset(0 80% 0 0); transform: translate3d(-4px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  86% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); animation-timing-function: linear; }
+  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); }
 }
 `;
 
@@ -820,25 +784,9 @@ function LoadingScreen({ userId = null }) {
             alt="Ultreia"
           />
         </div>
-        <svg className="ultreia-boot-word-svg" viewBox="0 0 420 120" aria-label="Ultreia">
-          <defs>
-            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse">
-              <rect x="0" y="0" width="420" height="120" fill="black" />
-              <path
-                className="ultreia-word-mask-path ultreia-word-mask-main"
-                pathLength="1"
-                d={BOOT_WORD_MAIN_PATH}
-              />
-              <path
-                className="ultreia-word-mask-path ultreia-word-mask-cross"
-                pathLength="1"
-                d={BOOT_WORD_CROSS_PATH}
-              />
-              <circle className="ultreia-word-mask-dot" cx="309" cy="38" r="16" />
-            </mask>
-          </defs>
-          <text className="ultreia-word-final" x="210" y="62" mask="url(#ultreiaBootWordMask)">Ultreia</text>
-        </svg>
+        <div className="ultreia-boot-word" aria-label="Ultreia">
+          <div className="ultreia-word-final">Ultreia</div>
+        </div>
         <div className="ultreia-boot-greeting">
           <div className="ultreia-boot-hello">
             {hello}

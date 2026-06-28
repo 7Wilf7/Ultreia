@@ -481,7 +481,7 @@ function throwIfAborted(signal) {
   throw err;
 }
 
-const BOOT_REVEAL_MS = 2800;
+const BOOT_REVEAL_MS = 3600;
 const APP_BOOT_STARTED_AT = Date.now();
 
 const BOOT_MOTION_CSS = `
@@ -495,7 +495,7 @@ const BOOT_MOTION_CSS = `
   padding: 0 24px;
   overflow: hidden;
   isolation: isolate;
-  --boot-duration: 2800ms;
+  --boot-duration: 3600ms;
   --boot-delay: calc(-1 * var(--boot-elapsed, 0ms));
 }
 .ultreia-boot-stack {
@@ -572,15 +572,17 @@ const BOOT_MOTION_CSS = `
   font-weight: 400;
   font-size: 76px;
   letter-spacing: 0;
-  text-anchor: middle;
   dominant-baseline: middle;
 }
 .ultreia-word-drawn {
   fill: var(--ink-1);
+  opacity: 0.92;
+  text-anchor: start;
 }
 .ultreia-word-final {
   fill: var(--ink-1);
   opacity: 0;
+  text-anchor: middle;
 }
 .ultreia-word-mask-path {
   fill: none;
@@ -637,9 +639,7 @@ const BOOT_MOTION_CSS = `
   .ultreia-logo-trail-core,
   .ultreia-word-mask-path,
   .ultreia-word-final,
-  .ultreia-word-pen,
-  .ultreia-boot-greeting,
-  .ultreia-boot-built {
+  .ultreia-word-pen {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
     animation-fill-mode: both;
@@ -680,23 +680,21 @@ const BOOT_MOTION_CSS = `
     stroke-dashoffset: 1.08;
     animation-name: ultreiaTrailDraw;
   }
-  .ultreia-word-mask-path {
+  .ultreia-word-mask-ul {
     stroke-dasharray: 1 1.18;
     stroke-dashoffset: 1.08;
-    animation-name: ultreiaWordInk;
+    animation-name: ultreiaWordInkUl;
+  }
+  .ultreia-word-mask-tail {
+    stroke-dasharray: 1 1.18;
+    stroke-dashoffset: 1.08;
+    animation-name: ultreiaWordInkTail;
   }
   .ultreia-word-final {
     animation-name: ultreiaWordSettle;
   }
   .ultreia-word-pen {
     animation-name: ultreiaWordPen;
-  }
-  .ultreia-boot-greeting {
-    animation-name: ultreiaGreetingIn;
-    will-change: transform, opacity;
-  }
-  .ultreia-boot-built {
-    animation-name: ultreiaBuiltIn;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -761,30 +759,30 @@ const BOOT_MOTION_CSS = `
   76% { opacity: 1; transform: scale(1.012); filter: blur(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: scale(1); filter: blur(0); }
 }
-@keyframes ultreiaWordInk {
-  0%, 50% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  82% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes ultreiaWordInkUl {
+  0%, 48% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  67% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { stroke-dashoffset: 0; }
+}
+@keyframes ultreiaWordInkTail {
+  0%, 64% { stroke-dashoffset: 1.08; animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  88% { stroke-dashoffset: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { stroke-dashoffset: 0; }
 }
 @keyframes ultreiaWordSettle {
-  0%, 74% { opacity: 0; transform: translateY(2px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  86% { opacity: 1; transform: translateY(-1px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 84% { opacity: 0; transform: translateY(2px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  94% { opacity: 1; transform: translateY(-1px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: translateY(0); }
 }
 @keyframes ultreiaWordPen {
-  0%, 50% { opacity: 0; transform: translate(34px, 58px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  58% { opacity: 0.72; transform: translate(96px, 64px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  68% { opacity: 0.86; transform: translate(177px, 58px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  79% { opacity: 0.72; transform: translate(314px, 62px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  84%, 100% { opacity: 0; transform: translate(384px, 56px); }
-}
-@keyframes ultreiaGreetingIn {
-  0%, 78% { opacity: 0; transform: translateY(10px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  94%, 100% { opacity: 1; transform: translateY(0); }
-}
-@keyframes ultreiaBuiltIn {
-  0%, 88% { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 1; }
+  0%, 48% { opacity: 0; transform: translate(46px, 59px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  57% { opacity: 0.78; transform: translate(88px, 73px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  67% { opacity: 0.62; transform: translate(134px, 52px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  69% { opacity: 0; transform: translate(140px, 52px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  72% { opacity: 0.72; transform: translate(159px, 61px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  82% { opacity: 0.86; transform: translate(244px, 57px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  90% { opacity: 0.64; transform: translate(363px, 61px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  94%, 100% { opacity: 0; transform: translate(386px, 56px); }
 }
 `;
 
@@ -836,16 +834,25 @@ function LoadingScreen({ userId = null }) {
         </div>
         <svg className="ultreia-boot-word-svg" viewBox="0 0 420 120" aria-label="Ultreia">
           <defs>
-            <mask id="ultreiaBootWordMask" maskUnits="userSpaceOnUse">
+            <mask id="ultreiaBootWordMaskUl" maskUnits="userSpaceOnUse">
               <rect x="0" y="0" width="420" height="120" fill="black" />
               <path
-                className="ultreia-word-mask-path"
+                className="ultreia-word-mask-path ultreia-word-mask-ul"
                 pathLength="1"
-                d="M38 61 C51 88 83 91 98 66 C112 42 99 25 87 38 C74 52 78 85 108 82 C135 80 146 55 139 42 C130 25 110 43 118 65 C127 91 169 86 181 61 C191 41 177 31 164 44 C151 58 160 82 190 78 C217 74 235 48 223 37 C211 26 193 39 198 61 C204 88 243 83 257 59 C269 39 255 31 242 43 C229 55 235 79 264 78 C292 77 308 53 302 39 M298 68 C315 87 350 85 365 61 C378 41 361 29 346 42 C330 56 338 81 368 78 C390 76 402 62 408 50"
+                d="M46 42 C44 88 93 93 101 57 C106 33 84 33 80 55 C76 80 104 89 126 73 C141 62 141 39 126 34"
+              />
+            </mask>
+            <mask id="ultreiaBootWordMaskTail" maskUnits="userSpaceOnUse">
+              <rect x="0" y="0" width="420" height="120" fill="black" />
+              <path
+                className="ultreia-word-mask-path ultreia-word-mask-tail"
+                pathLength="1"
+                d="M158 62 C178 86 218 82 230 56 C238 38 222 31 211 44 C198 59 210 83 238 78 C266 74 282 47 269 37 C256 28 240 43 247 64 C256 91 296 82 309 58 C319 39 304 31 292 44 C279 58 288 81 316 78 C343 75 356 53 350 38 M348 68 C365 88 395 82 407 58"
               />
             </mask>
           </defs>
-          <text className="ultreia-word-drawn" x="210" y="62" mask="url(#ultreiaBootWordMask)">Ultreia</text>
+          <text className="ultreia-word-drawn" x="48" y="62" mask="url(#ultreiaBootWordMaskUl)">Ul</text>
+          <text className="ultreia-word-drawn" x="150" y="62" mask="url(#ultreiaBootWordMaskTail)">treia</text>
           <text className="ultreia-word-final" x="210" y="62">Ultreia</text>
           <circle className="ultreia-word-pen" r="3.8" />
         </svg>

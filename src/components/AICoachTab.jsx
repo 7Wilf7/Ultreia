@@ -507,6 +507,7 @@ export function AICoachTab({
     return () => clearInterval(timer);
   }, []);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
+  const [showCoachFocus, setShowCoachFocus] = useState(false);
   const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);
   const [showCalendarSettings, setShowCalendarSettings] = useState(false);
   const [showAgentActions, setShowAgentActions] = useState(false);
@@ -531,9 +532,9 @@ export function AICoachTab({
   // below. coachHubTab tracks which tab is active in that modal.
   const [showCoachMenu, setShowCoachMenu] = useState(false);
   const [showCoachHub, setShowCoachHub] = useState(false);
-  // Default to the practical behavior controls. Internal diagnostics are now
-  // under Advanced so the settings hub does not open on a prompt/debug surface.
-  const [coachHubTab, setCoachHubTab] = useState("config");
+  // Default to the state overview. Internal diagnostics are under Advanced so
+  // the settings hub does not open on a prompt/debug surface.
+  const [coachHubTab, setCoachHubTab] = useState("focus");
   // Long-chat hint is dismissible. Once dismissed it collapses to a
   // single-line tappable chip that sits between provider pills and the
   // chat scroll area — no longer occupies a full banner, but still
@@ -1418,6 +1419,44 @@ export function AICoachTab({
                 onChange={setTrainingPreferences}
                 t={t}
                 isMobile={isMobile}
+              />
+            </div>
+          </div>
+        </ModalRoot>
+      )}
+
+      {showCoachFocus && (
+        <ModalRoot onClose={() => setShowCoachFocus(false)}>
+          <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => setShowCoachFocus(false)}>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                ...s.modalCard(isMobile, { maxWidth: 620, float: true }),
+                maxHeight: isMobile ? "min(82dvh, 680px)" : "min(82vh, 720px)",
+                overflowY: "auto",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.current_focus")}</h2>
+                <button onClick={() => setShowCoachFocus(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+              </div>
+              <CoachFocusPanel
+                races={races}
+                logs={logs}
+                now={now}
+                planDeviationSummary={planDeviationSummary}
+                recoveryGuardSummary={recoveryGuardSummary}
+                proactiveAdjustment={proactiveAdjustment}
+                proactiveAdjustmentLoading={proactiveAdjustmentLoading}
+                showManualAdjustmentShortcut={showManualAdjustmentShortcut}
+                manualAdjustmentLabel={manualAdjustmentLabel}
+                handleManualAdjustmentFromHub={handleManualAdjustmentFromHub}
+                raceBriefing={raceBriefing}
+                raceBriefingLoading={raceBriefingLoading}
+                onOpenRaceBriefing={setRaceBriefingAction}
+                onRaceBriefingRequest={handleRaceBriefingRequest}
+                t={t}
+                lang={lang}
               />
             </div>
           </div>
@@ -2597,6 +2636,7 @@ export function AICoachTab({
                   <button onClick={() => setShowCoachMenu(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>
 
+                {row(t("coach.current_focus"), () => openSub(() => setShowCoachFocus(true)))}
                 {row(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
                 {row(t("coach.training_preferences"), () => openSub(() => setShowTrainingPreferences(true)))}
                 {row(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), { badge: memoryReady })}
@@ -2661,6 +2701,7 @@ export function AICoachTab({
                 }}>
                   {[
                     { items: [
+                      { id: "focus", label: t("coach.current_focus") },
                       { id: "config", label: t("coach.show_config") },
                       { id: "trainingPrefs", label: t("coach.training_preferences") },
                       { id: "memory", label: t("coach.show_memory") + (memoryReady ? " ●" : "") },
@@ -2708,6 +2749,27 @@ export function AICoachTab({
 
                 {/* Right content pane */}
                 <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "18px 22px" }}>
+                  {coachHubTab === "focus" && (
+                    <CoachFocusPanel
+                      races={races}
+                      logs={logs}
+                      now={now}
+                      planDeviationSummary={planDeviationSummary}
+                      recoveryGuardSummary={recoveryGuardSummary}
+                      proactiveAdjustment={proactiveAdjustment}
+                      proactiveAdjustmentLoading={proactiveAdjustmentLoading}
+                      showManualAdjustmentShortcut={showManualAdjustmentShortcut}
+                      manualAdjustmentLabel={manualAdjustmentLabel}
+                      handleManualAdjustmentFromHub={handleManualAdjustmentFromHub}
+                      raceBriefing={raceBriefing}
+                      raceBriefingLoading={raceBriefingLoading}
+                      onOpenRaceBriefing={setRaceBriefingAction}
+                      onRaceBriefingRequest={handleRaceBriefingRequest}
+                      t={t}
+                      lang={lang}
+                    />
+                  )}
+
                   {coachHubTab === "config" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
@@ -3053,6 +3115,324 @@ function TrainingPreferenceHintIcon({ t }) {
       !
     </span>
   );
+}
+
+function CoachFocusPanel({
+  races = [],
+  logs = [],
+  now = new Date(),
+  planDeviationSummary = null,
+  recoveryGuardSummary = null,
+  proactiveAdjustment = null,
+  proactiveAdjustmentLoading = false,
+  showManualAdjustmentShortcut = false,
+  manualAdjustmentLabel = "",
+  handleManualAdjustmentFromHub,
+  raceBriefing = null,
+  raceBriefingLoading = false,
+  onOpenRaceBriefing,
+  onRaceBriefingRequest,
+  t,
+  lang = "zh",
+}) {
+  const nextRace = getNextCoachTargetRace(races, now);
+  const nextPlan = getNextCoachPlan(logs, now);
+  const raceName = nextRace?.name || t("coach.race_briefing_target");
+  const raceMeta = nextRace ? [
+    nextRace.date,
+    nextRace.priority ? t("coach.focus_priority", { priority: nextRace.priority }) : "",
+    [nextRace.category, nextRace.subtype].filter(Boolean).join(" / "),
+  ].filter(Boolean).join(" · ") : "";
+  const targetTitle = nextRace
+    ? t("coach.focus_target_race", { name: raceName })
+    : t("coach.focus_target_none");
+  const targetMeta = nextRace
+    ? [t("coach.focus_days_to_race", { days: nextRace.daysToRace }), raceMeta].filter(Boolean).join(" · ")
+    : t("coach.focus_target_none_hint");
+  const focusTitle = nextRace
+    ? nextRace.daysToRace <= 14
+      ? t("coach.focus_training_race_window")
+      : t("coach.focus_training_build_target")
+    : nextPlan
+      ? t("coach.focus_training_next_plan")
+      : t("coach.focus_training_data");
+  const focusMeta = nextRace
+    ? nextRace.daysToRace <= 14
+      ? t("coach.focus_training_race_window_meta")
+      : t("coach.focus_training_build_target_meta")
+    : nextPlan
+      ? formatCoachFocusPlan(nextPlan, t, lang)
+      : t("coach.focus_training_data_meta");
+  const watchItems = buildCoachFocusWatchItems({
+    planDeviationSummary,
+    recoveryGuardSummary,
+    proactiveAdjustment,
+    raceBriefing,
+    t,
+  });
+  const canRequestBriefing = !!(
+    raceBriefing
+    && !raceBriefing.existingAction
+    && typeof onRaceBriefingRequest === "function"
+  );
+
+  return (
+    <div style={{ display: "grid", gap: 10 }}>
+      <div style={{ ...s.muted, lineHeight: 1.55, marginBottom: 2 }}>{t("coach.current_focus_hint")}</div>
+
+      <CoachFocusBlock
+        title={t("coach.focus_target_object")}
+        value={targetTitle}
+        meta={targetMeta}
+      />
+      <CoachFocusBlock
+        title={t("coach.focus_training_focus")}
+        value={focusTitle}
+        meta={focusMeta}
+      />
+
+      <div style={coachFocusBlockStyle}>
+        <div style={coachFocusLabelStyle}>{t("coach.focus_watchlist")}</div>
+        <div style={{ display: "grid", gap: 7 }}>
+          {watchItems.length ? watchItems.map(item => (
+            <div key={item.key} style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(96px, 0.36fr) 1fr",
+              gap: 8,
+              alignItems: "start",
+              borderTop: "1px solid var(--rule-soft)",
+              paddingTop: 7,
+            }}>
+              <div style={{
+                fontSize: 11,
+                color: item.tone === "warn" ? "var(--warn)" : "var(--ink-3)",
+                fontWeight: 650,
+                lineHeight: 1.35,
+              }}>{item.label}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, color: "var(--ink-1)", lineHeight: 1.4 }}>{item.value}</div>
+                {item.note && <div style={{ marginTop: 2, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>{item.note}</div>}
+              </div>
+            </div>
+          )) : (
+            <div style={{ borderTop: "1px solid var(--rule-soft)", paddingTop: 7, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.45 }}>
+              {t("coach.focus_stable")}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={coachFocusBlockStyle}>
+        <div style={coachFocusLabelStyle}>{t("coach.focus_next_action")}</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={handleManualAdjustmentFromHub}
+            disabled={!showManualAdjustmentShortcut}
+            style={{
+              ...s.btn,
+              minHeight: 0,
+              fontSize: 12,
+              padding: "7px 11px",
+              background: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+              borderColor: proactiveAdjustmentLoading ? "var(--warn)" : undefined,
+              opacity: !showManualAdjustmentShortcut ? 0.55 : 1,
+              cursor: !showManualAdjustmentShortcut ? "default" : "pointer",
+            }}
+          >
+            {showManualAdjustmentShortcut ? manualAdjustmentLabel : t("coach.focus_no_adjustment")}
+          </button>
+
+          {raceBriefing && (
+            raceBriefing.existingAction ? (
+              <button
+                type="button"
+                onClick={() => onOpenRaceBriefing?.(raceBriefing.existingAction)}
+                style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "7px 11px" }}
+              >
+                {t("coach.race_briefing_open")}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onRaceBriefingRequest?.()}
+                disabled={!canRequestBriefing || raceBriefingLoading}
+                style={{
+                  ...s.btnGhost,
+                  minHeight: 0,
+                  fontSize: 12,
+                  padding: "7px 11px",
+                  opacity: !canRequestBriefing || raceBriefingLoading ? 0.55 : 1,
+                  cursor: !canRequestBriefing || raceBriefingLoading ? "default" : "pointer",
+                }}
+              >
+                {raceBriefingLoading ? t("coach.race_briefing_generating") : t("coach.race_briefing_generate")}
+              </button>
+            )
+          )}
+        </div>
+        <div style={{ marginTop: 7, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
+          {t("coach.focus_next_action_hint")}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CoachFocusBlock({ title, value, meta }) {
+  return (
+    <div style={coachFocusBlockStyle}>
+      <div style={coachFocusLabelStyle}>{title}</div>
+      <div style={{ fontSize: 15, fontWeight: 650, color: "var(--ink-1)", lineHeight: 1.35 }}>{value}</div>
+      {meta && <div style={{ marginTop: 4, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.45 }}>{meta}</div>}
+    </div>
+  );
+}
+
+const coachFocusBlockStyle = {
+  border: "1px solid var(--rule-soft)",
+  borderRadius: 6,
+  background: "var(--paper-2)",
+  padding: "10px 11px",
+};
+
+const coachFocusLabelStyle = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 10,
+  color: "var(--ink-3)",
+  textTransform: "uppercase",
+  letterSpacing: 0,
+  marginBottom: 6,
+};
+
+function buildCoachFocusWatchItems({
+  planDeviationSummary = null,
+  recoveryGuardSummary = null,
+  proactiveAdjustment = null,
+  raceBriefing = null,
+  t,
+}) {
+  const items = [];
+  if (planDeviationSummary?.affectedCount > 0) {
+    const missed = Number(planDeviationSummary.missedCount || 0);
+    const partial = Number(planDeviationSummary.partialCount || 0);
+    items.push({
+      key: "plan-deviation",
+      label: t("coach.focus_plan_deviation"),
+      value: t("coach.focus_plan_deviation_value", {
+        count: planDeviationSummary.affectedCount,
+        missed,
+        partial,
+      }),
+      note: proactiveAdjustment?.autoEligible
+        ? t("coach.focus_auto_candidate")
+        : t("coach.focus_manual_candidate"),
+      tone: proactiveAdjustment?.autoEligible ? "warn" : "muted",
+    });
+  }
+  if (recoveryGuardSummary?.signalCount > 0) {
+    const hard = Number(recoveryGuardSummary.hardFuturePlanCount || 0);
+    const severity = String(recoveryGuardSummary.severity || "");
+    const elevated = severity === "high" || severity === "danger";
+    items.push({
+      key: "recovery",
+      label: t("coach.focus_recovery_guard"),
+      value: t("coach.focus_recovery_guard_value", {
+        count: recoveryGuardSummary.signalCount,
+        hard,
+      }),
+      note: elevated ? t("coach.focus_recovery_elevated") : t("coach.focus_recovery_light"),
+      tone: elevated ? "warn" : "muted",
+    });
+  }
+  if (raceBriefing) {
+    items.push({
+      key: "race-briefing",
+      label: t("coach.focus_race_briefing"),
+      value: raceBriefing.existingAction
+        ? t("coach.focus_race_briefing_ready")
+        : t("coach.focus_race_briefing_window", { days: raceBriefing.daysToRace ?? "-" }),
+      note: t("coach.focus_race_briefing_note"),
+      tone: raceBriefing.existingAction ? "muted" : "warn",
+    });
+  }
+  return items;
+}
+
+function getNextCoachTargetRace(races = [], now = new Date()) {
+  const todayMs = coachFocusDateMs(coachFocusDateKey(now));
+  if (todayMs == null) return null;
+  return (Array.isArray(races) ? races : [])
+    .filter(race => race?.isTarget && race.date)
+    .map(race => {
+      const raceMs = coachFocusDateMs(race.date);
+      if (raceMs == null) return null;
+      return {
+        ...race,
+        daysToRace: Math.round((raceMs - todayMs) / (24 * 60 * 60 * 1000)),
+      };
+    })
+    .filter(Boolean)
+    .filter(race => race.daysToRace >= 0)
+    .sort((a, b) => {
+      const byDate = (a.date || "").localeCompare(b.date || "");
+      if (byDate) return byDate;
+      return racePriorityRank(a.priority) - racePriorityRank(b.priority);
+    })[0] || null;
+}
+
+function getNextCoachPlan(logs = [], now = new Date()) {
+  const today = coachFocusDateKey(now);
+  return (Array.isArray(logs) ? logs : [])
+    .filter(log => log?.isPlanned && log.date && log.date >= today && log.planStatus !== "done")
+    .sort((a, b) => (a.date || "").localeCompare(b.date || ""))[0] || null;
+}
+
+function formatCoachFocusPlan(plan, t, lang = "zh") {
+  if (!plan) return "";
+  const date = formatCoachFocusDate(plan.date, lang);
+  const type = plan.type ? t(`enum.activity.${plan.type}`) : "";
+  const subTypes = Array.isArray(plan.subTypes) ? plan.subTypes : [];
+  const subTypeText = subTypes.map(st => t(`enum.subtype.${st}`)).filter(Boolean).join(" / ");
+  const distance = Number(plan.distance || 0);
+  const ascent = Number(plan.ascent || 0);
+  const durationMin = Math.round(Number(plan.duration || 0) / 60) || 0;
+  const bits = [date, type, subTypeText].filter(Boolean);
+  if (distance > 0) bits.push(`${formatCompactNumber(distance)} km`);
+  if (ascent > 0) bits.push(`+${Math.round(ascent)} m`);
+  if (durationMin > 0) bits.push(`${durationMin} ${t("form.minutes")}`);
+  if (plan.planDetail?.keySession) bits.push(t("calendar.plan_key_session_short"));
+  return bits.join(" · ");
+}
+
+function formatCoachFocusDate(dateKey, lang = "zh") {
+  if (!dateKey) return "";
+  const date = new Date(`${dateKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dateKey;
+  if (lang === "zh") {
+    return `${date.getMonth() + 1}.${date.getDate()}`;
+  }
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function racePriorityRank(priority) {
+  if (priority === "A") return 0;
+  if (priority === "B") return 1;
+  if (priority === "C") return 2;
+  return 3;
+}
+
+function coachFocusDateKey(d = new Date()) {
+  const date = d instanceof Date ? d : new Date(d);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function coachFocusDateMs(dateKey) {
+  const ms = new Date(`${dateKey}T00:00:00`).getTime();
+  return Number.isFinite(ms) ? ms : null;
 }
 
 function RaceBriefingModal({ action, t, isMobile, mdComponents, onClose }) {

@@ -151,6 +151,65 @@ export function failAgentAction(action, error, now = new Date()) {
   };
 }
 
+export function getAgentActionQualitySignal(action) {
+  const status = String(action?.status || "").toLowerCase();
+  const type = String(action?.type || "").toLowerCase();
+  if (status === AGENT_ACTION_STATUS.EXECUTED) {
+    if (type === AGENT_ACTION_TYPES.CREATE_PLANS) {
+      return {
+        label: "accepted_saved",
+        score: 1,
+        coachHint: "positive runner feedback; prefer similar scope only when current evidence still supports it",
+      };
+    }
+    if (type === AGENT_ACTION_TYPES.MEMORY_UPDATE) {
+      return {
+        label: "memory_accepted",
+        score: 1,
+        coachHint: "positive runner feedback; saved facts can be trusted as reviewed context",
+      };
+    }
+    if (type === AGENT_ACTION_TYPES.RACE_BRIEFING) {
+      return {
+        label: "briefing_generated",
+        score: 0.5,
+        coachHint: "informational output was generated; use follow-up questions to judge usefulness",
+      };
+    }
+    return {
+      label: "executed",
+      score: 1,
+      coachHint: "positive runner feedback",
+    };
+  }
+  if (status === AGENT_ACTION_STATUS.ACCEPTED || status === AGENT_ACTION_STATUS.EXECUTING) {
+    return {
+      label: "accepted_pending_save",
+      score: 0.5,
+      coachHint: "runner accepted; do not assume final save succeeded until execution is complete",
+    };
+  }
+  if (status === AGENT_ACTION_STATUS.REJECTED || status === AGENT_ACTION_STATUS.CANCELLED) {
+    return {
+      label: "runner_skipped",
+      score: -1,
+      coachHint: "negative runner feedback; avoid repeating this pattern unless new evidence is materially stronger",
+    };
+  }
+  if (status === AGENT_ACTION_STATUS.FAILED) {
+    return {
+      label: "save_failed",
+      score: 0,
+      coachHint: "technical failure; do not treat it as preference feedback",
+    };
+  }
+  return {
+    label: "pending_review",
+    score: 0,
+    coachHint: "no runner decision yet",
+  };
+}
+
 export function isCreatePlansAction(action) {
   return action?.type === AGENT_ACTION_TYPES.CREATE_PLANS;
 }

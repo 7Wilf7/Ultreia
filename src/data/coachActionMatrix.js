@@ -9,16 +9,16 @@ export const COACH_ACTION_MATRIX = [
       zh: "计划偏差调整",
     },
     trigger: {
-      en: "Missed or partially completed planned sessions in the last 7-14 days.",
-      zh: "最近 7-14 天出现漏练或部分完成的计划。",
+      en: "Repeated missed or partial planned sessions in the last 7-14 days, or a missed key session.",
+      zh: "最近 7-14 天出现连续漏练 / 部分完成，或主课偏差。",
     },
     suggestion: {
       en: "Prepare a short adjustment for the next 3-7 days, such as moving work, lowering load, or adding rest.",
       zh: "整理接下来 3-7 天的调整建议，例如挪训练、降负荷或补恢复日。",
     },
     boundary: {
-      en: "Already live in first version. It does not auto-make up missed mileage or change the calendar without review.",
-      zh: "第一版已上线观察；不会自动补跑，也不会在确认前改日历。",
+      en: "Already live in first version. One ordinary missed session does not auto-trigger it; repeated skips make similar suggestions quieter.",
+      zh: "第一版已上线观察；一次普通漏练不会自动触发，连续跳过同类建议后会更安静。",
     },
   },
   {
@@ -31,16 +31,16 @@ export const COACH_ACTION_MATRIX = [
       zh: "恢复风险 / 负荷守门",
     },
     trigger: {
-      en: "ACWR high or danger, high RPE, poor readiness, or pain/fatigue notes.",
-      zh: "ACWR high / danger、RPE 偏高、晨间状态差，或备注出现疼痛 / 疲劳。",
+      en: "Clear recovery or load risk: ACWR high/danger, stacked signals, hard future sessions, or strong pain/fatigue/readiness evidence.",
+      zh: "明确恢复 / 负荷风险：ACWR high / danger、多信号叠加、未来硬课，或疼痛 / 疲劳 / 晨间状态证据较强。",
     },
     suggestion: {
       en: "Suggest a recovery day, lower intensity, or avoid stacking hard sessions.",
       zh: "建议恢复日、降强度，或避免继续叠加强度课。",
     },
     boundary: {
-      en: "Live in first version. Training guidance only, not diagnosis. Any plan change still requires confirmation.",
-      zh: "第一版已上线观察；只做训练安排建议，不做诊断；所有计划修改仍需确认。",
+      en: "Live in first version. Mild watch signals do not auto-trigger. Training guidance only, not diagnosis. Any plan change still requires confirmation.",
+      zh: "第一版已上线观察；轻微信号不自动触发。只做训练安排建议，不做诊断；所有计划修改仍需确认。",
     },
   },
   {

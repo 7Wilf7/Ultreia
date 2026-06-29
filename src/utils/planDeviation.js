@@ -52,6 +52,7 @@ function compactDeviationItem(plan, outcome, ratio) {
     type: plan.type || "",
     subTypes: Array.isArray(plan.subTypes) ? plan.subTypes.filter(Boolean) : [],
     target: planMetric(plan),
+    keySession: isKeySession(plan),
     outcome,
     ratio: Number.isFinite(ratio) ? Number(ratio.toFixed(2)) : null,
     line: planLine(plan),

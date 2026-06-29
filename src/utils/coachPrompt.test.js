@@ -94,11 +94,15 @@ describe("buildAgentActionsBlock", () => {
 
     expect(block).toContain("create plans");
     expect(block).toContain("status=executed");
+    expect(block).toContain("quality_signal=accepted_saved");
+    expect(block).toContain("quality_score=1");
     expect(block).toContain("dates=2026-06-24,2026-06-25");
     expect(block).toContain("created=2");
     expect(block).toContain("rest=2026-06-25");
     expect(block).toContain("memory update");
     expect(block).toContain("status=rejected");
+    expect(block).toContain("quality_signal=runner_skipped");
+    expect(block).toContain("quality_score=-1");
   });
 
   it("limits action feedback lines", () => {

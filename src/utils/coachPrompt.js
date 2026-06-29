@@ -6,6 +6,7 @@ import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES, DAILY_TAGS } from "../constants";
 import { formatDuration, formatPlanDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
 import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
 import { evaluatePlanOutcome } from "./planMatch";
+import { getAgentActionQualitySignal } from "./agentActions";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COACH_META_RE = /<!--\s*ultreia-meta:(.*?)\s*-->/s;
@@ -509,6 +510,10 @@ function formatAgentActionLine(action) {
   const type = String(action.type).replace(/_/g, " ");
   const status = String(action.status).replace(/_/g, " ");
   const parts = [`${created} ${type}`, `status=${status}`];
+  const quality = getAgentActionQualitySignal(action);
+  if (quality?.label) parts.push(`quality_signal=${quality.label}`);
+  if (Number.isFinite(Number(quality?.score))) parts.push(`quality_score=${Number(quality.score)}`);
+  if (quality?.coachHint) parts.push(`coach_hint=${quality.coachHint}`);
   const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
   if (plans.length) {
     const dates = [...new Set(plans.map(p => p?.date).filter(Boolean))].slice(0, 5);

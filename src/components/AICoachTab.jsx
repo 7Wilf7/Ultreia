@@ -19,8 +19,9 @@ import { cityAbbreviationFromLocation, cityFromLocation, hasValidCoords } from "
 import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTextTokenCounter, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { buildSystemPrompt } from "../utils/profile";
 import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
-import { AGENT_ACTION_STATUS, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
+import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
+import { shouldAutoQuietProactiveAction, shouldAutoTriggerPlanDeviation, shouldAutoTriggerRecoveryGuard } from "../utils/actionPlanFilters";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon, PinIcon } from "./Icons";
@@ -609,11 +610,18 @@ export function AICoachTab({
     const hasPlanDeviation = planDeviationSummary?.affectedCount > 0;
     const hasRecoverySignal = recoveryGuardSummary?.signalCount > 0;
     if (!hasPlanDeviation && !hasRecoverySignal) return null;
+    const planAutoEligible = shouldAutoTriggerPlanDeviation(planDeviationSummary);
+    const recoveryAutoEligible = shouldAutoTriggerRecoveryGuard(recoveryGuardSummary);
     const kind = hasPlanDeviation && hasRecoverySignal
       ? "combined_training_adjustment"
       : hasRecoverySignal
         ? "recovery_load_guard"
         : "plan_deviation_rescue";
+    const autoEligible = kind === "combined_training_adjustment"
+      ? (planAutoEligible || recoveryAutoEligible)
+      : kind === "recovery_load_guard"
+        ? recoveryAutoEligible
+        : planAutoEligible;
     const signature = kind === "combined_training_adjustment"
       ? trainingAdjustmentSignature(planDeviationSummary, recoveryGuardSummary)
       : kind === "recovery_load_guard"
@@ -632,8 +640,9 @@ export function AICoachTab({
       action.status === AGENT_ACTION_STATUS.REJECTED
       || action.status === AGENT_ACTION_STATUS.CANCELLED
     ));
-    return { kind, signature, existingAction, settledAction };
-  }, [agentActions, planDeviationSummary, recoveryGuardSummary]);
+    const autoQuieted = shouldAutoQuietProactiveAction(agentActions, kind, now);
+    return { kind, signature, existingAction, settledAction, autoEligible, autoQuieted };
+  }, [agentActions, now, planDeviationSummary, recoveryGuardSummary]);
   const allAttemptedProactiveAdjustmentSignatures = useMemo(
     () => compactProactiveAdjustmentSignatures([
       ...attemptedProactiveAdjustmentSignatures,
@@ -716,6 +725,8 @@ export function AICoachTab({
     if (!proactiveAdjustment) return;
     if (proactiveAdjustment.existingAction) return;
     if (proactiveAdjustment.settledAction) return;
+    if (!proactiveAdjustment.autoEligible) return;
+    if (proactiveAdjustment.autoQuieted) return;
     if (proactiveAdjustmentSnoozed) return;
     if (proactiveAutoPaused) return;
     if (allAttemptedProactiveAdjustmentSignatures.includes(proactiveAdjustment.signature)) return;
@@ -765,6 +776,10 @@ export function AICoachTab({
   const showProactiveAdjustment = !!(
     proactiveAdjustment
     && !proactiveAdjustment.settledAction
+    && (
+      proactiveAdjustment.existingAction
+      || (proactiveAdjustment.autoEligible && !proactiveAdjustment.autoQuieted)
+    )
     && !proactiveAdjustmentSnoozed
     && !proactiveAutoPaused
     && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
@@ -779,6 +794,14 @@ export function AICoachTab({
     proactiveAdjustment
     && !showProactiveAdjustment
     && (proactiveAdjustment.existingAction || typeof onProactiveTrainingAdjustmentRequest === "function" || proactiveAdjustmentLoading)
+  );
+  const showHeaderManualAdjustmentShortcut = !!(
+    showManualAdjustmentShortcut
+    && (
+      proactiveAdjustment?.existingAction
+      || (proactiveAdjustment?.autoEligible && !proactiveAdjustment?.autoQuieted)
+      || proactiveAdjustmentLoading
+    )
   );
   const handleStopProactiveAdjustment = useCallback(() => {
     onStopProactiveTrainingAdjustment?.();
@@ -1740,7 +1763,7 @@ export function AICoachTab({
         )}
 
         <span style={{ flex: 1, minWidth: 6 }} />
-        {!isMobile && showManualAdjustmentShortcut && (
+        {!isMobile && showHeaderManualAdjustmentShortcut && (
           <button
             type="button"
             onClick={handleManualAdjustmentShortcut}
@@ -3603,10 +3626,34 @@ function StatusPill({ status, t }) {
 }
 
 function AgentActionDetails({ action, t }) {
-  if (action.type === "create_plans") return <PlanActionDetails action={action} t={t} />;
-  if (action.type === "memory_update") return <MemoryActionDetails action={action} t={t} />;
-  if (isRaceBriefingAction(action)) return <RaceBriefingActionDetails action={action} t={t} />;
-  return <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>;
+  return (
+    <>
+      <ActionQualityDetails action={action} t={t} />
+      {action.type === "create_plans"
+        ? <PlanActionDetails action={action} t={t} />
+        : action.type === "memory_update"
+          ? <MemoryActionDetails action={action} t={t} />
+          : isRaceBriefingAction(action)
+            ? <RaceBriefingActionDetails action={action} t={t} />
+            : <div style={detailEmptyStyle}>{t("coach.agent_action_empty_detail")}</div>}
+    </>
+  );
+}
+
+function ActionQualityDetails({ action, t }) {
+  const signal = getAgentActionQualitySignal(action);
+  if (!signal?.label) return null;
+  return (
+    <ActionDetailSection title={t("coach.agent_action_quality_title")}>
+      <div style={detailResultWrapStyle}>
+        <span style={detailResultPillStyle}>{t(`coach.agent_action_quality_${signal.label}`)}</span>
+        <span style={detailResultPillStyle}>{t("coach.agent_action_quality_score", { score: Number(signal.score || 0) })}</span>
+      </div>
+      <div style={{ ...detailEmptyStyle, marginTop: 6 }}>
+        {t(`coach.agent_action_quality_hint_${signal.label}`)}
+      </div>
+    </ActionDetailSection>
+  );
 }
 
 function RaceBriefingActionDetails({ action, t }) {

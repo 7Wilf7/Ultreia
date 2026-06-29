@@ -8,6 +8,7 @@ import {
   getCreatePlans,
   getMemoryUpdate,
   getRaceBriefing,
+  getAgentActionQualitySignal,
   getPlanTargetId,
   isCreatePlansAction,
   isMemoryUpdateAction,
@@ -197,6 +198,32 @@ describe("agent action helpers", () => {
           updatedPlanIds: [],
         },
       ],
+    });
+  });
+
+  it("derives quality signals from runner decisions", () => {
+    expect(getAgentActionQualitySignal({
+      type: "create_plans",
+      status: "executed",
+    })).toMatchObject({
+      label: "accepted_saved",
+      score: 1,
+    });
+
+    expect(getAgentActionQualitySignal({
+      type: "create_plans",
+      status: "rejected",
+    })).toMatchObject({
+      label: "runner_skipped",
+      score: -1,
+    });
+
+    expect(getAgentActionQualitySignal({
+      type: "create_plans",
+      status: "failed",
+    })).toMatchObject({
+      label: "save_failed",
+      score: 0,
     });
   });
 

@@ -329,10 +329,10 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 优先级建议：
 
 1. **计划偏差补救 Action Card（第一版已落地，观察中）**
-   - 触发：过去 7–14 天出现漏练 / 部分完成，尤其是目标赛临近或连续两次未完成。
+   - 触发：过去 7–14 天出现漏练 / 部分完成，尤其是目标赛临近、主课偏差、漏练 + 部分完成叠加，或连续两次未完成。只漏掉一次普通训练时不自动打扰，但保留手动一键综合调整入口。
    - 数据来源：`evaluatePlanOutcome` 已能判断计划完成 / 部分完成 / 漏掉；AI Coach prompt 也已经读取计划依从。
    - 动作：生成“调整接下来 3–7 天计划”的 `create_plans` / update Action Card，例如降载、挪长距离、补恢复日。
-   - 边界：不自动补跑、不自动加量；必须解释原因并让用户确认。
+   - 边界：不自动补跑、不自动加量；必须解释原因并让用户确认。近期同类主动建议连续被跳过后，降低自动出现频率。
    - 为什么优先：它直接承接现有 Action Card、Calendar 和 Agent Action Log，不需要新表。
 
 2. **恢复风险 / 负荷守门 Action Card**
@@ -340,7 +340,7 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
    - 数据来源：`computeTrainingLoad`、readiness、最近训练备注、当前未来计划。
    - 动作：建议把某一天改成恢复跑 / 休息 / 低强度，或提醒不要叠加质量课。
    - 边界：健康风险只能建议和解释，不做诊断；所有计划变更都走确认。
-   - 状态：第一版已落地。`summarizeRecoveryGuard` 先做非 AI 风险检测，只有存在未来计划且恢复 / 负荷信号明确时才在 AI Coach 上方提示并自动生成来源为 `recovery_load_guard` 的 `create_plans` Action Card，结果写入 Agent Action Log。若它和计划偏差同时触发，则生成来源为 `combined_training_adjustment` 的综合建议。
+   - 状态：第一版已落地。`summarizeRecoveryGuard` 先做非 AI 风险检测，只有存在未来计划且恢复 / 负荷信号明确时才在 AI Coach 上方提示并自动生成来源为 `recovery_load_guard` 的 `create_plans` Action Card，结果写入 Agent Action Log。若它和计划偏差同时触发，则生成来源为 `combined_training_adjustment` 的综合建议。轻微信号不自动弹出，但仍可通过 AI Coach 设置里的手动一键综合调整触发。
 
 3. **赛前简报 / 装备检查**
    - 触发：目标赛进入 14 天窗口，且已填写地点 / 天气可用；Hyrox 可无天气。A / B / C 都触发，同一天多场时才按 A > B > C 排优先级。
@@ -361,12 +361,16 @@ Strava 下调后，短期最值得推进的不是外部同步，而是把 Ultrei
 
 ## 当前下一步
 
-可以继续观察 Phase 6：内部闭环 Action Cards。当前计划偏差补救、恢复风险 / 负荷守门、赛前简报 / 装备检查第一版都已接入；下一步先看真机上的触发频率、建议质量、静默逻辑和 Recent Agent Actions 回看是否够清楚，再决定是否扩展 checklist 交互或新的低风险卡片。
+可以继续观察 Phase 6：内部闭环 Action Cards。当前计划偏差补救、恢复风险 / 负荷守门、赛前简报 / 装备检查第一版都已接入；建议质量信号已进入 Recent Agent Actions 和 Coach prompt，上线后先看真机上的触发频率、建议质量、静默逻辑和 Recent Agent Actions 回看是否够清楚。
+
+目标任务对象入口暂不塞进 AI Coach 顶栏。推荐后续放在 AI Coach 设置页的动作区域，做成“当前焦点 / 目标任务对象”面板，展示当前最重要的目标赛、训练周期焦点、系统正在观察的风险和下一步可确认动作；如果以后 Settings tab 重新分子 tab，再考虑把 AI Coach 相关设置整体挪过去。不要为了这个新增顶栏图标。
+
+Checklist 状态：赛前简报已包含“装备检查 / 出发前流程 / 本周不要做”等 checklist 式内容，但它是报告型 checklist，不保存逐项勾选状态。只有用户明确需要“可打勾、可保存、可提醒”的交互 checklist 时，再作为单独能力推进。
 
 为什么现在可以推进：
 
 1. `create_plans` Action Card 已稳定支持新增计划、明确休息日和单条未来计划修改。
-2. `agent_actions` 已能记录动作提议、接受 / 忽略、执行结果和失败原因，并反哺 AI Coach / 周报上下文。
+2. `agent_actions` 已能记录动作提议、接受 / 忽略、执行结果、失败原因和质量信号，并反哺 AI Coach / 周报上下文。
 3. AI Coach 已能读取计划依从、未来计划、天气、训练负荷、晨间状态、目标赛事、Memory facts 和最近动作反馈。
 4. 当前三类 Phase 6 能力都不需要新 schema，也不需要扩大执行权限；它们只是把已有观察信号变成可查看、可确认或可追问的建议记录。
 5. Strava 自动同步短期下调后，内部闭环 Action Card 是更干净的 Agent 化推进路线。

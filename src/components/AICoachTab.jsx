@@ -9,6 +9,7 @@ import {
 } from "./CoachComposerControls";
 import {
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
+  TRAINING_PREFERENCE_OPTIONS,
   DEFAULT_COACH_CONFIG,
 } from "../constants";
 import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
@@ -2851,6 +2852,13 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
     am: t("calendar.plan_tod_am"),
     pm: t("calendar.plan_tod_pm"),
   };
+  const options = [
+    { value: "", label: t("coach.training_preferences_unset") },
+    ...TRAINING_PREFERENCE_OPTIONS.map(option => ({
+      value: option.id,
+      label: t(`enum.training_pref.${option.id}`),
+    })),
+  ];
   const write = (day, slot, text) => {
     const nextTemplate = {};
     for (const dayId of TRAINING_PREFERENCE_DAYS) {
@@ -2902,17 +2910,17 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
                   <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.2 }}>
                     {slotLabels[slot]}
                   </span>
-                  <input
+                  <Dropdown
+                    options={options}
                     value={dayPrefs[slot] || ""}
-                    onChange={e => write(day, slot, e.target.value)}
-                    placeholder={t("coach.training_preferences_placeholder")}
-                    style={{
-                      ...s.input,
+                    onChange={next => write(day, slot, next)}
+                    placeholder={t("coach.training_preferences_unset")}
+                    ariaLabel={`${t(`weekly_settings.day_${day}`)} ${slotLabels[slot]}`}
+                    triggerStyle={{
                       minHeight: 38,
                       padding: "8px 10px",
                       fontSize: 13,
                       lineHeight: 1.35,
-                      width: "100%",
                     }}
                   />
                 </label>

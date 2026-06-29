@@ -3,6 +3,7 @@ import {
   GENDERS, OCCUPATIONS, RUN_EXPERIENCE, RACE_TYPES_DONE,
   INJURY_HISTORY, EQUIPMENT_AVAILABLE,
   COACH_STYLES, OUTPUT_LENGTHS, INTERVENTION_LEVELS,
+  TRAINING_PREFERENCE_OPTIONS,
   HR_ZONE_METHODS,
 } from "../constants";
 
@@ -147,7 +148,7 @@ function trainingPreferenceLines(trainingPreferences, L_) {
     const dayPrefs = template[String(day)] || template[day] || {};
     for (const slot of TRAINING_PREFERENCE_SLOTS) {
       const text = String(dayPrefs?.[slot] || "").trim();
-      if (text) lines.push(`${L_.trainingPrefDays[day]} ${L_.trainingPrefSlots[slot]}: ${text}`);
+      if (text) lines.push(`${L_.trainingPrefDays[day]} ${L_.trainingPrefSlots[slot]}: ${labelFor(TRAINING_PREFERENCE_OPTIONS, text)}`);
     }
   }
   return lines;

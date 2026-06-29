@@ -457,6 +457,25 @@ export const DEFAULT_COACH_CONFIG = {
   },
 };
 
+export const TRAINING_PREFERENCE_OPTIONS = [
+  { id: "rest", label: "Rest" },
+  { id: "run", label: "Run (general)" },
+  { id: "road_run", label: "Road Run" },
+  { id: "easy_run", label: "Easy Run" },
+  { id: "aerobic_run", label: "Aerobic Run" },
+  { id: "tempo_run", label: "Tempo Run" },
+  { id: "interval_run", label: "Interval Run" },
+  { id: "long_run", label: "Long Run" },
+  { id: "trail_run", label: "Trail Run" },
+  { id: "hiking", label: "Hiking" },
+  { id: "floor_climbing", label: "Floor Climbing" },
+  { id: "strength", label: "Strength" },
+  { id: "hiit", label: "HIIT" },
+  { id: "cycling", label: "Cycling" },
+  { id: "swimming", label: "Swimming" },
+  { id: "mobility", label: "Mobility / stretching" },
+];
+
 export const COACH_STYLES = [
   { id: "soft",       label: "Soft & encouraging 温和鼓励" },
   { id: "balanced",   label: "Balanced & rational 平衡理性" },

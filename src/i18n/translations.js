@@ -80,7 +80,7 @@ const dict = {
   "settings.daily_push_on":     { en: "On · {time}",          zh: "开 · 每天 {time}" },
   "settings.daily_push_off":    { en: "Off",                  zh: "关闭" },
   "settings.weekly_report":     { en: "AI weekly report",     zh: "AI 周复盘" },
-  "settings.weekly_report_desc": { en: "Generate and review this week or last week", zh: "生成并查看本周 / 上周训练报告" },
+  "settings.weekly_report_desc": { en: "Generate and review saved weekly reports", zh: "生成并查看已保存周报" },
   "settings.weekly_report_details": { en: "Details",          zh: "详情" },
   "settings.weekly_report_settings": { en: "Settings",        zh: "设置" },
   "settings.weekly_report_analyzing": { en: "Analyzing",       zh: "正在分析" },
@@ -185,13 +185,19 @@ const dict = {
 
   // ===== Inbox (received coach pushes) =====
   "inbox.title":                { en: "Inbox",                zh: "收件箱" },
+  "inbox.tab_daily":            { en: "Daily push",            zh: "每日推送" },
+  "inbox.tab_weekly":           { en: "Weekly report",         zh: "周报" },
   "inbox.empty":                { en: "No messages yet. Coach check-ins and recaps will show up here.", zh: "还没有消息。教练打卡和复盘会出现在这里。" },
+  "inbox.daily_empty":          { en: "No daily push messages yet.", zh: "还没有每日推送消息。" },
   "inbox.mark_all_read":        { en: "Mark all read",        zh: "全部已读" },
   "inbox.clear_all":            { en: "Clear all",            zh: "清空" },
   "inbox.clear_confirm":        { en: "Delete all messages? This can't be undone.", zh: "删除所有消息？此操作无法撤销。" },
+  "inbox.clear_weekly_confirm": { en: "Delete all weekly reports? This can't be undone.", zh: "删除所有周报？此操作无法撤销。" },
   "inbox.delete":               { en: "Delete",               zh: "删除" },
   "inbox.load_failed":          { en: "Failed to load inbox.", zh: "加载收件箱失败。" },
-  "inbox.go_push_settings":     { en: "⚙ Set up daily coach push", zh: "⚙ 去设置每日教练推送" },
+  "inbox.go_push_settings":     { en: "Daily push settings",  zh: "每日推送设置" },
+  "inbox.weekly_settings":      { en: "Weekly report settings", zh: "周报设置" },
+  "inbox.weekly_empty":         { en: "No weekly report ranges yet. Last week is ready to analyze.", zh: "还没有保存的周报周期。可以先分析上周。" },
 
   // ===== Weekly report =====
   "weekly_report.title":         { en: "AI weekly report",      zh: "AI 周复盘" },
@@ -205,7 +211,7 @@ const dict = {
   "weekly_report.import_plan":   { en: "Import next plan",      zh: "导入接下来计划" },
   "weekly_report.import_plan_short": { en: "Import plan",       zh: "导入计划" },
   "weekly_report.generated_at":  { en: "Generated {time}",      zh: "生成于 {time}" },
-  "weekly_report.local_note":    { en: "Reports are saved to your account. Each tab only shows the report for the date range displayed above.", zh: "周报会保存到你的账号下。每个标签只显示上方日期范围对应的那一份。" },
+  "weekly_report.local_note":    { en: "Reports are saved to your account. This page shows the report for the date range displayed above.", zh: "周报会保存到你的账号下。当前页面只显示上方日期范围对应的那一份。" },
   "weekly_report.background_note": { en: "You can leave this page while the report runs. A phone notification appears when it is ready.", zh: "周报生成时可以离开这个页面；完成后会弹系统通知。" },
   "weekly_report.generate_failed": { en: "Could not generate report: {msg}", zh: "生成周报失败：{msg}" },
   "weekly_report.notification_title": { en: "Weekly report ready", zh: "AI 周复盘已完成" },
@@ -520,7 +526,7 @@ const dict = {
   "enum.training_pref.trail_run":     { en: "Trail Run",            zh: "越野跑" },
   "enum.training_pref.strength":      { en: "Strength",             zh: "力量训练" },
   "enum.training_pref.hiit":          { en: "HIIT",                 zh: "HIIT" },
-  "enum.training_pref.mobility":      { en: "Massage / stretching", zh: "按摩 / 拉伸" },
+  "enum.training_pref.mobility":      { en: "Massage",              zh: "Massage" },
 
   "enum.subtype.Easy Run":        { en: "Easy Run",         zh: "轻松跑" },
   "enum.subtype.Aerobic Run":     { en: "Aerobic Run",      zh: "有氧跑" },

@@ -24,21 +24,9 @@ export function SettingsMobileTab({
   lang,
   onOpenProfile,
   onRefreshWallet,
-  onOpenPushSettings,
   onOpenWeatherSettings,
-  onOpenWeeklyReport,
-  onOpenWeeklyReportSettings,
-  weeklyReportStatus,
-  weeklyReportEnabled,
-  weeklyReportWeekday,
-  weeklyReportTime,
-  weeklyReportAfterSundayImport,
   weatherAutoUpdate,
   weatherIntervalHours,
-  pushEnabled,
-  pushHours,
-  pushTimes,
-  pushFlash,
   profileFlash,
   onOpenGuide,
   onToggleLang,
@@ -54,7 +42,6 @@ export function SettingsMobileTab({
 }) {
   const t = useT();
   const [accountOpen, setAccountOpen] = useState(false);
-  const [weeklyOpen, setWeeklyOpen] = useState(false);
   const [group, setGroup] = useState("other");
   const [groupMotion, setGroupMotion] = useState({ dir: 0, seq: 0 });
   const [signingOut, setSigningOut] = useState(false);
@@ -99,10 +86,7 @@ export function SettingsMobileTab({
     setGroup(next);
   }, [group]);
 
-  // The "jump to this setting" flashes (from the inbox push-setup button / the
-  // AI Coach edit-profile jump) only read if their group is open — auto-open it.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { if (pushFlash) selectGroup("other"); }, [pushFlash, selectGroup]);
+  // The "jump to this setting" flash only reads if the account group is open.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (profileFlash) setAccountOpen(true); }, [profileFlash]);
   useEffect(() => {
@@ -119,46 +103,8 @@ export function SettingsMobileTab({
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
-  const pushSlots = (Array.isArray(pushTimes) && pushTimes.length)
-    ? [...pushTimes].sort()
-    : (Array.isArray(pushHours) ? [...pushHours].sort((a, b) => a - b).map(h => `${String(h).padStart(2, "0")}:00`) : []);
-  const weeklyDay = Number.isInteger(Number(weeklyReportWeekday)) ? Number(weeklyReportWeekday) : 0;
-  const weeklyTime = typeof weeklyReportTime === "string" && weeklyReportTime ? weeklyReportTime : "20:00";
-  const weeklyReportSummary = weeklyReportStatus === "analyzing"
-    ? t("settings.weekly_report_analyzing")
-    : weeklyReportStatus === "extracting"
-      ? t("settings.weekly_report_extracting")
-      : t("settings.weekly_report_desc");
-  const weeklyAutoSummary = weeklyReportEnabled
-    ? t("settings.weekly_report_auto_on", { day: t(`weekly_settings.day_${weeklyDay}`), time: weeklyTime })
-    : t("settings.weekly_report_auto_off", { sunday: weeklyReportAfterSundayImport !== false ? t("settings.weekly_report_sunday_on") : t("settings.weekly_report_sunday_off") });
   const otherSettings = (
     <>
-      <SubCell
-        primary={t("settings.daily_push")}
-        flash={pushFlash}
-        secondary={(pushEnabled && pushSlots.length > 0)
-          ? t("settings.daily_push_on", { time: pushSlots.join(" · ") })
-          : t("settings.daily_push_off")}
-        onClick={onOpenPushSettings} />
-      <SubCell
-        primary={t("settings.weekly_report")}
-        secondary={weeklyReportSummary}
-        busy={!!weeklyReportStatus}
-        expanded={weeklyOpen}
-        onClick={() => setWeeklyOpen(open => !open)} />
-      <SettingsSubGroup open={weeklyOpen}>
-        <SubCell
-          primary={t("settings.weekly_report_details")}
-          secondary={t("settings.weekly_report_desc")}
-          indent={12}
-          onClick={onOpenWeeklyReport} />
-        <SubCell
-          primary={t("settings.weekly_report_settings")}
-          secondary={weeklyAutoSummary}
-          indent={12}
-          onClick={onOpenWeeklyReportSettings} />
-      </SettingsSubGroup>
       <SubCell
         primary={t("settings.weather_updates")}
         secondary={weatherAutoUpdate !== false
@@ -323,21 +269,6 @@ function GroupPanel({ motion, children }) {
       <div key={motion.seq} className={cls}>
         {children}
       </div>
-    </div>
-  );
-}
-
-function SettingsSubGroup({ open, children }) {
-  return (
-    <div aria-hidden={!open} style={{
-      maxHeight: open ? 180 : 0,
-      opacity: open ? 1 : 0,
-      overflow: "hidden",
-      pointerEvents: open ? "auto" : "none",
-      background: "var(--bg-elevated)",
-      transition: "max-height 260ms cubic-bezier(0.18,0.86,0.24,1), opacity 180ms ease",
-    }}>
-      {children}
     </div>
   );
 }

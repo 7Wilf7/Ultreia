@@ -61,8 +61,8 @@ export function WeeklyReportPage({
   onImportPlan,
   onDiscussReport,
   reports,
-  rangeMode,
-  setRangeMode,
+  rangeMode = "last",
+  selectedRange,
   loading,
   extracting,
   error,
@@ -72,15 +72,26 @@ export function WeeklyReportPage({
 }) {
   const t = useT();
   const [discussionText, setDiscussionText] = useState("");
-  const range = useMemo(() => weekWindow(now || new Date(), rangeMode === "last" ? -1 : 0), [now, rangeMode]);
+  const range = useMemo(() => {
+    if (selectedRange?.start && selectedRange?.end) {
+      return {
+        start: selectedRange.start,
+        end: selectedRange.end,
+        nextStart: selectedRange.nextStart || weekWindow(`${selectedRange.end}T12:00:00`, 1).start,
+        nextEnd: selectedRange.nextEnd || weekWindow(`${selectedRange.end}T12:00:00`, 1).end,
+      };
+    }
+    return weekWindow(now || new Date(), rangeMode === "this" ? 0 : -1);
+  }, [now, rangeMode, selectedRange]);
+  const generateRangeMode = selectedRange?.rangeMode || rangeMode || "last";
   const selected = useMemo(() => {
     const rangeReports = (reports || []).filter(r => (
-      r.rangeMode === rangeMode
-      && r.start === range.start
+      r.start === range.start
       && r.end === range.end
+      && r.status !== "failed"
     ));
     return rangeReports.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
-  }, [reports, rangeMode, range.start, range.end]);
+  }, [reports, range.start, range.end]);
   const canDiscuss = !!selected && discussionText.trim().length > 0;
 
   function sendDiscussion() {
@@ -96,14 +107,17 @@ export function WeeklyReportPage({
 
   return (
     <div style={{
-      height: "calc(100% + 8px)",
+      position: "fixed",
+      inset: 0,
+      zIndex: 9999,
+      height: "100dvh",
       minHeight: 0,
-      maxHeight: "calc(100% + 8px)",
+      maxHeight: "100dvh",
       background: "var(--bg)",
       fontFamily: "var(--font-sans)",
       display: "flex",
       flexDirection: "column",
-      margin: "-8px -14px 0",
+      margin: 0,
       overflow: "hidden",
       overscrollBehavior: "none",
     }}>
@@ -122,7 +136,7 @@ export function WeeklyReportPage({
           </div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 5, width: 78 }}>
             <button
-              onClick={() => loading ? onStopGenerate?.() : onGenerate?.(range, rangeMode)}
+              onClick={() => loading ? onStopGenerate?.() : onGenerate?.(range, generateRangeMode)}
               style={{ ...(loading ? s.btnGhost : s.btn), minHeight: 0, width: "100%", padding: "5px 0", fontSize: 11, whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
               {loading && <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />}
               {loading ? t("common.stop") : t("weekly_report.generate_short")}
@@ -139,23 +153,6 @@ export function WeeklyReportPage({
             </button>
           </div>
           <button onClick={onClose} style={{ ...s.modalCloseBtn, position: "static", flexShrink: 0 }} aria-label="Close">×</button>
-        </div>
-      </div>
-
-      <div style={{
-        padding: "10px 18px 12px",
-        borderBottom: "1px solid var(--rule-soft)",
-        background: "var(--bg)",
-        flexShrink: 0,
-        zIndex: 2,
-      }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          <button onClick={() => setRangeMode("this")} style={{ ...(rangeMode === "this" ? s.btn : s.btnGhost), minHeight: 0, padding: "9px 6px", whiteSpace: "nowrap" }}>
-            {t("weekly_report.this_week")}
-          </button>
-          <button onClick={() => setRangeMode("last")} style={{ ...(rangeMode === "last" ? s.btn : s.btnGhost), minHeight: 0, padding: "9px 6px", whiteSpace: "nowrap" }}>
-            {t("weekly_report.last_week")}
-          </button>
         </div>
       </div>
 

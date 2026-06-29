@@ -463,7 +463,7 @@ export const TRAINING_PREFERENCE_OPTIONS = [
   { id: "trail_run", label: "Trail Run" },
   { id: "strength", label: "Strength" },
   { id: "hiit", label: "HIIT" },
-  { id: "mobility", label: "Massage / stretching" },
+  { id: "mobility", label: "Massage" },
 ];
 
 export const COACH_STYLES = [

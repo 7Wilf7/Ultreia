@@ -102,3 +102,15 @@ export async function importStoredReports(reports = []) {
   }
   return (data ?? []).map(fromRow);
 }
+
+export async function clearAll() {
+  const userId = await getCurrentUserId();
+  const { error } = await supabase
+    .from('coach_reports')
+    .delete()
+    .eq('user_id', userId);
+  if (error) {
+    console.error('clearAll (coach reports) failed:', error);
+    throw new Error(error.message);
+  }
+}

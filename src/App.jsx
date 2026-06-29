@@ -1949,8 +1949,9 @@ function AppShell({
   const [showLocationSettings, setShowLocationSettings] = useState(false);
   const [showWeeklyReportSettings, setShowWeeklyReportSettings] = useState(false);
   const [showWeeklyReport, setShowWeeklyReport] = useState(false);
+  const [weeklyReportRange, setWeeklyReportRange] = useState(null);
+  const [returnToInboxAfterWeeklyReport, setReturnToInboxAfterWeeklyReport] = useState(false);
   const [weeklyReports, setWeeklyReports] = useState(() => loadStoredReports(user?.id));
-  const [weeklyReportRangeMode, setWeeklyReportRangeMode] = useState("this");
   const [weeklyReportLoading, setWeeklyReportLoading] = useState(false);
   const [weeklyReportError, setWeeklyReportError] = useState("");
   const [weeklyImportPrompt, setWeeklyImportPrompt] = useState(null);
@@ -1968,10 +1969,7 @@ function AppShell({
   const [coachReviewPrompt, setCoachReviewPrompt] = useState(null);
   const [proactiveAutoPauseUntil, setProactiveAutoPauseUntil] = useState(0);
   const [handledProactiveAdjustmentSignatures, setHandledProactiveAdjustmentSignatures] = useState([]);
-  // Flash the "Daily coach push" settings cell after the user taps the inbox's
-  // "set up daily push" button — draws the eye to where the setting lives.
-  const [pushFlash, setPushFlash] = useState(false);
-  // Same idea as pushFlash, for the "edit profile" jump from the AI Coach.
+  // Flash the "Personal profile" settings cell after a jump from AI Coach.
   const [profileFlash, setProfileFlash] = useState(false);
   // Token bumped when the AI Coach weather pill sends the user to the calendar;
   // the calendar flashes today's weather card. A counter (not a bool) so each
@@ -2077,19 +2075,6 @@ function AppShell({
     revealPendingWeeklyImportPrompt();
   }
 
-  // Jump from the inbox to the daily-push setting. On mobile that's the
-  // Settings tab (flash the cell); on desktop just open the modal directly.
-  function goToPushSettings() {
-    setShowInbox(false);
-    if (isMobile) {
-      setTab(4);
-      setPushFlash(true);
-      setTimeout(() => setPushFlash(false), 2200);
-    } else {
-      setShowPushSettings(true);
-    }
-  }
-
   // Jump from the AI Coach's "edit profile" to the Settings → profile cell.
   // On mobile, switch to Settings and flash the cell (so the user learns where
   // their profile lives); on desktop, open the editor directly.
@@ -2169,7 +2154,6 @@ function AppShell({
   const weeklyReportRunRef = useRef(0);
   const proactiveAdjustmentAbortRef = useRef(null);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
-  const weeklyReportStatus = weeklyReportLoading ? "analyzing" : weeklyReportExtracting ? "extracting" : null;
   const refreshCodexRunnerStatus = useCallback(async () => {
     runnerStatusAbortRef.current?.abort();
     const controller = new AbortController();
@@ -2372,6 +2356,34 @@ function AppShell({
     weeklyReportAbortRef.current = null;
     weeklyReportRunRef.current += 1;
     setWeeklyReportLoading(false);
+  }
+
+  async function clearWeeklyReports() {
+    const snapshot = weeklyReports;
+    setWeeklyReports([]);
+    try {
+      await db.coachReports.clearAll();
+      return true;
+    } catch (err) {
+      setWeeklyReports(snapshot);
+      appDialog.alert(`Failed to clear weekly reports: ${err?.message || String(err)}`);
+      return false;
+    }
+  }
+
+  function openWeeklyReportFromInbox(range) {
+    setWeeklyReportRange(range || weekWindow(now || new Date(), -1));
+    setReturnToInboxAfterWeeklyReport(true);
+    setShowInbox(false);
+    setShowWeeklyReport(true);
+  }
+
+  function closeWeeklyReportPage() {
+    setShowWeeklyReport(false);
+    if (returnToInboxAfterWeeklyReport) {
+      setReturnToInboxAfterWeeklyReport(false);
+      setShowInbox(true);
+    }
   }
 
   function stopProactiveTrainingAdjustment() {
@@ -3679,9 +3691,10 @@ Rules:
   function analyzeWeeklyReportFromPrompt() {
     setWeeklyImportPrompt(null);
     const range = weekWindow(now || new Date(), 0);
-    setWeeklyReportRangeMode("this");
+    setWeeklyReportRange(range);
+    setReturnToInboxAfterWeeklyReport(false);
     setShowWeeklyReport(true);
-    setTab(4);
+    setShowInbox(false);
     generateWeeklyReport(range, "this");
   }
 
@@ -3951,67 +3964,29 @@ Rules:
     );
     // Index 4 — mobile-only Settings page (desktop puts these in the top-right).
     if (which === TAB_SETTINGS) return (
-      showWeeklyReport ? (
-        <WeeklyReportPage
-          now={now}
-          onClose={() => setShowWeeklyReport(false)}
-          reports={weeklyReports}
-          rangeMode={weeklyReportRangeMode}
-          setRangeMode={setWeeklyReportRangeMode}
-          loading={weeklyReportLoading}
-          extracting={weeklyReportExtracting}
-          error={weeklyReportError}
-          onGenerate={generateWeeklyReport}
-          onStopGenerate={stopWeeklyReport}
-          onStopImport={stopPlanExtraction}
-          onImportPlan={(text, id) => {
-            setShowWeeklyReport(false);
-            setTab(TAB_COACH);
-            importToCalendar(text, `weekly-report:${id}`, { force: true });
-          }}
-          onDiscussReport={(_report, message) => {
-            setShowWeeklyReport(false);
-            setTab(TAB_COACH);
-            sendChat(message);
-          }}
-        />
-      ) : (
-        <SettingsMobileTab
-          user={user}
-          profile={profile}
-          wallet={wallet}
-          lang={lang}
-          onOpenProfile={() => setProfileEditorMode("preview")}
-          onRefreshWallet={refreshWallet}
-          onOpenPushSettings={() => setShowPushSettings(true)}
-          onOpenWeatherSettings={() => setShowWeatherSettings(true)}
-          onOpenWeeklyReport={() => setShowWeeklyReport(true)}
-          onOpenWeeklyReportSettings={() => setShowWeeklyReportSettings(true)}
-          weeklyReportStatus={weeklyReportStatus}
-          weeklyReportEnabled={weeklyReportEnabled}
-          weeklyReportWeekday={weeklyReportWeekday}
-          weeklyReportTime={weeklyReportTime}
-          weeklyReportAfterSundayImport={weeklyReportAfterSundayImport}
-          weatherAutoUpdate={weatherSettings.autoUpdate}
-          weatherIntervalHours={weatherSettings.intervalHours}
-          pushEnabled={pushEnabled}
-          pushHours={pushHours}
-          pushTimes={pushTimes}
-          pushFlash={pushFlash}
-          profileFlash={profileFlash}
-          onOpenGuide={() => setShowGuide(true)}
-          onToggleLang={toggleLang}
-          onChangePassword={() => setShowChangePassword(true)}
-          onDeleteAccount={() => setShowDeleteAccount(true)}
-          isAdmin={isAdmin}
-          publicFeatures={PRODUCT_PUBLIC_FEATURES}
-          onGenerateInvite={() => setShowInviteCodes(true)}
-          onOpenAdminWalletGrant={() => setShowAdminWalletGrant(true)}
-          onOpenPromptCatalog={() => setShowPromptCatalog(true)}
-          signOut={signOut}
-          focusGroup={mobileSettingsFocus}
-        />
-      )
+      <SettingsMobileTab
+        user={user}
+        profile={profile}
+        wallet={wallet}
+        lang={lang}
+        onOpenProfile={() => setProfileEditorMode("preview")}
+        onRefreshWallet={refreshWallet}
+        onOpenWeatherSettings={() => setShowWeatherSettings(true)}
+        weatherAutoUpdate={weatherSettings.autoUpdate}
+        weatherIntervalHours={weatherSettings.intervalHours}
+        profileFlash={profileFlash}
+        onOpenGuide={() => setShowGuide(true)}
+        onToggleLang={toggleLang}
+        onChangePassword={() => setShowChangePassword(true)}
+        onDeleteAccount={() => setShowDeleteAccount(true)}
+        isAdmin={isAdmin}
+        publicFeatures={PRODUCT_PUBLIC_FEATURES}
+        onGenerateInvite={() => setShowInviteCodes(true)}
+        onOpenAdminWalletGrant={() => setShowAdminWalletGrant(true)}
+        onOpenPromptCatalog={() => setShowPromptCatalog(true)}
+        signOut={signOut}
+        focusGroup={mobileSettingsFocus}
+      />
     );
     return null;
   };
@@ -4218,12 +4193,52 @@ Rules:
         />
       )}
 
+      {showWeeklyReport && (
+        <ModalRoot onClose={closeWeeklyReportPage}>
+          <WeeklyReportPage
+            now={now}
+            onClose={closeWeeklyReportPage}
+            reports={weeklyReports}
+            selectedRange={weeklyReportRange || weekWindow(now || new Date(), -1)}
+            loading={weeklyReportLoading}
+            extracting={weeklyReportExtracting}
+            error={weeklyReportError}
+            onGenerate={generateWeeklyReport}
+            onStopGenerate={stopWeeklyReport}
+            onStopImport={stopPlanExtraction}
+            onImportPlan={(text, id) => {
+              setShowWeeklyReport(false);
+              setReturnToInboxAfterWeeklyReport(false);
+              setTab(TAB_COACH);
+              importToCalendar(text, `weekly-report:${id}`, { force: true });
+            }}
+            onDiscussReport={(_report, message) => {
+              setShowWeeklyReport(false);
+              setReturnToInboxAfterWeeklyReport(false);
+              setTab(TAB_COACH);
+              sendChat(message);
+            }}
+          />
+        </ModalRoot>
+      )}
+
       {showInbox && (
         <InboxModal
           items={inboxItems}
           setItems={setInboxItems}
           onClose={() => setShowInbox(false)}
-          onGoToPushSettings={goToPushSettings}
+          onOpenPushSettings={() => {
+            setShowInbox(false);
+            setShowPushSettings(true);
+          }}
+          reports={weeklyReports}
+          now={now}
+          onOpenWeeklyReport={openWeeklyReportFromInbox}
+          onOpenWeeklyReportSettings={() => {
+            setShowInbox(false);
+            setShowWeeklyReportSettings(true);
+          }}
+          onClearWeeklyReports={clearWeeklyReports}
         />
       )}
 

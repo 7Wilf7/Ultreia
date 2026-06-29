@@ -1336,13 +1336,16 @@ export function AICoachTab({
             <div
               style={{
                 ...s.modalCard(isMobile, { maxWidth: 720, float: true }),
-                maxHeight: isMobile ? "min(82dvh, 720px)" : "min(82vh, 760px)",
+                maxHeight: isMobile ? "min(94dvh, 760px)" : "min(88vh, 760px)",
                 overflowY: "auto",
               }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.training_preferences")}</h2>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 4 : 8 }}>
+                <h2 style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 18, fontWeight: 500, margin: 0 }}>
+                  <span>{t("coach.training_preferences")}</span>
+                  <TrainingPreferenceHintIcon t={t} />
+                </h2>
                 <button onClick={() => setShowTrainingPreferences(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <TrainingPreferenceEditor
@@ -2862,27 +2865,8 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
   const clearAll = () => onChange?.({ weeklyTemplate: {} });
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
-      <div
-        title={t("coach.training_preferences_hint")}
-        aria-label={t("coach.training_preferences_hint")}
-        style={{
-          width: 18,
-          height: 18,
-          borderRadius: 999,
-          border: "1px solid var(--rule)",
-          color: "var(--ink-3)",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 12,
-          lineHeight: 1,
-          justifySelf: "start",
-        }}
-      >
-        !
-      </div>
-      <div style={{ display: "grid", gap: 8 }}>
+    <div style={{ display: "grid", gap: isMobile ? 6 : 12 }}>
+      <div style={{ display: "grid", gap: isMobile ? 0 : 8 }}>
         {TRAINING_PREFERENCE_DAYS.map(day => {
           const dayPrefs = template[String(day)] || {};
           return (
@@ -2891,9 +2875,10 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
               style={{
                 display: "grid",
                 gridTemplateColumns: isMobile ? "52px minmax(0, 1fr) minmax(0, 1fr)" : "74px minmax(0, 1fr) minmax(0, 1fr)",
-                gap: isMobile ? 8 : 10,
+                columnGap: isMobile ? 6 : 10,
+                rowGap: isMobile ? 3 : 6,
                 alignItems: "center",
-                padding: isMobile ? "8px 0" : "8px 0",
+                padding: isMobile ? "4px 0" : "8px 0",
                 borderTop: "1px solid var(--rule-soft)",
               }}
             >
@@ -2905,11 +2890,11 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
                   key={slot}
                   style={{
                     display: "grid",
-                    gap: 4,
+                    gap: isMobile ? 3 : 4,
                     minWidth: 0,
                   }}
-                >
-                  <span style={{ fontSize: 11, color: "var(--ink-3)", lineHeight: 1.2 }}>
+                  >
+                  <span style={{ fontSize: 10.5, color: "var(--ink-3)", lineHeight: 1.1 }}>
                     {slotLabels[slot]}
                   </span>
                   <Dropdown
@@ -2919,9 +2904,9 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
                     placeholder={t("coach.training_preferences_unset")}
                     ariaLabel={`${t(`weekly_settings.day_${day}`)} ${slotLabels[slot]}`}
                     triggerStyle={{
-                      minHeight: 38,
-                      padding: "8px 10px",
-                      fontSize: 13,
+                      minHeight: isMobile ? 30 : 38,
+                      padding: isMobile ? "5px 8px" : "8px 10px",
+                      fontSize: isMobile ? 12.5 : 13,
                       lineHeight: 1.35,
                     }}
                   />
@@ -2937,6 +2922,31 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function TrainingPreferenceHintIcon({ t }) {
+  return (
+    <span
+      title={t("coach.training_preferences_hint")}
+      aria-label={t("coach.training_preferences_hint")}
+      role="img"
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 999,
+        border: "1px solid var(--rule)",
+        color: "var(--ink-3)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      !
+    </span>
   );
 }
 

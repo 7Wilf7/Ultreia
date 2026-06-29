@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
@@ -29,14 +29,17 @@ function reportSortValue(report) {
 }
 
 function buildWeeklyRanges(reports, now) {
+  const thisWeek = weekWindow(now || new Date(), 0);
   const lastWeek = weekWindow(now || new Date(), -1);
   const byKey = new Map();
-  byKey.set(`${lastWeek.start}:${lastWeek.end}`, {
-    ...lastWeek,
-    reports: [],
-    latest: null,
-    defaultRange: true,
-  });
+  for (const range of [thisWeek, lastWeek]) {
+    byKey.set(`${range.start}:${range.end}`, {
+      ...range,
+      reports: [],
+      latest: null,
+      defaultRange: rangesEqual(range, lastWeek),
+    });
+  }
   for (const report of reports || []) {
     if (!report?.start || !report?.end) continue;
     const key = `${report.start}:${report.end}`;
@@ -72,10 +75,12 @@ export function InboxModal({
   onOpenWeeklyReport,
   onOpenWeeklyReportSettings,
   onClearWeeklyReports,
+  activeTab = "daily",
+  onTabChange,
 }) {
   const t = useT();
   const appDialog = useAppDialog();
-  const [tab, setTab] = useState("daily");
+  const tab = activeTab === "weekly" ? "weekly" : "daily";
   const scrollRef = useRef(null);
   const ioRef = useRef(null);
   const rowEls = useRef(new Map());
@@ -227,10 +232,10 @@ export function InboxModal({
         </div>
 
         <div style={styles.tabs}>
-          <button onClick={() => setTab("daily")} style={tabButtonStyle(tab === "daily")}>
+          <button onClick={() => onTabChange?.("daily")} style={tabButtonStyle(tab === "daily")}>
             {t("inbox.tab_daily")}
           </button>
-          <button onClick={() => setTab("weekly")} style={tabButtonStyle(tab === "weekly")}>
+          <button onClick={() => onTabChange?.("weekly")} style={tabButtonStyle(tab === "weekly")}>
             {t("inbox.tab_weekly")}
           </button>
         </div>
@@ -283,7 +288,7 @@ export function InboxModal({
             weeklyRanges.length === 0 ? (
               <div style={styles.empty}>{t("inbox.weekly_empty")}</div>
             ) : (
-              <div style={styles.weekGrid}>
+              <div style={styles.weekList}>
                 {weeklyRanges.map(range => {
                   const active = rangesEqual(range, weekWindow(now || new Date(), -1));
                   return (
@@ -292,8 +297,8 @@ export function InboxModal({
                       onClick={() => onOpenWeeklyReport?.(range)}
                       style={{
                         ...styles.weekChip,
-                        borderColor: active ? "var(--accent)" : "var(--rule)",
-                        background: active ? "var(--accent-soft)" : "var(--panel-2)",
+                        borderColor: active ? "var(--accent)" : "var(--rule-soft)",
+                        background: active ? "var(--accent-soft)" : "transparent",
                         color: active ? "var(--accent-dark)" : "var(--ink-1)",
                       }}
                     >
@@ -327,7 +332,7 @@ const styles = {
   page: {
     position: "fixed",
     inset: 0,
-    zIndex: 9999,
+    zIndex: 9000,
     background: "var(--bg)",
     color: "var(--ink-1)",
     fontFamily: "var(--font-sans)",
@@ -417,22 +422,24 @@ const styles = {
     lineHeight: 1,
     flexShrink: 0,
   },
-  weekGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 10,
-    paddingTop: 14,
+  weekList: {
+    display: "flex",
+    flexDirection: "column",
+    paddingTop: 10,
   },
   weekChip: {
+    width: "100%",
     minHeight: 0,
-    padding: "12px 10px",
+    padding: "14px 12px",
     border: "1px solid var(--rule)",
-    borderRadius: 8,
+    borderRadius: 6,
     fontFamily: "var(--font-mono)",
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 650,
     fontVariantNumeric: "tabular-nums",
+    textAlign: "left",
     cursor: "pointer",
+    marginBottom: 8,
   },
   actionBar: {
     position: "fixed",

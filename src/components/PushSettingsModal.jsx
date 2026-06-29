@@ -21,6 +21,7 @@ const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) =>
 export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings, onClose }) {
   const t = useT();
   const [enabled, setEnabled] = useState(pushEnabled === true);
+  const [showInfo, setShowInfo] = useState(false);
   // Working copy of "HH:MM" half-hour slots. Prefer the new push_times; fall
   // back to the legacy whole-hour list (8 → "08:00"); default to one 08:00 slot.
   const initial = (Array.isArray(pushTimes) && pushTimes.length)
@@ -36,6 +37,11 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
     catch { return ""; }
   })();
+  const infoText = [
+    t("push.hint"),
+    t("push.apk_note"),
+    t("push.keepalive_note"),
+  ].join("\n\n");
 
   function setTimeAt(idx, value) {
     setTimes(prev => prev.map((tm, i) => (i === idx ? value : tm)));
@@ -83,13 +89,20 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
           overflowY: "auto", padding: "22px 24px 20px", boxSizing: "border-box",
           fontFamily: "var(--font-sans)",
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-            <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("push.title")}</h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showInfo ? 10 : 14, gap: 12 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("push.title")}</h2>
+              <InfoHintButton
+                label={infoText}
+                open={showInfo}
+                onClick={() => setShowInfo(v => !v)}
+              />
+            </div>
             <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
-          <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6, fontSize: 12 }}>
-            {t("push.hint")}
-          </p>
+          {showInfo && (
+            <div style={infoPanelStyle}>{infoText}</div>
+          )}
 
           {/* Enable toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
@@ -152,13 +165,6 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
             </div>
           </div>
 
-          <div style={{ ...s.muted, fontSize: 11, marginBottom: 14, lineHeight: 1.5 }}>
-            {t("push.apk_note")}
-          </div>
-          <div style={{ ...s.muted, fontSize: 11, marginBottom: 14, lineHeight: 1.5 }}>
-            {t("push.keepalive_note")}
-          </div>
-
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
             <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
             <button onClick={save} style={s.btn}>{t("common.save")}</button>
@@ -176,3 +182,46 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
     </ModalRoot>
   );
 }
+
+function InfoHintButton({ label, open, onClick }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-expanded={open}
+      onClick={onClick}
+      style={{
+        width: 18,
+        height: 18,
+        minHeight: 0,
+        padding: 0,
+        borderRadius: 999,
+        border: "1px solid var(--rule)",
+        background: open ? "var(--accent-soft)" : "transparent",
+        color: open ? "var(--accent-dark)" : "var(--ink-3)",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        lineHeight: 1,
+        flexShrink: 0,
+        cursor: "pointer",
+      }}
+    >
+      !
+    </button>
+  );
+}
+
+const infoPanelStyle = {
+  whiteSpace: "pre-line",
+  fontSize: 12,
+  lineHeight: 1.55,
+  color: "var(--ink-2)",
+  background: "var(--bg-elevated)",
+  border: "1px solid var(--rule-soft)",
+  borderRadius: 6,
+  padding: 10,
+  marginBottom: 14,
+};

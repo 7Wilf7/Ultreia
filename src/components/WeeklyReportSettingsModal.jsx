@@ -27,7 +27,13 @@ export function WeeklyReportSettingsModal({
   const [afterSundayImport, setAfterSundayImport] = useState(initial.afterSundayImport !== false);
   const [weekdayPickerOpen, setWeekdayPickerOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const weekdayOptions = WEEKDAYS.map(day => ({ value: day, label: t(`weekly_settings.day_${day}`) }));
+  const infoText = [
+    t("weekly_settings.auto_generate_desc"),
+    t("weekly_settings.after_sunday_import_desc"),
+    t("weekly_settings.behavior_note"),
+  ].join("\n\n");
 
   function save() {
     setWeeklyReportSettings({
@@ -44,14 +50,23 @@ export function WeeklyReportSettingsModal({
       <div style={s.overlay} onClick={onClose}>
         <div style={s.modal} onClick={e => e.stopPropagation()}>
           <div style={s.header}>
-            <h2 style={s.title}>{t("weekly_settings.title")}</h2>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <h2 style={s.title}>{t("weekly_settings.title")}</h2>
+              <InfoHintButton
+                label={infoText}
+                open={showInfo}
+                onClick={() => setShowInfo(v => !v)}
+              />
+            </div>
             <button onClick={onClose} style={s.close} aria-label="Close">×</button>
           </div>
+          {showInfo && (
+            <div style={s.infoPanel}>{infoText}</div>
+          )}
 
           <label style={s.switchRow}>
             <span>
               <span style={s.primary}>{t("weekly_settings.auto_generate")}</span>
-              <span style={s.secondary}>{t("weekly_settings.auto_generate_desc")}</span>
             </span>
             <input
               type="checkbox"
@@ -78,7 +93,6 @@ export function WeeklyReportSettingsModal({
           <label style={s.switchRow}>
             <span>
               <span style={s.primary}>{t("weekly_settings.after_sunday_import")}</span>
-              <span style={s.secondary}>{t("weekly_settings.after_sunday_import_desc")}</span>
             </span>
             <input
               type="checkbox"
@@ -87,8 +101,6 @@ export function WeeklyReportSettingsModal({
               style={{ width: 20, height: 20 }}
             />
           </label>
-
-          <div style={s.note}>{t("weekly_settings.behavior_note")}</div>
 
           <div style={s.actions}>
             <button onClick={onClose} style={s.secondaryBtn}>{t("common.cancel")}</button>
@@ -124,6 +136,21 @@ export function WeeklyReportSettingsModal({
   );
 }
 
+function InfoHintButton({ label, open, onClick }) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      aria-expanded={open}
+      onClick={onClick}
+      style={s.infoButton(open)}
+    >
+      !
+    </button>
+  );
+}
+
 const s = {
   overlay: {
     position: "fixed", inset: 0, zIndex: 9999,
@@ -149,7 +176,6 @@ const s = {
     padding: "12px 0", borderBottom: "1px solid var(--rule-soft)",
   },
   primary: { display: "block", fontSize: 14, fontWeight: 600 },
-  secondary: { display: "block", marginTop: 4, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.45 },
   label: { fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 },
   scheduleGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 },
   scheduleButton: {
@@ -171,8 +197,26 @@ const s = {
   weekdayValue: { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 },
   timeValue: { fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
   scheduleChevron: { color: "var(--ink-3)", fontFamily: "var(--font-sans)", fontSize: 13, flexShrink: 0 },
-  note: {
-    marginTop: 16,
+  infoButton: (open) => ({
+    width: 18,
+    height: 18,
+    minHeight: 0,
+    padding: 0,
+    borderRadius: 999,
+    border: "1px solid var(--rule)",
+    background: open ? "var(--accent-soft)" : "transparent",
+    color: open ? "var(--accent-dark)" : "var(--ink-3)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 12,
+    lineHeight: 1,
+    flexShrink: 0,
+    cursor: "pointer",
+  }),
+  infoPanel: {
+    whiteSpace: "pre-line",
+    marginBottom: 14,
     padding: 12,
     background: "var(--bg-elevated)",
     border: "1px solid var(--rule-soft)",

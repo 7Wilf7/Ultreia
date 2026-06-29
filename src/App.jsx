@@ -1957,6 +1957,7 @@ function AppShell({
   const [weeklyImportPrompt, setWeeklyImportPrompt] = useState(null);
   const [pendingWeeklyImportPrompt, setPendingWeeklyImportPrompt] = useState(null);
   const [showInbox, setShowInbox] = useState(false);
+  const [inboxTab, setInboxTab] = useState("daily");
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showInviteCodes, setShowInviteCodes] = useState(false);
@@ -2372,6 +2373,7 @@ function AppShell({
   }
 
   function openWeeklyReportFromInbox(range) {
+    setInboxTab("weekly");
     setWeeklyReportRange(range || weekWindow(now || new Date(), -1));
     setReturnToInboxAfterWeeklyReport(true);
     setShowInbox(false);
@@ -2382,6 +2384,7 @@ function AppShell({
     setShowWeeklyReport(false);
     if (returnToInboxAfterWeeklyReport) {
       setReturnToInboxAfterWeeklyReport(false);
+      setInboxTab("weekly");
       setShowInbox(true);
     }
   }
@@ -3931,7 +3934,10 @@ Rules:
           defaultLocation={defaultLocation}
           onOpenLocationSettings={() => setShowLocationSettings(true)}
           /* Inbox entry — top-right of the AI Coach header. */
-          onOpenInbox={() => setShowInbox(true)}
+          onOpenInbox={() => {
+            setInboxTab("daily");
+            setShowInbox(true);
+          }}
           inboxUnread={inboxUnread}
           /* Memory update lifted to app scope (survives leaving the tab). */
           showMemory={showMemory}
@@ -4226,16 +4232,18 @@ Rules:
         <InboxModal
           items={inboxItems}
           setItems={setInboxItems}
+          activeTab={inboxTab}
+          onTabChange={setInboxTab}
           onClose={() => setShowInbox(false)}
           onOpenPushSettings={() => {
-            setShowInbox(false);
+            setInboxTab("daily");
             setShowPushSettings(true);
           }}
           reports={weeklyReports}
           now={now}
           onOpenWeeklyReport={openWeeklyReportFromInbox}
           onOpenWeeklyReportSettings={() => {
-            setShowInbox(false);
+            setInboxTab("weekly");
             setShowWeeklyReportSettings(true);
           }}
           onClearWeeklyReports={clearWeeklyReports}

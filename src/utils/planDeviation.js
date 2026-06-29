@@ -136,7 +136,7 @@ export function summarizePlanDeviation(logs = [], now = new Date(), opts = {}) {
   };
 }
 
-export function buildPlanDeviationRescuePrompt({ summary, dataBlock, now = new Date() }) {
+export function buildPlanDeviationRescuePrompt({ summary, dataBlock, coachPreferenceBlock = "", now = new Date() }) {
   const todayStr = localDateKey(now);
   const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
   const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
@@ -156,6 +156,11 @@ ${deviations}
 
 Upcoming plans that may be adjusted:
 ${futurePlans}
+
+Coach preference context:
+---
+${coachPreferenceBlock || "(not set)"}
+---
 
 Full training context:
 ---

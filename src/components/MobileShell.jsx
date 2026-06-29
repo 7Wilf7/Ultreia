@@ -79,6 +79,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, []);
 
   const lastTabTap = useRef({ idx: -1, at: 0 });
+  const pointerDownRef = useRef({ idx: -1, at: 0, switched: false });
   function scrollActiveToTop() {
     activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
@@ -193,6 +194,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   function onTabTap(idx, e) {
     const now = e?.timeStamp ?? 0;
+    const pointerDown = pointerDownRef.current;
+    if (pointerDown.switched && pointerDown.idx === idx && idx === tab && now - pointerDown.at < 500) {
+      pointerDownRef.current = { idx: -1, at: 0, switched: false };
+      return;
+    }
     const prev = lastTabTap.current;
     lastTabTap.current = { idx, at: now };
     if (idx === tab && prev.idx === idx && now - prev.at < 320) {
@@ -209,6 +215,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       return;
     }
     go(idx, { animate: Math.abs(idx - tab) <= 1 });
+  }
+
+  function onTabPointerDown(idx, e) {
+    if (e.pointerType === "mouse") return;
+    const switched = idx !== tab;
+    pointerDownRef.current = { idx, at: e.timeStamp || 0, switched };
+    if (idx !== tab) {
+      lastTabTap.current = { idx: -1, at: 0 };
+      go(idx, { animate: false });
+    }
   }
 
   const pullY = refreshing ? 44 : 0;
@@ -313,6 +329,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           return (
             <button
               key={key}
+              onPointerDown={(e) => onTabPointerDown(idx, e)}
               onClick={(e) => onTabTap(idx, e)}
               style={{
                 background: "transparent",

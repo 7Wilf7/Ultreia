@@ -7,7 +7,7 @@ import {
   DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
   RUN_GROUP_TYPES, WEATHER_RELEVANT_TYPES,
 } from "./constants";
-import { isProfileComplete, buildSystemPrompt } from "./utils/profile";
+import { isProfileComplete, buildSystemPrompt, coachPreferenceContextBlock } from "./utils/profile";
 import { buildDataBlock, parsePlansFromLLM } from "./utils/coachPrompt";
 import { buildPlanDeviationRescuePrompt, summarizePlanDeviation } from "./utils/planDeviation";
 import { buildRecoveryGuardPrompt, summarizeRecoveryGuard } from "./utils/recoveryGuard";
@@ -127,6 +127,47 @@ function withTimeout(promise, label, ms = 15000) {
 }
 
 const WORKOUT_CACHE_LIMIT = 1500;
+
+function readObjectCache(key) {
+  if (!key) return null;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "null");
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeObjectCache(key, value) {
+  if (!key || !value || typeof value !== "object") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { /* cache is best-effort only */ }
+}
+
+function profileCacheKey(userId) {
+  return `ultreia.profileCache.v1:${userId}`;
+}
+
+function settingsCacheKey(userId) {
+  return `ultreia.settingsCache.v1:${userId}`;
+}
+
+function readProfileCache(userId) {
+  return readObjectCache(profileCacheKey(userId));
+}
+
+function writeProfileCache(userId, profile) {
+  writeObjectCache(profileCacheKey(userId), profile);
+}
+
+function readSettingsCache(userId) {
+  return readObjectCache(settingsCacheKey(userId));
+}
+
+function writeSettingsCache(userId, settings) {
+  writeObjectCache(settingsCacheKey(userId), settings);
+}
 
 function workoutCacheKey(userId) {
   return `ultreia.workoutsCache.v1:${userId}`;
@@ -909,7 +950,10 @@ export default function App() {
 function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // ── Supabase-backed: workouts (3.3c) + races (3.3d) + chatMessages (3.3e)
   //    + dailyNotes (Calendar day-level tags, e.g. ['massage'])
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState(() => readWorkoutCache(user.id));
+  const bootProfileCacheRef = useRef(readProfileCache(user.id));
+  const bootSettingsCacheRef = useRef(readSettingsCache(user.id));
+  const bootHadWorkoutCacheRef = useRef(readWorkoutCache(user.id).length > 0);
   // Per-workout write sequence — lets a background save ignore its own result
   // when a newer optimistic write has already landed (e.g. mark done then
   // immediately undo: the slower done response must not clobber pending).
@@ -958,31 +1002,54 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     return () => clearTimeout(t);
   }, [bootRevealComplete]);
 
-  // Fetch + apply all user data. Reused by the boot effect AND pull-to-refresh.
-  // Throws on error so each caller can handle it (boot alerts; refresh is quiet).
-  const loadData = useCallback(async () => {
-        const pieces = await Promise.all([
-          withTimeout(db.profiles.getMyProfile(), "profile").then(value => ({ key: "profile", value }), error => ({ key: "profile", error })),
-          withTimeout(db.userSettings.getMySettings(), "settings").then(value => ({ key: "settings", value }), error => ({ key: "settings", error })),
-          withTimeout(db.workouts.listMyWorkouts(), "workouts").then(value => ({ key: "workouts", value }), error => ({ key: "workouts", error })),
-          withTimeout(db.races.listMyRaces(), "races").then(value => ({ key: "races", value }), error => ({ key: "races", error })),
-          withTimeout(db.coachMessages.listMyMessages(), "messages").then(value => ({ key: "messages", value }), error => ({ key: "messages", error })),
-          withTimeout(db.agentActions.listMyActions(), "agentActions").then(value => ({ key: "agentActions", value }), error => ({ key: "agentActions", error })),
-          withTimeout(db.memoryFacts.listMyFacts(), "memoryFacts").then(value => ({ key: "memoryFacts", value }), error => ({ key: "memoryFacts", error })),
-          withTimeout(db.dailyNotes.listMyDailyNotes(), "notes").then(value => ({ key: "notes", value }), error => ({ key: "notes", error })),
-          withTimeout(db.trainingLocations.listMyLocations(), "trainingLocations").then(value => ({ key: "trainingLocations", value }), error => ({ key: "trainingLocations", error })),
-        ]);
-        const result = Object.fromEntries(pieces.map(p => [p.key, p]));
+  // Fetch + apply user data. Boot can request only the minimum needed to enter
+  // the app; refresh and background hydration still fetch the complete set.
+  const loadData = useCallback(async (options = {}) => {
+        const criticalOnly = options.criticalOnly === true;
+        const allowBootCache = criticalOnly && options.allowBootCache === true;
+        const cachedProfile = allowBootCache ? bootProfileCacheRef.current : null;
+        const cachedSettings = allowBootCache ? bootSettingsCacheRef.current : null;
+        const skipProfileFetch = !!cachedProfile;
+        const skipSettingsFetch = !!cachedSettings;
+        const skipWorkoutFetch = criticalOnly && options.allowWorkoutCache === true && bootHadWorkoutCacheRef.current;
+        const tasks = [
+          ...(skipProfileFetch ? [] : [["profile", () => db.profiles.getMyProfile()]]),
+          ...(skipSettingsFetch ? [] : [["settings", () => db.userSettings.getMySettings()]]),
+          ...(skipWorkoutFetch ? [] : [["workouts", () => db.workouts.listMyWorkouts()]]),
+          ...(criticalOnly ? [] : [
+            ["races", () => db.races.listMyRaces()],
+            ["messages", () => db.coachMessages.listMyMessages()],
+            ["agentActions", () => db.agentActions.listMyActions()],
+            ["memoryFacts", () => db.memoryFacts.listMyFacts()],
+            ["notes", () => db.dailyNotes.listMyDailyNotes()],
+            ["trainingLocations", () => db.trainingLocations.listMyLocations()],
+          ]),
+        ];
+        const pieces = await Promise.all(tasks.map(([key, task]) => (
+          withTimeout(task(), key).then(value => ({ key, value }), error => ({ key, error }))
+        )));
+        const cachedPieces = [
+          ...(cachedProfile ? [{ key: "profile", value: cachedProfile, cached: true }] : []),
+          ...(cachedSettings ? [{ key: "settings", value: cachedSettings, cached: true }] : []),
+        ];
+        const allPieces = [...cachedPieces, ...pieces];
+        const result = Object.fromEntries(allPieces.map(p => [p.key, p]));
         const failures = pieces.filter(p => p.error);
         if (failures.length) {
           console.warn("[boot] partial data load:", failures.map(p => `${p.key}: ${p.error?.message || p.error}`).join("; "));
+        }
+        const criticalFailure = criticalOnly ? failures.find(p => p.key === "profile" || p.key === "settings") : null;
+        if (criticalFailure) {
+          const err = new Error(`${criticalFailure.key} failed to load: ${criticalFailure.error?.message || criticalFailure.error}`);
+          err.critical = true;
+          throw err;
         }
 
         // Profile — null means no row yet (handle_new_user trigger should
         // prevent this, but defend against it). DEFAULT_PROFILE keeps shape
         // consistent so AppShell can read profile.displayName safely; the
         // setup wizard still fires because isProfileComplete() checks values.
-        if (!result.profile.error) {
+        if (result.profile && !result.profile.error) {
           const mergedProfile = { ...DEFAULT_PROFILE, ...(result.profile.value || {}) };
           setProfileState(mergedProfile);
           setItraPIState(mergedProfile.itraPI ?? "");
@@ -991,12 +1058,13 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           try {
             localStorage.setItem(`ultreia.displayName:${user.id}`, mergedProfile.displayName || "");
           } catch { /* private mode */ }
+          if (!result.profile.cached) writeProfileCache(user.id, result.profile.value || {});
         } else {
           setProfileState(prev => prev || DEFAULT_PROFILE);
         }
 
         // Settings — same defensive merge.
-        const settingsData = result.settings.error ? null : result.settings.value;
+        const settingsData = result.settings?.error ? null : result.settings?.value;
         if (settingsData) {
           setCoachConfigState({
             ...DEFAULT_COACH_CONFIG,
@@ -1021,6 +1089,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
               ? Number(settingsData.weatherIntervalHours)
               : getStoredWeatherSettings().intervalHours,
           });
+          if (!result.settings?.cached) writeSettingsCache(user.id, settingsData);
         }
 
         // Language: a saved setting wins; otherwise fall back to the choice the
@@ -1041,10 +1110,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // Workouts are critical. Do not let a failed refresh look like the
         // account has zero activities; use last good local cache as a fallback,
         // otherwise block the app on a retry screen.
-        if (!result.workouts.error) {
+        if (result.workouts && !result.workouts.error) {
           setLogs(result.workouts.value);
           writeWorkoutCache(user.id, result.workouts.value);
-        } else {
+        } else if (result.workouts?.error) {
           const cached = readWorkoutCache(user.id);
           if (cached.length) {
             setLogs(cached);
@@ -1058,32 +1127,32 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
         // Races — DAL returns created_at desc; RacesTab re-sorts internally
         // (target by date asc, history by date desc).
-        if (!result.races.error) setRaces(result.races.value);
+        if (result.races && !result.races.error) setRaces(result.races.value);
 
         // Coach messages — DAL returns created_at asc (oldest first).
-        if (!result.messages.error) setChatMessages(result.messages.value);
+        if (result.messages && !result.messages.error) setChatMessages(result.messages.value);
 
         // Agent actions — cloud source of truth for Action Card lifecycle.
-        if (!result.agentActions.error) {
+        if (result.agentActions && !result.agentActions.error) {
           setAgentActions(result.agentActions.value || []);
         }
 
-        if (!result.memoryFacts.error) {
+        if (result.memoryFacts && !result.memoryFacts.error) {
           setMemoryFacts(result.memoryFacts.value || []);
         }
 
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
-        if (!result.notes.error) setDailyNotes(result.notes.value);
+        if (result.notes && !result.notes.error) setDailyNotes(result.notes.value);
 
-        if (!result.trainingLocations.error) {
+        if (result.trainingLocations && !result.trainingLocations.error) {
           const locs = sortTrainingLocationList(result.trainingLocations.value || []);
           setTrainingLocations(locs);
           const defaultPlace = locs.find(l => l.isDefaultWeather) || null;
           if (defaultPlace) setDefaultLocationState(normalizeWeatherLocation(defaultPlace));
         }
 
-        const nonCriticalFailures = failures.filter(p => p.key !== "workouts");
+        const nonCriticalFailures = criticalOnly ? [] : failures.filter(p => p.key !== "workouts");
         if (nonCriticalFailures.length) {
           const err = new Error(`Partial data load: ${nonCriticalFailures.map(p => p.key).join(", ")}`);
           err.partial = true;
@@ -1098,11 +1167,27 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     const watchdog = setTimeout(() => {
       if (!cancelled) console.warn("[boot] data load still pending after 25s");
     }, 25000);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setDataLoading(true);
-    setDataLoadError(null);
-    loadData()
-      .catch((err) => {
+    async function boot() {
+      try {
+        setDataLoading(true);
+        setDataLoadError(null);
+        await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: true });
+        if (cancelled) return;
+        setDataLoading(false);
+        loadData().catch((err) => {
+          if (cancelled) return;
+          if (err?.critical) {
+            console.error("[boot hydration] critical data load:", err);
+            setDataLoadError(err);
+            reportError(`Background critical data load failed: ${err?.message || String(err)}`);
+          } else if (err?.partial) {
+            console.warn("[boot hydration] entered app with partial data:", err.message);
+          } else {
+            console.warn("[boot hydration] data load failed:", err);
+            reportError(`Background data load failed: ${err?.message || String(err)}`);
+          }
+        });
+      } catch (err) {
         if (cancelled) return;
         if (err?.critical) {
           console.error("Failed to load critical user data:", err);
@@ -1115,8 +1200,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           reportError(`Data load failed: ${err?.message || String(err)}\n${err?.stack || ""}`);
           window.alert("Failed to load your data, please refresh.");
         }
-      })
-      .finally(() => { clearTimeout(watchdog); if (!cancelled) setDataLoading(false); });
+        setDataLoading(false);
+      } finally {
+        clearTimeout(watchdog);
+      }
+    }
+    boot();
     return () => { cancelled = true; clearTimeout(watchdog); };
   }, [loadData]);
 
@@ -3099,6 +3188,7 @@ Rules:
       const prompt = buildPlanDeviationRescuePrompt({
         summary,
         dataBlock,
+        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
         now: now || new Date(),
       });
       const action = await generateProactivePlanAction({
@@ -3181,6 +3271,7 @@ Rules:
       const prompt = buildRecoveryGuardPrompt({
         summary,
         dataBlock,
+        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
         now: now || new Date(),
       });
       const action = await generateProactivePlanAction({
@@ -3266,6 +3357,7 @@ Rules:
         planSummary,
         recoverySummary,
         dataBlock,
+        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
         now: currentNow,
       });
       const action = await generateProactivePlanAction({
@@ -3382,6 +3474,7 @@ Rules:
       const prompt = buildRaceBriefingPrompt({
         summary,
         dataBlock,
+        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
         raceDayWeather,
         now: currentNow,
       });

@@ -227,7 +227,7 @@ export function summarizeRecoveryGuard(logs = [], dailyNotes = [], now = new Dat
   };
 }
 
-export function buildRecoveryGuardPrompt({ summary, dataBlock, now = new Date() }) {
+export function buildRecoveryGuardPrompt({ summary, dataBlock, coachPreferenceBlock = "", now = new Date() }) {
   const todayStr = localDateKey(now);
   const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
   const typeUnion = ACTIVITY_TYPES.map(at => `"${at}"`).join(" | ");
@@ -247,6 +247,11 @@ ${recentSessions}
 
 Upcoming plans that may be adjusted:
 ${futurePlans}
+
+Coach preference context:
+---
+${coachPreferenceBlock || "(not set)"}
+---
 
 Full training context:
 ---

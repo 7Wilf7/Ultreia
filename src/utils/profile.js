@@ -221,6 +221,10 @@ export function coachConfigBlock(cfg, lang = "en") {
   return lines.join("\n");
 }
 
+export function coachPreferenceContextBlock(coachConfig, lang = "en") {
+  return coachConfigBlock(coachConfig, lang);
+}
+
 /**
  * Assemble the full system prompt. `lang` controls the language of the static
  * scaffold (labels + fixed instructions). The dynamic `dataBlock` is built by

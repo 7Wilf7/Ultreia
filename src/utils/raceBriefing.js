@@ -119,7 +119,7 @@ function weatherLine(weather) {
   return bits.length ? bits.join(" · ") : "Weather context is present but sparse.";
 }
 
-export function buildRaceBriefingPrompt({ summary, dataBlock, raceDayWeather = null, now = new Date() }) {
+export function buildRaceBriefingPrompt({ summary, dataBlock, coachPreferenceBlock = "", raceDayWeather = null, now = new Date() }) {
   const race = summary?.race || {};
   const today = localDateKey(now);
   const days = Number(summary?.daysToRace);
@@ -129,6 +129,11 @@ Today: ${today} (GMT+8)
 Days to race: ${Number.isFinite(days) ? days : "unknown"}
 Target race: ${raceLine(race)}
 Race-day weather/context: ${weatherLine(raceDayWeather)}
+
+Coach preference context:
+---
+${coachPreferenceBlock || "(not set)"}
+---
 
 Current training context:
 ---

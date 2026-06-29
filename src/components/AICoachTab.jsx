@@ -816,10 +816,6 @@ export function AICoachTab({
     ? t("coach.proactive_open")
     : t("coach.proactive_manual_hint");
   const manualAdjustmentOpensConfirm = !proactiveAdjustmentLoading && !proactiveAdjustment?.existingAction;
-  const handleManualAdjustmentFromMenu = useCallback(() => {
-    if (!manualAdjustmentOpensConfirm) setShowCoachMenu(false);
-    handleManualAdjustmentShortcut();
-  }, [handleManualAdjustmentShortcut, manualAdjustmentOpensConfirm]);
   const handleManualAdjustmentFromHub = useCallback(() => {
     if (!manualAdjustmentOpensConfirm) setShowCoachHub(false);
     handleManualAdjustmentShortcut();
@@ -2471,11 +2467,6 @@ export function AICoachTab({
             <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
           </button>
         );
-        const groupHeader = (label) => (
-          <div style={{ padding: "14px 16px 6px", display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</span>
-          </div>
-        );
         return (
           <ModalRoot onClose={() => setShowCoachMenu(false)}>
             <div onClick={() => setShowCoachMenu(false)} className="ultreia-overlay-in" style={{
@@ -2498,14 +2489,10 @@ export function AICoachTab({
                   <button onClick={() => setShowCoachMenu(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>
 
-                {groupHeader(t("coach.group_coach"))}
                 {row(t("coach.show_config"), () => openSub(() => setShowCoachConfig(true)))}
                 {row(t("coach.training_preferences"), () => openSub(() => setShowTrainingPreferences(true)))}
                 {row(t("coach.show_memory"), () => openSub(() => setShowMemory(true)), { badge: memoryReady })}
-
-                {groupHeader(t("coach.group_actions"))}
-                {showManualAdjustmentShortcut && row(manualAdjustmentLabel, handleManualAdjustmentFromMenu)}
-                {agentActions.length > 0 && row(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)))}
+                {row(t("coach.recent_agent_actions"), () => openSub(() => setShowAgentActions(true)))}
 
                 <button
                   type="button"
@@ -2565,14 +2552,11 @@ export function AICoachTab({
                   padding: "10px 0",
                 }}>
                   {[
-                    { header: t("coach.group_coach"), items: [
+                    { items: [
                       { id: "config", label: t("coach.show_config") },
                       { id: "trainingPrefs", label: t("coach.training_preferences") },
                       { id: "memory", label: t("coach.show_memory") + (memoryReady ? " ●" : "") },
-                    ] },
-                    { header: t("coach.group_actions"), items: [
-                      ...(showManualAdjustmentShortcut ? [{ id: "adjust", label: manualAdjustmentLabel }] : []),
-                      ...(agentActions.length > 0 ? [{ id: "actions", label: t("coach.recent_agent_actions") }] : []),
+                      { id: "actions", label: t("coach.recent_agent_actions") },
                     ] },
                     { header: t("coach.group_advanced"), items: [
                       { id: "prompt", label: t("coach.preview_prompt"), muted: true },
@@ -2581,12 +2565,14 @@ export function AICoachTab({
                       { id: "clear", label: t("coach.clear_chat"), muted: true, danger: true },
                     ] },
                   ].filter(group => group.items.length > 0).map((group, gi) => (
-                    <div key={group.header}>
-                      <div style={{
-                        padding: gi === 0 ? "2px 14px 6px" : "14px 14px 6px",
-                        fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)",
-                        textTransform: "uppercase", letterSpacing: "0.06em",
-                      }}>{group.header}</div>
+                    <div key={group.header || `group-${gi}`}>
+                      {group.header && (
+                        <div style={{
+                          padding: gi === 0 ? "2px 14px 6px" : "14px 14px 6px",
+                          fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-3)",
+                          textTransform: "uppercase", letterSpacing: "0.06em",
+                        }}>{group.header}</div>
+                      )}
                       {group.items.map(tab => {
                         const active = coachHubTab === tab.id;
                         return (
@@ -2877,8 +2863,24 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
 
   return (
     <div style={{ display: "grid", gap: 14 }}>
-      <div style={{ ...s.muted, lineHeight: 1.55, fontSize: 13 }}>
-        {t("coach.training_preferences_hint")}
+      <div
+        title={t("coach.training_preferences_hint")}
+        aria-label={t("coach.training_preferences_hint")}
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          border: "1px solid var(--rule)",
+          color: "var(--ink-3)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 12,
+          lineHeight: 1,
+          justifySelf: "start",
+        }}
+      >
+        !
       </div>
       <div style={{ display: "grid", gap: 8 }}>
         {TRAINING_PREFERENCE_DAYS.map(day => {
@@ -2888,10 +2890,10 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
               key={day}
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "74px minmax(0, 1fr) minmax(0, 1fr)",
-                gap: isMobile ? 7 : 10,
+                gridTemplateColumns: isMobile ? "52px minmax(0, 1fr) minmax(0, 1fr)" : "74px minmax(0, 1fr) minmax(0, 1fr)",
+                gap: isMobile ? 8 : 10,
                 alignItems: "center",
-                padding: isMobile ? "10px 0" : "8px 0",
+                padding: isMobile ? "8px 0" : "8px 0",
                 borderTop: "1px solid var(--rule-soft)",
               }}
             >

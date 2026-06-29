@@ -92,10 +92,12 @@ describe("recovery guard helpers", () => {
     const prompt = buildRecoveryGuardPrompt({
       summary,
       dataBlock: "[Planned Sessions]\nplan_id=p1 2026-06-26 Road Run Tempo 10km",
+      coachPreferenceBlock: "[Weekly Training Preferences]\nFriday PM: Massage / stretching",
       now: new Date("2026-06-25T10:00:00+08:00"),
     });
 
     expect(prompt).toContain("High recent RPE: 2026-06-23 RPE 9");
+    expect(prompt).toContain("Friday PM: Massage / stretching");
     expect(prompt).toContain("targetPlanId");
     expect(prompt).toContain("Do NOT diagnose injury or illness");
     expect(prompt).toContain("Plans marked key_session=true are protected anchor workouts");

@@ -1,5 +1,6 @@
 import { formatDuration, formatPaceFromSec } from "./format";
 import { buildDataBlock } from "./coachPrompt";
+import { coachPreferenceContextBlock } from "./profile";
 
 export const KEEP_REPORTS = 8;
 const STORAGE_KEY_PREFIX = "ultreia.weeklyReports.v1";
@@ -114,10 +115,11 @@ export function buildWeeklyReportPrompt({ coachConfig, logs, races, dailyNotes, 
     `If information is missing, state assumptions and mark what to confirm, then still provide a provisional recommendation.`;
 
   const profileBlock = buildDataBlock({ logs, races, now, lang: "en", dailyNotes, agentActions, memoryFacts });
+  const coachPreferenceBlock = coachPreferenceContextBlock(coachConfig, "en") || JSON.stringify(coachConfig || {});
   const user =
     `Report range: ${range.start} to ${range.end}. Next plan range: ${range.nextStart} to ${range.nextEnd}.\n\n` +
     `[Runner profile and longer context]\n${profileBlock}\n\n` +
-    `[Coach preference]\n${JSON.stringify(coachConfig || {})}\n\n` +
+    `[Coach preference]\n${coachPreferenceBlock}\n\n` +
     `[This week completed workouts]\n${completed.length ? completed.map(fmtWorkout).join("\n") : "none"}\n\n` +
     `[This week planned workouts]\n${plannedThisWeek.length ? plannedThisWeek.map(fmtWorkout).join("\n") : "none"}\n\n` +
     `[Next week existing plans]\n${plannedNextWeek.length ? plannedNextWeek.map(fmtWorkout).join("\n") : "none"}\n\n` +

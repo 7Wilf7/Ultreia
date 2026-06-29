@@ -74,10 +74,12 @@ describe("race briefing helpers", () => {
         race: { name: "Main Race", date: "2026-07-02", category: "Trail", distance: 30, ascent: 1600 },
       },
       dataBlock: "[Recent Workouts]\n2026-06-24 Trail Run",
+      coachPreferenceBlock: "[Weekly Training Preferences]\nSunday AM: Trail Run",
       now: new Date("2026-06-25T10:00:00+08:00"),
     });
 
     expect(prompt).toContain("## 装备检查");
+    expect(prompt).toContain("Sunday AM: Trail Run");
     expect(prompt).toContain("Do not create calendar plans");
     expect(prompt).toContain("Do not diagnose injury or illness");
   });

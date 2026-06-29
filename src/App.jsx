@@ -2534,6 +2534,7 @@ function AppShell({
     const runId = weeklyReportRunRef.current + 1;
     weeklyReportRunRef.current = runId;
     weeklyReportAbortRef.current = controller;
+    setWeeklyReportRange(range);
     setWeeklyReportLoading(true);
     setWeeklyReportError("");
     try {
@@ -3704,7 +3705,7 @@ Rules:
   // True when ANY long-running AI Coach operation is in flight. Used to
   // render the spinner badge on the AI Coach tab label so the user knows
   // the model is still working even when they've switched to another tab.
-  const coachBusy = chatLoading || contextCompressing || !!extractingForMsgId || memoryUpdating;
+  const coachBusy = chatLoading || contextCompressing || !!extractingForMsgId || memoryUpdating || weeklyReportLoading;
 
   // First-time setup: force the wizard until profile is complete (incl. displayName)
   useEffect(() => {
@@ -3939,6 +3940,7 @@ Rules:
             setShowInbox(true);
           }}
           inboxUnread={inboxUnread}
+          weeklyReportLoading={weeklyReportLoading}
           /* Memory update lifted to app scope (survives leaving the tab). */
           showMemory={showMemory}
           setShowMemory={setShowMemory}
@@ -4242,6 +4244,8 @@ Rules:
           reports={weeklyReports}
           now={now}
           onOpenWeeklyReport={openWeeklyReportFromInbox}
+          weeklyReportLoading={weeklyReportLoading}
+          activeWeeklyReportRange={weeklyReportRange}
           onOpenWeeklyReportSettings={() => {
             setInboxTab("weekly");
             setShowWeeklyReportSettings(true);

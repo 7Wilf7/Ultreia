@@ -486,7 +486,7 @@ export function AICoachTab({
   // Inbox (delivered coach pushes) — entry lives top-right of this tab's
   // header. Opens the InboxModal owned by AppShell; inboxUnread drives the
   // badge.
-  onOpenInbox, inboxUnread = 0,
+  onOpenInbox, inboxUnread = 0, weeklyReportLoading = false,
   // Memory update lifted to AppShell so it survives leaving this tab (the
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
@@ -1716,19 +1716,34 @@ export function AICoachTab({
           </button>
         )}
         {onOpenInbox && (
-          <button onClick={onOpenInbox} title={t("inbox.title")} aria-label={t("inbox.title")}
+          <button onClick={onOpenInbox} title={weeklyReportLoading ? t("weekly_report.thinking") : t("inbox.title")} aria-label={weeklyReportLoading ? t("weekly_report.thinking") : t("inbox.title")}
             style={{
               position: "relative",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               minHeight: 26, width: 34, padding: 0,
-              border: "1px solid var(--rule)", borderRadius: 2,
-              background: "var(--bg-elevated)", color: "var(--ink-2)",
+              border: weeklyReportLoading ? "1px solid var(--accent)" : "1px solid var(--rule)",
+              borderRadius: 2,
+              background: weeklyReportLoading ? "var(--accent-soft)" : "var(--bg-elevated)",
+              color: weeklyReportLoading ? "var(--accent-dark)" : "var(--ink-2)",
+              boxShadow: weeklyReportLoading ? "0 0 0 1px oklch(0.54 0.055 138 / 0.12), 0 0 18px oklch(0.38 0.060 138 / 0.18)" : "none",
               cursor: "pointer", WebkitTapHighlightColor: "transparent",
             }}>
             <MailIcon size={15} />
+            {weeklyReportLoading && (
+              <span style={{
+                position: "absolute",
+                right: -5,
+                top: -5,
+                background: "var(--bg)",
+                borderRadius: 8,
+                lineHeight: 0,
+              }}>
+                <Spinner size={10} thickness={1.4} color="var(--accent)" />
+              </span>
+            )}
             {inboxUnread > 0 && (
               <span style={{
-                position: "absolute", top: -6, right: -6,
+                position: "absolute", top: -6, right: weeklyReportLoading ? 7 : -6,
                 minWidth: 16, height: 16, padding: "0 4px", boxSizing: "border-box",
                 borderRadius: 8, background: "var(--warn)", color: "var(--bg-deep)",
                 fontSize: 9, fontWeight: 700, lineHeight: "16px", textAlign: "center",

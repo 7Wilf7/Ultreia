@@ -77,6 +77,8 @@ export function InboxModal({
   onClearWeeklyReports,
   activeTab = "daily",
   onTabChange,
+  weeklyReportLoading = false,
+  activeWeeklyReportRange = null,
 }) {
   const t = useT();
   const appDialog = useAppDialog();
@@ -235,8 +237,11 @@ export function InboxModal({
           <button onClick={() => onTabChange?.("daily")} style={tabButtonStyle(tab === "daily")}>
             {t("inbox.tab_daily")}
           </button>
-          <button onClick={() => onTabChange?.("weekly")} style={tabButtonStyle(tab === "weekly")}>
+          <button onClick={() => onTabChange?.("weekly")} style={tabButtonStyle(tab === "weekly", weeklyReportLoading)}>
             {t("inbox.tab_weekly")}
+            {weeklyReportLoading && (
+              <span className="ultreia-spinner" style={{ width: 10, height: 10, borderWidth: 1.5, marginLeft: 6 }} />
+            )}
           </button>
         </div>
 
@@ -291,18 +296,26 @@ export function InboxModal({
               <div style={styles.weekList}>
                 {weeklyRanges.map(range => {
                   const active = rangesEqual(range, weekWindow(now || new Date(), -1));
+                  const running = weeklyReportLoading && (!activeWeeklyReportRange || rangesEqual(range, activeWeeklyReportRange));
                   return (
                     <button
                       key={`${range.start}:${range.end}`}
                       onClick={() => onOpenWeeklyReport?.(range)}
                       style={{
                         ...styles.weekChip,
-                        borderColor: active ? "var(--accent)" : "var(--rule-soft)",
-                        background: active ? "var(--accent-soft)" : "transparent",
-                        color: active ? "var(--accent-dark)" : "var(--ink-1)",
+                        borderColor: running || active ? "var(--accent)" : "var(--rule-soft)",
+                        background: running || active ? "var(--accent-soft)" : "transparent",
+                        color: running || active ? "var(--accent-dark)" : "var(--ink-1)",
+                        boxShadow: running ? "0 0 0 1px oklch(0.54 0.055 138 / 0.12), 0 0 18px oklch(0.38 0.060 138 / 0.16)" : "none",
                       }}
                     >
                       <span>{shortRange(range.start, range.end)}</span>
+                      {running && (
+                        <span style={styles.weekRunning}>
+                          <span className="ultreia-spinner" style={{ width: 11, height: 11, borderWidth: 1.5 }} />
+                          {t("weekly_report.generating")}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
@@ -319,12 +332,12 @@ export function InboxModal({
   );
 }
 
-function tabButtonStyle(active) {
+function tabButtonStyle(active, busy = false) {
   return {
     ...styles.tabButton,
-    background: active ? "var(--accent-soft)" : "transparent",
-    borderColor: active ? "var(--accent)" : "var(--rule)",
-    color: active ? "var(--accent-dark)" : "var(--ink-2)",
+    background: active || busy ? "var(--accent-soft)" : "transparent",
+    borderColor: active || busy ? "var(--accent)" : "var(--rule)",
+    color: active || busy ? "var(--accent-dark)" : "var(--ink-2)",
   };
 }
 
@@ -371,6 +384,9 @@ const styles = {
     fontSize: 13,
     fontWeight: 650,
     cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   body: {
     flex: 1,
@@ -440,6 +456,20 @@ const styles = {
     textAlign: "left",
     cursor: "pointer",
     marginBottom: 8,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  weekRunning: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    fontFamily: "var(--font-sans)",
+    fontSize: 12,
+    fontWeight: 650,
+    color: "var(--accent-dark)",
+    whiteSpace: "nowrap",
   },
   actionBar: {
     position: "fixed",

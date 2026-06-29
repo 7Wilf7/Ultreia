@@ -540,7 +540,9 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
+  const contextUsageButtonRef = useRef(null);
   const [showContextUsage, setShowContextUsage] = useState(false);
+  const [contextUsagePopoverPosition, setContextUsagePopoverPosition] = useState(null);
   const [preciseTextTokenCounter, setPreciseTextTokenCounter] = useState(null);
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
@@ -1269,6 +1271,46 @@ export function AICoachTab({
     : contextUsage.ratio >= 0.75
       ? "var(--warn)"
       : "var(--moss)";
+  const closeContextUsagePopover = useCallback(() => {
+    setShowContextUsage(false);
+  }, []);
+  const updateContextUsagePopoverPosition = useCallback(() => {
+    const rect = contextUsageButtonRef.current?.getBoundingClientRect?.();
+    if (!rect || typeof window === "undefined") return;
+    const viewportWidth = window.innerWidth || 360;
+    const viewportHeight = window.innerHeight || 640;
+    const width = Math.min(286, Math.max(240, viewportWidth - 32));
+    const safeLeftMax = Math.max(16, viewportWidth - width - 16);
+    const left = Math.min(Math.max(16, rect.right - width), safeLeftMax);
+    const estimatedHeight = 128;
+    const belowTop = rect.bottom + 8;
+    const top = belowTop + estimatedHeight <= viewportHeight - 12
+      ? belowTop
+      : Math.max(12, rect.top - estimatedHeight - 8);
+    setContextUsagePopoverPosition({ top, left, width });
+  }, []);
+  const toggleContextUsagePopover = useCallback(() => {
+    if (!showContextUsage) updateContextUsagePopoverPosition();
+    setShowContextUsage(v => !v);
+  }, [showContextUsage, updateContextUsagePopoverPosition]);
+  useLayoutEffect(() => {
+    if (!showContextUsage) return undefined;
+    updateContextUsagePopoverPosition();
+    window.addEventListener("resize", updateContextUsagePopoverPosition);
+    window.addEventListener("scroll", updateContextUsagePopoverPosition, true);
+    return () => {
+      window.removeEventListener("resize", updateContextUsagePopoverPosition);
+      window.removeEventListener("scroll", updateContextUsagePopoverPosition, true);
+    };
+  }, [showContextUsage, updateContextUsagePopoverPosition]);
+  useEffect(() => {
+    if (!showContextUsage) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") closeContextUsagePopover();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [closeContextUsagePopover, showContextUsage]);
   const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
@@ -1594,10 +1636,12 @@ export function AICoachTab({
           }}
         />
         <button
+          ref={contextUsageButtonRef}
           type="button"
-          onClick={() => setShowContextUsage(v => !v)}
+          onClick={toggleContextUsagePopover}
           title={providerTitle}
           aria-expanded={showContextUsage}
+          aria-controls="coach-context-usage-popover"
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
@@ -1774,56 +1818,79 @@ export function AICoachTab({
         )}
       </div>
       {showContextUsage && (
-        <div style={{
-          marginBottom: 10,
-          padding: "9px 11px",
-          border: "1px solid var(--rule)",
-          borderRadius: 6,
-          background: "var(--bg-elevated)",
-          color: "var(--ink-2)",
-          display: "grid",
-          gap: 6,
-        }}>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            fontSize: 12,
-            fontFamily: "var(--font-sans)",
-          }}>
-            <span style={{ color: "var(--ink-3)" }}>{t("coach.context_used")}</span>
-            <span style={{ color: "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
-              ≈ {contextUsage.usedLabel} / {contextUsage.totalLabel}
-            </span>
+        <ModalRoot onClose={closeContextUsagePopover}>
+          <div
+            onPointerDown={closeContextUsagePopover}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 9999,
+              background: "transparent",
+              WebkitTapHighlightColor: "transparent",
+            }}>
+            <div
+              id="coach-context-usage-popover"
+              role="dialog"
+              aria-label={t("coach.context_used")}
+              onPointerDown={(event) => event.stopPropagation()}
+              style={{
+                position: "fixed",
+                top: contextUsagePopoverPosition?.top ?? 64,
+                left: contextUsagePopoverPosition?.left ?? 16,
+                width: contextUsagePopoverPosition?.width ?? "calc(100vw - 32px)",
+                maxWidth: "calc(100vw - 32px)",
+                boxSizing: "border-box",
+                padding: "9px 11px",
+                border: "1px solid var(--rule)",
+                borderRadius: 8,
+                background: "var(--bg-elevated)",
+                color: "var(--ink-2)",
+                display: "grid",
+                gap: 6,
+                boxShadow: "0 8px 8px oklch(0.04 0.006 274 / 0.22)",
+              }}>
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                fontSize: 12,
+                fontFamily: "var(--font-sans)",
+              }}>
+                <span style={{ color: "var(--ink-3)" }}>{t("coach.context_used")}</span>
+                <span style={{ color: "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
+                  ≈ {contextUsage.usedLabel} / {contextUsage.totalLabel}
+                </span>
+              </div>
+              <div style={{
+                height: 5,
+                borderRadius: 999,
+                background: "var(--bg-sunken)",
+                overflow: "hidden",
+              }}>
+                <div style={{
+                  width: `${Math.min(100, Math.round(contextUsage.ratio * 100))}%`,
+                  height: "100%",
+                  borderRadius: 999,
+                  background: contextUsageAccent,
+                }} />
+              </div>
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                fontSize: 12,
+                fontFamily: "var(--font-sans)",
+              }}>
+                <span style={{ color: "var(--ink-3)" }}>{t("coach.context_remaining")}</span>
+                <span style={{ color: contextUsage.nearLimit ? "var(--danger)" : "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
+                  ≈ {contextUsage.remainingLabel}
+                </span>
+              </div>
+            </div>
           </div>
-          <div style={{
-            height: 5,
-            borderRadius: 999,
-            background: "var(--bg-sunken)",
-            overflow: "hidden",
-          }}>
-            <div style={{
-              width: `${Math.min(100, Math.round(contextUsage.ratio * 100))}%`,
-              height: "100%",
-              borderRadius: 999,
-              background: contextUsageAccent,
-            }} />
-          </div>
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 10,
-            fontSize: 12,
-            fontFamily: "var(--font-sans)",
-          }}>
-            <span style={{ color: "var(--ink-3)" }}>{t("coach.context_remaining")}</span>
-            <span style={{ color: contextUsage.nearLimit ? "var(--danger)" : "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
-              ≈ {contextUsage.remainingLabel}
-            </span>
-          </div>
-        </div>
+        </ModalRoot>
       )}
       {/* Soft hint once estimated context usage approaches the safe limit. Two states:
           • EXPANDED (default) — full banner with the "consider distilling

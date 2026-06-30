@@ -18,7 +18,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { cityAbbreviationFromLocation, cityFromLocation, hasValidCoords } from "../lib/weather";
 import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTextTokenCounter, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { buildSystemPrompt } from "../utils/profile";
-import { extractMemoryFacts, fillEmptyMemorySections, isMemorySectionHeading, MEMORY_SECTIONS } from "../utils/memory";
+import { buildMemoryFactReview, buildMemoryFactSnapshotFromReview, extractMemoryFacts, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { shouldAutoQuietProactiveAction, shouldAutoTriggerPlanDeviation, shouldAutoTriggerRecoveryGuard } from "../utils/actionPlanFilters";
@@ -1007,34 +1007,44 @@ export function AICoachTab({
 
   // Accepts the kept points from the per-point review and activates them as
   // structured Memory facts. The legacy free-text Memory is no longer written.
-  async function acceptMemoryProposal(en, zh) {
-    const e = (en || "").trim(), z = (zh || "").trim();
+  async function acceptMemoryProposal(facts, stats = {}) {
+    const safeFacts = Array.isArray(facts) ? facts : [];
     const actionId = memoryProposal?.action?.id || `memory-update-${Date.now()}`;
-    const facts = extractMemoryFacts({ en: e, zh: z }, {
-      clientPrefix: `memory-fact-${actionId}`,
-      memoryActionId: actionId,
-      sourceMessageCount: memoryProposal?.action?.payload?.sourceMessageCount || 0,
-      source: "ai_coach_memory",
-      sourceSummary: "Memory auto-update",
+    const sourceSummary = memoryProposal?.action?.source === "nightly_memory_review" ? "Nightly Memory review" : "Memory auto-update";
+    const factsToSave = safeFacts.map((fact, index) => ({
+      ...fact,
+      clientId: fact.clientId || fact.id || `memory-fact-${actionId}-${index}`,
+      metadata: {
+        ...(fact.metadata || {}),
+        memoryActionId: fact.metadata?.memoryActionId || actionId,
+        sourceMessageCount: Number(fact.metadata?.sourceMessageCount || memoryProposal?.action?.payload?.sourceMessageCount || 0),
+      },
+      source: fact.source || memoryProposal?.action?.source || "ai_coach_memory",
+      sourceSummary: fact.sourceSummary || sourceSummary,
       status: "active",
-    });
+    }));
     try {
-      if (facts.length && typeof saveMemoryFacts !== "function") {
+      if (factsToSave.length && typeof saveMemoryFacts !== "function") {
         throw new Error("Memory facts save handler is unavailable");
       }
-      const saveResult = await saveMemoryFacts(facts, { replaceActiveSnapshot: true, returnSummary: true });
+      const saveResult = await saveMemoryFacts(factsToSave, { replaceActiveSnapshot: true, returnSummary: true });
       const savedFacts = Array.isArray(saveResult) ? saveResult : (saveResult?.savedFacts || []);
       const archivedFactCount = Array.isArray(saveResult) ? 0 : (saveResult?.archivedFacts?.length || 0);
-      if (facts.length && (!Array.isArray(savedFacts) || savedFacts.length < facts.length)) {
-        throw new Error(`Only saved ${savedFacts?.length || 0} of ${facts.length} Memory facts`);
+      if (factsToSave.length && (!Array.isArray(savedFacts) || savedFacts.length < factsToSave.length)) {
+        throw new Error(`Only saved ${savedFacts?.length || 0} of ${factsToSave.length} Memory facts`);
       }
       if (memoryProposal?.action) {
         const nextAction = recordMemoryActionDecision
           ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
-              savedLanguages: [e ? "en" : null, z ? "zh" : null].filter(Boolean),
-              savedCharacterCount: { en: e.length, zh: z.length },
+              savedLanguages: ["facts"],
+              savedCharacterCount: {
+                en: factsToSave.reduce((sum, fact) => sum + String(fact.contentEn || "").length, 0),
+                zh: factsToSave.reduce((sum, fact) => sum + String(fact.contentZh || "").length, 0),
+              },
               savedFactCount: savedFacts.length,
               archivedFactCount,
+              reviewedChangeCount: Number(stats.reviewedChangeCount || 0),
+              unchangedFactCount: Number(stats.unchangedFactCount || 0),
             })
           : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED);
         setLastMemoryAction(nextAction);
@@ -4456,45 +4466,85 @@ function formatActionTime(value) {
 }
 
 function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, onReject, t }) {
-  const splitLines = (str) => (str || "").split("\n").map(l => l.replace(/\s+$/, "")).filter(l => l.trim());
-  const enLines = splitLines(proposal.en);
-  const zhLines = splitLines(proposal.zh);
   const action = proposal.action || null;
-  const aligned = enLines.length === zhLines.length && enLines.length > 0;
-  const displayLines = displayLang === "zh" ? (zhLines.length ? zhLines : enLines) : (enLines.length ? enLines : zhLines);
-  const oldFactText = oldFacts
-    .filter(f => f?.status === "active")
-    .map(f => displayLang === "zh" ? (f.contentZh || f.contentEn || "") : (f.contentEn || f.contentZh || ""))
-    .join("\n")
-    .toLowerCase();
-  const [kept, setKept] = useState(() => new Set(displayLines.map((_, i) => i)));
-  const isNew = (line) => {
-    const probe = line.trim().toLowerCase();
-    return probe.length > 0 && !oldFactText.includes(probe.slice(0, Math.min(probe.length, 30)));
-  };
+  const sourceMessageCount = Number(action?.payload?.sourceMessageCount || 0);
+  const source = action?.source || "ai_coach_memory";
+  const sourceSummary = source === "nightly_memory_review" ? "Nightly Memory review" : "Memory auto-update";
+  const fallbackActionId = useMemo(() => {
+    const seed = `${proposal.en || ""}|${proposal.zh || ""}`;
+    let hash = 0;
+    for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    return `memory-update-${seed.length}-${hash.toString(36)}`;
+  }, [proposal.en, proposal.zh]);
+  const actionId = action?.id || fallbackActionId;
+  const proposalFacts = useMemo(() => {
+    if (Array.isArray(proposal.facts) && proposal.facts.length) {
+      return proposal.facts.map((fact, index) => ({
+        ...fact,
+        clientId: fact.clientId || fact.id || `memory-fact-${actionId}-${index}`,
+        source: fact.source || source,
+        sourceSummary: fact.sourceSummary || sourceSummary,
+        status: "active",
+      }));
+    }
+    return extractMemoryFacts({ en: proposal.en, zh: proposal.zh }, {
+      clientPrefix: `memory-fact-${actionId}`,
+      memoryActionId: actionId,
+      sourceMessageCount,
+      source,
+      sourceSummary,
+      status: "active",
+    });
+  }, [actionId, proposal.en, proposal.facts, proposal.zh, source, sourceMessageCount, sourceSummary]);
+  const review = useMemo(
+    () => buildMemoryFactReview(proposalFacts, oldFacts),
+    [oldFacts, proposalFacts],
+  );
+  const defaultSelectedKeys = useMemo(() => new Set(
+    review.entries
+      .filter(entry => entry.kind === "new" || entry.kind === "updated" || entry.kind === "removed")
+      .map(entry => entry.key),
+  ), [review.entries]);
+  const defaultSelectedSignature = useMemo(
+    () => [...defaultSelectedKeys].sort().join("|"),
+    [defaultSelectedKeys],
+  );
+  const [selectionState, setSelectionState] = useState(() => ({
+    signature: defaultSelectedSignature,
+    keys: defaultSelectedKeys,
+  }));
+  const selectedKeys = selectionState.signature === defaultSelectedSignature ? selectionState.keys : defaultSelectedKeys;
   const [saving, setSaving] = useState(false);
-  function toggle(i) {
+  const changedEntries = review.entries.filter(entry => entry.kind !== "unchanged");
+  const unchangedEntries = review.entries.filter(entry => entry.kind === "unchanged");
+  function toggle(key) {
     if (saving) return;
-    if (isMemorySectionHeading(displayLines[i])) return;
-    setKept(prev => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
+    setSelectionState(prev => {
+      const base = prev.signature === defaultSelectedSignature ? prev.keys : defaultSelectedKeys;
+      const keys = new Set(base);
+      if (keys.has(key)) keys.delete(key); else keys.add(key);
+      return { signature: defaultSelectedSignature, keys };
+    });
   }
   async function accept() {
-    if (saving || kept.size === 0) return;
-    const keep = (lines) => lines.filter((line, i) => isMemorySectionHeading(line) || kept.has(i)).join("\n");
-    const normalizeEn = (text) => fillEmptyMemorySections(text, "en");
-    const normalizeZh = (text) => fillEmptyMemorySections(text, "zh");
+    if (saving) return;
+    const finalFacts = buildMemoryFactSnapshotFromReview(review.entries, selectedKeys);
     setSaving(true);
     try {
-      if (aligned) {
-        await onAccept(normalizeEn(keep(enLines)), normalizeZh(keep(zhLines)));
-        return;
-      }
-      if (displayLang === "zh") await onAccept(normalizeEn(proposal.en), normalizeZh(keep(zhLines)));
-      else await onAccept(normalizeEn(keep(enLines)), normalizeZh(proposal.zh));
+      await onAccept(finalFacts, {
+        reviewedChangeCount: changedEntries.filter(entry => selectedKeys.has(entry.key)).length,
+        unchangedFactCount: unchangedEntries.length,
+      });
     } finally {
       setSaving(false);
     }
   }
+  const summaryBits = [
+    review.counts.new ? t("coach.memory_review_summary_new", { count: review.counts.new }) : "",
+    review.counts.updated ? t("coach.memory_review_summary_updated", { count: review.counts.updated }) : "",
+    review.counts.removed ? t("coach.memory_review_summary_removed", { count: review.counts.removed }) : "",
+    review.counts.unchanged ? t("coach.memory_review_summary_unchanged", { count: review.counts.unchanged }) : "",
+  ].filter(Boolean);
   return (
     <>
       <div style={{
@@ -4526,42 +4576,47 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
         </div>
       </div>
       <div style={{ ...s.label, marginBottom: 4, color: "var(--moss-deep)" }}>{t("coach.memory_proposal_title")}</div>
-      <div style={{ ...s.muted, fontSize: 11, marginBottom: 8, lineHeight: 1.5 }}>{t("coach.memory_proposal_hint")}</div>
-      <div style={{
-        display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto",
-        border: "1px solid var(--moss)", background: "var(--moss-bg)", borderRadius: 4, padding: "8px 10px",
-      }}>
-        {displayLines.map((line, i) => {
-          const isHeading = isMemorySectionHeading(line);
-          return (
-            <label key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start", cursor: isHeading ? "default" : "pointer", padding: "4px 0" }}>
-              {isHeading ? (
-                <span style={{ width: 13, marginTop: 4, flexShrink: 0 }} />
-              ) : (
-                <input type="checkbox" checked={kept.has(i)} disabled={saving} onChange={() => toggle(i)} style={{ marginTop: 4, flexShrink: 0 }} />
-              )}
-              <span style={{
-                flex: 1, fontSize: 13, lineHeight: 1.5,
-                color: isHeading || kept.has(i) ? "var(--ink-1)" : "var(--ink-3)",
-                textDecoration: isHeading || kept.has(i) ? "none" : "line-through",
-                fontWeight: isHeading ? 600 : 400,
-              }}>
-                {line}
-                {!isHeading && isNew(line) && (
-                  <span style={{
-                    marginLeft: 6, fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--moss)",
-                    border: "1px solid var(--moss)", borderRadius: 3, padding: "0 4px", verticalAlign: "middle",
-                  }}>{t("coach.memory_new")}</span>
-                )}
-              </span>
-            </label>
-          );
-        })}
+      <div style={{ ...s.muted, fontSize: 11, marginBottom: 8, lineHeight: 1.5 }}>
+        {summaryBits.length ? summaryBits.join(" · ") : t("coach.memory_review_no_changes")}
+      </div>
+      <div style={memoryReviewListStyle}>
+        {changedEntries.length ? (
+          changedEntries.map(entry => (
+            <MemoryReviewEntry
+              key={entry.key}
+              entry={entry}
+              selected={selectedKeys.has(entry.key)}
+              disabled={saving}
+              displayLang={displayLang}
+              onToggle={() => toggle(entry.key)}
+              t={t}
+            />
+          ))
+        ) : (
+          <div style={memoryReviewEmptyStyle}>{t("coach.memory_review_no_changes")}</div>
+        )}
+        {unchangedEntries.length > 0 && (
+          <details style={memoryReviewDetailsStyle}>
+            <summary style={memoryReviewSummaryStyle}>{t("coach.memory_review_unchanged_group", { count: unchangedEntries.length })}</summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+              {unchangedEntries.map(entry => (
+                <MemoryReviewEntry
+                  key={entry.key}
+                  entry={entry}
+                  selected
+                  disabled
+                  displayLang={displayLang}
+                  t={t}
+                />
+              ))}
+            </div>
+          </details>
+        )}
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button onClick={accept}
-          disabled={kept.size === 0 || saving}
-          style={{ ...s.btn, opacity: (kept.size === 0 || saving) ? 0.55 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+          disabled={saving}
+          style={{ ...s.btn, opacity: saving ? 0.55 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
           {saving && <Spinner size={13} thickness={1.6} color="currentColor" />}
           {saving ? t("coach.memory_importing") : t("coach.memory_accept")}
         </button>
@@ -4570,3 +4625,113 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
     </>
   );
 }
+
+function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t }) {
+  const fact = entry.fact || entry.oldFact || {};
+  const oldFact = entry.oldFact || null;
+  const text = displayLang === "zh" ? (fact.contentZh || fact.contentEn || "") : (fact.contentEn || fact.contentZh || "");
+  const oldText = oldFact && entry.kind === "updated"
+    ? (displayLang === "zh" ? (oldFact.contentZh || oldFact.contentEn || "") : (oldFact.contentEn || oldFact.contentZh || ""))
+    : "";
+  const removable = entry.kind === "removed";
+  const label = t(`coach.memory_review_kind_${entry.kind}`);
+  return (
+    <label style={{
+      ...memoryReviewEntryStyle,
+      borderColor: selected ? "var(--moss)" : "var(--rule)",
+      background: selected ? "var(--moss-bg)" : "var(--panel-2)",
+      opacity: disabled && entry.kind !== "unchanged" ? 0.72 : 1,
+      cursor: disabled || entry.kind === "unchanged" ? "default" : "pointer",
+    }}>
+      <input
+        type="checkbox"
+        checked={selected}
+        disabled={disabled || entry.kind === "unchanged"}
+        onChange={onToggle}
+        style={{ marginTop: 4, flexShrink: 0 }}
+      />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            border: "1px solid var(--rule)",
+            borderRadius: 4,
+            padding: "1px 5px",
+            color: removable ? "var(--danger)" : "var(--moss-deep)",
+            background: "var(--paper-2)",
+          }}>
+            {label}
+          </span>
+          {fact.category && (
+            <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
+              {t(`coach.memory_fact_category_${fact.category}`)}
+            </span>
+          )}
+        </span>
+        {oldText && oldText !== text && (
+          <span style={{
+            display: "block",
+            fontSize: 12,
+            lineHeight: 1.45,
+            color: "var(--ink-3)",
+            textDecoration: "line-through",
+            marginBottom: 3,
+          }}>
+            {oldText}
+          </span>
+        )}
+        <span style={{
+          display: "block",
+          fontSize: 13,
+          lineHeight: 1.5,
+          color: selected || entry.kind === "unchanged" ? "var(--ink-1)" : "var(--ink-3)",
+          textDecoration: selected || entry.kind === "unchanged" ? "none" : "line-through",
+        }}>
+          {text || t("coach.memory_review_empty_fact")}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+const memoryReviewListStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+  maxHeight: 360,
+  overflowY: "auto",
+  border: "1px solid var(--moss)",
+  background: "var(--moss-bg)",
+  borderRadius: 4,
+  padding: 8,
+};
+
+const memoryReviewEntryStyle = {
+  display: "flex",
+  gap: 8,
+  alignItems: "flex-start",
+  padding: "8px 9px",
+  border: "1px solid var(--rule)",
+  borderRadius: 6,
+};
+
+const memoryReviewEmptyStyle = {
+  ...s.muted,
+  fontSize: 12,
+  lineHeight: 1.5,
+  padding: "8px 4px",
+};
+
+const memoryReviewDetailsStyle = {
+  borderTop: "1px solid var(--rule)",
+  marginTop: 4,
+  paddingTop: 8,
+};
+
+const memoryReviewSummaryStyle = {
+  fontSize: 12,
+  color: "var(--ink-2)",
+  cursor: "pointer",
+  userSelect: "none",
+};

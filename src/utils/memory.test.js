@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildMemoryUpdatePrompt,
+  buildMemoryFactReview,
+  buildMemoryFactSnapshotFromReview,
   extractMemoryFacts,
   fillEmptyMemorySections,
   inferMemoryFactCategory,
@@ -72,6 +74,52 @@ describe("extractMemoryFacts", () => {
 });
 
 describe("memory snapshot merge", () => {
+  it("separates changed facts from unchanged facts for review", () => {
+    const oldFacts = [
+      {
+        rowId: "row-1",
+        clientId: "old-1",
+        status: "active",
+        category: "coaching_style",
+        contentZh: "偏好直接、少废话的教练回复。",
+        contentEn: "Prefers direct, concise coaching replies.",
+      },
+      {
+        rowId: "row-2",
+        clientId: "old-2",
+        status: "active",
+        category: "injury_health",
+        contentZh: "下坡后右膝容易敏感。",
+      },
+    ];
+    const incomingFacts = [
+      {
+        clientId: "new-1",
+        status: "active",
+        category: "coaching_style",
+        contentZh: "偏好直接、少废话的教练回复。",
+        contentEn: "Prefers direct, concise coaching replies.",
+      },
+      {
+        clientId: "new-2",
+        status: "active",
+        category: "training_preferences",
+        contentZh: "周一上午默认休息。",
+      },
+    ];
+
+    const review = buildMemoryFactReview(incomingFacts, oldFacts);
+    expect(review.counts).toMatchObject({ unchanged: 1, new: 1, removed: 1 });
+
+    const selected = new Set(review.entries.filter(entry => entry.kind !== "unchanged").map(entry => entry.key));
+    const snapshot = buildMemoryFactSnapshotFromReview(review.entries, selected);
+
+    expect(snapshot).toHaveLength(2);
+    expect(snapshot.some(fact => fact.rowId === "row-1")).toBe(true);
+    expect(snapshot.some(fact => fact.contentZh === "周一上午默认休息。")).toBe(true);
+    expect(snapshot.some(fact => fact.rowId === "row-2")).toBe(false);
+  });
+
   it("reuses matching active fact rows and archives facts missing from the new snapshot", () => {
     const existingFacts = [
       {

@@ -119,6 +119,7 @@ function memoryFactSimilarity(a = {}, b = {}) {
 }
 
 function memoryFactKey(fact = {}) {
+  if (!fact) return "";
   return fact.rowId || fact.clientId || fact.id || "";
 }
 
@@ -137,6 +138,118 @@ function findMemoryFactMatch(fact, candidates, usedKeys) {
   return bestScore >= 0.72 ? best : null;
 }
 
+function hasMeaningfulMemoryFactChange(incoming = {}, existing = {}) {
+  const incomingText = memoryFactText(incoming);
+  const existingText = memoryFactText(existing);
+  const incomingNorm = normalizeMemoryFactText(incomingText);
+  const existingNorm = normalizeMemoryFactText(existingText);
+  if (!incomingNorm && !existingNorm) return false;
+  if (incomingNorm === existingNorm) return false;
+
+  const incomingZh = normalizeMemoryFactText(incoming.contentZh || incoming.contentEn || "");
+  const existingZh = normalizeMemoryFactText(existing.contentZh || existing.contentEn || "");
+  if (incomingZh && existingZh && incomingZh === existingZh) return false;
+
+  const incomingEn = normalizeMemoryFactText(incoming.contentEn || incoming.contentZh || "");
+  const existingEn = normalizeMemoryFactText(existing.contentEn || existing.contentZh || "");
+  if (incomingEn && existingEn && incomingEn === existingEn) return false;
+
+  return memoryFactSimilarity(incoming, existing) < 0.9;
+}
+
+function prepareMatchedMemoryFact(fact, match) {
+  const category = inferMemoryFactCategory(fact, fact.category || match?.category || "other");
+  if (!match) return { ...fact, category };
+  return {
+    ...fact,
+    id: match.id || fact.id,
+    rowId: match.rowId || fact.rowId,
+    clientId: match.clientId || match.id || fact.clientId || fact.id,
+    category,
+    acceptedAt: match.acceptedAt || fact.acceptedAt,
+    proposedAt: match.proposedAt || fact.proposedAt,
+    createdAt: match.createdAt || fact.createdAt,
+    lastUsedAt: match.lastUsedAt || fact.lastUsedAt,
+  };
+}
+
+function memoryReviewEntryKey(kind, fact, oldFact, index) {
+  const key = memoryFactKey(fact) || memoryFactKey(oldFact);
+  if (key) return `${kind}:${key}`;
+  const text = normalizeMemoryFactText(memoryFactText(fact || oldFact)).slice(0, 32);
+  return `${kind}:${index}:${text}`;
+}
+
+export function buildMemoryFactReview(incomingFacts = [], existingFacts = []) {
+  const activeExisting = (Array.isArray(existingFacts) ? existingFacts : []).filter(f => f?.status === "active");
+  const usedExistingKeys = new Set();
+  const entries = [];
+
+  (Array.isArray(incomingFacts) ? incomingFacts : []).forEach((fact, index) => {
+    const normalizedFact = {
+      ...fact,
+      category: inferMemoryFactCategory(fact, fact.category || "other"),
+    };
+    const match = findMemoryFactMatch(normalizedFact, activeExisting, usedExistingKeys);
+    const preparedFact = prepareMatchedMemoryFact(normalizedFact, match);
+    if (match) {
+      const matchKey = memoryFactKey(match);
+      if (matchKey) usedExistingKeys.add(matchKey);
+    }
+    const kind = !match
+      ? "new"
+      : hasMeaningfulMemoryFactChange(normalizedFact, match)
+        ? "updated"
+        : "unchanged";
+    entries.push({
+      key: memoryReviewEntryKey(kind, preparedFact, match, index),
+      kind,
+      fact: preparedFact,
+      oldFact: match || null,
+    });
+  });
+
+  activeExisting.forEach((fact, index) => {
+    const key = memoryFactKey(fact);
+    if (key && usedExistingKeys.has(key)) return;
+    entries.push({
+      key: memoryReviewEntryKey("removed", null, fact, index),
+      kind: "removed",
+      fact: null,
+      oldFact: fact,
+    });
+  });
+
+  const counts = entries.reduce((acc, entry) => {
+    acc[entry.kind] = (acc[entry.kind] || 0) + 1;
+    return acc;
+  }, { new: 0, updated: 0, unchanged: 0, removed: 0 });
+
+  return { entries, counts };
+}
+
+export function buildMemoryFactSnapshotFromReview(entries = [], selectedKeys = new Set()) {
+  const selected = selectedKeys instanceof Set ? selectedKeys : new Set(selectedKeys || []);
+  const facts = [];
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (!entry || !entry.kind) continue;
+    if (entry.kind === "removed") {
+      if (!selected.has(entry.key) && entry.oldFact) facts.push(entry.oldFact);
+      continue;
+    }
+    if (entry.kind === "unchanged") {
+      facts.push(entry.oldFact || entry.fact);
+      continue;
+    }
+    if (selected.has(entry.key)) {
+      if (entry.fact) facts.push(entry.fact);
+    } else if (entry.kind === "updated" && entry.oldFact) {
+      facts.push(entry.oldFact);
+    }
+  }
+  return facts;
+}
+
 export function prepareMemoryFactSnapshot(incomingFacts = [], existingFacts = []) {
   const activeExisting = (Array.isArray(existingFacts) ? existingFacts : []).filter(f => f?.status === "active");
   const usedExistingKeys = new Set();
@@ -146,17 +259,7 @@ export function prepareMemoryFactSnapshot(incomingFacts = [], existingFacts = []
     if (!match) return { ...fact, category };
     const matchKey = memoryFactKey(match);
     if (matchKey) usedExistingKeys.add(matchKey);
-    return {
-      ...fact,
-      id: match.id || fact.id,
-      rowId: match.rowId || fact.rowId,
-      clientId: match.clientId || match.id || fact.clientId || fact.id,
-      category,
-      acceptedAt: match.acceptedAt || fact.acceptedAt,
-      proposedAt: match.proposedAt || fact.proposedAt,
-      createdAt: match.createdAt || fact.createdAt,
-      lastUsedAt: match.lastUsedAt || fact.lastUsedAt,
-    };
+    return prepareMatchedMemoryFact({ ...fact, category }, match);
   });
   const archivedFacts = activeExisting.filter(fact => {
     const key = memoryFactKey(fact);

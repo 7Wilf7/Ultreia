@@ -33,6 +33,7 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
+import { RaceBriefingModal } from "./components/RaceBriefingModal";
 import { WeeklyReportPage } from "./components/WeeklyReportModal";
 import {
   buildWeeklyReportPrompt,
@@ -1960,6 +1961,8 @@ function AppShell({
   const [pendingWeeklyImportPrompt, setPendingWeeklyImportPrompt] = useState(null);
   const [showInbox, setShowInbox] = useState(false);
   const [inboxTab, setInboxTab] = useState("daily");
+  const [inboxRaceBriefingAction, setInboxRaceBriefingAction] = useState(null);
+  const [returnToInboxAfterRaceBriefing, setReturnToInboxAfterRaceBriefing] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showInviteCodes, setShowInviteCodes] = useState(false);
@@ -2387,6 +2390,36 @@ function AppShell({
     if (returnToInboxAfterWeeklyReport) {
       setReturnToInboxAfterWeeklyReport(false);
       setInboxTab("weekly");
+      setShowInbox(true);
+    }
+  }
+
+  function openMemoryActionFromInbox(action) {
+    const proposal = pendingMemoryActionToProposal(action, races);
+    if (proposal) {
+      setMemoryProposal(proposal);
+      setLastMemoryAction(null);
+    } else {
+      setLastMemoryAction(action);
+    }
+    setInboxTab("other");
+    setShowInbox(false);
+    setTab(TAB_COACH);
+    setShowMemory(true);
+  }
+
+  function openRaceBriefingActionFromInbox(action) {
+    setInboxTab("other");
+    setShowInbox(false);
+    setReturnToInboxAfterRaceBriefing(true);
+    setInboxRaceBriefingAction(action);
+  }
+
+  function closeInboxRaceBriefing() {
+    setInboxRaceBriefingAction(null);
+    if (returnToInboxAfterRaceBriefing) {
+      setReturnToInboxAfterRaceBriefing(false);
+      setInboxTab("other");
       setShowInbox(true);
     }
   }
@@ -4237,6 +4270,7 @@ Rules:
         <InboxModal
           items={inboxItems}
           setItems={setInboxItems}
+          agentActions={agentActions}
           activeTab={inboxTab}
           onTabChange={setInboxTab}
           onClose={() => setShowInbox(false)}
@@ -4247,6 +4281,8 @@ Rules:
           reports={weeklyReports}
           now={now}
           onOpenWeeklyReport={openWeeklyReportFromInbox}
+          onOpenMemoryAction={openMemoryActionFromInbox}
+          onOpenRaceBriefingAction={openRaceBriefingActionFromInbox}
           weeklyReportLoading={weeklyReportLoading}
           activeWeeklyReportRange={weeklyReportRange}
           onOpenWeeklyReportSettings={() => {
@@ -4254,6 +4290,15 @@ Rules:
             setShowWeeklyReportSettings(true);
           }}
           onClearWeeklyReports={clearWeeklyReports}
+        />
+      )}
+
+      {inboxRaceBriefingAction && (
+        <RaceBriefingModal
+          action={inboxRaceBriefingAction}
+          t={t}
+          isMobile={isMobile}
+          onClose={closeInboxRaceBriefing}
         />
       )}
 

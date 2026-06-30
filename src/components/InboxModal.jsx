@@ -5,6 +5,7 @@ import { ModalRoot } from "./ModalRoot";
 import * as db from "../lib/db";
 import { useAppDialog } from "./AppDialogContext";
 import { weekWindow } from "../utils/weeklyReport";
+import { isMemoryUpdateAction, isRaceBriefingAction } from "../utils/agentActions";
 
 function inboxTextParts(item) {
   return {
@@ -93,11 +94,14 @@ function buildWeeklyRanges(reports, now) {
 export function InboxModal({
   items,
   setItems,
+  agentActions = [],
   onClose,
   onOpenPushSettings,
   reports,
   now,
   onOpenWeeklyReport,
+  onOpenMemoryAction,
+  onOpenRaceBriefingAction,
   onOpenWeeklyReportSettings,
   onClearWeeklyReports,
   activeTab = "daily",
@@ -133,6 +137,18 @@ export function InboxModal({
     () => (items || []).filter(item => !isWeeklyInboxItem(item) && isOtherInboxItem(item)),
     [items],
   );
+  const otherAgentActions = useMemo(
+    () => (agentActions || [])
+      .filter(action => isMemoryUpdateAction(action) || isRaceBriefingAction(action))
+      .filter(action => action?.status !== "rejected" && action?.status !== "cancelled")
+      .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
+      .slice(0, 20),
+    [agentActions],
+  );
+  const otherEntries = useMemo(() => [
+    ...otherAgentActions.map(action => ({ kind: "agent", action, sortAt: action.createdAt || "" })),
+    ...otherItems.map(item => ({ kind: "inbox", item, sortAt: item.createdAt || "" })),
+  ].sort((a, b) => String(b.sortAt || "").localeCompare(String(a.sortAt || ""))), [otherAgentActions, otherItems]);
   const weeklyRanges = useMemo(
     () => buildWeeklyRanges(reports || [], now),
     [reports, now],
@@ -284,6 +300,63 @@ export function InboxModal({
     )
   );
 
+  const renderOtherRows = () => (
+    otherEntries.length === 0 ? (
+      <div style={styles.empty}>{t("inbox.other_empty")}</div>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {otherEntries.map(entry => (
+          entry.kind === "agent" ? (
+            <AgentActionInboxRow
+              key={`agent-${entry.action.id || entry.action.rowId || entry.action.createdAt}`}
+              action={entry.action}
+              t={t}
+              onOpen={() => {
+                if (isMemoryUpdateAction(entry.action)) onOpenMemoryAction?.(entry.action);
+                else if (isRaceBriefingAction(entry.action)) onOpenRaceBriefingAction?.(entry.action);
+              }}
+            />
+          ) : (
+            <div
+              key={entry.item.id}
+              ref={el => registerRow(el, entry.item.id)}
+              onClick={() => markReadById(entry.item.id)}
+              style={styles.row}
+            >
+              <span style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                marginTop: 7,
+                flexShrink: 0,
+                background: entry.item.read ? "transparent" : "var(--moss)",
+              }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {entry.item.title && (
+                  <div style={styles.rowTitle}>{entry.item.title}</div>
+                )}
+                <div style={{
+                  ...styles.rowBody,
+                  fontWeight: entry.item.read ? 400 : 500,
+                }}>
+                  {entry.item.body}
+                </div>
+                <div style={styles.rowDate}>{fmtDate(entry.item.createdAt)}</div>
+              </div>
+              <button
+                onClick={(e) => handleDelete(entry.item, e)}
+                aria-label={t("inbox.delete")}
+                style={styles.deleteButton}
+              >
+                ×
+              </button>
+            </div>
+          )
+        ))}
+      </div>
+    )
+  );
+
   const actionBar = tab === "daily" ? (
     <>
       <button
@@ -379,7 +452,7 @@ export function InboxModal({
               </div>
             )
           ) : (
-            renderMessageRows(otherItems, t("inbox.other_empty"))
+            renderOtherRows()
           )}
         </div>
 
@@ -398,6 +471,55 @@ function tabButtonStyle(active, busy = false) {
     borderColor: active || busy ? "var(--accent)" : "var(--rule)",
     color: active || busy ? "var(--accent-dark)" : "var(--ink-2)",
   };
+}
+
+function AgentActionInboxRow({ action, t, onOpen }) {
+  const summary = summarizeOtherAgentAction(action, t);
+  return (
+    <button type="button" onClick={onOpen} style={{ ...styles.row, width: "100%", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", textAlign: "left", fontFamily: "var(--font-sans)" }}>
+      <span style={{
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        marginTop: 7,
+        flexShrink: 0,
+        background: "var(--accent)",
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={styles.rowTitle}>{summary.title}</div>
+        <div style={{ ...styles.rowBody, fontWeight: 500 }}>{summary.body}</div>
+        <div style={styles.rowDate}>{summary.meta}</div>
+      </div>
+      <span style={{ color: "var(--ink-3)", fontSize: 16, lineHeight: 1, paddingTop: 3 }}>&gt;</span>
+    </button>
+  );
+}
+
+function summarizeOtherAgentAction(action, t) {
+  const status = t(`coach.agent_action_status_${action?.status || "proposed"}`);
+  const when = fmtActionDate(action?.createdAt);
+  if (isMemoryUpdateAction(action)) {
+    const memory = action?.payload?.memory || {};
+    const text = String(memory.zh || memory.en || "").trim();
+    return {
+      title: t("coach.agent_action_type_memory_update"),
+      body: text ? text.split(/\n+/).filter(Boolean).slice(0, 2).join(" / ") : t("coach.memory_ready_banner"),
+      meta: [status, when].filter(Boolean).join(" · "),
+    };
+  }
+  const race = action?.payload?.raceBriefing || {};
+  return {
+    title: t("coach.agent_action_type_race_briefing"),
+    body: [race.date, race.name].filter(Boolean).join(" · ") || t("coach.race_briefing_target"),
+    meta: [status, when].filter(Boolean).join(" · "),
+  };
+}
+
+function fmtActionDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 const styles = {

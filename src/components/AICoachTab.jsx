@@ -708,9 +708,16 @@ export function AICoachTab({
   // stacked row cards). Memoize so we don't rebuild the renderer object on
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
+  const floatingPanelTransitionTimer = useRef(null);
   useEffect(() => {
     const timer = setInterval(() => setRunnerNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
+  }, []);
+  useEffect(() => () => {
+    if (floatingPanelTransitionTimer.current != null) {
+      window.clearTimeout(floatingPanelTransitionTimer.current);
+      floatingPanelTransitionTimer.current = null;
+    }
   }, []);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCoachFocus, setShowCoachFocus] = useState(false);
@@ -1086,18 +1093,25 @@ export function AICoachTab({
     setShowCoachFocus(false);
     setShowCoachHub(false);
   }, []);
-  const handleManualAdjustmentFromHub = useCallback(() => {
+  const transitionFromCoachFloatingPanel = useCallback((next) => {
     closeCoachFloatingPanels();
-    handleManualAdjustmentShortcut();
-  }, [closeCoachFloatingPanels, handleManualAdjustmentShortcut]);
-  const handleOpenRaceBriefingFromFocus = useCallback((action) => {
-    closeCoachFloatingPanels();
-    setRaceBriefingAction(action);
+    if (floatingPanelTransitionTimer.current != null) {
+      window.clearTimeout(floatingPanelTransitionTimer.current);
+    }
+    floatingPanelTransitionTimer.current = window.setTimeout(() => {
+      floatingPanelTransitionTimer.current = null;
+      next?.();
+    }, 48);
   }, [closeCoachFloatingPanels]);
+  const handleManualAdjustmentFromHub = useCallback(() => {
+    transitionFromCoachFloatingPanel(handleManualAdjustmentShortcut);
+  }, [handleManualAdjustmentShortcut, transitionFromCoachFloatingPanel]);
+  const handleOpenRaceBriefingFromFocus = useCallback((action) => {
+    transitionFromCoachFloatingPanel(() => setRaceBriefingAction(action));
+  }, [transitionFromCoachFloatingPanel]);
   const handleRaceBriefingRequestFromFocus = useCallback((options) => {
-    closeCoachFloatingPanels();
-    return handleRaceBriefingRequest(options);
-  }, [closeCoachFloatingPanels, handleRaceBriefingRequest]);
+    transitionFromCoachFloatingPanel(() => handleRaceBriefingRequest(options));
+  }, [handleRaceBriefingRequest, transitionFromCoachFloatingPanel]);
   const handleOpenRaceBriefingFromAgentActions = useCallback((action) => {
     setShowAgentActions(false);
     setShowCoachHub(false);
@@ -1924,7 +1938,7 @@ export function AICoachTab({
             onClick={closeManualAdjustmentConfirm}
           >
             <div
-              style={s.modalCard(isMobile, { maxWidth: 460, float: true })}
+              style={{ ...s.modalCard(isMobile, { maxWidth: 460, float: true }), background: "var(--panel)" }}
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
@@ -3396,6 +3410,9 @@ function CoachFocusPanel({
         </div>
         <div style={{ marginTop: 7, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
           {t("coach.focus_next_action_hint")}
+        </div>
+        <div style={{ marginTop: 5, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
+          {t("coach.focus_edit_hint")}
         </div>
       </div>
     </div>

@@ -1101,6 +1101,7 @@ const dict = {
   "coach.training_preferences_clear": { en: "Clear all", zh: "全部清空" },
   "coach.current_focus": { en: "Current Focus", zh: "当前焦点" },
   "coach.current_focus_hint": { en: "Read-only snapshot of the coach's long-term anchor, short-term execution focus, watched risks, and confirmable next actions.", zh: "只读汇总：教练当前的长期锚点、短期执行重点、风险信号，以及下一步可确认动作。" },
+  "coach.focus_edit_hint": { en: "To change it, edit the source data: target races in Races, near-term plans or completion status in Calendar.", zh: "要改焦点，请改它的来源：长期焦点去 Races 调整目标赛；短期焦点去 Calendar 调整未来计划或完成状态。" },
   "coach.focus_long_term": { en: "Long-term focus", zh: "长期焦点" },
   "coach.focus_short_term": { en: "Short-term focus", zh: "短期焦点" },
   "coach.focus_target_object": { en: "Target object", zh: "目标对象" },

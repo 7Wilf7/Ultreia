@@ -80,7 +80,7 @@ const STEPS = [
     bullets: [
       { zh: "开关每日推送和天气自动更新", en: "Toggle daily push and automatic weather updates." },
       { zh: "修改个人资料、切换中 / 英", en: "Edit your profile and switch 中 / EN." },
-      { zh: "删除账号、查看使用手册也在这里", en: "Account deletion and the user guide are here too." },
+      { zh: "删除 Aevum 账号、查看使用手册也在这里", en: "Delete your Aevum account or open the user guide here too." },
     ],
   },
 ];

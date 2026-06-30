@@ -45,6 +45,16 @@ Wilf 在 Windows 和 Mac mini 两台设备上工作。涉及 Aevum、Viatica、O
 - **不要把 Ultreia 扩成超级 App**：全局入口、跨产品编排、统一记忆审核优先放 Aevum；Ultreia 只做训练域内最小接入。
 - 如果归属不确定，先按“是否直接改变训练体验”判断：直接改变训练记录、计划、教练建议或赛事准备 = Ultreia；只是让多个产品协同或统一入口 = Aevum。
 
+## Aevum 账号体系与删除账号
+
+账号统一叫 **Aevum 账号 / Aevum account**。Ultreia、Viatica、Aevum 都是同一个 Aevum 账号下的产品模块；登录、注册、Settings、账号页、删除账号、充值备注等面向用户的文案不要写成 “Ultreia 账号 / Ultreia account”。
+
+“删除账号”在 Ultreia 内的含义必须始终是：**删除整个 Aevum 账号**。UI 文案必须明确说明这会删除 Aevum / Ultreia / Viatica 下的所有个人数据，不能让用户误解成只是退出 Ultreia、只删除 Ultreia 数据，或只清空训练记录。
+
+不要把“只删除 Ultreia 数据但保留 Viatica 数据”的逻辑塞进“删除账号”。如果未来需要单产品清空能力，应单独命名为“清空 Ultreia 数据”或“重置训练数据”，并放在训练数据管理语义下，不要混用账号删除。
+
+技术方向上，Aevum 账号删除应以删除 `auth.users` 为全局入口，由各产品用户表的 `user_id references auth.users(id) on delete cascade` 负责清理。Ultreia 当前 `delete-account` Edge Function 仍有一层手动逐表删除的旧保险清单；改动删号生产逻辑前，必须先审计 Supabase 外键 cascade 覆盖范围，尤其是新增的 Viatica 表（`viatica_accounts`、`viatica_budgets`、`viatica_preferences`、`viatica_transactions`）和 Ultreia 新表（如 `coach_reports`、`coach_memory_facts`、`training_locations`、`push_getui_devices`）。不要在未审计前静默扩展或重构删号函数。
+
 ## Agent 化推进
 
 Ultreia 的中期方向是从 **AI Coach Copilot** 逐步推进到 **可确认动作的 AI Coach Agent**。当前 source of truth 是 `docs-internal/agentization-roadmap.md`，背景分析见 `docs-internal/agentization-analysis.md`。
@@ -117,7 +127,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
   - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
   - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
-  - `delete-account`（自助注销；清各用户表数据 → 删 auth 用户）
+  - `delete-account`（自助注销整个 Aevum 账号；当前实现先清一批历史用户表再删 auth 用户，后续应在外键 cascade 审计后收敛为以 `auth.users` 删除为中心）
   - `push-test`（早期冒烟测试，可退役）
 
 **Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。

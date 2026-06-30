@@ -1081,11 +1081,27 @@ export function AICoachTab({
     : proactiveAdjustment?.existingAction
     ? t("coach.proactive_open")
     : t("coach.proactive_manual_hint");
-  const manualAdjustmentOpensConfirm = !proactiveAdjustmentLoading && !proactiveAdjustment?.existingAction;
+  const closeCoachFloatingPanels = useCallback(() => {
+    setShowCoachFocus(false);
+    setShowCoachHub(false);
+  }, []);
   const handleManualAdjustmentFromHub = useCallback(() => {
-    if (!manualAdjustmentOpensConfirm) setShowCoachHub(false);
+    closeCoachFloatingPanels();
     handleManualAdjustmentShortcut();
-  }, [handleManualAdjustmentShortcut, manualAdjustmentOpensConfirm]);
+  }, [closeCoachFloatingPanels, handleManualAdjustmentShortcut]);
+  const handleOpenRaceBriefingFromFocus = useCallback((action) => {
+    closeCoachFloatingPanels();
+    setRaceBriefingAction(action);
+  }, [closeCoachFloatingPanels]);
+  const handleRaceBriefingRequestFromFocus = useCallback((options) => {
+    closeCoachFloatingPanels();
+    return handleRaceBriefingRequest(options);
+  }, [closeCoachFloatingPanels, handleRaceBriefingRequest]);
+  const handleOpenRaceBriefingFromAgentActions = useCallback((action) => {
+    setShowAgentActions(false);
+    setShowCoachHub(false);
+    setRaceBriefingAction(action);
+  }, []);
 
   // (Removed the hourly weather auto-refresh timer: it burned Caiyun calls all
   // day for a runner sitting on this tab. The hook already refetches on tab
@@ -1733,8 +1749,8 @@ export function AICoachTab({
                 handleManualAdjustmentFromHub={handleManualAdjustmentFromHub}
                 raceBriefing={raceBriefing}
                 raceBriefingLoading={raceBriefingLoading}
-                onOpenRaceBriefing={setRaceBriefingAction}
-                onRaceBriefingRequest={handleRaceBriefingRequest}
+                onOpenRaceBriefing={handleOpenRaceBriefingFromFocus}
+                onRaceBriefingRequest={handleRaceBriefingRequestFromFocus}
                 t={t}
                 lang={lang}
               />
@@ -1789,7 +1805,7 @@ export function AICoachTab({
                 actions={agentActions}
                 t={t}
                 onDelete={onDeleteAgentAction}
-                onOpenRaceBriefing={setRaceBriefingAction}
+                onOpenRaceBriefing={handleOpenRaceBriefingFromAgentActions}
                 onAskCoach={(action) => {
                   sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
                   setShowAgentActions(false);
@@ -2868,8 +2884,8 @@ export function AICoachTab({
                       handleManualAdjustmentFromHub={handleManualAdjustmentFromHub}
                       raceBriefing={raceBriefing}
                       raceBriefingLoading={raceBriefingLoading}
-                      onOpenRaceBriefing={setRaceBriefingAction}
-                      onRaceBriefingRequest={handleRaceBriefingRequest}
+                      onOpenRaceBriefing={handleOpenRaceBriefingFromFocus}
+                      onRaceBriefingRequest={handleRaceBriefingRequestFromFocus}
                       t={t}
                       lang={lang}
                     />
@@ -2919,7 +2935,7 @@ export function AICoachTab({
                       actions={agentActions}
                       t={t}
                       onDelete={onDeleteAgentAction}
-                      onOpenRaceBriefing={setRaceBriefingAction}
+                      onOpenRaceBriefing={handleOpenRaceBriefingFromAgentActions}
                       onAskCoach={(action) => {
                         sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
                         setShowCoachHub(false);
@@ -3248,26 +3264,27 @@ function CoachFocusPanel({
     nextRace.priority ? t("coach.focus_priority", { priority: nextRace.priority }) : "",
     [nextRace.category, nextRace.subtype].filter(Boolean).join(" / "),
   ].filter(Boolean).join(" · ") : "";
-  const targetTitle = nextRace
+  const longTermTitle = nextRace
     ? t("coach.focus_target_race", { name: raceName })
     : t("coach.focus_target_none");
-  const targetMeta = nextRace
+  const longTermMeta = nextRace
     ? [t("coach.focus_days_to_race", { days: nextRace.daysToRace }), raceMeta].filter(Boolean).join(" · ")
     : t("coach.focus_target_none_hint");
-  const focusTitle = nextRace
-    ? nextRace.daysToRace <= 14
-      ? t("coach.focus_training_race_window")
-      : t("coach.focus_training_build_target")
+  const inRaceWindow = !!nextRace && nextRace.daysToRace <= 14;
+  const shortTermTitle = inRaceWindow
+    ? t("coach.focus_training_race_window")
     : nextPlan
       ? t("coach.focus_training_next_plan")
-      : t("coach.focus_training_data");
-  const focusMeta = nextRace
-    ? nextRace.daysToRace <= 14
-      ? t("coach.focus_training_race_window_meta")
-      : t("coach.focus_training_build_target_meta")
+      : nextRace
+        ? t("coach.focus_training_build_target")
+        : t("coach.focus_training_data");
+  const shortTermMeta = inRaceWindow
+    ? t("coach.focus_training_race_window_meta")
     : nextPlan
       ? formatCoachFocusPlan(nextPlan, t, lang)
-      : t("coach.focus_training_data_meta");
+      : nextRace
+        ? t("coach.focus_training_build_target_meta")
+        : t("coach.focus_training_data_meta");
   const watchItems = buildCoachFocusWatchItems({
     planDeviationSummary,
     recoveryGuardSummary,
@@ -3286,14 +3303,14 @@ function CoachFocusPanel({
       <div style={{ ...s.muted, lineHeight: 1.55, marginBottom: 2 }}>{t("coach.current_focus_hint")}</div>
 
       <CoachFocusBlock
-        title={t("coach.focus_target_object")}
-        value={targetTitle}
-        meta={targetMeta}
+        title={t("coach.focus_long_term")}
+        value={longTermTitle}
+        meta={longTermMeta}
       />
       <CoachFocusBlock
-        title={t("coach.focus_training_focus")}
-        value={focusTitle}
-        meta={focusMeta}
+        title={t("coach.focus_short_term")}
+        value={shortTermTitle}
+        meta={shortTermMeta}
       />
 
       <div style={coachFocusBlockStyle}>

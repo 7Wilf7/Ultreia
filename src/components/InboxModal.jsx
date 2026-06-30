@@ -6,9 +6,34 @@ import * as db from "../lib/db";
 import { useAppDialog } from "./AppDialogContext";
 import { weekWindow } from "../utils/weeklyReport";
 
+function inboxTextParts(item) {
+  return {
+    title: String(item?.title || "").toLowerCase(),
+    body: String(item?.body || "").toLowerCase(),
+    combined: `${item?.title || ""} ${item?.body || ""}`.toLowerCase(),
+  };
+}
+
 function isWeeklyInboxItem(item) {
-  const text = `${item?.title || ""} ${item?.body || ""}`.toLowerCase();
-  return text.includes("周复盘") || text.includes("weekly report") || text.includes("weekly recap");
+  const { combined } = inboxTextParts(item);
+  return combined.includes("周复盘") || combined.includes("weekly report") || combined.includes("weekly recap");
+}
+
+function isOtherInboxItem(item) {
+  const { title, combined } = inboxTextParts(item);
+  if (title.includes("记忆") || title.includes("memory") || title.includes("memory_update")) return true;
+  if (title.includes("简报") || title.includes("briefing") || title.includes("race_briefing")) return true;
+  if (title.includes("钱包") || title.includes("wallet") || title.includes("充值") || title.includes("payment")) return true;
+  return [
+    "记忆更新待审核",
+    "长期记忆建议",
+    "赛前简报",
+    "装备检查",
+    "race briefing",
+    "wallet_topup_done",
+    "wallet_payment_request",
+    "充值提醒",
+  ].some(keyword => combined.includes(keyword));
 }
 
 function shortRange(start, end) {
@@ -63,8 +88,8 @@ function buildWeeklyRanges(reports, now) {
 
 // Full-screen in-app inbox. Rows are written server-side by the
 // daily-coach-dispatch Edge Function and are lifted to AppShell so opening this
-// page is immediate. Daily push messages retain the existing read semantics:
-// a message marks read only after it is fully visible in the scroll area.
+// page is immediate. Message-list tabs retain the existing read semantics: a
+// message marks read only after it is fully visible in the scroll area.
 export function InboxModal({
   items,
   setItems,
@@ -82,7 +107,7 @@ export function InboxModal({
 }) {
   const t = useT();
   const appDialog = useAppDialog();
-  const tab = activeTab === "weekly" ? "weekly" : "daily";
+  const tab = activeTab === "weekly" || activeTab === "other" ? activeTab : "daily";
   const scrollRef = useRef(null);
   const ioRef = useRef(null);
   const rowEls = useRef(new Map());
@@ -97,11 +122,15 @@ export function InboxModal({
   }, []);
 
   const dailyItems = useMemo(
-    () => (items || []).filter(item => !isWeeklyInboxItem(item)),
+    () => (items || []).filter(item => !isWeeklyInboxItem(item) && !isOtherInboxItem(item)),
     [items],
   );
   const weeklyItems = useMemo(
     () => (items || []).filter(isWeeklyInboxItem),
+    [items],
+  );
+  const otherItems = useMemo(
+    () => (items || []).filter(item => !isWeeklyInboxItem(item) && isOtherInboxItem(item)),
     [items],
   );
   const weeklyRanges = useMemo(
@@ -122,7 +151,7 @@ export function InboxModal({
 
   useEffect(() => {
     const root = scrollRef.current;
-    if (!root || tab !== "daily") return undefined;
+    if (!root || (tab !== "daily" && tab !== "other")) return undefined;
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
         if (e.isIntersecting && e.intersectionRatio >= 0.99) {
@@ -197,6 +226,64 @@ export function InboxModal({
     }
   }
 
+  async function handleClearOther() {
+    if (!otherItems.length) return;
+    if (!await appDialog.confirm(t("inbox.clear_other_confirm"), { danger: true, confirmLabel: t("common.delete") })) return;
+    const snapshot = items;
+    const otherIds = new Set(otherItems.map(item => item.id));
+    setItems(prev => prev.filter(item => !otherIds.has(item.id)));
+    try {
+      await Promise.all(otherItems.map(item => db.pushInbox.deleteOne(item.id)));
+    } catch {
+      setItems(snapshot);
+    }
+  }
+
+  const renderMessageRows = (list, emptyLabel) => (
+    list.length === 0 ? (
+      <div style={styles.empty}>{emptyLabel}</div>
+    ) : (
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {list.map(item => (
+          <div
+            key={item.id}
+            ref={el => registerRow(el, item.id)}
+            onClick={() => markReadById(item.id)}
+            style={styles.row}
+          >
+            <span style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              marginTop: 7,
+              flexShrink: 0,
+              background: item.read ? "transparent" : "var(--moss)",
+            }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {item.title && (
+                <div style={styles.rowTitle}>{item.title}</div>
+              )}
+              <div style={{
+                ...styles.rowBody,
+                fontWeight: item.read ? 400 : 500,
+              }}>
+                {item.body}
+              </div>
+              <div style={styles.rowDate}>{fmtDate(item.createdAt)}</div>
+            </div>
+            <button
+              onClick={(e) => handleDelete(item, e)}
+              aria-label={t("inbox.delete")}
+              style={styles.deleteButton}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  );
+
   const actionBar = tab === "daily" ? (
     <>
       <button
@@ -210,7 +297,7 @@ export function InboxModal({
         {t("inbox.go_push_settings")}
       </button>
     </>
-  ) : (
+  ) : tab === "weekly" ? (
     <>
       <button
         onClick={handleClearWeekly}
@@ -223,6 +310,14 @@ export function InboxModal({
         {t("inbox.weekly_settings")}
       </button>
     </>
+  ) : (
+    <button
+      onClick={handleClearOther}
+      disabled={!otherItems.length}
+      style={{ ...styles.bottomButton, flex: 1, color: "var(--danger)", borderColor: otherItems.length ? "var(--danger)" : "var(--rule)", opacity: otherItems.length ? 1 : 0.45 }}
+    >
+      {t("inbox.clear_all")}
+    </button>
   );
 
   return (
@@ -243,53 +338,15 @@ export function InboxModal({
               <span className="ultreia-spinner" style={{ width: 10, height: 10, borderWidth: 1.5, marginLeft: 6 }} />
             )}
           </button>
+          <button onClick={() => onTabChange?.("other")} style={tabButtonStyle(tab === "other")}>
+            {t("inbox.tab_other")}
+          </button>
         </div>
 
         <div ref={scrollRef} style={styles.body}>
           {tab === "daily" ? (
-            dailyItems.length === 0 ? (
-              <div style={styles.empty}>{t("inbox.daily_empty")}</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {dailyItems.map(item => (
-                  <div
-                    key={item.id}
-                    ref={el => registerRow(el, item.id)}
-                    onClick={() => markReadById(item.id)}
-                    style={styles.row}
-                  >
-                    <span style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: "50%",
-                      marginTop: 7,
-                      flexShrink: 0,
-                      background: item.read ? "transparent" : "var(--moss)",
-                    }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {item.title && (
-                        <div style={styles.rowTitle}>{item.title}</div>
-                      )}
-                      <div style={{
-                        ...styles.rowBody,
-                        fontWeight: item.read ? 400 : 500,
-                      }}>
-                        {item.body}
-                      </div>
-                      <div style={styles.rowDate}>{fmtDate(item.createdAt)}</div>
-                    </div>
-                    <button
-                      onClick={(e) => handleDelete(item, e)}
-                      aria-label={t("inbox.delete")}
-                      style={styles.deleteButton}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : (
+            renderMessageRows(dailyItems, t("inbox.daily_empty"))
+          ) : tab === "weekly" ? (
             weeklyRanges.length === 0 ? (
               <div style={styles.empty}>{t("inbox.weekly_empty")}</div>
             ) : (
@@ -321,6 +378,8 @@ export function InboxModal({
                 })}
               </div>
             )
+          ) : (
+            renderMessageRows(otherItems, t("inbox.other_empty"))
           )}
         </div>
 
@@ -369,7 +428,7 @@ const styles = {
   },
   tabs: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr",
+    gridTemplateColumns: "1fr 1fr 1fr",
     gap: 8,
     padding: "10px 18px",
     borderBottom: "1px solid var(--rule-soft)",

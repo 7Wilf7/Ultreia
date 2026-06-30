@@ -1,8 +1,8 @@
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 
-// Long-press context actions for a training/race record: a small centered card
-// over a blurred backdrop (matches the change-password modal). Edit + Delete.
+// Context actions for a training/race record: a small centered card over a
+// blurred backdrop (matches the change-password modal). Edit + Delete.
 // `title` is an optional one-line label of the item being acted on.
 export function ItemActionModal({ title, onEdit, onDelete, onClose }) {
   const t = useT();

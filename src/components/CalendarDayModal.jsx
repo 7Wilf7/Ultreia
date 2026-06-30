@@ -4,7 +4,7 @@
 // zero runtime benefit, so we disable the dev-only Fast-Refresh rule here (same
 // call LanguageContext.jsx makes).
 /* eslint-disable react-refresh/only-export-components */
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -93,6 +93,20 @@ function weatherLines(w, lang) {
   return { l1: l1.join(" · "), l2: l2.join(" · "), icon: sky?.icon };
 }
 
+function formatRaceParts(race, t) {
+  const parts = [];
+  const category = race.category ? t(`enum.race_cat.${race.category}`) : "";
+  const subtype = race.subtype
+    ? (race.category === "Hyrox" ? t(`enum.hyrox.${race.subtype}`) : race.subtype)
+    : "";
+  if (category) parts.push(category);
+  if (subtype) parts.push(subtype);
+  if (Number(race.distance) > 0) parts.push(`${race.distance} km`);
+  if (Number(race.ascent) > 0) parts.push(`+${race.ascent} m`);
+  if (race.locationName) parts.push(race.locationName);
+  return parts.join(" · ");
+}
+
 const navBtn = {
   flexShrink: 0, width: 38, height: 38, minHeight: 38,
   border: "1px solid var(--rule)", borderRadius: 8,
@@ -105,7 +119,7 @@ const navBtn = {
 export function CalendarDayModal({
   dateKey, isFuture, isToday, logs, note, weather, onClose, onPrev, onNext,
   addLog, updateLog, setConfirmDelete, setDailyTags, setReadiness,
-  trainingLocations = [],
+  trainingLocations = [], racesForDay = [],
 }) {
   const t = useT();
   const appDialog = useAppDialog();
@@ -146,15 +160,9 @@ export function CalendarDayModal({
   const [planKeySession, setPlanKeySession] = useState(false);
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
   const [editingId, setEditingId] = useState(null);
-  // Long-press a workout row → a centered Edit/Delete action card (same
-  // pattern as the Training list's ItemActionModal). actionTarget = the log.
+  // Tap a workout row -> a centered Edit/Delete action card (same pattern as
+  // the Training list's ItemActionModal). actionTarget = the log.
   const [actionTarget, setActionTarget] = useState(null);
-  const pressTimer = useRef(null);
-  function startRowPress(l) {
-    clearTimeout(pressTimer.current);
-    pressTimer.current = setTimeout(() => setActionTarget(l), 450);
-  }
-  function cancelRowPress() { clearTimeout(pressTimer.current); }
   const planF = planFields(planType);
 
   // Day-level tags live in dailyNotes — we toggle in-place. The Save is implicit:
@@ -284,41 +292,45 @@ export function CalendarDayModal({
   }
 
   const headerDate = formatHeaderDate(dateKey, lang);
+  const contentMaxWidth = isMobile ? "100%" : 720;
 
   return (
     <ModalRoot onClose={onClose}>
-    <div
-      onClick={onClose}
-      className="ultreia-overlay-in"
-      style={{
-        position: "fixed", inset: 0,
-        background: "rgba(20,20,19,0.45)",
-        backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        zIndex: 9999, padding: 16, overscrollBehavior: "contain",
-      }}
-    >
       <div
-        onClick={e => e.stopPropagation()}
-        className="ultreia-modal-in"
+        className="ultreia-overlay-in"
         style={{
+          position: "fixed", inset: 0,
           background: "var(--bg)",
-          border: "1px solid var(--rule)",
-          borderRadius: 12,
-          boxShadow: "0 18px 50px rgba(0,0,0,0.25)",
-          width: "100%", maxWidth: 460,
-          maxHeight: "calc(100dvh - 32px)",
-          overflowY: "auto",
-          padding: isMobile ? "16px 18px calc(env(safe-area-inset-bottom) + 20px)" : "20px 24px 22px",
+          color: "var(--ink-1)",
+          zIndex: 9999,
+          overscrollBehavior: "contain",
           fontFamily: "var(--font-sans)",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        {/* Header: ‹  centered date  ›  + close */}
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+        <div style={{
+          flexShrink: 0,
+          borderBottom: "1px solid var(--rule)",
+          background: "var(--bg)",
+          padding: isMobile
+            ? "calc(env(safe-area-inset-top) + 12px) 14px 10px"
+            : "18px 22px 12px",
+        }}>
+          {/* Header: fixed grid columns keep ‹/› in the same place while changing days. */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "44px minmax(0, 1fr) 44px 44px",
+            alignItems: "center",
+            gap: 6,
+            width: "100%",
+            maxWidth: contentMaxWidth,
+            margin: "0 auto",
+          }}>
           {onPrev && (
             <button onClick={onPrev} aria-label={lang === "zh" ? "前一天" : "Previous day"} style={navBtn}>‹</button>
           )}
-          <div style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+          <div style={{ textAlign: "center", minWidth: 0 }}>
             <div style={{
               fontFamily: "var(--font-mono)", fontSize: 10,
               color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em",
@@ -334,13 +346,22 @@ export function CalendarDayModal({
             <button onClick={onNext} aria-label={lang === "zh" ? "后一天" : "Next day"} style={navBtn}>›</button>
           )}
           <button onClick={onClose} style={{
-            background: "none", border: "none", fontSize: 22,
-            color: "var(--ink-3)", cursor: "pointer", padding: "0 2px", marginLeft: 2,
+            ...navBtn,
+            background: "transparent",
+            borderColor: "transparent",
+            fontSize: 22,
+            color: "var(--ink-3)",
           }} aria-label="Close">×</button>
         </div>
+        </div>
 
-        <div style={{ height: 1, background: "var(--rule)", margin: "14px 0 16px" }} />
-
+        <div style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: isMobile ? "14px 16px calc(env(safe-area-inset-bottom) + 22px)" : "18px 22px 28px",
+          boxSizing: "border-box",
+        }}>
+          <div style={{ width: "100%", maxWidth: contentMaxWidth, margin: "0 auto" }}>
         {/* Weather summary — single line at the top. For future days this is
             the daily forecast (passed down from CalendarTab); for past days
             with logged workouts, the parent passes the first workout's
@@ -364,6 +385,71 @@ export function CalendarDayModal({
           );
         })()}
 
+        {racesForDay.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ ...s.label, marginBottom: 8 }}>
+              {t("calendar.day_races_title")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {racesForDay.map(race => (
+                <div key={race.id || `${race.name}-${race.date}`} style={{
+                  border: "1px solid var(--rule)",
+                  borderLeft: `3px solid ${race.isTarget ? "var(--moss)" : "var(--ink-3)"}`,
+                  background: race.isTarget ? "var(--moss-bg)" : "var(--bg-elevated)",
+                  padding: "10px 12px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                    <span style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 10,
+                      color: race.isTarget ? "var(--moss)" : "var(--ink-3)",
+                      border: "1px solid " + (race.isTarget ? "var(--moss)" : "var(--rule)"),
+                      padding: "2px 6px",
+                      flexShrink: 0,
+                      textTransform: "uppercase",
+                    }}>
+                      {race.isTarget ? t("calendar.day_race_target") : t("calendar.day_race_history")}
+                    </span>
+                    {race.isTarget && race.priority && (
+                      <span style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: 10,
+                        color: "var(--ink-2)",
+                        flexShrink: 0,
+                      }}>
+                        {t("calendar.day_race_priority", { priority: race.priority })}
+                      </span>
+                    )}
+                    <div style={{
+                      minWidth: 0,
+                      flex: 1,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      fontSize: 14,
+                      fontWeight: 650,
+                      color: "var(--ink-1)",
+                    }}>
+                      {race.name || t("races.name_label")}
+                    </div>
+                  </div>
+                  {formatRaceParts(race, t) && (
+                    <div style={{
+                      marginTop: 7,
+                      fontFamily: "var(--font-mono)",
+                      fontSize: 12,
+                      color: "var(--ink-3)",
+                      lineHeight: 1.45,
+                    }}>
+                      {formatRaceParts(race, t)}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Existing workouts on this day */}
         {logs.length > 0 ? (
           <div style={{ marginBottom: 18 }}>
@@ -375,16 +461,15 @@ export function CalendarDayModal({
                 const color = TYPE_COLOR[l.type] || "var(--ink-2)";
                 return (
                   <div key={l.id}
-                    onPointerDown={() => startRowPress(l)}
-                    onPointerUp={cancelRowPress}
-                    onPointerLeave={cancelRowPress}
-                    onPointerCancel={cancelRowPress}
+                    onClick={() => setActionTarget(l)}
                     onContextMenu={e => e.preventDefault()}
                     style={{
                     border: "1px solid var(--rule)",
                     borderLeft: `3px ${l.isPlanned ? "dashed" : "solid"} ${color}`,
                     padding: "10px 12px",
                     background: l.isPlanned ? "var(--bg-elevated)" : "var(--bg)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <div style={{ ...s.tag(l.type), fontSize: 11 }}>
@@ -440,7 +525,7 @@ export function CalendarDayModal({
                         <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color, letterSpacing: "0.04em" }}>{txt}</span>
                       );
                       const miniBtn = (txt, onClick) => (
-                        <button onClick={onClick} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11 }}>{txt}</button>
+                        <button onClick={(e) => { e.stopPropagation(); onClick(); }} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11 }}>{txt}</button>
                       );
                       // missed + partial can be manually accepted as done.
                       // Explicit done shows an undo; "skip" is no longer a
@@ -529,8 +614,8 @@ export function CalendarDayModal({
           </div>
         )}
 
-        {/* Long-press action sheet for a workout row — Edit (plans only) + Delete.
-            Mirrors the Training list's long-press pattern. Portals to body. */}
+        {/* Action sheet for a workout row — Edit (plans only) + Delete.
+            Mirrors the Training list's action pattern. Portals to body. */}
         {actionTarget && (
           <ItemActionModal
             title={t(`enum.activity.${actionTarget.type}`)}
@@ -697,6 +782,7 @@ export function CalendarDayModal({
             </div>
           </ModalRoot>
         )}
+          </div>
       </div>
     </div>
     </ModalRoot>

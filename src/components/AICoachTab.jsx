@@ -708,16 +708,9 @@ export function AICoachTab({
   // stacked row cards). Memoize so we don't rebuild the renderer object on
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
-  const floatingPanelTransitionTimer = useRef(null);
   useEffect(() => {
     const timer = setInterval(() => setRunnerNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, []);
-  useEffect(() => () => {
-    if (floatingPanelTransitionTimer.current != null) {
-      window.clearTimeout(floatingPanelTransitionTimer.current);
-      floatingPanelTransitionTimer.current = null;
-    }
   }, []);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCoachFocus, setShowCoachFocus] = useState(false);
@@ -1089,29 +1082,15 @@ export function AICoachTab({
     : proactiveAdjustment?.existingAction
     ? t("coach.proactive_open")
     : t("coach.proactive_manual_hint");
-  const closeCoachFloatingPanels = useCallback(() => {
-    setShowCoachFocus(false);
-    setShowCoachHub(false);
-  }, []);
-  const transitionFromCoachFloatingPanel = useCallback((next) => {
-    closeCoachFloatingPanels();
-    if (floatingPanelTransitionTimer.current != null) {
-      window.clearTimeout(floatingPanelTransitionTimer.current);
-    }
-    floatingPanelTransitionTimer.current = window.setTimeout(() => {
-      floatingPanelTransitionTimer.current = null;
-      next?.();
-    }, 48);
-  }, [closeCoachFloatingPanels]);
   const handleManualAdjustmentFromHub = useCallback(() => {
-    transitionFromCoachFloatingPanel(handleManualAdjustmentShortcut);
-  }, [handleManualAdjustmentShortcut, transitionFromCoachFloatingPanel]);
+    handleManualAdjustmentShortcut();
+  }, [handleManualAdjustmentShortcut]);
   const handleOpenRaceBriefingFromFocus = useCallback((action) => {
-    transitionFromCoachFloatingPanel(() => setRaceBriefingAction(action));
-  }, [transitionFromCoachFloatingPanel]);
+    setRaceBriefingAction(action);
+  }, []);
   const handleRaceBriefingRequestFromFocus = useCallback((options) => {
-    transitionFromCoachFloatingPanel(() => handleRaceBriefingRequest(options));
-  }, [handleRaceBriefingRequest, transitionFromCoachFloatingPanel]);
+    return handleRaceBriefingRequest(options);
+  }, [handleRaceBriefingRequest]);
   const handleOpenRaceBriefingFromAgentActions = useCallback((action) => {
     setShowAgentActions(false);
     setShowCoachHub(false);

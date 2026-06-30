@@ -132,15 +132,26 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     return m;
   }, [dailyNotes]);
 
-  // Race days (target + history) → a date-key set so each cell can show a
-  // trophy. Pulled straight from the races list so it stays in sync.
-  const raceDays = useMemo(() => {
-    const set = new Set();
+  // Races indexed by date. Cells use the keys for the trophy mark; the
+  // full-screen day page renders the actual race rows for that date.
+  const racesByDate = useMemo(() => {
+    const m = new Map();
     for (const r of races || []) {
-      if (r.date) set.add(r.date);
+      if (!r.date) continue;
+      const arr = m.get(r.date) || [];
+      arr.push(r);
+      m.set(r.date, arr);
     }
-    return set;
+    for (const arr of m.values()) {
+      arr.sort((a, b) => {
+        if (!!a.isTarget !== !!b.isTarget) return a.isTarget ? -1 : 1;
+        return String(a.priority || "Z").localeCompare(String(b.priority || "Z"))
+          || String(a.name || "").localeCompare(String(b.name || ""));
+      });
+    }
+    return m;
   }, [races]);
+  const raceDays = useMemo(() => new Set(racesByDate.keys()), [racesByDate]);
 
   // Tap a day → one centered day modal that views + edits + adds. dayKey also
   // drives the ‹/› day stepping inside the modal.
@@ -339,7 +350,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         flashToken={weatherFlashToken}
       />
 
-      {/* Tap a day → one centered modal (view + long-press-edit + add), with
+      {/* Tap a day → one full-screen day page (view + tap-edit + add), with
           ‹/› stepping to the previous/next day in place. */}
       {dayKey && (() => {
         const k = dayKey;
@@ -363,6 +374,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
             setReadiness={setReadiness}
             isToday={k === todayKey}
             trainingLocations={trainingLocations}
+            racesForDay={racesByDate.get(k) || []}
           />
         );
       })()}

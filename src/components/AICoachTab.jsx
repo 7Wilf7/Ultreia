@@ -1917,7 +1917,10 @@ export function AICoachTab({
             onClick={closeManualAdjustmentConfirm}
           >
             <div
-              style={{ ...s.modalCard(isMobile, { maxWidth: 460, float: true }), background: "var(--panel)" }}
+              style={{
+                ...s.modalCard(isMobile, { maxWidth: 460, bg: "oklch(0.132 0.009 145)", float: true }),
+                background: "linear-gradient(180deg, oklch(0.18 0.011 145), oklch(0.132 0.009 145))",
+              }}
               onClick={(e) => e.stopPropagation()}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>

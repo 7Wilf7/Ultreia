@@ -12,8 +12,8 @@ export function RaceBriefingModal({ action, t, isMobile, mdComponents, onClose }
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            ...s.modalCard(isMobile, { maxWidth: 680, float: true }),
-            background: "var(--panel)",
+            ...s.modalCard(isMobile, { maxWidth: 680, bg: "oklch(0.132 0.009 145)", float: true }),
+            background: "linear-gradient(180deg, oklch(0.18 0.011 145), oklch(0.132 0.009 145))",
             maxHeight: isMobile ? "min(82dvh, 680px)" : "min(82vh, 720px)",
           }}
         >

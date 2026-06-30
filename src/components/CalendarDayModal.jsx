@@ -297,71 +297,57 @@ export function CalendarDayModal({
   return (
     <ModalRoot onClose={onClose}>
       <div
+        onClick={onClose}
         className="ultreia-overlay-in"
         style={{
           position: "fixed", inset: 0,
-          background: "var(--bg)",
+          background: "transparent",
           color: "var(--ink-1)",
           zIndex: 9999,
           overscrollBehavior: "contain",
           fontFamily: "var(--font-sans)",
           display: "flex",
-          flexDirection: "column",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          padding: isMobile ? 0 : "0 18px 18px",
+          boxSizing: "border-box",
         }}
       >
-        <div style={{
-          flexShrink: 0,
-          borderBottom: "1px solid var(--rule)",
-          background: "var(--bg)",
-          padding: isMobile
-            ? "calc(env(safe-area-inset-top) + 12px) 14px 10px"
-            : "18px 22px 12px",
-        }}>
-          {/* Header: fixed grid columns keep ‹/› in the same place while changing days. */}
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "44px minmax(0, 1fr) 44px 44px",
-            alignItems: "center",
-            gap: 6,
+        <div
+          onClick={e => e.stopPropagation()}
+          className="ultreia-modal-in"
+          style={{
             width: "100%",
             maxWidth: contentMaxWidth,
-            margin: "0 auto",
+            margin: isMobile ? 0 : "0 auto",
+            maxHeight: isMobile ? "min(78dvh, calc(100dvh - 72px))" : "min(78vh, 720px)",
+            background: "linear-gradient(180deg, oklch(0.155 0.010 145), var(--bg))",
+            border: "1px solid var(--rule)",
+            borderBottom: isMobile ? "none" : "1px solid var(--rule)",
+            borderRadius: isMobile ? "14px 14px 0 0" : 14,
+            boxShadow: "0 -18px 48px oklch(0.02 0.004 145 / 0.55), inset 0 1px 0 oklch(1 0 0 / 0.055)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxSizing: "border-box",
+          }}
+        >
+          <div style={{
+            flex: "0 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
+            padding: isMobile ? "10px 16px 14px" : "14px 18px 16px",
+            boxSizing: "border-box",
+            WebkitOverflowScrolling: "touch",
           }}>
-          {onPrev && (
-            <button onClick={onPrev} aria-label={lang === "zh" ? "前一天" : "Previous day"} style={navBtn}>‹</button>
-          )}
-          <div style={{ textAlign: "center", minWidth: 0 }}>
             <div style={{
-              fontFamily: "var(--font-mono)", fontSize: 10,
-              color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em",
-              marginBottom: 2,
-            }}>
-              {isFuture ? t("calendar.day_future") : t("calendar.day_past")}
-            </div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--ink-1)" }}>
-              {headerDate}
-            </div>
-          </div>
-          {onNext && (
-            <button onClick={onNext} aria-label={lang === "zh" ? "后一天" : "Next day"} style={navBtn}>›</button>
-          )}
-          <button onClick={onClose} style={{
-            ...navBtn,
-            background: "transparent",
-            borderColor: "transparent",
-            fontSize: 22,
-            color: "var(--ink-3)",
-          }} aria-label="Close">×</button>
-        </div>
-        </div>
-
-        <div style={{
-          flex: 1,
-          overflowY: "auto",
-          padding: isMobile ? "14px 16px calc(env(safe-area-inset-bottom) + 22px)" : "18px 22px 28px",
-          boxSizing: "border-box",
-        }}>
-          <div style={{ width: "100%", maxWidth: contentMaxWidth, margin: "0 auto" }}>
+              width: 42,
+              height: 4,
+              borderRadius: 999,
+              background: "var(--rule-strong)",
+              opacity: 0.7,
+              margin: "0 auto 12px",
+            }} />
         {/* Weather summary — single line at the top. For future days this is
             the daily forecast (passed down from CalendarTab); for past days
             with logged workouts, the parent passes the first workout's
@@ -782,6 +768,53 @@ export function CalendarDayModal({
             </div>
           </ModalRoot>
         )}
+          </div>
+          <div style={{
+            flexShrink: 0,
+            borderTop: "1px solid var(--rule)",
+            background: "oklch(0.118 0.008 145)",
+            padding: isMobile ? "9px 12px calc(env(safe-area-inset-bottom) + 10px)" : "10px 14px",
+          }}>
+            {/* Footer navigation: fixed columns keep ‹/› stable while dates change. */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "44px minmax(0, 1fr) 44px 44px",
+              alignItems: "center",
+              gap: 6,
+            }}>
+              {onPrev ? (
+                <button onClick={onPrev} aria-label={lang === "zh" ? "前一天" : "Previous day"} style={navBtn}>‹</button>
+              ) : <div />}
+              <div style={{ textAlign: "center", minWidth: 0 }}>
+                <div style={{
+                  fontFamily: "var(--font-mono)", fontSize: 10,
+                  color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em",
+                  marginBottom: 2,
+                }}>
+                  {isFuture ? t("calendar.day_future") : t("calendar.day_past")}
+                </div>
+                <div style={{
+                  fontSize: 15,
+                  fontWeight: 650,
+                  color: "var(--ink-1)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}>
+                  {headerDate}
+                </div>
+              </div>
+              {onNext ? (
+                <button onClick={onNext} aria-label={lang === "zh" ? "后一天" : "Next day"} style={navBtn}>›</button>
+              ) : <div />}
+              <button onClick={onClose} style={{
+                ...navBtn,
+                background: "transparent",
+                borderColor: "transparent",
+                fontSize: 22,
+                color: "var(--ink-3)",
+              }} aria-label="Close">×</button>
+            </div>
           </div>
       </div>
     </div>

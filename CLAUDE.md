@@ -53,7 +53,7 @@ Wilf 在 Windows 和 Mac mini 两台设备上工作。涉及 Aevum、Viatica、O
 
 不要把“只删除 Ultreia 数据但保留 Viatica 数据”的逻辑塞进“删除账号”。如果未来需要单产品清空能力，应单独命名为“清空 Ultreia 数据”或“重置训练数据”，并放在训练数据管理语义下，不要混用账号删除。
 
-技术方向上，Aevum 账号删除应以删除 `auth.users` 为全局入口，由各产品用户表的 `user_id references auth.users(id) on delete cascade` 负责清理。Ultreia 当前 `delete-account` Edge Function 仍有一层手动逐表删除的旧保险清单；改动删号生产逻辑前，必须先审计 Supabase 外键 cascade 覆盖范围，尤其是新增的 Viatica 表（`viatica_accounts`、`viatica_budgets`、`viatica_preferences`、`viatica_transactions`）和 Ultreia 新表（如 `coach_reports`、`coach_memory_facts`、`training_locations`、`push_getui_devices`）。不要在未审计前静默扩展或重构删号函数。
+技术实现上，Aevum 账号删除以删除 `auth.users` 为全局入口，由各产品用户表的 `user_id references auth.users(id) on delete cascade` 负责清理。Ultreia 的 `delete-account` Edge Function 只校验当前登录用户并删除 auth 用户，不再手动维护产品表清理清单。新增用户归属表时，必须先确保外键 cascade 覆盖，再把表投入生产；不要在删号函数里补产品专属逐表删除逻辑。
 
 ## Agent 化推进
 
@@ -127,7 +127,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
   - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
   - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
-  - `delete-account`（自助注销整个 Aevum 账号；当前实现先清一批历史用户表再删 auth 用户，后续应在外键 cascade 审计后收敛为以 `auth.users` 删除为中心）
+  - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica 个人数据）
   - `push-test`（早期冒烟测试，可退役）
 
 **Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
@@ -263,13 +263,23 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `workouts` — 训练记录
 - `races` — 赛事（target + history 共表，`is_target` 区分）
 - `coach_messages` — AI Coach 对话历史，append-only
+- `coach_reports` — AI 周复盘报告
+- `coach_report_notes` — 周复盘相关备注 / 交互记录
+- `coach_memory_facts` — AI Coach 长期记忆事实卡
+- `agent_actions` — AI Coach Action Card 生命周期记录
+- `training_locations` — 训练地点 / 天气位置
 - `daily_notes` — 每日笔记 / 打卡
 - `push_subscriptions` — 设备推送订阅（FCM token）
+- `push_getui_devices` — 个推设备绑定
 - `push_inbox` — 推送收件箱（每日打卡等推送落库）
+- `push_log` — 推送 / 后台任务去重日志
+- `ai_jobs` — desktop runner / AI 后台任务队列
+- `ai_runners` — runner 在线状态登记，不是单用户数据
 - `invite_codes` — 一次性邀请码（注册用，service_role 烧码）
 - `wallets` — 旧公开模式钱包余额（人民币分）；当前个人模式 AI / 天气不依赖
 - `wallet_ledger` — 旧公开模式钱包流水（AI / 天气 / 充值 / 退款等）；当前个人模式 AI / 天气不写入
 - `app_admins` — 管理员账号白名单（旧钱包充值、邀请码等）
 - `usage_quota` — 旧免费额度表，仅保留删除账号兼容；新扣费逻辑不要继续依赖它
+- `viatica_accounts` / `viatica_budgets` / `viatica_preferences` / `viatica_transactions` — 同一 Aevum Supabase project 下的 Viatica 表；账号删除时通过 `user_id → auth.users(id) ON DELETE CASCADE` 清理
 
-公共字段约定：`id uuid PK`、`user_id uuid → auth.users(id)`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤。
+公共字段约定：`id uuid PK`、用户归属表用 `user_id uuid → auth.users(id) ON DELETE CASCADE`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤；非用户归属的系统表需单独说明边界。

@@ -1,10 +1,14 @@
-// Self-service account deletion.
+// Self-service Aevum account deletion.
 //
-// A logged-in user can permanently delete their own account + all their data.
+// A logged-in user can permanently delete their own Aevum account.
 // The JS client can't delete its own auth user (that needs service_role), so
-// this function does it: it identifies the caller from their JWT, wipes their
-// rows from every user-scoped table (belt-and-braces, in case any FK isn't ON
-// DELETE CASCADE), then deletes the auth user.
+// this function identifies the caller from their JWT and deletes the auth user.
+// Product data in Aevum / Ultreia / Viatica is cleaned by database-level
+// ON DELETE CASCADE constraints from each user-owned table to auth.users.
+//
+// Do not manually enumerate product tables here. Aevum account deletion is a
+// shared account boundary; adding product-specific cleanup in this function can
+// create partial deletion if table deletes succeed but auth deletion fails.
 //
 // Auth: the caller must be logged in. The client's functions.invoke attaches
 // their access token as the Authorization bearer; we validate it via getUser().
@@ -29,24 +33,6 @@ function json(obj: unknown, status = 200): Response {
   });
 }
 
-// User-scoped tables keyed by user_id. push_log may not exist on every project —
-// deletes are best-effort (errors ignored) so a missing table doesn't abort.
-const USER_TABLES = [
-  "workouts",
-  "races",
-  "coach_messages",
-  "agent_actions",
-  "user_settings",
-  "daily_notes",
-  "push_subscriptions",
-  "push_inbox",
-  "push_log",
-  "usage_quota",
-  "wallet_ledger",
-  "wallets",
-  "app_admins",
-];
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -65,16 +51,7 @@ Deno.serve(async (req) => {
   if (whoErr || !user) return json({ error: "unauthorized" }, 401);
   const uid = user.id;
 
-  // Wipe user-scoped rows first (ignore per-table errors: missing table/column).
-  for (const tbl of USER_TABLES) {
-    const { error } = await admin.from(tbl).delete().eq("user_id", uid);
-    if (error) console.error(`delete ${tbl} for ${uid}:`, error.message);
-  }
-  // profiles is keyed by id (= auth.uid()), not user_id.
-  const { error: profErr } = await admin.from("profiles").delete().eq("id", uid);
-  if (profErr) console.error(`delete profiles for ${uid}:`, profErr.message);
-
-  // Finally remove the auth user.
+  // Remove the Aevum auth user. Database FK cascades clean product rows.
   const { error: delErr } = await admin.auth.admin.deleteUser(uid);
   if (delErr) return json({ error: "delete_failed", detail: delErr.message }, 500);
 

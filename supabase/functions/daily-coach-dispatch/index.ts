@@ -465,6 +465,7 @@ function buildMemoryUpdatePrompt(opts: {
   lang: string;
   memory: string;
   chatRows: any[];
+  targetRaces?: any[];
 }): { system: string; user: string } {
   const langName = opts.lang === "zh" ? "Chinese (简体中文)" : "English";
   const chat = (opts.chatRows || []).map((m) => {
@@ -486,6 +487,7 @@ function buildMemoryUpdatePrompt(opts: {
     "[教练风格]",
     "[长期模式]",
   ].join("\n");
+  const targetRaces = formatMemoryTargetRaces(opts.targetRaces || []);
   const system =
     `You update a runner's long-term coach Memory from recent chat. ` +
     `Return only durable, repeatedly useful facts. Do not write one-off session details. ` +
@@ -494,12 +496,16 @@ function buildMemoryUpdatePrompt(opts: {
   const user =
     `[Preferred UI language] ${langName}\n\n` +
     `[Current memory]\n${opts.memory || "(empty)"}\n\n` +
+    `[Current target races from app settings - source of truth for race status and priority]\n${targetRaces}\n\n` +
     `[Recent coach chat from today]\n${chat || "(empty)"}\n\n` +
     `Guidelines:\n` +
     `- Keep these exact English section headings:\n${sectionsEn}\n` +
     `- Keep these exact Chinese section headings:\n${sectionsZh}\n` +
     `- Under each heading, write one short fact per line as "- ...".\n` +
     `- Keep durable facts only: injuries/health constraints, goals/races, training preferences, coaching style preferences, recurring patterns.\n` +
+    `- If recent chat conflicts with current target races, trust Current target races. The runner may have edited race priority after the chat.\n` +
+    `- Do not store A/B/C priority, race date, distance, ascent, or target status as Memory when it is already present in Current target races.\n` +
+    `- For Goals / Races, store durable strategy boundaries only, e.g. "HYROX should remain auxiliary and must not displace trail-running preparation."\n` +
     `- Drop today's specific question, one-off advice, temporary mood, and generic encouragement.\n` +
     `- If nothing meaningful should change, return the existing memory normalized into the section structure.\n` +
     `- Maximum about 500 words total.\n\n` +
@@ -507,6 +513,36 @@ function buildMemoryUpdatePrompt(opts: {
     `===EN===\n${sectionsEn}\n<english facts>\n` +
     `===ZH===\n${sectionsZh}\n<中文事实>`;
   return { system, user };
+}
+
+function formatMemoryTargetRaces(races: any[] = []): string {
+  const rows = (Array.isArray(races) ? races : [])
+    .slice()
+    .sort((a, b) => String(a?.date || "").localeCompare(String(b?.date || "")));
+  if (!rows.length) return "(empty)";
+
+  return rows.map((race) => {
+    const name = String(race?.name || race?.category || "Unnamed race").trim();
+    const date = String(race?.date || "date unset").trim();
+    const category = [race?.category, race?.subtype].filter(Boolean).join(" / ");
+    const priority = String(race?.priority || "unset").trim();
+    const distance = formatMemoryRaceNumber(race?.distance, "km");
+    const ascent = formatMemoryRaceNumber(race?.ascent, "m ascent");
+    const details = [
+      category ? `Type: ${category}` : "",
+      `Priority: ${priority}`,
+      distance ? `Distance: ${distance}` : "",
+      ascent ? `Ascent: ${ascent}` : "",
+    ].filter(Boolean);
+    return `- ${date} | ${name}${details.length ? ` | ${details.join(" | ")}` : ""}`;
+  }).join("\n");
+}
+
+function formatMemoryRaceNumber(value: unknown, suffix: string): string {
+  if (value === null || value === undefined || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `${Number.isInteger(n) ? n : Number(n.toFixed(1))}${suffix}`;
 }
 
 function parseBilingualMemory(text: string): { en: string; zh: string } {
@@ -907,10 +943,20 @@ Deno.serve(async (req) => {
           return `- [${category}] EN: ${fact.content_en || ""}\n  ZH: ${fact.content_zh || ""}`;
         }).join("\n");
 
+        const { data: targetRaces, error: racesErr } = await supabase
+          .from("races")
+          .select("name, date, category, subtype, priority, distance, ascent")
+          .eq("user_id", u.user_id)
+          .eq("is_target", true)
+          .order("date", { ascending: true })
+          .limit(12);
+        if (racesErr) { summary.push({ user: u.user_id, error: `target_races: ${racesErr.message}` }); continue; }
+
         const { system, user } = buildMemoryUpdatePrompt({
           lang: u.lang || "en",
           memory: currentFacts,
           chatRows: chatRows || [],
+          targetRaces: targetRaces || [],
         });
 
         let llm: LlmResult;

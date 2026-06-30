@@ -5,6 +5,7 @@ import {
   buildMemoryFactSnapshotFromReview,
   extractMemoryFacts,
   fillEmptyMemorySections,
+  formatCurrentTargetRacesForMemory,
   inferMemoryFactCategory,
   isMemorySectionHeading,
   MEMORY_SECTIONS,
@@ -70,6 +71,21 @@ describe("extractMemoryFacts", () => {
 
     expect(facts[0]).toMatchObject({ category: "goals_races" });
     expect(facts[1]).toMatchObject({ category: "coaching_style" });
+  });
+
+  it("removes structured target-race priority from facts when current races are supplied", () => {
+    const facts = extractMemoryFacts({
+      en: "[Goals / Races]\n- HYROX Shenzhen is A-level, but should remain auxiliary and must not displace trail-running preparation.",
+      zh: "[目标 / 比赛]\n- HYROX 深圳是当前 A 级赛事，但不应取代越野训练主线。",
+    }, {
+      races: [{ isTarget: true, name: "HYROX Shenzhen", category: "Hyrox", priority: "B" }],
+    });
+
+    expect(facts).toHaveLength(1);
+    expect(facts[0].contentEn).not.toMatch(/A-level|Priority/i);
+    expect(facts[0].contentZh).not.toMatch(/A 级|优先级/);
+    expect(facts[0].contentEn).toContain("remain auxiliary");
+    expect(facts[0].contentZh).toContain("不应取代越野训练主线");
   });
 });
 
@@ -210,9 +226,39 @@ describe("buildMemoryUpdatePrompt", () => {
     expect(prompt).toContain("Under each heading, write one short fact per line as \"- ...\".");
     expect(prompt).toContain("My knee still feels sensitive on descents.");
   });
+
+  it("treats current target races as source of truth over stale chat priorities", () => {
+    const prompt = buildMemoryUpdatePrompt({
+      races: [
+        {
+          isTarget: true,
+          name: "HYROX Shenzhen",
+          date: "2026-08-15",
+          category: "Hyrox",
+          subtype: "Doubles Pro",
+          priority: "B",
+        },
+      ],
+      chatTranscript: "[user]\nHYROX is A-level, but it should not override trail training.",
+    });
+
+    expect(prompt).toContain("Current target races from app settings");
+    expect(prompt).toContain("HYROX Shenzhen");
+    expect(prompt).toContain("Priority: B");
+    expect(prompt).toContain("trust Current target races");
+    expect(prompt).toContain("Do not store A/B/C priority");
+    expect(prompt).toContain("HYROX should remain auxiliary");
+  });
 });
 
 describe("memory section helpers", () => {
+  it("formats only current target races for memory-update context", () => {
+    expect(formatCurrentTargetRacesForMemory([
+      { isTarget: false, name: "Past road race", date: "2026-05-01", priority: null },
+      { isTarget: true, name: "HYROX Shenzhen", date: "2026-08-15", category: "Hyrox", priority: "B" },
+    ])).toBe("- 2026-08-15 | HYROX Shenzhen | Type: Hyrox | Priority: B");
+  });
+
   it("recognizes English and Chinese memory section headings", () => {
     expect(isMemorySectionHeading("[Goals / Races]")).toBe(true);
     expect(isMemorySectionHeading("[目标 / 比赛]")).toBe(true);

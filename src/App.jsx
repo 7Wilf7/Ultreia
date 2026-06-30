@@ -373,7 +373,7 @@ function mergeMemoryFactList(facts = [], fact) {
   return next.sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
 }
 
-function pendingMemoryActionToProposal(action) {
+function pendingMemoryActionToProposal(action, races = []) {
   if (action?.type !== "memory_update" || action.status !== AGENT_ACTION_STATUS.PROPOSED) return null;
   const memory = action.payload?.memory;
   if (!memory || typeof memory !== "object") return null;
@@ -393,6 +393,7 @@ function pendingMemoryActionToProposal(action) {
       source: action.source || "ai_coach_memory",
       sourceSummary: action.source === "nightly_memory_review" ? "Nightly Memory review" : "Memory auto-update",
       status: "proposed",
+      races,
     }),
   };
 }
@@ -2410,7 +2411,7 @@ function AppShell({
   useEffect(() => {
     if (memoryProposal || memoryUpdating) return undefined;
     const pending = (agentActions || [])
-      .map(pendingMemoryActionToProposal)
+      .map(action => pendingMemoryActionToProposal(action, races))
       .filter(Boolean)
       .sort((a, b) => String(b.action?.createdAt || "").localeCompare(String(a.action?.createdAt || "")))[0];
     if (pending) {
@@ -2421,7 +2422,7 @@ function AppShell({
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [agentActions, memoryProposal, memoryUpdating]);
+  }, [agentActions, memoryProposal, memoryUpdating, races]);
 
   const refreshWallet = useCallback(async () => {
     const next = await db.wallet.getMyWallet();
@@ -2436,7 +2437,7 @@ function AppShell({
   async function proposeMemoryUpdate() {
     if (!chatMessages.length) { appDialog.alert(t("coach.memory_need_chat")); return; }
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
-    const memoryPrompt = buildMemoryUpdatePrompt({ memoryFacts, chatTranscript });
+    const memoryPrompt = buildMemoryUpdatePrompt({ memoryFacts, chatTranscript, races });
     setMemoryUpdating(true);
     try {
       const data = await db.usage.coachProxy({
@@ -2456,6 +2457,7 @@ function AppShell({
         source: "ai_coach_memory",
         sourceSummary: "Memory auto-update",
         status: "proposed",
+        races,
       });
       saveAgentAction(action);
       setMemoryProposal({

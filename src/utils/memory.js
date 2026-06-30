@@ -123,6 +123,53 @@ function memoryFactKey(fact = {}) {
   return fact.rowId || fact.clientId || fact.id || "";
 }
 
+function compactTextForMatch(text = "") {
+  return String(text || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function buildTargetRaceKeywords(races = []) {
+  const keywords = new Set();
+  (Array.isArray(races) ? races : [])
+    .filter(race => race?.isTarget === true || race?.is_target === true)
+    .forEach(race => {
+      for (const value of [race.name, race.category, race.subtype]) {
+        const text = String(value || "").trim();
+        if (text.length >= 4) keywords.add(compactTextForMatch(text));
+        for (const part of text.split(/[\s/|,，、()（）-]+/)) {
+          const clean = part.trim();
+          if (clean.length >= 4) keywords.add(compactTextForMatch(clean));
+        }
+      }
+    });
+  return [...keywords].filter(Boolean);
+}
+
+function mentionsTargetRace(text = "", targetRaceKeywords = []) {
+  if (!targetRaceKeywords.length) return false;
+  const compact = compactTextForMatch(text);
+  return targetRaceKeywords.some(keyword => keyword && compact.includes(keyword));
+}
+
+function stripStructuredRacePriority(text = "") {
+  let out = String(text || "");
+  out = out
+    .replace(/\bpriority\s*[:：=]?\s*[ABC]\b/gi, "")
+    .replace(/\b[ABC]\s*priority\b/gi, "")
+    .replace(/\b(?:is|was|were|remains|currently|set as|as)?\s*(?:an?\s*)?[ABC]\s*[- ]?\s*level(?:\s+(?:race|event|target))?\b/gi, "")
+    .replace(/优先级\s*(?:是|为|:|：)?\s*[ABCＡＢＣ]/gi, "")
+    .replace(/(?:是|为|作为|属于)?(?:当前|目前|原本|仍然)?\s*[ABCＡＢＣ]\s*级(?:赛事|比赛|目标赛|目标)?/g, "");
+
+  return out
+    .replace(/\s*[,，]\s*(?:but|但|但是|不过)\s*/gi, " ")
+    .replace(/\s+but\s+(should|must|does|is|will|can|cannot|shouldn't|mustn't|not)\b/gi, " $1")
+    .replace(/\s+([，。；：,.!?;:])/g, "$1")
+    .replace(/([（(])\s+/g, "$1")
+    .replace(/\s+([）)])/g, "$1")
+    .replace(/^\s*[-,，;；:：]\s*/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function findMemoryFactMatch(fact, candidates, usedKeys) {
   let best = null;
   let bestScore = 0;
@@ -274,6 +321,7 @@ export function extractMemoryFacts(memory = {}, opts = {}) {
   const aligned = enLines.length === zhLines.length && enLines.length > 0;
   const primaryLines = enLines.length ? enLines : zhLines;
   const primaryLang = enLines.length ? "en" : "zh";
+  const targetRaceKeywords = buildTargetRaceKeywords(opts.targetRaces || opts.races || []);
   const facts = [];
   let currentSection = "other";
 
@@ -286,8 +334,12 @@ export function extractMemoryFacts(memory = {}, opts = {}) {
     }
     if (isMemorySectionHeading(line) || isMemorySectionHeading(zhLine)) return;
 
-    const contentEn = normalizeMemoryFactLine(line);
-    const contentZh = normalizeMemoryFactLine(zhLine);
+    let contentEn = normalizeMemoryFactLine(line);
+    let contentZh = normalizeMemoryFactLine(zhLine);
+    if (mentionsTargetRace(`${contentEn}\n${contentZh}`, targetRaceKeywords)) {
+      contentEn = stripStructuredRacePriority(contentEn);
+      contentZh = stripStructuredRacePriority(contentZh);
+    }
     if (isEmptyMemoryFact(contentEn) && isEmptyMemoryFact(contentZh)) return;
     const category = inferMemoryFactCategory({ contentEn, contentZh }, currentSection);
     facts.push({
@@ -349,14 +401,51 @@ function formatExistingMemoryFacts(memoryFacts = []) {
     .join("\n");
 }
 
-export function buildMemoryUpdatePrompt({ memoryFacts = [], chatTranscript = "" } = {}) {
+function formatMemoryRaceNumber(value, suffix = "") {
+  if (value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `${Number.isInteger(n) ? n : Number(n.toFixed(1))}${suffix}`;
+}
+
+export function formatCurrentTargetRacesForMemory(races = []) {
+  const targets = (Array.isArray(races) ? races : [])
+    .filter(race => race?.isTarget === true || race?.is_target === true)
+    .slice()
+    .sort((a, b) => String(a.date || a.race_date || "").localeCompare(String(b.date || b.race_date || "")));
+  if (!targets.length) return "(empty)";
+
+  return targets
+    .map(race => {
+      const name = String(race.name || race.category || "Unnamed race").trim();
+      const date = String(race.date || race.race_date || "date unset").trim();
+      const category = [race.category, race.subtype].filter(Boolean).join(" / ");
+      const priority = String(race.priority || "unset").trim();
+      const distance = formatMemoryRaceNumber(race.distance, "km");
+      const ascent = formatMemoryRaceNumber(race.ascent, "m ascent");
+      const details = [
+        category ? `Type: ${category}` : "",
+        `Priority: ${priority}`,
+        distance ? `Distance: ${distance}` : "",
+        ascent ? `Ascent: ${ascent}` : "",
+      ].filter(Boolean);
+      return `- ${date} | ${name}${details.length ? ` | ${details.join(" | ")}` : ""}`;
+    })
+    .join("\n");
+}
+
+export function buildMemoryUpdatePrompt({ memoryFacts = [], chatTranscript = "", races = [] } = {}) {
   const enSections = MEMORY_SECTIONS.map(s => s.en).join("\n");
   const zhSections = MEMORY_SECTIONS.map(s => s.zh).join("\n");
+  const targetRaces = formatCurrentTargetRacesForMemory(races);
 
   return `You are updating reviewed long-term Memory fact cards about a runner. The facts capture DURABLE, repeatedly-useful information about the user — training patterns, preferences, injuries, recurring concerns, coaching style preferences.
 
 Existing active Memory facts:
 ${formatExistingMemoryFacts(memoryFacts)}
+
+Current target races from app settings (source of truth for race status and priority):
+${targetRaces}
 
 Recent conversation:
 ${chatTranscript || "(empty)"}
@@ -368,10 +457,13 @@ ${enSections}
 - Return a COMPLETE, deduplicated active snapshot. Do not output only additions. If an old fact is outdated, replaced, or no longer useful, omit it.
 - Use the categories strictly:
   - Injuries / Health: injuries, recovery needs, fatigue readiness, health risks, HRV/resting-HR/heart-rate risk signals.
-  - Goals / Races: current target races and current race priorities only. Drop completed race results and stale targets.
+  - Goals / Races: durable race-planning preferences or constraints not captured by the current target race fields.
   - Training Preferences: plan structure, equipment constraints, terrain, schedule preferences, training methods.
   - Coaching Style: how the user wants the coach to communicate, decide, or frame judgment.
   - Recurring Patterns: repeated behavior patterns that affect planning.
+- If recent conversation conflicts with current target races, trust Current target races. The runner may have edited race priority after the chat.
+- Do not store A/B/C priority, race date, distance, ascent, or target status as Memory when it is already present in Current target races.
+- For Goals / Races, store durable strategy boundaries only, e.g. "HYROX should remain auxiliary and must not displace trail-running preparation."
 - Keep durable facts only.
 - DROP session-specific things: today's specific question, one-off advice, temporary feelings that do not look durable.
 - Don't repeat what's already in the user's profile: age, location, basic stats.

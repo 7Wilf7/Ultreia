@@ -4,6 +4,7 @@
 
 import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES, DAILY_TAGS } from "../constants";
 import { formatDuration, formatPlanDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
+import { formatWorkoutNoteForDisplay } from "./importReviewNotes";
 import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
 import { evaluatePlanOutcome } from "./planMatch";
 import { getAgentActionQualitySignal } from "./agentActions";
@@ -588,7 +589,8 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
     // for runs only, so those two carry their own derived metric instead.
     const speed = (l.type === "Cycling" && l.distance > 0 && l.duration > 0) ? " " + formatSpeedKmh(l.distance, l.duration) + "km/h" : "";
     const swim = (l.type === "Swimming" && l.distance > 0 && l.duration > 0) ? " " + formatSwimPace(l.distance, l.duration) + "/100m" : "";
-    return `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${speed}${swim}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${l.note ? ` note: ${String(l.note).replace(/\s+/g, " ").trim()}` : ""}`;
+    const displayNote = formatWorkoutNoteForDisplay(l.note, lang);
+    return `${l.date} ${l.type}${l.subTypes.length ? "(" + l.subTypes.join(",") + ")" : ""} ${l.distance > 0 ? l.distance + "km" : ""} ${formatDuration(l.duration)}${l.pace ? " " + formatPaceFromSec(l.pace) + "/km" : ""}${speed}${swim}${l.hr ? " HR" + l.hr : ""}${l.maxHR ? "/" + l.maxHR : ""}${l.ascent ? " +" + l.ascent + "m" : ""}${l.cadence ? " cad" + l.cadence : ""}${l.rpe ? " RPE" + l.rpe : ""}${formatHrZones(l.hrZoneSeconds)}${formatWeatherInline(l.weather)}${displayNote ? ` note: ${displayNote.replace(/\s+/g, " ").trim()}` : ""}`;
   }).join("\n");
   // Day-level recovery/context flags from the Calendar, last 21 days plus the
   // upcoming plan window. Retired legacy tags are ignored so old rows do not

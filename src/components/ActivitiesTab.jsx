@@ -7,6 +7,7 @@ import {
   recommendRunType, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
+import { formatWorkoutNoteForDisplay } from "../utils/importReviewNotes";
 import { computeHRZones, calculateAge } from "../utils/profile";
 import { parseFitFile } from "../lib/fit";
 import { ActivityForm } from "./ActivityForm";
@@ -927,7 +928,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                     borderTop: "1px solid var(--rule-soft)", paddingTop: 8, marginTop: 2,
                     display: "flex", flexDirection: "column", gap: 8,
                   }}>
-                    <ExpandedMetrics log={l} t={t} />
+                    <ExpandedMetrics log={l} t={t} lang={lang} />
                   </div>
                 )}
               </div>
@@ -1419,7 +1420,7 @@ function CompactMetrics({ log: l }) {
   );
 }
 
-function ExpandedMetrics({ log: l }) {
+function ExpandedMetrics({ log: l, lang }) {
   // Everything that's NOT already in the CompactMetrics summary, rendered
   // as a wrap-flex below the divider. Items with no value (0/missing) skip.
   const isRoad = l.type === "Road Run";
@@ -1428,6 +1429,7 @@ function ExpandedMetrics({ log: l }) {
   const isCycling = l.type === "Cycling";
   const isSwimming = l.type === "Swimming";
   const isStrengthLike = l.type === "Strength" || l.type === "HIIT";
+  const displayNote = formatWorkoutNoteForDisplay(l.note, lang);
 
   return (
     <>
@@ -1472,8 +1474,8 @@ function ExpandedMetrics({ log: l }) {
           <MetricWeather w={l.weather} full />
         </div>
       )}
-      {String(l.note || "").trim() && (
-        <div title={String(l.note).trim()} style={{
+      {displayNote && (
+        <div title={displayNote} style={{
           color: "var(--ink-2)",
           display: "-webkit-box",
           fontSize: 12,
@@ -1484,7 +1486,7 @@ function ExpandedMetrics({ log: l }) {
           WebkitLineClamp: 2,
           whiteSpace: "pre-wrap",
         }}>
-          {String(l.note).trim()}
+          {displayNote}
         </div>
       )}
     </>

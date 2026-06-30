@@ -10,6 +10,7 @@ import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, RUN_PACE_
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, formatPlanDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
+import { formatWorkoutNoteForDisplay } from "../utils/importReviewNotes";
 import { evaluatePlanOutcome } from "../utils/planMatch";
 import { planFields } from "../utils/planFields";
 
@@ -410,8 +411,10 @@ export function CalendarDayModal({
                         {l.isPlanned ? planHeadline(l, t) : logHeadline(l)}
                       </div>
                     </div>
-                    {String(l.note || "").trim() && (
-                      <div title={String(l.note).trim()} style={{
+                    {(() => {
+                      const displayNote = formatWorkoutNoteForDisplay(l.note, lang);
+                      return displayNote ? (
+                      <div title={displayNote} style={{
                         marginTop: 7,
                         color: "var(--ink-2)",
                         display: "-webkit-box",
@@ -423,9 +426,10 @@ export function CalendarDayModal({
                         WebkitLineClamp: 2,
                         whiteSpace: "pre-wrap",
                       }}>
-                        {String(l.note).trim()}
+                        {displayNote}
                       </div>
-                    )}
+                      ) : null;
+                    })()}
                     {/* Plan reconciliation — past plans show their outcome and a
                         one-tap resolve, so the user never has to delete a past
                         plan to keep the calendar clean. */}

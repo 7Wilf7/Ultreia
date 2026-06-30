@@ -1,4 +1,5 @@
 import { ACTIVITY_TYPES } from "../constants";
+import { formatWorkoutNoteForDisplay } from "./importReviewNotes";
 import { computeTrainingLoad } from "./trainingLoad";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,13 +85,14 @@ function signalLine(signal) {
 }
 
 function completedLine(log) {
+  const displayNote = formatWorkoutNoteForDisplay(log.note, "en");
   const parts = [
     log.date || "",
     log.type || "",
     Array.isArray(log.subTypes) && log.subTypes.length ? `(${log.subTypes.join(", ")})` : "",
     planMetric(log),
     Number(log.rpe) > 0 ? `RPE ${Number(log.rpe)}` : "",
-    log.note ? `note="${String(log.note).slice(0, 140)}"` : "",
+    displayNote ? `note="${displayNote.slice(0, 140)}"` : "",
   ].filter(Boolean);
   return parts.join(" ");
 }
@@ -148,7 +150,7 @@ export function summarizeRecoveryGuard(logs = [], dailyNotes = [], now = new Dat
       id: "pain_fatigue_note",
       level: noteFlags.length >= 2 ? 2 : 1,
       label: "Pain/fatigue note",
-      detail: noteFlags.slice(-3).map(l => `${l.date} ${String(l.note || "").slice(0, 60)}`).join("; "),
+      detail: noteFlags.slice(-3).map(l => `${l.date} ${formatWorkoutNoteForDisplay(l.note, "en").slice(0, 60)}`).join("; "),
     });
   }
 
@@ -218,7 +220,7 @@ export function summarizeRecoveryGuard(logs = [], dailyNotes = [], now = new Dat
       date: l.date || "",
       type: l.type || "",
       rpe: Number(l.rpe) || null,
-      note: l.note || "",
+      note: formatWorkoutNoteForDisplay(l.note, "en"),
       line: completedLine(l),
     })),
     futurePlans,

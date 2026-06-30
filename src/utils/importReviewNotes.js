@@ -1,4 +1,5 @@
 const DEFAULT_MAX_SELF_REVIEW_CHARS = 56;
+const SELF_REVIEW_STORAGE_PREFIX = "selfreview:";
 
 function cleanFeelingText(raw) {
   return String(raw || "")
@@ -40,15 +41,38 @@ export function buildImportSelfReviewNote(raw, coachReply = "", lang = "zh", max
   const cleaned = cleanFeelingText(raw);
   if (!cleaned) return "";
   const limit = Math.max(20, Number(maxChars) || DEFAULT_MAX_SELF_REVIEW_CHARS);
-  const prefix = lang === "zh" ? "自评：" : "Self review: ";
-  const bodyLimit = Math.max(20, limit - prefix.length);
   void coachReply;
-  const summary = shorten(compactRawSelfReview(cleaned, lang), bodyLimit);
-  return `${prefix}${summary}`;
+  const summary = shorten(compactRawSelfReview(cleaned, lang), limit);
+  return summary ? `${SELF_REVIEW_STORAGE_PREFIX} ${summary}` : "";
 }
 
 export function buildImportFeelingNote(raw, lang = "zh", maxChars = DEFAULT_MAX_SELF_REVIEW_CHARS) {
   return buildImportSelfReviewNote(raw, "", lang, maxChars);
+}
+
+export function parseImportSelfReviewBody(line) {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return "";
+  const match = trimmed.match(/^自评\s*[:：]\s*(.+)$/)
+    || trimmed.match(/^(?:self\s*review|selfreview)\s*[:：]\s*(.+)$/i);
+  return match ? cleanFeelingText(match[1]) : "";
+}
+
+export function formatImportSelfReviewNoteLine(line, lang = "zh") {
+  const trimmed = String(line || "").trim();
+  if (!trimmed) return "";
+  const body = parseImportSelfReviewBody(trimmed);
+  if (!body) return trimmed;
+  return lang === "zh" ? `自评：${body}` : `Self review: ${body}`;
+}
+
+export function formatWorkoutNoteForDisplay(note, lang = "zh") {
+  return String(note || "")
+    .split(/\r?\n/)
+    .map(line => formatImportSelfReviewNoteLine(line, lang))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
 }
 
 export function mergeImportFeelingNote(existing, feelingNote) {
@@ -56,6 +80,10 @@ export function mergeImportFeelingNote(existing, feelingNote) {
   const note = String(feelingNote || "").trim();
   if (!note) return current || null;
   if (!current) return note;
+  const noteBody = parseImportSelfReviewBody(note);
+  if (noteBody && current.split(/\r?\n/).some(line => parseImportSelfReviewBody(line) === noteBody)) {
+    return current;
+  }
   if (current.includes(note)) return current;
   return `${current}\n${note}`;
 }

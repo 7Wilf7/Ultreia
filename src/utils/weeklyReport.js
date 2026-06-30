@@ -1,5 +1,6 @@
 import { formatDuration, formatPaceFromSec } from "./format";
 import { buildDataBlock } from "./coachPrompt";
+import { formatWorkoutNoteForDisplay } from "./importReviewNotes";
 import { coachPreferenceContextBlock } from "./profile";
 
 export const KEEP_REPORTS = 8;
@@ -66,7 +67,8 @@ function fmtWorkout(w) {
   if (w.maxHR > 0) bits.push(`max HR ${w.maxHR}`);
   if (w.rpe > 0) bits.push(`RPE ${w.rpe}`);
   if (w.aerobicTE > 0) bits.push(`TE ${w.aerobicTE}`);
-  if (w.note) bits.push(`note: ${String(w.note).replace(/\s+/g, " ").slice(0, 180)}`);
+  const displayNote = formatWorkoutNoteForDisplay(w.note, "zh");
+  if (displayNote) bits.push(`note: ${displayNote.replace(/\s+/g, " ").slice(0, 180)}`);
   return `- ${bits.join(" · ")}`;
 }
 

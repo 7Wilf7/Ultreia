@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { s } from "../styles";
 import { STRENGTH_SUBS, WEATHER_RELEVANT_TYPES } from "../constants";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { useLanguage, useT } from "../i18n/LanguageContext";
+import { useT } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { weatherWindowEligible } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
@@ -39,7 +39,6 @@ function weatherEligibleForImport(w) {
 
 export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, onConfirm }) {
   const t = useT();
-  const { lang } = useLanguage();
   const isMobile = useIsMobile();
   const [page, setPage] = useState(initialPage);
   const initialFetchWeather = useMemo(
@@ -299,14 +298,6 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                 <textarea
                   ref={coachNotesRef}
                   rows={3}
-                  lang={lang === "zh" ? "zh-CN" : "en"}
-                  dir="auto"
-                  inputMode="text"
-                  enterKeyHint="done"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  autoComplete="off"
-                  spellCheck={false}
                   placeholder={t("activities.import_review_coach_placeholder")}
                   style={{ ...s.input, marginTop: 8, resize: "vertical", minHeight: 74, lineHeight: 1.45 }}
                 />

@@ -88,7 +88,7 @@ import {
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
-import { buildImportSelfReviewNote, mergeImportFeelingNote } from "./utils/importReviewNotes";
+import { buildImportSelfReviewNote, formatWorkoutNoteForDisplay, mergeImportFeelingNote } from "./utils/importReviewNotes";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -445,6 +445,7 @@ function coachProviderLabel(providerId, fallback = null) {
 
 function describeWorkoutForCoach(w, idx) {
   const subTypes = (w.subTypes || []).filter(Boolean).join(", ");
+  const displayNote = formatWorkoutNoteForDisplay(w.note, "zh");
   const metrics = [
     w.distance ? `${w.distance} km` : null,
     w.duration ? formatDuration(w.duration) : null,
@@ -453,7 +454,7 @@ function describeWorkoutForCoach(w, idx) {
     w.hr ? `avg HR ${w.hr}` : null,
     w.maxHR ? `max HR ${w.maxHR}` : null,
     w.rpe ? `RPE ${w.rpe}` : null,
-    w.note ? `note: ${w.note}` : null,
+    displayNote ? `note: ${displayNote}` : null,
   ].filter(Boolean).join(" · ");
   return `${idx + 1}. ${w.date || "No date"} · ${w.type || "Activity"}${subTypes ? ` (${subTypes})` : ""}${metrics ? ` · ${metrics}` : ""}`;
 }

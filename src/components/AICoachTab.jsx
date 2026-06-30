@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -364,6 +364,211 @@ function formatProviderMeta(meta, lang) {
   return providerLabel;
 }
 
+const CoachChatMessages = memo(function CoachChatMessages({
+  chatMessages,
+  isMobile,
+  mdComponents,
+  lang,
+  t,
+  showCalendarButton,
+  importToCalendar,
+  chatLoading,
+  sendChat,
+  extractingForMsgId,
+  hasPlanImportCache,
+  getPlanImportActionStatus,
+  onStopExtraction,
+}) {
+  if (chatMessages.length === 0) {
+    return (
+      <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, lineHeight: 1.6 }}>
+        <div style={{ whiteSpace: "pre-line" }}>{t("coach.empty")}</div>
+      </div>
+    );
+  }
+
+  // The "resend" affordance only shows on the most-recent user message
+  // (an older send is rarely what the user wants to retry — usually they
+  // hit a network error on the last one).
+  let lastUserIdx = -1;
+  for (let k = chatMessages.length - 1; k >= 0; k--) {
+    if (chatMessages[k].role === "user") { lastUserIdx = k; break; }
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {chatMessages.map((m, i) => {
+        const isUser = m.role === "user";
+        const parsedMessage = parseCoachMessageMeta(m.content);
+        const displayContent = parsedMessage.text;
+        const providerMeta = !isUser ? formatProviderMeta(parsedMessage.meta, lang) : "";
+        const hasDisplayContent = String(displayContent || "").trim().length > 0;
+        if (!isUser && m.isStreaming && !hasDisplayContent) return null;
+        const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && showCalendarButton;
+        const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
+        const extracting = extractingForMsgId === m.id;
+        const hasCachedAction = canImport && !!hasPlanImportCache?.(m.id);
+        const actionStatus = canImport ? getPlanImportActionStatus?.(m.id) : null;
+        const actionCompleted = actionStatus === "executed";
+        const actionRejected = actionStatus === "rejected";
+        const actionButtonLabel = extracting
+          ? t("coach.extracting")
+          : actionCompleted
+            ? t("coach.import_button_executed")
+            : actionRejected
+              ? t("coach.import_button_rejected")
+              : hasCachedAction
+                ? t("coach.import_button_cached")
+                : t("coach.import_button");
+        const actionButtonIcon = extracting
+          ? <Spinner size={12} thickness={1.5} color="var(--moss)" />
+          : actionCompleted
+            ? "✓"
+            : actionRejected
+              ? "×"
+              : hasCachedAction
+                ? "✓"
+                : "📅";
+        const actionButtonBg = actionCompleted
+          ? "var(--moss-bg)"
+          : actionRejected
+            ? "var(--bg-elevated)"
+            : hasCachedAction
+              ? "var(--moss-bg)"
+              : "var(--bg-elevated)";
+        const actionButtonBorder = actionCompleted || hasCachedAction
+          ? "var(--moss)"
+          : "var(--rule)";
+        const actionButtonColor = actionCompleted || hasCachedAction
+          ? "var(--moss-deep)"
+          : actionRejected
+            ? "var(--ink-3)"
+            : "var(--ink-2)";
+        return (
+          <div key={i} className="ultreia-msg-in" style={{
+            alignSelf: isUser ? "flex-end" : "flex-start",
+            // Mobile bubbles get wider so long messages don't squeeze into
+            // a narrow column the user has to keep scrolling to read.
+            // Color already differentiates user vs coach so the visual
+            // "tail" of leftover horizontal space isn't needed.
+            maxWidth: isMobile ? "94%" : "85%",
+            display: "flex", flexDirection: "column",
+            alignItems: isUser ? "flex-end" : "flex-start",
+            gap: 6, minWidth: 0,
+          }}>
+            <div className="selectable" style={{
+              // On-token bubbles: user = stamped ink block (echoes the
+              // s.tag stamp), coach = sunken panel with a hairline (the
+              // app's borders-not-fills rule). Soft 10px radius kept on
+              // purpose — chat reads warmer than the sharp 2px cards.
+              // `.selectable` re-enables long-press select + copy (the
+              // app disables text selection globally) so the runner can
+              // copy the coach's advice.
+              background: isUser ? "var(--accent-soft)" : "var(--bg-sunken)",
+              color: isUser ? "var(--ink-1)" : "var(--ink-1)",
+              border: `1px solid ${isUser ? "var(--accent)" : "var(--rule)"}`,
+              borderRadius: 10, padding: "10px 14px",
+              fontSize: 13, lineHeight: 1.7,
+              minWidth: 0, maxWidth: "100%",
+              // Belt-and-braces: even though tables get their own
+              // scroll container, very long unbroken tokens (URLs,
+              // model IDs) could still push the bubble wide. Wrap.
+              wordBreak: "break-word", overflowWrap: "anywhere",
+            }}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={mdComponents}>
+                {displayContent}
+              </ReactMarkdown>
+            </div>
+
+            {providerMeta && (
+              <div style={{
+                fontSize: 10,
+                lineHeight: 1.2,
+                color: parsedMessage.meta?.fallback ? "var(--warn)" : "var(--ink-3)",
+                fontFamily: "var(--font-sans)",
+                padding: "0 2px",
+              }}>
+                {providerMeta}
+              </div>
+            )}
+
+            {/* Calendar import affordance — text button below the bubble.
+                Gated by the showCalendarButton coach setting (default ON).
+                Shows on persistent assistant replies only. */}
+            {canImport && (
+              <button
+                onClick={() => extracting ? onStopExtraction?.(m.id) : importToCalendar(displayContent, m.id)}
+                style={{
+                  background: actionButtonBg,
+                  border: `1px solid ${actionButtonBorder}`,
+                  borderRadius: 4,
+                  padding: "5px 10px",
+                  fontSize: 12, lineHeight: 1.2,
+                  color: actionButtonColor,
+                  fontFamily: "var(--font-sans)",
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                }}>
+                {actionButtonIcon}
+                {actionButtonLabel}
+              </button>
+            )}
+
+            {/* Resend affordance — only on the latest user msg, only when
+                not currently waiting on a reply. Fixes the "tab away → come
+                back → network error" case where the user wants one-tap retry
+                without having to copy/paste their text. */}
+            {canResend && (
+              <button
+                onClick={() => sendChat(messageContentForCoach(m.content))}
+                style={{
+                  background: "var(--bg-elevated)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: 4,
+                  padding: "4px 10px",
+                  fontSize: 11, lineHeight: 1.2,
+                  color: "var(--ink-3)",
+                  fontFamily: "var(--font-sans)",
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                }}>
+                ↻ {t("coach.resend")}
+              </button>
+            )}
+          </div>
+        );
+      })}
+      {chatLoading && !chatMessages.some(m => m.isStreaming && String(messageContentForCoach(m.content) || "").trim()) && (
+        <div style={{
+          alignSelf: "flex-start", color: "var(--ink-3)", fontSize: 13,
+          display: "inline-flex", alignItems: "center", gap: 8,
+          padding: "10px 14px",
+        }}>
+          <Spinner size={12} thickness={1.5} color="var(--moss)" />
+          {t("coach.thinking")}
+        </div>
+      )}
+    </div>
+  );
+}, areCoachChatMessagesEqual);
+
+function areCoachChatMessagesEqual(prev, next) {
+  return prev.chatMessages === next.chatMessages
+    && prev.isMobile === next.isMobile
+    && prev.mdComponents === next.mdComponents
+    && prev.lang === next.lang
+    && prev.showCalendarButton === next.showCalendarButton
+    && prev.chatLoading === next.chatLoading
+    && prev.extractingForMsgId === next.extractingForMsgId
+    && prev.importToCalendar === next.importToCalendar
+    && prev.sendChat === next.sendChat
+    && prev.hasPlanImportCache === next.hasPlanImportCache
+    && prev.getPlanImportActionStatus === next.getPlanImportActionStatus
+    && prev.onStopExtraction === next.onStopExtraction;
+}
+
 function formatRunnerClock(iso, lang) {
   if (!iso) return "";
   const date = new Date(iso);
@@ -522,6 +727,41 @@ export function AICoachTab({
   // First-send guidance: { msg, hints } while the one-time nudge modal is open.
   const [coachHints, setCoachHints] = useState(null);
   const [coachImages, setCoachImages] = useState([]);
+  const [composerInput, setComposerInput] = useState(() => String(chatInput || ""));
+  const composerInputRef = useRef(composerInput);
+  const syncComposerInput = useCallback((value) => {
+    const next = String(value ?? "");
+    composerInputRef.current = next;
+    setComposerInput(next);
+    setChatInput?.(next);
+  }, [setChatInput]);
+  const handleComposerInputChange = useCallback((event) => {
+    const next = event.target.value;
+    composerInputRef.current = next;
+    setComposerInput(next);
+  }, []);
+  const deferredComposerInput = useDeferredValue(composerInput);
+
+  useEffect(() => {
+    const next = String(chatInput || "");
+    if (next === composerInputRef.current) return;
+    composerInputRef.current = next;
+    setComposerInput(next);
+  }, [chatInput]);
+
+  // Keep typing responsive: keystrokes update local state immediately, while
+  // the lifted AppShell draft only syncs after the user pauses.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const next = composerInputRef.current;
+      if (next !== String(chatInput || "")) setChatInput?.(next);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [chatInput, composerInput, setChatInput]);
+
+  useEffect(() => () => {
+    setChatInput?.(composerInputRef.current);
+  }, [setChatInput]);
 
   // Single ⚙ toggle replaces the row of toggle buttons (config / memory /
   // prompt preview / edit profile / clear chat). Open the menu to access
@@ -944,12 +1184,12 @@ export function AICoachTab({
     if (!el) return;
     const minHeight = 32;
     const maxHeight = Math.round(13 * 1.35 * 7 + 18);
-    const hasText = chatInput.trim().length > 0;
+    const hasText = composerInput.trim().length > 0;
     el.style.height = `${minHeight}px`;
     if (hasText) {
       el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
     }
-  }, [chatInput, isMobile]);
+  }, [composerInput, isMobile]);
 
   async function handleImagePick(event) {
     const files = Array.from(event.target.files || []);
@@ -1128,7 +1368,7 @@ export function AICoachTab({
   }, [coachHintsPending, coachHints, showCoachConfig]);
 
   async function handleSend() {
-    const userMsg = chatInput.trim();
+    const userMsg = composerInput.trim();
     const attachments = coachImages;
     if ((!userMsg && !attachments.length) || chatLoading || contextCompressing) return;
     let seen = true;
@@ -1138,14 +1378,41 @@ export function AICoachTab({
       if (hints.length) { setCoachHints({ msg: userMsg, hints }); return; }
       markHintsSeen();
     }
-    setChatInput("");
+    syncComposerInput("");
     setCoachImages([]);
     const sent = await sendChat(userMsg || t("coach.image_only_message"), { imageAttachments: attachments });
     if (!sent) {
-      setChatInput(userMsg);
+      syncComposerInput(userMsg);
       if (attachments.length) setCoachImages(attachments);
     }
   }
+
+  const dismissCoachHints = useCallback(() => {
+    markHintsSeen();
+    setCoachHintsPending?.(null);
+    setCoachHints(null);
+  }, [setCoachHintsPending]);
+  const proceedCoachHints = useCallback(() => {
+    if (!coachHints) return;
+    markHintsSeen();
+    const message = coachHints.msg;
+    setCoachHintsPending?.(null);
+    setCoachHints(null);
+    syncComposerInput("");
+    sendChat(message);
+  }, [coachHints, sendChat, setCoachHintsPending, syncComposerInput]);
+  const jumpFromCoachHints = useCallback((action) => {
+    if (!coachHints) return;
+    setCoachHintsPending?.(coachHints.msg);
+    setCoachHints(null);
+    action?.();
+  }, [coachHints, setCoachHintsPending]);
+  const coachHintMeta = useMemo(() => ({
+    config:   { text: t("coach.hint_config"),   jump: () => jumpFromCoachHints(() => setShowCoachConfig(true)) },
+    workouts: { text: t("coach.hint_workouts"), jump: () => jumpFromCoachHints(() => onGoToTraining?.()) },
+    races:    { text: t("coach.hint_races"),    jump: () => jumpFromCoachHints(() => onGoToRaces?.()) },
+    location: { text: t("coach.hint_location"), jump: () => jumpFromCoachHints(() => onOpenLocationSettings?.()) },
+  }), [jumpFromCoachHints, onGoToRaces, onGoToTraining, onOpenLocationSettings, t]);
 
   // Mobile has two views inside this tab — chat (default) and a settings
   // sub-page (opened via the ⚙ button in the input row). Desktop shows
@@ -1169,7 +1436,7 @@ export function AICoachTab({
     ? (calendarImportOn ? "显示" : "隐藏")
     : (calendarImportOn ? "shown" : "hidden");
   const hasCoachImageAttachments = coachImages.length > 0;
-  const canSubmitCoachMessage = !contextCompressing && (chatInput.trim().length > 0 || hasCoachImageAttachments);
+  const canSubmitCoachMessage = !contextCompressing && (composerInput.trim().length > 0 || hasCoachImageAttachments);
   // Weather pill value + state. When location is missing, the pill opens the
   // AI Coach location panel so the user can set the weather place in-context.
   const wStatus = weatherCtx?.status || 'idle';
@@ -1249,8 +1516,8 @@ export function AICoachTab({
     : coachProviderFallback
       ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
       : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`);
-  const contextUsage = useMemo(() => {
-    const countTokens = preciseTextTokenCounter || estimateTextTokens;
+  const countTokens = preciseTextTokenCounter || estimateTextTokens;
+  const baseContextUsage = useMemo(() => {
     let systemTokens;
     try {
       const dataBlock = buildDataBlock({
@@ -1277,12 +1544,15 @@ export function AICoachTab({
     const historyTokens = chatMessages.reduce((sum, m) => (
       sum + countTokens(`[${m.role || "user"}]\n${messageContentForCoach(m.content)}`)
     ), 0);
-    const draft = String(chatInput || "").trim();
+    return { systemTokens, historyTokens };
+  }, [agentActions, chatMessages, coachConfig, countTokens, dailyNotes, logs, memoryFacts, now, profile, races, weatherCtx]);
+  const contextUsage = useMemo(() => {
+    const draft = String(deferredComposerInput || "").trim();
     const draftTokens = draft ? countTokens(`[user]\n${draft}`) : 0;
     const imageTokens = Math.max(0, coachImages.length) * COACH_IMAGE_ESTIMATE_TOKENS;
     const usedTokens = Math.max(0, Math.round(
-      systemTokens
-      + historyTokens
+      baseContextUsage.systemTokens
+      + baseContextUsage.historyTokens
       + draftTokens
       + imageTokens
       + COACH_CONTEXT_FIXED_OVERHEAD_TOKENS
@@ -1299,7 +1569,7 @@ export function AICoachTab({
       totalLabel: formatTokenK(COACH_CONTEXT_WINDOW_TOKENS),
       nearLimit: remainingTokens <= COACH_CONTEXT_WARN_REMAINING_TOKENS,
     };
-  }, [agentActions, chatInput, chatMessages, coachConfig, coachImages.length, dailyNotes, logs, memoryFacts, now, preciseTextTokenCounter, profile, races, weatherCtx]);
+  }, [baseContextUsage, coachImages.length, countTokens, deferredComposerInput]);
   const contextUsageAccent = contextUsage.nearLimit
     ? "var(--danger)"
     : contextUsage.ratio >= 0.75
@@ -2215,176 +2485,21 @@ export function AICoachTab({
           boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.035)",
         } : {}),
       }}>
-        {chatMessages.length === 0 ? (
-          <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, lineHeight: 1.6 }}>
-            <div style={{ whiteSpace: "pre-line" }}>{t("coach.empty")}</div>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {(() => {
-              // The "resend" affordance only shows on the most-recent user message
-              // (an older send is rarely what the user wants to retry — usually they
-              // hit a network error on the last one).
-              let lastUserIdx = -1;
-              for (let k = chatMessages.length - 1; k >= 0; k--) {
-                if (chatMessages[k].role === "user") { lastUserIdx = k; break; }
-              }
-              return chatMessages.map((m, i) => {
-                const isUser = m.role === "user";
-                const parsedMessage = parseCoachMessageMeta(m.content);
-                const displayContent = parsedMessage.text;
-                const providerMeta = !isUser ? formatProviderMeta(parsedMessage.meta, lang) : "";
-                const hasDisplayContent = String(displayContent || "").trim().length > 0;
-                if (!isUser && m.isStreaming && !hasDisplayContent) return null;
-                const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && coachConfig.showCalendarButton !== false;
-                const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
-                const extracting = extractingForMsgId === m.id;
-                const hasCachedAction = canImport && !!hasPlanImportCache?.(m.id);
-                const actionStatus = canImport ? getPlanImportActionStatus?.(m.id) : null;
-                const actionCompleted = actionStatus === "executed";
-                const actionRejected = actionStatus === "rejected";
-                const actionButtonLabel = extracting
-                  ? t("coach.extracting")
-                  : actionCompleted
-                    ? t("coach.import_button_executed")
-                    : actionRejected
-                      ? t("coach.import_button_rejected")
-                      : hasCachedAction
-                        ? t("coach.import_button_cached")
-                        : t("coach.import_button");
-                const actionButtonIcon = extracting
-                  ? <Spinner size={12} thickness={1.5} color="var(--moss)" />
-                  : actionCompleted
-                    ? "✓"
-                    : actionRejected
-                      ? "×"
-                      : hasCachedAction
-                        ? "✓"
-                        : "📅";
-                const actionButtonBg = actionCompleted
-                  ? "var(--moss-bg)"
-                  : actionRejected
-                    ? "var(--bg-elevated)"
-                    : hasCachedAction
-                      ? "var(--moss-bg)"
-                      : "var(--bg-elevated)";
-                const actionButtonBorder = actionCompleted || hasCachedAction
-                  ? "var(--moss)"
-                  : "var(--rule)";
-                const actionButtonColor = actionCompleted || hasCachedAction
-                  ? "var(--moss-deep)"
-                  : actionRejected
-                    ? "var(--ink-3)"
-                    : "var(--ink-2)";
-                return (
-                  <div key={i} className="ultreia-msg-in" style={{
-                    alignSelf: isUser ? "flex-end" : "flex-start",
-                    // Mobile bubbles get wider so long messages don't squeeze into
-                    // a narrow column the user has to keep scrolling to read.
-                    // Color already differentiates user vs coach so the visual
-                    // "tail" of leftover horizontal space isn't needed.
-                    maxWidth: isMobile ? "94%" : "85%",
-                    display: "flex", flexDirection: "column",
-                    alignItems: isUser ? "flex-end" : "flex-start",
-                    gap: 6, minWidth: 0,
-                  }}>
-                    <div className="selectable" style={{
-                      // On-token bubbles: user = stamped ink block (echoes the
-                      // s.tag stamp), coach = sunken panel with a hairline (the
-                      // app's borders-not-fills rule). Soft 10px radius kept on
-                      // purpose — chat reads warmer than the sharp 2px cards.
-                      // `.selectable` re-enables long-press select + copy (the
-                      // app disables text selection globally) so the runner can
-                      // copy the coach's advice.
-                      background: isUser ? "var(--accent-soft)" : "var(--bg-sunken)",
-                      color: isUser ? "var(--ink-1)" : "var(--ink-1)",
-                      border: `1px solid ${isUser ? "var(--accent)" : "var(--rule)"}`,
-                      borderRadius: 10, padding: "10px 14px",
-                      fontSize: 13, lineHeight: 1.7,
-                      minWidth: 0, maxWidth: "100%",
-                      // Belt-and-braces: even though tables get their own
-                      // scroll container, very long unbroken tokens (URLs,
-                      // model IDs) could still push the bubble wide. Wrap.
-                      wordBreak: "break-word", overflowWrap: "anywhere",
-                    }}>
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={mdComponents}>
-                        {displayContent}
-                      </ReactMarkdown>
-                    </div>
-
-                    {providerMeta && (
-                      <div style={{
-                        fontSize: 10,
-                        lineHeight: 1.2,
-                        color: parsedMessage.meta?.fallback ? "var(--warn)" : "var(--ink-3)",
-                        fontFamily: "var(--font-sans)",
-                        padding: "0 2px",
-                      }}>
-                        {providerMeta}
-                      </div>
-                    )}
-
-                    {/* Calendar import affordance — text button below the bubble.
-                        Gated by the showCalendarButton coach setting (default ON).
-                        Shows on persistent assistant replies only. */}
-                    {canImport && (
-                      <button
-                        onClick={() => extracting ? onStopExtraction?.(m.id) : importToCalendar(displayContent, m.id)}
-                        style={{
-                          background: actionButtonBg,
-                          border: `1px solid ${actionButtonBorder}`,
-                          borderRadius: 4,
-                          padding: "5px 10px",
-                          fontSize: 12, lineHeight: 1.2,
-                          color: actionButtonColor,
-                          fontFamily: "var(--font-sans)",
-                          cursor: "pointer",
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                        }}>
-                        {actionButtonIcon}
-                        {actionButtonLabel}
-                      </button>
-                    )}
-
-                    {/* Resend affordance — only on the latest user msg, only when
-                        not currently waiting on a reply. Fixes the "tab away → come
-                        back → network error" case where the user wants one-tap retry
-                        without having to copy/paste their text. */}
-                    {canResend && (
-                      <button
-                        onClick={() => sendChat(messageContentForCoach(m.content))}
-                        style={{
-                          background: "var(--bg-elevated)",
-                          border: "1px solid var(--rule)",
-                          borderRadius: 4,
-                          padding: "4px 10px",
-                          fontSize: 11, lineHeight: 1.2,
-                          color: "var(--ink-3)",
-                          fontFamily: "var(--font-sans)",
-                          cursor: "pointer",
-                          display: "inline-flex", alignItems: "center", gap: 5,
-                        }}>
-                        ↻ {t("coach.resend")}
-                      </button>
-                    )}
-                  </div>
-                );
-              });
-            })()}
-            {chatLoading && !chatMessages.some(m => m.isStreaming && String(messageContentForCoach(m.content) || "").trim()) && (
-              <div style={{
-                alignSelf: "flex-start", color: "var(--ink-3)", fontSize: 13,
-                display: "inline-flex", alignItems: "center", gap: 8,
-                padding: "10px 14px",
-              }}>
-                <Spinner size={12} thickness={1.5} color="var(--moss)" />
-                {t("coach.thinking")}
-              </div>
-            )}
-          </div>
-        )}
+        <CoachChatMessages
+          chatMessages={chatMessages}
+          isMobile={isMobile}
+          mdComponents={mdComponents}
+          lang={lang}
+          t={t}
+          showCalendarButton={coachConfig.showCalendarButton !== false}
+          importToCalendar={importToCalendar}
+          chatLoading={chatLoading}
+          sendChat={sendChat}
+          extractingForMsgId={extractingForMsgId}
+          hasPlanImportCache={hasPlanImportCache}
+          getPlanImportActionStatus={getPlanImportActionStatus}
+          onStopExtraction={onStopExtraction}
+        />
       </div>
 
       {/* Jump to oldest — shows once the user scrolls down into history. */}
@@ -2477,8 +2592,8 @@ export function AICoachTab({
           <textarea
             ref={chatInputRef}
             rows={isMobile ? 1 : 9}
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
+            value={composerInput}
+            onChange={handleComposerInputChange}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
             disabled={contextCompressing}
             style={{
@@ -2545,28 +2660,9 @@ export function AICoachTab({
 
       {/* MOBILE settings — bottom sheet. Daily-use controls stay first; internal
           diagnostics and destructive actions sit behind Advanced. */}
-      {coachHints && (() => {
-        const proceed = () => {
-          markHintsSeen();
-          const m = coachHints.msg;
-          setCoachHintsPending?.(null);
-          setCoachHints(null);
-          setChatInput("");
-          sendChat(m);
-        };
-        const dismiss = () => { markHintsSeen(); setCoachHintsPending?.(null); setCoachHints(null); };
-        // Jump to a setting WITHOUT marking seen: stash the message as pending so
-        // the nudge re-opens (recomputed) when the user comes back.
-        const jumpTo = (action) => { setCoachHintsPending?.(coachHints.msg); setCoachHints(null); action(); };
-        const META = {
-          config:   { text: t("coach.hint_config"),   jump: () => jumpTo(() => setShowCoachConfig(true)) },
-          workouts: { text: t("coach.hint_workouts"), jump: () => jumpTo(() => onGoToTraining?.()) },
-          races:    { text: t("coach.hint_races"),    jump: () => jumpTo(() => onGoToRaces?.()) },
-          location: { text: t("coach.hint_location"), jump: () => jumpTo(() => onOpenLocationSettings?.()) },
-        };
-        return (
-          <ModalRoot onClose={dismiss}>
-            <div onClick={dismiss} className="ultreia-overlay-in" style={{
+      {coachHints && (
+          <ModalRoot onClose={dismissCoachHints}>
+            <div onClick={dismissCoachHints} className="ultreia-overlay-in" style={{
               position: "fixed", inset: 0, background: "rgba(20,20,19,0.45)",
               backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
               display: "flex", alignItems: "center", justifyContent: "center",
@@ -2587,21 +2683,20 @@ export function AICoachTab({
                       display: "flex", alignItems: "center", gap: 10,
                       border: "1px solid var(--rule)", borderRadius: 8, padding: "10px 12px",
                     }}>
-                      <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5, color: "var(--ink-1)" }}>{META[id].text}</span>
-                      <button onClick={META[id].jump} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", minHeight: 0, flexShrink: 0 }}>
+                      <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5, color: "var(--ink-1)" }}>{coachHintMeta[id].text}</span>
+                      <button onClick={coachHintMeta[id].jump} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", minHeight: 0, flexShrink: 0 }}>
                         {t("coach.hint_go")}
                       </button>
                     </div>
                   ))}
                 </div>
-                <button onClick={proceed} style={{ ...s.btn, width: "100%" }}>
+                <button onClick={proceedCoachHints} style={{ ...s.btn, width: "100%" }}>
                   {t("coach.hints_proceed")}
                 </button>
               </div>
             </div>
           </ModalRoot>
-        );
-      })()}
+      )}
 
       {showCoachMenu && isMobile && (() => {
         // pick: close the menu then act — for items that navigate away (edit

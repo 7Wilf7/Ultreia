@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
@@ -25,9 +26,9 @@ function inHorizontalScroller(node) {
  * mobile-only Settings page.
  *
  * Each tab is its OWN scroll container (so scroll position is preserved per tab).
- * Only the active pane and
- * its immediate neighbors render real content — far panes stay empty so we never
- * mount five heavy tabs at once.
+ * The active pane and its immediate neighbors render first. Other panes are
+ * mounted after the browser has idle time, so first paint stays light but later
+ * bottom-nav switches don't pay the full mount cost.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
@@ -36,6 +37,40 @@ function inHorizontalScroller(node) {
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
 const SNAP_MS = 220;
+const TAB_HAPTIC_MS = 8;
+
+function triggerTabHaptic() {
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(TAB_HAPTIC_MS);
+    }
+  } catch { /* haptics are best-effort */ }
+}
+
+function tabWindow(idx, count) {
+  const tabs = [idx];
+  if (idx > 0) tabs.push(idx - 1);
+  if (idx < count - 1) tabs.push(idx + 1);
+  return tabs.sort((a, b) => a - b);
+}
+
+function withRenderedTabs(prev, indices, count) {
+  const next = new Set(prev);
+  indices.forEach((idx) => {
+    if (idx >= 0 && idx < count) next.add(idx);
+  });
+  if (next.size === prev.length) return prev;
+  return Array.from(next).sort((a, b) => a - b);
+}
+
+function scheduleIdle(fn) {
+  if (typeof requestIdleCallback === "function") {
+    const id = requestIdleCallback(fn, { timeout: 1400 });
+    return () => cancelIdleCallback(id);
+  }
+  const id = setTimeout(fn, 900);
+  return () => clearTimeout(id);
+}
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
   const t = useT();
@@ -43,7 +78,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const trackRef = useRef(null);
   const paneRefs = useRef({});
   const setPaneRef = (idx) => (el) => { if (el) paneRefs.current[idx] = el; };
-  const activePane = () => paneRefs.current[tab];
+  const [visualTab, setVisualTab] = useState(tab);
+  const visualTabRef = useRef(tab);
+  const [renderedTabs, setRenderedTabs] = useState(() => tabWindow(tab, tabCount));
+  const renderedTabsRef = useRef(renderedTabs);
+  const renderedTabSet = new Set(renderedTabs);
+  const activePane = () => paneRefs.current[visualTabRef.current];
 
   // Horizontal pager drag offset. During finger-following this updates a CSS
   // variable directly instead of setState on every touchmove; rendering the
@@ -72,6 +112,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const [instant, setInstant] = useState(false);
   const [tapWindow, setTapWindow] = useState(null);
   const tapWindowTimer = useRef(null);
+  const lastHapticAt = useRef(0);
 
   useEffect(() => () => {
     if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
@@ -83,6 +124,61 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   function scrollActiveToTop() {
     activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
+
+  const commitVisualTab = useCallback((next, { urgent = false } = {}) => {
+    const nextRenderedTabs = withRenderedTabs(renderedTabsRef.current, tabWindow(next, tabCount), tabCount);
+    const renderedChanged = nextRenderedTabs !== renderedTabsRef.current;
+    renderedTabsRef.current = nextRenderedTabs;
+    visualTabRef.current = next;
+
+    if (urgent) {
+      flushSync(() => {
+        if (renderedChanged) setRenderedTabs(nextRenderedTabs);
+        setVisualTab(next);
+      });
+      return;
+    }
+
+    if (renderedChanged) setRenderedTabs(nextRenderedTabs);
+    setVisualTab(next);
+  }, [tabCount]);
+
+  useEffect(() => {
+    if (tab === visualTabRef.current) return;
+    commitVisualTab(tab);
+    setDragXpx(0, true);
+    setDragging(false);
+    setInstant(true);
+    requestAnimationFrame(() => setInstant(false));
+  }, [tab, commitVisualTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let cancelScheduled = null;
+    const start = visualTabRef.current;
+    const order = Array.from({ length: tabCount }, (_, idx) => idx)
+      .sort((a, b) => Math.abs(a - start) - Math.abs(b - start) || a - b);
+
+    let cursor = 0;
+    const warmNext = () => {
+      if (cancelled) return;
+      while (cursor < order.length) {
+        const idx = order[cursor++];
+        const nextRenderedTabs = withRenderedTabs(renderedTabsRef.current, [idx], tabCount);
+        if (nextRenderedTabs === renderedTabsRef.current) continue;
+        renderedTabsRef.current = nextRenderedTabs;
+        setRenderedTabs(nextRenderedTabs);
+        break;
+      }
+      if (cursor < order.length) cancelScheduled = scheduleIdle(warmNext);
+    };
+
+    cancelScheduled = scheduleIdle(warmNext);
+    return () => {
+      cancelled = true;
+      cancelScheduled?.();
+    };
+  }, [tabCount]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -98,8 +194,17 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const touch = useRef(null);
 
   // Jump to `next` tab. Used by drag-commit AND by bottom-nav taps.
-  function go(next, { animate = true } = {}) {
-    if (next === tab || next < 0 || next >= tabCount) return;
+  function go(next, { animate = true, haptic = false, hapticAt = 0 } = {}) {
+    const current = visualTabRef.current;
+    if (next === current || next < 0 || next >= tabCount) return;
+    if (haptic) {
+      const at = hapticAt || lastHapticAt.current + 61;
+      if (at - lastHapticAt.current > 60) {
+        triggerTabHaptic();
+        lastHapticAt.current = at;
+      }
+    }
+    commitVisualTab(next, { urgent: !animate });
     if (!animate) {
       setInstant(true);
       requestAnimationFrame(() => setInstant(false));
@@ -107,10 +212,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
       setDragging(false);
       setDragXpx(0, true);
-      setTapWindow({ from: Math.min(tab, next), to: Math.max(tab, next) });
+      setTapWindow({ from: Math.min(current, next), to: Math.max(current, next) });
       tapWindowTimer.current = setTimeout(() => setTapWindow(null), SNAP_MS + 90);
     }
-    setTab(next);
+    startTransition(() => setTab(next));
   }
 
   function onTouchStart(e) {
@@ -144,7 +249,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         // direction, leave it to that tab's own swipe handler — the top pager
         // only takes over once the inner toggle is at its edge. ('inner' = stay
         // out of the way; we don't move the outer track at all.)
-        const inner = getInnerPager?.(tab);
+        const current = visualTabRef.current;
+        const inner = getInnerPager?.(current);
         const dir = dx < 0 ? 1 : -1;
         const innerCanMove = inner && ((dir > 0 && inner.index < inner.count - 1) || (dir < 0 && inner.index > 0));
         st.mode = innerCanMove ? "inner" : "page";
@@ -156,7 +262,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
     if (st.mode === "page") {
       e.preventDefault?.();
-      const atFirst = tab <= 0, atLast = tab >= tabCount - 1;
+      const current = visualTabRef.current;
+      const atFirst = current <= 0, atLast = current >= tabCount - 1;
       const d = ((atFirst && dx > 0) || (atLast && dx < 0)) ? dx * EDGE_RESIST : dx;
       setDragXpx(d);
     }
@@ -173,15 +280,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const dt = Math.max(1, (e.timeStamp || 0) - (st.t || 0));
       const velocity = dx / dt;
       const threshold = Math.min(W * 0.16, 58);
+      const current = visualTabRef.current;
       let dir = 0;
-      if ((dx <= -threshold || velocity < -0.38) && tab < tabCount - 1) dir = 1;
-      else if ((dx >= threshold || velocity > 0.38) && tab > 0) dir = -1;
+      if ((dx <= -threshold || velocity < -0.38) && current < tabCount - 1) dir = 1;
+      else if ((dx >= threshold || velocity > 0.38) && current > 0) dir = -1;
       setDragging(false); // re-enable the snap transition
       if (dir !== 0) {
         // Commit immediately so rapid repeated swipes can start from the new
         // tab without waiting for the old 280ms delayed setTab.
         setDragXpx(dx + (dir === 1 ? W : -W), true);
-        setTab(tab + dir);
+        go(current + dir, { animate: false, haptic: true, hapticAt: e.timeStamp || 0 });
         requestAnimationFrame(() => setDragXpx(0, true));
       } else {
         requestAnimationFrame(() => setDragXpx(0, true)); // snap back
@@ -194,14 +302,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   function onTabTap(idx, e) {
     const now = e?.timeStamp ?? 0;
+    const current = visualTabRef.current;
     const pointerDown = pointerDownRef.current;
-    if (pointerDown.switched && pointerDown.idx === idx && idx === tab && now - pointerDown.at < 500) {
+    if (pointerDown.switched && pointerDown.idx === idx && idx === current && now - pointerDown.at < 500) {
       pointerDownRef.current = { idx: -1, at: 0, switched: false };
       return;
     }
     const prev = lastTabTap.current;
     lastTabTap.current = { idx, at: now };
-    if (idx === tab && prev.idx === idx && now - prev.at < 320) {
+    if (idx === current && prev.idx === idx && now - prev.at < 320) {
       if (idx === 0 && onRefresh) {
         const pane = activePane();
         if ((pane?.scrollTop || 0) > 4) {
@@ -214,17 +323,31 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       scrollActiveToTop();
       return;
     }
-    go(idx, { animate: Math.abs(idx - tab) <= 1 });
+    go(idx, { animate: false, haptic: true, hapticAt: now });
+  }
+
+  function commitTabPress(idx, e) {
+    const current = visualTabRef.current;
+    const switched = idx !== current;
+    const at = e.timeStamp || 0;
+    const previous = pointerDownRef.current;
+    if (!switched && previous.switched && previous.idx === idx && at - previous.at < 140) {
+      return;
+    }
+    pointerDownRef.current = { idx, at, switched };
+    if (switched) {
+      lastTabTap.current = { idx: -1, at: 0 };
+      go(idx, { animate: false, haptic: true, hapticAt: at });
+    }
   }
 
   function onTabPointerDown(idx, e) {
     if (e.pointerType === "mouse") return;
-    const switched = idx !== tab;
-    pointerDownRef.current = { idx, at: e.timeStamp || 0, switched };
-    if (idx !== tab) {
-      lastTabTap.current = { idx: -1, at: 0 };
-      go(idx, { animate: false });
-    }
+    commitTabPress(idx, e);
+  }
+
+  function onTabTouchStart(idx, e) {
+    commitTabPress(idx, e);
   }
 
   const pullY = refreshing ? 44 : 0;
@@ -275,14 +398,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           display: "flex",
           height: "100%",
           width: `${tabCount * 100}%`,
-          transform: `translate3d(calc(${(-tab * 100) / tabCount}% + var(--drag-x, 0px)), ${pullY}px, 0)`,
+          transform: `translate3d(calc(${(-visualTab * 100) / tabCount}% + var(--drag-x, 0px)), ${pullY}px, 0)`,
           transition: trackTransition,
           willChange: (dragging || refreshing || instant) ? "transform" : undefined,
         }} ref={trackRef}>
           {TABS.map(({ idx }) => {
-            const isAdjacent = tapWindow
+            const shouldRender = renderedTabSet.has(idx) || (tapWindow
               ? idx >= tapWindow.from && idx <= tapWindow.to
-              : Math.abs(idx - tab) <= 1;
+              : Math.abs(idx - visualTab) <= 1);
             return (
               <div
                 key={idx}
@@ -301,7 +424,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
                 }}>
-                {isAdjacent ? renderTab(idx) : null}
+                {shouldRender ? renderTab(idx) : null}
               </div>
             );
           })}
@@ -324,12 +447,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         WebkitTapHighlightColor: "transparent",
       }}>
         {TABS.map(({ key, idx, Icon }) => {
-          const active = tab === idx;
+          const active = visualTab === idx;
           const showSpinner = idx === 2 && coachBusy;
           return (
             <button
               key={key}
               onPointerDown={(e) => onTabPointerDown(idx, e)}
+              onTouchStart={(e) => onTabTouchStart(idx, e)}
               onClick={(e) => onTabTap(idx, e)}
               style={{
                 background: "transparent",
@@ -368,7 +492,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 color: active ? "var(--accent-dark)" : "var(--ink-3)",
                 transform: active ? "translateY(-1px)" : "none",
                 boxShadow: active ? "0 0 0 1px oklch(0.54 0.055 138 / 0.13), 0 0 22px oklch(0.38 0.060 138 / 0.18)" : "none",
-                transition: "background-color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out), color 160ms var(--ease-out), box-shadow 160ms var(--ease-out)",
+                transition: "transform 90ms var(--ease-out), box-shadow 90ms var(--ease-out)",
               }}>
                 <Icon size={20} />
                 {showSpinner && (

@@ -4034,8 +4034,6 @@ Rules:
     );
     return null;
   };
-  const tabContent = renderTab(tab);
-
   const modals = (
     <>
       {contextCompressing && (
@@ -4443,7 +4441,7 @@ Rules:
             which === 0 ? { index: trainingView === "charts" ? 1 : 0, count: 2 }
             : which === TAB_RACES ? { index: racesTopTab === "pr" ? 1 : 0, count: 2 }
             : null}
-          onRefresh={tab === 0 ? refresh : null} refreshing={refreshing} />
+          onRefresh={refresh} refreshing={refreshing} />
         {modals}
       </>
     );
@@ -4614,7 +4612,7 @@ Rules:
         })}
       </div>
 
-      {tabContent}
+      {renderTab(tab)}
       {modals}
     </div>
   );

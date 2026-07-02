@@ -5,7 +5,7 @@
 ## Current Source Of Truth
 
 - Brand name: `Ultreia`
-- Web domain: `https://www.ultreia.run/`
+- Web domain: `https://ultreia.run/`
 - GitHub repo: `https://github.com/7Wilf7/Ultreia`
 - npm package name: `ultreia`
 - Android applicationId / namespace: `run.ultreia.app`
@@ -42,13 +42,16 @@ The logo system uses three ideas:
 - Firebase Android config moved to project `ultreia-ce3d9`.
 - New demo account created and seeded.
 - Release workflow now uploads the stable APK mirror as `ultreia-latest.apk`.
+- Public web entry switched to `https://ultreia.run/`; the `www` subdomain is
+  only kept as a 308 redirect to the apex domain.
 
 ## Dashboard Items
 
 - Firebase `FCM_SERVICE_ACCOUNT` secret in Supabase must contain the full service
   account JSON from the current Firebase project.
-- Old web domain entries can be removed from Vercel and Supabase Auth redirect
-  settings after confirming no local test flow still needs them.
+- Supabase Auth redirect settings should keep `https://ultreia.run/` as the
+  canonical redirect. The `www` entry is only needed while old links may still
+  be in circulation.
 - The previously shared Supabase service-role key should be rotated after this
   migration work is finished.
 

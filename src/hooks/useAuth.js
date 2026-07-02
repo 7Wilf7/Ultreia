@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { registerWithInvite } from "../lib/db/invites";
 import { clearPushRegistrationForCurrentUser } from "../lib/push";
 
-const AUTH_REDIRECT_TO = "https://www.ultreia.run/";
+const AUTH_REDIRECT_TO = "https://ultreia.run/";
 
 export function useAuth() {
   const [user, setUser] = useState(null);

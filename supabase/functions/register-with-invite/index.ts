@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
   const { error: resendErr } = await db.auth.resend({
     type: "signup",
     email,
-    options: { emailRedirectTo: "https://www.ultreia.run/" },
+    options: { emailRedirectTo: "https://ultreia.run/" },
   });
   if (resendErr) return json({ error: "confirmation_send_failed", detail: resendErr.message }, 500);
 

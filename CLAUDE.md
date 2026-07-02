@@ -8,7 +8,7 @@
 
 ## 部署 & 分发
 
-- **Web 版**：部署在 Vercel，主域名 `https://www.ultreia.run/`（2026-06-12 切换完成，裸域 308 → www）；旧域名已允许下线；rebrand 全记录见 `docs-internal/rebrand-ultreia.md`
+- **Web 版**：部署在 Vercel，主域名 `https://ultreia.run/`（2026-07-02 切换为裸域；`www` 子域 308 → 裸域）；rebrand 全记录见 `docs-internal/rebrand-ultreia.md`
 - **GitHub repo**：`https://github.com/7Wilf7/Ultreia`（**public**；main 分支推送后 Vercel 自动构建）
 - **PWA**：已通过 vite-plugin-pwa 配置（`autoUpdate` 模式，前端发版后用户重开即拿新版）
 - **Android APK**：用 Capacitor 打包，分发走 GitHub Releases；APP 内"检查更新"按钮调 GitHub Releases API 比对版本

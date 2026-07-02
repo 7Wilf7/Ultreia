@@ -2,6 +2,8 @@
 
 Ultreia 是一个面向耐力跑者的个人教练操作台：训练记录、日历计划、赛事管理、AI Coach、天气和钱包扣费集中在同一个 React/Vite 单页应用里。
 
+正式 Web 入口：<https://ultreia.run/>
+
 ## 常用命令
 
 - `npm run dev`：本地开发
@@ -18,4 +20,4 @@ Ultreia 是一个面向耐力跑者的个人教练操作台：训练记录、日
 
 ## 发版提示
 
-Web 版随 `main` 分支推送自动部署到 Vercel。Android APK 只在明确要发版时 bump 版本并推 `vX.Y.Z` tag，由 GitHub Actions 构建 release APK。
+Web 版随 `main` 分支推送自动部署到 Vercel，正式入口是 `https://ultreia.run/`。Android APK 只在明确要发版时 bump 版本并推 `vX.Y.Z` tag，由 GitHub Actions 构建 release APK。

@@ -191,12 +191,12 @@ export function pickGreeting(date = new Date(), scope = "default") {
 }
 
 // Time-of-day greeting from LOCAL device time. Buckets:
-//   05–11 morning · 11–13 noon · 13–18 afternoon · 18–23 evening · else night
+//   05–12 morning · 12–13 noon · 13–18 afternoon · 18–23 evening · else night
 export function timeGreeting(lang, date = new Date()) {
   const h = date.getHours();
   const key =
     h < 5 ? "night" :
-    h < 11 ? "morning" :
+    h < 12 ? "morning" :
     h < 13 ? "noon" :
     h < 18 ? "afternoon" :
     h < 23 ? "evening" : "night";

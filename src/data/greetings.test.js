@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { GREETINGS, pickGreeting } from "./greetings";
+import { GREETINGS, pickGreeting, timeGreeting } from "./greetings";
 
 function makeStorage() {
   const store = new Map();
@@ -48,5 +48,12 @@ describe("splash greetings", () => {
     ].forEach(phrase => {
       expect(text).not.toContain(phrase);
     });
+  });
+
+  it("keeps late morning in the morning greeting bucket", () => {
+    expect(timeGreeting("en", new Date("2026-07-03T11:21:00+08:00"))).toBe("Good morning");
+    expect(timeGreeting("zh", new Date("2026-07-03T11:21:00+08:00"))).toBe("早上好");
+    expect(timeGreeting("zh", new Date("2026-07-03T12:00:00+08:00"))).toBe("中午好");
+    expect(timeGreeting("zh", new Date("2026-07-03T13:00:00+08:00"))).toBe("下午好");
   });
 });

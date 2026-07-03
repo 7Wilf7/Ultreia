@@ -3617,6 +3617,7 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
   const appDialog = useAppDialog();
   const [view, setView] = useState("current");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const baseFacts = useMemo(() => {
     const statuses = view === "archived" ? ["archived"] : ["active", "proposed"];
     return [...(facts || [])]
@@ -3634,12 +3635,7 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
       const category = fact.category || "other";
       counts.set(category, (counts.get(category) || 0) + 1);
     }
-    const categoryOrder = new Map(MEMORY_SECTIONS.map((section, index) => [section.key, index]));
-    return [...counts.entries()].sort((a, b) => {
-      const byOrder = (categoryOrder.get(a[0]) ?? 99) - (categoryOrder.get(b[0]) ?? 99);
-      if (byOrder) return byOrder;
-      return String(a[0]).localeCompare(String(b[0]));
-    });
+    return sortMemoryCategoryEntries([...counts.entries()]);
   }, [baseFacts]);
   const categoryExists = categorySummary.some(([category]) => category === categoryFilter);
   const selectedCategory = categoryFilter === "all" || categoryExists ? categoryFilter : "all";
@@ -3652,6 +3648,17 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
     if (!baseFacts.length) return [];
     return [["all", baseFacts.length], ...categorySummary];
   }, [baseFacts.length, categorySummary]);
+  const groupedCategories = useMemo(() => (
+    groupMemoryFactsByCategory(visibleFacts, displayLang, t)
+  ), [visibleFacts, displayLang, t]);
+  function toggleCategoryExpanded(category) {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) next.delete(category);
+      else next.add(category);
+      return next;
+    });
+  }
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -3712,62 +3719,220 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
         </div>
       ) : (
         <div style={{ display: "grid", gap: 7 }}>
-          {visibleFacts.map(fact => (
-            <div key={fact.rowId || fact.clientId || fact.id} style={{
-              border: "1px solid var(--rule-soft)",
-              borderRadius: 4,
-              background: "var(--paper-2)",
-              padding: "10px 11px",
-            }}>
-              <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-1)" }}>
-                {displayLang === "zh"
-                  ? (fact.contentZh || fact.contentEn || "-")
-                  : (fact.contentEn || fact.contentZh || "-")}
-              </div>
-              <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                {fact.status === "proposed" && (
-                  <>
-                    <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_accept")}</button>
-                    <button type="button" onClick={() => onStatus?.(fact, "rejected")} style={memoryFactButtonStyle}>{t("coach.memory_fact_reject")}</button>
-                  </>
-                )}
-                {fact.status === "active" && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (await appDialog.confirm(t("coach.memory_fact_archive_confirm"))) {
-                        onStatus?.(fact, "archived");
-                      }
-                    }}
-                    style={memoryFactButtonStyle}
-                  >
-                    {t("coach.memory_fact_archive")}
-                  </button>
-                )}
-                {fact.status === "archived" && (
-                  <>
-                    <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_restore")}</button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (await appDialog.confirm(t("coach.memory_fact_delete_confirm"), { danger: true, confirmLabel: t("common.delete") })) {
-                          onDelete?.(fact);
-                        }
-                      }}
-                      style={{ ...memoryFactButtonStyle, color: "var(--danger)", borderColor: "var(--danger)" }}
-                    >
-                      {t("coach.memory_fact_delete")}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+          {groupedCategories.map(group => (
+            <MemoryFactCategorySection
+              key={group.category}
+              group={group}
+              expanded={expandedCategories.has(group.category) || group.hasProposed}
+              onToggle={() => toggleCategoryExpanded(group.category)}
+              displayLang={displayLang}
+              onStatus={onStatus}
+              onDelete={onDelete}
+              t={t}
+              appDialog={appDialog}
+            />
           ))}
         </div>
       )}
     </div>
   );
 }
+
+const MEMORY_CATEGORY_ORDER = new Map(MEMORY_SECTIONS.map((section, index) => [section.key, index]));
+
+function sortMemoryCategoryEntries(entries) {
+  return [...entries].sort((a, b) => {
+    const byOrder = (MEMORY_CATEGORY_ORDER.get(a[0]) ?? 99) - (MEMORY_CATEGORY_ORDER.get(b[0]) ?? 99);
+    if (byOrder) return byOrder;
+    return String(a[0]).localeCompare(String(b[0]));
+  });
+}
+
+function getMemoryFactText(fact, displayLang) {
+  return displayLang === "zh"
+    ? (fact.contentZh || fact.contentEn || "-")
+    : (fact.contentEn || fact.contentZh || "-");
+}
+
+function normalizeMemorySummaryText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/[。.!！?？;；,，]+$/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function cleanMemorySummaryText(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/[。.!！?？;；]+$/g, "")
+    .trim();
+}
+
+function buildMemoryCategorySummary(texts, displayLang, t) {
+  const cleaned = texts.map(cleanMemorySummaryText).filter(Boolean);
+  if (!cleaned.length) return t("coach.memory_category_summary_empty");
+  const shown = cleaned.slice(0, 4);
+  const joiner = displayLang === "zh" ? "；" : "; ";
+  let summary = shown.join(joiner);
+  if (summary && displayLang === "zh") summary = `${summary}。`;
+  else if (summary && !/[.!?]$/.test(summary)) summary = `${summary}.`;
+  const remaining = cleaned.length - shown.length;
+  if (remaining > 0) {
+    summary = `${summary} ${t("coach.memory_category_summary_more", { count: remaining })}`;
+  }
+  return summary;
+}
+
+function groupMemoryFactsByCategory(facts, displayLang, t) {
+  const groups = new Map();
+  for (const fact of facts) {
+    const category = fact.category || "other";
+    if (!groups.has(category)) {
+      groups.set(category, { category, facts: [], texts: [], textKeys: new Set(), hasProposed: false });
+    }
+    const group = groups.get(category);
+    group.facts.push(fact);
+    if (fact.status === "proposed") group.hasProposed = true;
+    const text = getMemoryFactText(fact, displayLang);
+    const key = normalizeMemorySummaryText(text);
+    if (key && !group.textKeys.has(key)) {
+      group.textKeys.add(key);
+      group.texts.push(text);
+    }
+  }
+  return sortMemoryCategoryEntries([...groups.entries()]).map(([, group]) => ({
+    category: group.category,
+    facts: group.facts,
+    hasProposed: group.hasProposed,
+    summary: buildMemoryCategorySummary(group.texts, displayLang, t),
+  }));
+}
+
+function MemoryFactCategorySection({ group, expanded, onToggle, displayLang, onStatus, onDelete, t, appDialog }) {
+  return (
+    <div style={memoryFactCategorySectionStyle}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={onToggle}
+        style={memoryFactCategoryHeaderButtonStyle}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 650, color: "var(--ink-1)", minWidth: 0 }}>
+            {t(`coach.memory_fact_category_${group.category}`)}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap" }}>
+            {t("coach.memory_category_fact_count", { count: group.facts.length })}
+          </div>
+        </div>
+        <div style={{ marginTop: 6, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-2)" }}>
+          {group.summary}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 8 }}>
+          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
+            {expanded ? t("coach.memory_category_collapse") : t("coach.memory_category_expand")}
+          </span>
+          <span aria-hidden="true" style={{ fontSize: 14, color: "var(--ink-3)", lineHeight: 1 }}>
+            {expanded ? "-" : "+"}
+          </span>
+        </div>
+      </button>
+      {expanded && (
+        <div style={memoryFactDetailsStyle}>
+          {group.facts.map((fact, index) => (
+            <MemoryFactRow
+              key={fact.rowId || fact.clientId || fact.id}
+              fact={fact}
+              hasTopBorder={index > 0}
+              displayLang={displayLang}
+              onStatus={onStatus}
+              onDelete={onDelete}
+              t={t}
+              appDialog={appDialog}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MemoryFactRow({ fact, hasTopBorder, displayLang, onStatus, onDelete, t, appDialog }) {
+  return (
+    <div style={{ ...memoryFactRowStyle, borderTop: hasTopBorder ? "1px solid var(--rule-soft)" : "none" }}>
+      <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-1)" }}>
+        {getMemoryFactText(fact, displayLang)}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+        {fact.status === "proposed" && (
+          <>
+            <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_accept")}</button>
+            <button type="button" onClick={() => onStatus?.(fact, "rejected")} style={memoryFactButtonStyle}>{t("coach.memory_fact_reject")}</button>
+          </>
+        )}
+        {fact.status === "active" && (
+          <button
+            type="button"
+            onClick={async () => {
+              if (await appDialog.confirm(t("coach.memory_fact_archive_confirm"))) {
+                onStatus?.(fact, "archived");
+              }
+            }}
+            style={memoryFactButtonStyle}
+          >
+            {t("coach.memory_fact_archive")}
+          </button>
+        )}
+        {fact.status === "archived" && (
+          <>
+            <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_restore")}</button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (await appDialog.confirm(t("coach.memory_fact_delete_confirm"), { danger: true, confirmLabel: t("common.delete") })) {
+                  onDelete?.(fact);
+                }
+              }}
+              style={{ ...memoryFactButtonStyle, color: "var(--danger)", borderColor: "var(--danger)" }}
+            >
+              {t("coach.memory_fact_delete")}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const memoryFactCategorySectionStyle = {
+  border: "1px solid var(--rule-soft)",
+  borderRadius: 6,
+  background: "var(--paper-2)",
+  overflow: "hidden",
+};
+
+const memoryFactCategoryHeaderButtonStyle = {
+  width: "100%",
+  minHeight: 0,
+  border: "none",
+  borderRadius: 0,
+  background: "transparent",
+  color: "inherit",
+  padding: "10px 11px",
+  textAlign: "left",
+  cursor: "pointer",
+  WebkitTapHighlightColor: "transparent",
+};
+
+const memoryFactDetailsStyle = {
+  borderTop: "1px solid var(--rule-soft)",
+  background: "var(--bg-elevated)",
+};
+
+const memoryFactRowStyle = {
+  padding: "10px 11px",
+};
 
 const memoryFactFilterButtonStyle = {
   ...s.btnGhost,

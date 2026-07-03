@@ -116,6 +116,12 @@ const navBtn = {
   WebkitTapHighlightColor: "transparent",
 };
 
+function getDaySheetHeight({ isMobile, isPast, isToday }) {
+  if (isPast) return isMobile ? "min(70dvh, calc(100dvh - 72px))" : "min(70vh, 720px)";
+  if (isToday) return isMobile ? "min(64dvh, calc(100dvh - 72px))" : "min(64vh, 680px)";
+  return isMobile ? "min(56dvh, calc(100dvh - 72px))" : "min(56vh, 620px)";
+}
+
 export function CalendarDayModal({
   dateKey, isFuture, isToday, logs, note, weather, onClose, onPrev, onNext,
   addLog, updateLog, setConfirmDelete, setDailyTags, setReadiness,
@@ -293,6 +299,8 @@ export function CalendarDayModal({
 
   const headerDate = formatHeaderDate(dateKey, lang);
   const contentMaxWidth = isMobile ? "100%" : 720;
+  const sheetHeight = getDaySheetHeight({ isMobile, isPast, isToday });
+  const dayKindLabel = isToday ? t("calendar.day_today") : (isFuture ? t("calendar.day_future") : t("calendar.day_past"));
 
   return (
     <ModalRoot onClose={onClose}>
@@ -320,7 +328,8 @@ export function CalendarDayModal({
             width: "100%",
             maxWidth: contentMaxWidth,
             margin: isMobile ? 0 : "0 auto",
-            maxHeight: isMobile ? "min(78dvh, calc(100dvh - 72px))" : "min(78vh, 720px)",
+            height: sheetHeight,
+            maxHeight: sheetHeight,
             background: "linear-gradient(180deg, oklch(0.155 0.010 145), var(--bg))",
             border: "1px solid var(--rule)",
             borderBottom: isMobile ? "none" : "1px solid var(--rule)",
@@ -330,10 +339,25 @@ export function CalendarDayModal({
             flexDirection: "column",
             overflow: "hidden",
             boxSizing: "border-box",
+            position: "relative",
           }}
         >
+          <button onClick={onClose} style={{
+            ...navBtn,
+            position: "absolute",
+            top: isMobile ? 9 : 12,
+            right: isMobile ? 12 : 14,
+            width: 34,
+            height: 34,
+            minHeight: 34,
+            background: "var(--bg-elevated)",
+            borderColor: "var(--rule)",
+            fontSize: 22,
+            color: "var(--ink-3)",
+            zIndex: 2,
+          }} aria-label="Close">×</button>
           <div style={{
-            flex: "0 1 auto",
+            flex: "1 1 auto",
             minHeight: 0,
             overflowY: "auto",
             padding: isMobile ? "10px 16px 14px" : "14px 18px 16px",
@@ -341,13 +365,19 @@ export function CalendarDayModal({
             WebkitOverflowScrolling: "touch",
           }}>
             <div style={{
-              width: 42,
-              height: 4,
-              borderRadius: 999,
-              background: "var(--rule-strong)",
-              opacity: 0.7,
-              margin: "0 auto 12px",
-            }} />
+              height: isMobile ? 36 : 38,
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "center",
+            }}>
+              <div style={{
+                width: 42,
+                height: 4,
+                borderRadius: 999,
+                background: "var(--rule-strong)",
+                opacity: 0.7,
+              }} />
+            </div>
         {/* Weather summary — single line at the top. For future days this is
             the daily forecast (passed down from CalendarTab); for past days
             with logged workouts, the parent passes the first workout's
@@ -778,8 +808,9 @@ export function CalendarDayModal({
             {/* Footer navigation: fixed columns keep ‹/› stable while dates change. */}
             <div style={{
               display: "grid",
-              gridTemplateColumns: "44px minmax(0, 1fr) 44px 44px",
+              gridTemplateColumns: "44px minmax(0, 260px) 44px",
               alignItems: "center",
+              justifyContent: "center",
               gap: 6,
             }}>
               {onPrev ? (
@@ -791,7 +822,7 @@ export function CalendarDayModal({
                   color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em",
                   marginBottom: 2,
                 }}>
-                  {isFuture ? t("calendar.day_future") : t("calendar.day_past")}
+                  {dayKindLabel}
                 </div>
                 <div style={{
                   fontSize: 15,
@@ -807,13 +838,6 @@ export function CalendarDayModal({
               {onNext ? (
                 <button onClick={onNext} aria-label={lang === "zh" ? "后一天" : "Next day"} style={navBtn}>›</button>
               ) : <div />}
-              <button onClick={onClose} style={{
-                ...navBtn,
-                background: "transparent",
-                borderColor: "transparent",
-                fontSize: 22,
-                color: "var(--ink-3)",
-              }} aria-label="Close">×</button>
             </div>
           </div>
       </div>

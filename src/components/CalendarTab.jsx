@@ -162,6 +162,21 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     const [y, m, d] = key.split("-").map(Number);
     return dateKey(new Date(y, m - 1, d + delta));
   }
+  function selectDayKey(key) {
+    const [y, m] = key.split("-").map(Number);
+    setDayKey(key);
+    if (!Number.isFinite(y) || !Number.isFinite(m)) return;
+    const target = y * 12 + (m - 1);
+    setViewMonth(v => {
+      const current = v.year * 12 + v.month;
+      if (target === current) {
+        setDir(0);
+        return v;
+      }
+      setDir(target > current ? 1 : -1);
+      return { year: y, month: m - 1 };
+    });
+  }
 
   // Vertical swipe on the calendar grid changes month (up = next, down = prev);
   // the 7-day weather strip below scrolls normally.
@@ -311,6 +326,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
           const isWeekend = monIdx(d) >= 5;
           const dayLogs = byDate.get(key) || [];
           const dayNote = notesByDate.get(key) || null;
+          const isSelected = key === dayKey;
 
           return (
             <DayCell
@@ -323,9 +339,10 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
               logs={dayLogs}
               note={dayNote}
               isRace={raceDays.has(key)}
+              isSelected={isSelected}
               colIdx={i % 7}
               rowIdx={Math.floor(i / 7)}
-              onTap={() => setDayKey(key)}
+              onTap={() => selectDayKey(key)}
               t={t}
               isMobile={isMobile}
             />
@@ -350,7 +367,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         flashToken={weatherFlashToken}
       />
 
-      {/* Tap a day → one full-screen day page (view + tap-edit + add), with
+      {/* Tap a day → one bottom-sheet day page (view + tap-edit + add), with
           ‹/› stepping to the previous/next day in place. */}
       {dayKey && (() => {
         const k = dayKey;
@@ -364,8 +381,8 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
             logs={byDate.get(k) || []}
             note={notesByDate.get(k) || null}
             weather={w}
-            onPrev={() => setDayKey(shiftDayKey(k, -1))}
-            onNext={() => setDayKey(shiftDayKey(k, 1))}
+            onPrev={() => selectDayKey(shiftDayKey(k, -1))}
+            onNext={() => selectDayKey(shiftDayKey(k, 1))}
             onClose={() => setDayKey(null)}
             addLog={addLog}
             updateLog={updateLog}
@@ -649,7 +666,7 @@ function WeatherCard({ date, forecast, isToday, flash = false, lang, t, isMobile
 //     bottom-right corner — independent from workouts.
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
-function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, colIdx, rowIdx, onTap, t, isMobile }) {
+function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, isSelected, colIdx, rowIdx, onTap, t, isMobile }) {
   const dayTags = visibleDailyTags(note);
   const hasPlannedRest = dayTags.includes("planned_rest");
   const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
@@ -667,9 +684,21 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
 
   const cellBg = isToday
     ? "var(--moss-bg)"
+    : isSelected
+      ? "oklch(0.19 0.030 145)"
     : !inMonth
       ? "var(--bg-elevated)"
       : "var(--bg)";
+  const selectedRing = isSelected
+    ? "inset 0 0 0 1px var(--moss), 0 0 0 1px oklch(0.54 0.055 138 / 0.10)"
+    : "none";
+  const selectedDayNumberStyle = isSelected && !isToday ? {
+    color: "var(--ink-1)",
+    padding: isMobile ? "0 4px" : "1px 7px",
+    border: "1px solid var(--moss)",
+    borderRadius: 3,
+    background: "oklch(0.54 0.055 138 / 0.14)",
+  } : {};
 
   // Mobile cells are ~50–60px wide on a 430px screen — way too cramped for
   // labels or distances. Switch to Garmin-style: just the date number and a
@@ -687,7 +716,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
           background: cellBg,
           cursor: "pointer",
           opacity: inMonth ? 1 : 0.45,
-          transition: "background 120ms",
+          transition: "background 120ms, box-shadow 120ms",
+          boxShadow: selectedRing,
           overflow: "hidden",
           display: "flex", flexDirection: "column", alignItems: "center",
         }}
@@ -710,6 +740,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
             border: isToday ? "1px solid var(--ink-1)" : "none",
             borderRadius: isToday ? 3 : 0,
             lineHeight: 1,
+            ...selectedDayNumberStyle,
           }}>{date.getDate()}</span>
           {isRace && <span aria-label="race" style={{ fontSize: 9, lineHeight: 1 }}>🏆</span>}
         </span>
@@ -794,7 +825,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
         background: cellBg,
         cursor: "pointer",
         opacity: inMonth ? 1 : 0.45,
-        transition: "background 120ms",
+        transition: "background 120ms, box-shadow 120ms",
+        boxShadow: selectedRing,
         overflow: "hidden",
       }}
     >
@@ -816,6 +848,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
           border: isToday ? "1px solid var(--ink-1)" : "none",
           borderRadius: isToday ? 3 : 0,
           lineHeight: 1,
+          ...selectedDayNumberStyle,
         }}>{date.getDate()}</span>
         {isRace && <span aria-label="race" title={t("filter.child.Race") || "Race"} style={{ fontSize: 13, lineHeight: 1 }}>🏆</span>}
       </div>

@@ -354,7 +354,6 @@ summary::-webkit-details-marker { display: none; }
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] {
   overflow-y: hidden !important;
   isolation: isolate;
-  will-change: transform;
 }
 
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] > * {

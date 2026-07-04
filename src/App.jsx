@@ -4583,7 +4583,7 @@ Rules:
   );
 
   if (isMobile) {
-    // MobileShell owns the transform-only mobile pager; renderTab(idx) lets it
+    // MobileShell owns the native-scroll mobile pager; renderTab(idx) lets it
     // paint the current tab and adjacent tabs. Index 4 is the mobile Settings
     // page (handled inside renderTab).
     return (

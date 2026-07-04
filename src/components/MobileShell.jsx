@@ -117,7 +117,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   const clearPagingState = useCallback(() => {
     const track = trackRef.current;
-    if (track) delete track.dataset.paging;
+    if (track) {
+      delete track.dataset.paging;
+      delete track.dataset.touching;
+    }
     pagerGestureRef.current = null;
   }, []);
 
@@ -203,6 +206,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     pagerTouchActiveRef.current = true;
     clearPagerTimers();
     clearPagingState();
+    const track = trackRef.current;
+    if (track) track.dataset.touching = "true";
     ensureRenderedWindow(visualTabRef.current);
   }
 
@@ -415,6 +420,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           overscrollBehaviorX: "contain",
           WebkitOverflowScrolling: "touch",
           touchAction: "pan-x pan-y",
+          overflowAnchor: "none",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
           transform: pullY ? `translate3d(0, ${pullY}px, 0)` : "translate3d(0, 0, 0)",
@@ -440,6 +446,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-x pan-y",
                   contain: "layout paint style",
+                  overflowAnchor: "none",
                   backfaceVisibility: "hidden",
                   pointerEvents: shouldRender ? "auto" : "none",
                   background: "linear-gradient(180deg, oklch(0.105 0.008 145), oklch(0.078 0.008 145))",

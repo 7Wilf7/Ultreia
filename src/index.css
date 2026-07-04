@@ -351,8 +351,17 @@ summary::-webkit-details-marker { display: none; }
   top: auto !important;
 }
 
+.ultreia-pager-track[data-touching="true"] .ultreia-pager-pane {
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+}
+
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane > * {
   pointer-events: none;
+}
+
+.ultreia-pager-track[data-paging="true"] .ultreia-spinner {
+  animation-play-state: paused;
 }
 
 .ultreia-pager-pane {

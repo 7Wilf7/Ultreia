@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
+import { getMobilePagerRenderWindow } from "../utils/mobilePager";
 
 // Walk up from the touch target: if any ancestor is itself horizontally
 // scrollable (charts, wide tables, the filter dropdown), a horizontal drag
@@ -25,10 +26,10 @@ function inHorizontalScroller(node) {
  * current tab AND a neighbor at once while you drag; the 5th tab (idx=4) is the
  * mobile-only Settings page.
  *
- * Each tab is its OWN scroll container (so scroll position is preserved per tab).
- * The active pane and its immediate neighbors render first. Other panes are
- * mounted after the browser has idle time, so first paint stays light but later
- * bottom-nav switches don't pay the full mount cost.
+ * Each tab is its OWN scroll container. Only the active pane and its immediate
+ * neighbors render heavy content; keeping every tab mounted made later swipes
+ * re-render Training + Calendar + Coach + Races + Settings together and caused
+ * dropped frames on Android/PWA.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
@@ -47,29 +48,10 @@ function triggerTabHaptic() {
   } catch { /* haptics are best-effort */ }
 }
 
-function tabWindow(idx, count) {
-  const tabs = [idx];
-  if (idx > 0) tabs.push(idx - 1);
-  if (idx < count - 1) tabs.push(idx + 1);
-  return tabs.sort((a, b) => a - b);
-}
-
-function withRenderedTabs(prev, indices, count) {
-  const next = new Set(prev);
-  indices.forEach((idx) => {
-    if (idx >= 0 && idx < count) next.add(idx);
-  });
-  if (next.size === prev.length) return prev;
-  return Array.from(next).sort((a, b) => a - b);
-}
-
-function scheduleIdle(fn) {
-  if (typeof requestIdleCallback === "function") {
-    const id = requestIdleCallback(fn, { timeout: 1400 });
-    return () => cancelIdleCallback(id);
-  }
-  const id = setTimeout(fn, 900);
-  return () => clearTimeout(id);
+function sameTabWindow(a, b) {
+  return Array.isArray(a) && Array.isArray(b)
+    && a.length === b.length
+    && a.every((value, idx) => value === b[idx]);
 }
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
@@ -80,7 +62,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const setPaneRef = (idx) => (el) => { if (el) paneRefs.current[idx] = el; };
   const [visualTab, setVisualTab] = useState(tab);
   const visualTabRef = useRef(tab);
-  const [renderedTabs, setRenderedTabs] = useState(() => tabWindow(tab, tabCount));
+  const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
   const renderedTabSet = new Set(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
@@ -126,8 +108,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   const commitVisualTab = useCallback((next, { urgent = false } = {}) => {
-    const nextRenderedTabs = withRenderedTabs(renderedTabsRef.current, tabWindow(next, tabCount), tabCount);
-    const renderedChanged = nextRenderedTabs !== renderedTabsRef.current;
+    const nextRenderedTabs = getMobilePagerRenderWindow(next, tabCount);
+    const renderedChanged = !sameTabWindow(nextRenderedTabs, renderedTabsRef.current);
     renderedTabsRef.current = nextRenderedTabs;
     visualTabRef.current = next;
 
@@ -151,34 +133,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     setInstant(true);
     requestAnimationFrame(() => setInstant(false));
   }, [tab, commitVisualTab]);
-
-  useEffect(() => {
-    let cancelled = false;
-    let cancelScheduled = null;
-    const start = visualTabRef.current;
-    const order = Array.from({ length: tabCount }, (_, idx) => idx)
-      .sort((a, b) => Math.abs(a - start) - Math.abs(b - start) || a - b);
-
-    let cursor = 0;
-    const warmNext = () => {
-      if (cancelled) return;
-      while (cursor < order.length) {
-        const idx = order[cursor++];
-        const nextRenderedTabs = withRenderedTabs(renderedTabsRef.current, [idx], tabCount);
-        if (nextRenderedTabs === renderedTabsRef.current) continue;
-        renderedTabsRef.current = nextRenderedTabs;
-        setRenderedTabs(nextRenderedTabs);
-        break;
-      }
-      if (cursor < order.length) cancelScheduled = scheduleIdle(warmNext);
-    };
-
-    cancelScheduled = scheduleIdle(warmNext);
-    return () => {
-      cancelled = true;
-      cancelScheduled?.();
-    };
-  }, [tabCount]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },

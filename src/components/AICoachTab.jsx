@@ -1468,8 +1468,8 @@ export function AICoachTab({
   const locationLabel = cityAbbreviationFromLocation(defaultLocation, lang);
   const runnerLastSeenIso = codexRunnerStatus?.last_seen_at || null;
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
-  const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 20_000;
-  const runnerStaleMs = Number(codexRunnerStatus?.stale_ms) || 10_000;
+  const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 12_000;
+  const runnerStaleMs = Number(codexRunnerStatus?.stale_ms) || 8_000;
   const serverRunnerState = codexRunnerStatus?.state || "loading";
   const runnerState = (serverRunnerState === "online" || serverRunnerState === "stale") && runnerAge !== null
     ? runnerAge > runnerFreshMs + runnerStaleMs

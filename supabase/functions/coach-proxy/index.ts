@@ -28,8 +28,8 @@ const DESKTOP_CODEX = {
   id: "desktop_codex",
   model: "codex-cli",
 } as const;
-const DESKTOP_RUNNER_FRESH_MS = 20_000;
-const DESKTOP_RUNNER_STALE_MS = 10_000;
+const DESKTOP_RUNNER_FRESH_MS = 12_000;
+const DESKTOP_RUNNER_STALE_MS = 8_000;
 const DESKTOP_CODEX_ERROR_COOLDOWN_MS = 5 * 60_000;
 const DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS = 24 * 60 * 60_000;
 const DESKTOP_JOB_TTL_MS = 2 * 60_000;

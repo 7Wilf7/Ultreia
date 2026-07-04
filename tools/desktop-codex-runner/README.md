@@ -34,7 +34,8 @@ For a company Mac mini, prefer a stable runner id and explicit reasoning effort:
 export SUPABASE_URL="https://ihibmkfgfznqwzavaeiq.supabase.co"
 export SUPABASE_SERVICE_ROLE_KEY="<keep local only>"
 export RUNNER_ID="company-mac-mini-codex"
-export POLL_MS="3000"
+export POLL_MS="2000"
+export RUNNING_HEARTBEAT_MS="5000"
 export LEASE_SECONDS="180"
 export CODEX_TIMEOUT_MS="180000"
 export CODEX_PACKAGE="@openai/codex@0.142.0"
@@ -67,7 +68,8 @@ then ask Codex:
 > Install `tools/desktop-codex-runner` dependencies; use the Supabase CLI to read
 > the `service_role` key for project `ihibmkfgfznqwzavaeiq` without printing the
 > key; set `SUPABASE_URL=https://ihibmkfgfznqwzavaeiq.supabase.co`,
-> `RUNNER_ID=company-mac-mini-codex`, `POLL_MS=3000`, `LEASE_SECONDS=180`,
+> `RUNNER_ID=company-mac-mini-codex`, `POLL_MS=2000`,
+> `RUNNING_HEARTBEAT_MS=5000`, `LEASE_SECONDS=180`,
 > `CODEX_TIMEOUT_MS=180000`, `CODEX_PACKAGE=@openai/codex@0.142.0`,
 > `CODEX_MODEL=gpt-5.5`, and `CODEX_REASONING_EFFORT=xhigh`; then run `npm run start` from
 > `tools/desktop-codex-runner`. Keep the runner running and do not commit any

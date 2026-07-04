@@ -8,7 +8,7 @@ const env = process.env;
 const SUPABASE_URL = required("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = required("SUPABASE_SERVICE_ROLE_KEY");
 const RUNNER_ID = env.RUNNER_ID || `desktop-${env.COMPUTERNAME || env.HOSTNAME || "local"}`;
-const POLL_MS = positiveInt(env.POLL_MS, 5000);
+const POLL_MS = positiveInt(env.POLL_MS, 2000);
 const LEASE_SECONDS = positiveInt(env.LEASE_SECONDS, 180);
 const CODEX_TIMEOUT_MS = positiveInt(env.CODEX_TIMEOUT_MS, 120000);
 const CODEX_PACKAGE = env.CODEX_PACKAGE || "@openai/codex@0.142.0";
@@ -21,7 +21,7 @@ const CODEX_REASONING_EFFORT = optionalEnum(
 const MAX_PROMPT_CHARS = positiveInt(env.MAX_PROMPT_CHARS, 120000);
 const MAX_IMAGE_ATTACHMENTS = positiveInt(env.MAX_IMAGE_ATTACHMENTS, 3);
 const MAX_IMAGE_DATA_URL_CHARS = positiveInt(env.MAX_IMAGE_DATA_URL_CHARS, 2500000);
-const RUNNING_HEARTBEAT_MS = positiveInt(env.RUNNING_HEARTBEAT_MS, 10000);
+const RUNNING_HEARTBEAT_MS = positiveInt(env.RUNNING_HEARTBEAT_MS, 5000);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },

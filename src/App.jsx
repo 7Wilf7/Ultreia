@@ -614,6 +614,8 @@ function throwIfAborted(signal) {
 
 const BOOT_REVEAL_MS = 3600;
 const APP_BOOT_STARTED_AT = Date.now();
+const RUNNER_STATUS_POLL_MS = 2_000;
+const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts", "races", "messages", "notes"]);
 
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
@@ -734,6 +736,17 @@ const BOOT_MOTION_CSS = `
   color: var(--ink-3);
   max-width: min(78vw, 360px);
   line-height: 1.5;
+}
+.ultreia-boot-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: min(2.4vmin, 12px);
+  font-family: var(--font-sans);
+  font-size: min(3.3vmin, 13px);
+  color: var(--ink-2);
+  line-height: 1.4;
 }
 .ultreia-boot-built {
   position: absolute;
@@ -872,7 +885,7 @@ const BOOT_MOTION_CSS = `
 // React boot and post-login data loading now share one branded loading scene:
 // logo, wordmark, greeting, and build credit. That removes the old in-app
 // handoff from a wordmark-only screen to a separate greeting screen.
-function LoadingScreen({ userId = null }) {
+function LoadingScreen({ userId = null, phase = "boot" }) {
   // Read directly from localStorage — this renders before LanguageProvider /
   // profile are available (during auth + first data load). Name is cached when
   // the profile loads. Cache is per auth user so switching accounts cannot leak
@@ -886,6 +899,9 @@ function LoadingScreen({ userId = null }) {
   const hello = timeGreeting(lang) + (name ? `，${name}` : "");
   const greeting = useMemo(() => pickGreeting(new Date(), userId), [userId]);
   const line = greeting[lang === "zh" ? "zh" : "en"];
+  const statusText = phase === "data"
+    ? (lang === "zh" ? "核心数据加载中" : "Loading core data")
+    : "";
   const [bootElapsedMs] = useState(() => (
     Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT))
   ));
@@ -925,6 +941,12 @@ function LoadingScreen({ userId = null }) {
           <div className="ultreia-boot-line">
             {line}
           </div>
+          {statusText && (
+            <div className="ultreia-boot-status" role="status">
+              <Spinner size={13} thickness={1.8} color="var(--accent)" />
+              <span>{statusText}</span>
+            </div>
+          )}
         </div>
       </div>
       <div className="ultreia-boot-built">Built with Codex and Claude Code</div>
@@ -940,14 +962,14 @@ function DataLoadErrorScreen({ onRetry, onSignOut }) {
   } catch { /* private mode */ }
   const copy = lang === "zh"
     ? {
-        title: "训练记录没有加载成功",
-        body: "这通常是网络、登录态或数据库请求超时。为了避免误以为记录被清空，Ultreia 不会进入空列表。",
+        title: "核心数据没有加载成功",
+        body: "这通常是网络、登录态或数据库请求超时。为了避免误以为训练、赛事或教练记录被清空，Ultreia 不会带着缺失数据进入应用。",
         retry: "重新加载",
         signOut: "退出登录",
       }
     : {
-        title: "Training data did not load",
-        body: "This is usually a network, session, or database timeout. To avoid showing an empty log by mistake, Ultreia will not enter the app with missing workouts.",
+        title: "Core data did not load",
+        body: "This is usually a network, session, or database timeout. To avoid showing empty training, race, or coach data by mistake, Ultreia will not enter the app with missing core data.",
         retry: "Retry",
         signOut: "Sign out",
       };
@@ -1093,18 +1115,23 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const skipProfileFetch = !!cachedProfile;
         const skipSettingsFetch = !!cachedSettings;
         const skipWorkoutFetch = criticalOnly && options.allowWorkoutCache === true && bootHadWorkoutCacheRef.current;
+        const skipCoreDataFetch = options.skipCoreData === true;
+        const coreDataTasks = [
+          ["races", () => db.races.listMyRaces()],
+          ["messages", () => db.coachMessages.listMyMessages()],
+          ["notes", () => db.dailyNotes.listMyDailyNotes()],
+        ];
+        const backgroundDataTasks = [
+          ["agentActions", () => db.agentActions.listMyActions()],
+          ["memoryFacts", () => db.memoryFacts.listMyFacts()],
+          ["trainingLocations", () => db.trainingLocations.listMyLocations()],
+        ];
         const tasks = [
           ...(skipProfileFetch ? [] : [["profile", () => db.profiles.getMyProfile()]]),
           ...(skipSettingsFetch ? [] : [["settings", () => db.userSettings.getMySettings()]]),
           ...(skipWorkoutFetch ? [] : [["workouts", () => db.workouts.listMyWorkouts()]]),
-          ...(criticalOnly ? [] : [
-            ["races", () => db.races.listMyRaces()],
-            ["messages", () => db.coachMessages.listMyMessages()],
-            ["agentActions", () => db.agentActions.listMyActions()],
-            ["memoryFacts", () => db.memoryFacts.listMyFacts()],
-            ["notes", () => db.dailyNotes.listMyDailyNotes()],
-            ["trainingLocations", () => db.trainingLocations.listMyLocations()],
-          ]),
+          ...(skipCoreDataFetch ? [] : coreDataTasks),
+          ...(criticalOnly ? [] : backgroundDataTasks),
         ];
         const pieces = await Promise.all(tasks.map(([key, task]) => (
           withTimeout(task(), key).then(value => ({ key, value }), error => ({ key, error }))
@@ -1119,7 +1146,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         if (failures.length) {
           console.warn("[boot] partial data load:", failures.map(p => `${p.key}: ${p.error?.message || p.error}`).join("; "));
         }
-        const criticalFailure = criticalOnly ? failures.find(p => p.key === "profile" || p.key === "settings") : null;
+        const criticalFailure = criticalOnly ? failures.find(p => BOOT_CRITICAL_DATA_KEYS.has(p.key)) : null;
         if (criticalFailure) {
           const err = new Error(`${criticalFailure.key} failed to load: ${criticalFailure.error?.message || criticalFailure.error}`);
           err.critical = true;
@@ -1260,7 +1287,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: true });
         if (cancelled) return;
         setDataLoading(false);
-        loadData().catch((err) => {
+        loadData({ skipCoreData: true }).catch((err) => {
           if (cancelled) return;
           if (err?.critical) {
             console.error("[boot hydration] critical data load:", err);
@@ -1319,7 +1346,19 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     setDataLoading(true);
     setDataLoadError(null);
     try {
-      await loadData();
+      await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: false });
+      loadData({ skipCoreData: true }).catch((err) => {
+        if (err?.critical) {
+          console.error("[retry hydration] critical data load:", err);
+          setDataLoadError(err);
+          reportError(`Retry background critical data load failed: ${err?.message || String(err)}`);
+        } else if (err?.partial) {
+          console.warn("[retry hydration] entered app with partial data:", err.message);
+        } else {
+          console.warn("[retry hydration] data load failed:", err);
+          reportError(`Retry background data load failed: ${err?.message || String(err)}`);
+        }
+      });
     } catch (err) {
       if (err?.critical) {
         console.error("[retry] critical data load:", err);
@@ -1931,7 +1970,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     <LanguageProvider lang={lang} setLang={setLang}>
       <AppDialogProvider>
         {dataLoading || !bootRevealComplete ? (
-          <LoadingScreen userId={user?.id} />
+          <LoadingScreen userId={user?.id} phase={dataLoading && bootRevealComplete ? "data" : "boot"} />
         ) : dataLoadError ? (
           <DataLoadErrorScreen
             onRetry={retryDataLoad}
@@ -2244,8 +2283,12 @@ function AppShell({
   const weeklyReportRunRef = useRef(0);
   const proactiveAdjustmentAbortRef = useRef(null);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
-  const refreshCodexRunnerStatus = useCallback(async () => {
-    runnerStatusAbortRef.current?.abort();
+  const refreshCodexRunnerStatus = useCallback(async (options = {}) => {
+    const force = options.force === true;
+    if (runnerStatusAbortRef.current) {
+      if (!force) return null;
+      runnerStatusAbortRef.current.abort();
+    }
     const controller = new AbortController();
     runnerStatusAbortRef.current = controller;
     try {
@@ -2269,10 +2312,10 @@ function AppShell({
     }
   }, []);
   useEffect(() => {
-    refreshCodexRunnerStatus();
-    const timer = setInterval(refreshCodexRunnerStatus, 5_000);
+    refreshCodexRunnerStatus({ force: true });
+    const timer = setInterval(refreshCodexRunnerStatus, RUNNER_STATUS_POLL_MS);
     const handleVisible = () => {
-      if (document.visibilityState === "visible") refreshCodexRunnerStatus();
+      if (document.visibilityState === "visible") refreshCodexRunnerStatus({ force: true });
     };
     document.addEventListener("visibilitychange", handleVisible);
     return () => {
@@ -3093,7 +3136,7 @@ function AppShell({
           checked_at: new Date().toISOString(),
         }));
       } else if (data.fallback?.from === "desktop_codex") {
-        refreshCodexRunnerStatus();
+        refreshCodexRunnerStatus({ force: true });
       }
       const meta = buildCoachReplyMeta({
         providerId,

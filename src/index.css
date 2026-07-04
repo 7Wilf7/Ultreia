@@ -353,36 +353,18 @@ summary::-webkit-details-marker { display: none; }
   min-height: 100%;
 }
 
-.ultreia-pager-preview-stage {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  overflow: hidden;
-  opacity: 0;
+.ultreia-pager-preview-content {
+  min-height: 100%;
   pointer-events: none;
-  background: var(--bg);
   contain: layout paint style;
-  will-change: opacity;
 }
 
-.ultreia-pager-preview-strip {
-  display: flex;
-  width: 300%;
-  height: 100%;
-  transform: translate3d(0, 0, 0);
-  will-change: transform;
+.ultreia-pager-track[data-dragging="true"] .ultreia-pager-pane {
+  overflow-y: hidden !important;
 }
 
-.ultreia-pager-preview-pane {
-  flex: 0 0 33.333333%;
-  width: 33.333333%;
-  height: 100%;
-  overflow: hidden;
-  background: var(--bg);
-  contain: layout paint style;
-  padding: 14px 14px 0;
-  padding-top: max(env(safe-area-inset-top), 14px);
-  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+.ultreia-pager-track[data-dragging="true"] .ultreia-spinner {
+  animation-play-state: paused;
 }
 
 .ultreia-no-motion-surface button {

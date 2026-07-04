@@ -71,6 +71,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pendingTrackXRef = useRef(null);
   const trackXRef = useRef(0);
   const renderTrimTimerRef = useRef(null);
+  const freezeTabContentRef = useRef(false);
+  const cachedTabContentRef = useRef({});
+  const dragRenderedTargetRef = useRef(null);
   const pagerTouchActiveRef = useRef(false);
   const pagerGestureRef = useRef(null);
   const tabPropRef = useRef(tab);
@@ -162,6 +165,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       delete track.dataset.paging;
       delete track.dataset.touching;
     }
+    freezeTabContentRef.current = false;
+    dragRenderedTargetRef.current = null;
     pagerGestureRef.current = null;
   }, []);
 
@@ -171,6 +176,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       track.dataset.paging = "true";
       track.dataset.touching = "true";
     }
+    freezeTabContentRef.current = true;
   }, []);
 
   const scheduleRenderedWindowTrim = useCallback((next, delay = 180) => {
@@ -241,6 +247,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPagingState();
     const width = measurePagerWidth();
     const current = visualTabRef.current;
+    dragRenderedTargetRef.current = current;
     pagerGestureRef.current = {
       pointerId: event.pointerId,
       x: event.clientX,
@@ -283,7 +290,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
     const current = visualTabRef.current;
     const target = dx < 0 ? current + 1 : current - 1;
-    if (target >= 0 && target < tabCount) ensureRenderedWindow(target);
+    if (target >= 0 && target < tabCount && dragRenderedTargetRef.current !== target) {
+      ensureRenderedWindow(target);
+      dragRenderedTargetRef.current = target;
+    }
 
     const now = event.timeStamp || performance.now();
     const dt = Math.max(1, now - gesture.lastAt);
@@ -356,6 +366,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [alignTrackToTab]);
+
+  useEffect(() => {
+    const rendered = new Set(renderedTabs);
+    Object.keys(cachedTabContentRef.current).forEach((key) => {
+      if (!rendered.has(Number(key))) delete cachedTabContentRef.current[key];
+    });
+  }, [renderedTabs]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -437,6 +454,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     commitTabPress(idx, e);
   }
 
+  function renderPaneContent(idx, shouldRender) {
+    if (!shouldRender) return null;
+    if (freezeTabContentRef.current && Object.prototype.hasOwnProperty.call(cachedTabContentRef.current, idx)) {
+      return cachedTabContentRef.current[idx];
+    }
+    const content = renderTab(idx);
+    cachedTabContentRef.current[idx] = content;
+    return content;
+  }
+
   return (
     <div style={{
       height: "100dvh",
@@ -494,6 +521,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>
+          {/* eslint-disable-next-line react-hooks/refs -- Drag-time pane caching intentionally reads refs during render to avoid re-rendering heavy tab trees mid-gesture. */}
           {TABS.map(({ idx }) => {
             const shouldRender = renderedTabSet.has(idx);
             return (
@@ -520,7 +548,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
                 }}>
-                {shouldRender ? renderTab(idx) : null}
+                {renderPaneContent(idx, shouldRender)}
               </div>
             );
           })}

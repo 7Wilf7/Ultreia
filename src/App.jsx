@@ -4583,20 +4583,13 @@ Rules:
   );
 
   if (isMobile) {
-    // MobileShell drives the finger-follow pager; renderTab(idx) lets it paint
-    // the current tab AND a neighbor during a swipe. Index 4 is the Settings
+    // MobileShell owns the native scroll-snap pager; renderTab(idx) lets it
+    // paint the current tab and adjacent tabs. Index 4 is the mobile Settings
     // page (handled inside renderTab).
     return (
       <>
         <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}
           renderTab={renderTab} tabCount={5}
-          /* Inner toggles (Training: Activities/Charts; Races: Races/PR) own a
-             horizontal swipe until their edge — then the top pager takes over.
-             This tells the shell where each inner toggle currently sits. */
-          getInnerPager={(which) =>
-            which === 0 ? { index: trainingView === "charts" ? 1 : 0, count: 2 }
-            : which === TAB_RACES ? { index: racesTopTab === "pr" ? 1 : 0, count: 2 }
-            : null}
           onRefresh={refresh} refreshing={refreshing} />
         {modals}
       </>

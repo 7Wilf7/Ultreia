@@ -115,7 +115,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }, delay);
   }, [finishPagerScroll]);
 
-  function onPagerTouchStart() {
+  const onPagerTouchStart = useCallback(() => {
     pagerTouchActiveRef.current = true;
     const track = trackRef.current;
     if (track) track.dataset.paging = "true";
@@ -123,12 +123,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       clearTimeout(scrollSettleTimerRef.current);
       scrollSettleTimerRef.current = null;
     }
-  }
+  }, []);
 
-  function onPagerTouchEnd() {
+  const onPagerTouchEnd = useCallback(() => {
     pagerTouchActiveRef.current = false;
     scheduleScrollSettle(320);
-  }
+  }, [scheduleScrollSettle]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -146,8 +146,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track) return undefined;
     track.addEventListener("scrollend", finishPagerScroll, { passive: true });
-    return () => track.removeEventListener("scrollend", finishPagerScroll);
-  }, [finishPagerScroll]);
+    track.addEventListener("touchstart", onPagerTouchStart, { passive: true });
+    track.addEventListener("touchend", onPagerTouchEnd, { passive: true });
+    track.addEventListener("touchcancel", onPagerTouchEnd, { passive: true });
+    return () => {
+      track.removeEventListener("scrollend", finishPagerScroll);
+      track.removeEventListener("touchstart", onPagerTouchStart);
+      track.removeEventListener("touchend", onPagerTouchEnd);
+      track.removeEventListener("touchcancel", onPagerTouchEnd);
+    };
+  }, [finishPagerScroll, onPagerTouchEnd, onPagerTouchStart]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -267,9 +275,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         <div
           ref={trackRef}
           className="ultreia-pager-track"
-          onTouchStartCapture={onPagerTouchStart}
-          onTouchEndCapture={onPagerTouchEnd}
-          onTouchCancelCapture={onPagerTouchEnd}
           style={{
           display: "flex",
           height: "100%",

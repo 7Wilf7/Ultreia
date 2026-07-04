@@ -349,12 +349,6 @@ summary::-webkit-details-marker { display: none; }
   position: relative;
 }
 
-.ultreia-pager-preview-content {
-  min-height: 100%;
-  pointer-events: none;
-  contain: layout paint style;
-}
-
 .ultreia-pager-full-content {
   min-height: 100%;
 }
@@ -404,20 +398,8 @@ summary::-webkit-details-marker { display: none; }
   will-change: transform;
 }
 
-.ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-preview-content {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  visibility: hidden;
-}
-
 .ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-pane {
   overflow-y: hidden !important;
-}
-
-.ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-preview-content {
-  opacity: 1;
-  visibility: visible;
 }
 
 .ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-full-content {

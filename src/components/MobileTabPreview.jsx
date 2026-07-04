@@ -262,8 +262,10 @@ function CoachPreview({ t, lang, chatMessages, chatLoading, codexRunnerStatus })
         </div>
         {rows.length ? rows.map((msg, idx) => (
           <div key={msg.id || `${msg.role}-${idx}`} style={{
-            borderLeft: `2px solid ${msg.role === "assistant" ? "var(--accent)" : "var(--ink-3)"}`,
-            paddingLeft: 9,
+            border: "1px solid var(--rule)",
+            borderRadius: 7,
+            background: msg.role === "assistant" ? "oklch(0.17 0.018 138 / 0.58)" : "oklch(0.12 0.010 145 / 0.58)",
+            padding: "7px 8px",
             minWidth: 0,
           }}>
             <div style={{ fontSize: 11, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: 0 }}>

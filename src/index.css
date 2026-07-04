@@ -344,6 +344,46 @@ summary::-webkit-details-marker { display: none; }
   min-width: 100%;
 }
 
+.ultreia-pager-content-shell {
+  min-height: 100%;
+  position: relative;
+}
+
+.ultreia-pager-preview-content {
+  min-height: 100%;
+  pointer-events: none;
+  contain: layout paint style;
+}
+
+.ultreia-pager-full-content {
+  min-height: 100%;
+}
+
+.ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-preview-content {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.ultreia-pager-track[data-dragging="true"] .ultreia-pager-pane {
+  overflow-y: hidden !important;
+}
+
+.ultreia-pager-track[data-dragging="true"] .ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-preview-content {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ultreia-pager-track[data-dragging="true"] .ultreia-pager-full-content {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.ultreia-pager-track[data-dragging="true"] .ultreia-spinner {
+  animation-play-state: paused;
+}
+
 .ultreia-no-motion-surface button {
   transition: none !important;
 }

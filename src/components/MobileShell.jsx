@@ -339,7 +339,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
         st.mode = shouldHandle ? "pager" : "pass";
         if (shouldHandle) {
           pagerTouchActiveRef.current = true;
-          setPagerPreviewMode(true);
         } else {
           return;
         }
@@ -356,7 +355,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     event.stopPropagation();
     const width = st.width || pagerWidthRef.current || measurePagerWidth();
     setTrackScrollLeft(clampPagerScrollLeft(st.startLeft - dx, width, tabCount));
-  }, [measurePagerWidth, setPagerPreviewMode, setTrackScrollLeft, tabCount]);
+  }, [measurePagerWidth, setTrackScrollLeft, tabCount]);
 
   useEffect(() => () => {
     clearPagerTimers();

@@ -361,14 +361,6 @@ summary::-webkit-details-marker { display: none; }
   contain: layout paint style;
 }
 
-.ultreia-pager-track[data-dragging="true"] .ultreia-pager-pane {
-  overflow-y: hidden !important;
-}
-
-.ultreia-pager-track[data-dragging="true"] .ultreia-spinner {
-  animation-play-state: paused;
-}
-
 .ultreia-no-motion-surface button {
   transition: none !important;
 }

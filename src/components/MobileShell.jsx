@@ -96,7 +96,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       scrollSettleTimerRef.current = null;
     }
     const track = trackRef.current;
-    if (track) delete track.dataset.paging;
+    if (track) {
+      delete track.dataset.paging;
+      delete track.dataset.dragging;
+      track.style.scrollSnapType = "";
+    }
     pagerTouchActiveRef.current = false;
 
     const next = nearestScrollTab();
@@ -118,7 +122,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const onPagerTouchStart = useCallback(() => {
     pagerTouchActiveRef.current = true;
     const track = trackRef.current;
-    if (track) track.dataset.paging = "true";
+    if (track) {
+      track.dataset.paging = "true";
+      track.dataset.dragging = "true";
+      track.style.scrollSnapType = "none";
+    }
     if (scrollSettleTimerRef.current) {
       clearTimeout(scrollSettleTimerRef.current);
       scrollSettleTimerRef.current = null;
@@ -127,6 +135,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   const onPagerTouchEnd = useCallback(() => {
     pagerTouchActiveRef.current = false;
+    const track = trackRef.current;
+    if (track) {
+      delete track.dataset.dragging;
+      track.style.scrollSnapType = "x mandatory";
+    }
     scheduleScrollSettle(320);
   }, [scheduleScrollSettle]);
 

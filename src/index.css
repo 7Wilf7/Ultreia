@@ -340,6 +340,10 @@ summary::-webkit-details-marker { display: none; }
   display: none;
 }
 
+.ultreia-pager-track[data-dragging="true"] {
+  scroll-snap-type: none !important;
+}
+
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *,
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *::before,
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *::after {

@@ -387,18 +387,21 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   useEffect(() => {
     const el = mainRef.current;
     if (!el) return undefined;
+    const startOptions = { passive: true, capture: true };
+    const moveOptions = { passive: false, capture: true };
+    const endOptions = { passive: true, capture: true };
     const handleStart = (event) => nativeTouchHandlersRef.current?.start?.(event);
     const handleMove = (event) => nativeTouchHandlersRef.current?.move?.(event);
     const handleEnd = (event) => nativeTouchHandlersRef.current?.end?.(event);
-    el.addEventListener("touchstart", handleStart, { passive: true });
-    el.addEventListener("touchmove", handleMove, { passive: false });
-    el.addEventListener("touchend", handleEnd, { passive: true });
-    el.addEventListener("touchcancel", handleEnd, { passive: true });
+    el.addEventListener("touchstart", handleStart, startOptions);
+    el.addEventListener("touchmove", handleMove, moveOptions);
+    el.addEventListener("touchend", handleEnd, endOptions);
+    el.addEventListener("touchcancel", handleEnd, endOptions);
     return () => {
-      el.removeEventListener("touchstart", handleStart);
-      el.removeEventListener("touchmove", handleMove);
-      el.removeEventListener("touchend", handleEnd);
-      el.removeEventListener("touchcancel", handleEnd);
+      el.removeEventListener("touchstart", handleStart, startOptions);
+      el.removeEventListener("touchmove", handleMove, moveOptions);
+      el.removeEventListener("touchend", handleEnd, endOptions);
+      el.removeEventListener("touchcancel", handleEnd, endOptions);
     };
   }, []);
 

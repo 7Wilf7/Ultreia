@@ -61,6 +61,8 @@ describe("import review note helpers", () => {
     expect(mergeImportFeelingNote("换了新鞋", note)).toBe("换了新鞋\nselfreview: 腿很沉");
     expect(mergeImportFeelingNote(`换了新鞋\n${note}`, note)).toBe(`换了新鞋\n${note}`);
     expect(mergeImportFeelingNote("换了新鞋\n自评：腿很沉", note)).toBe("换了新鞋\n自评：腿很沉");
+    expect(mergeImportFeelingNote("换了新鞋\nselfreview: 呃今天那个腿好像很沉然后然后", "selfreview: 腿沉但后程稳定"))
+      .toBe("换了新鞋\nselfreview: 腿沉但后程稳定");
 
     const coachNote = "coachreview: 控制得不错";
     expect(mergeImportCoachReviewNote("换了新鞋", coachNote)).toBe("换了新鞋\ncoachreview: 控制得不错");

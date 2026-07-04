@@ -520,7 +520,7 @@ function extractJsonArrayText(text) {
   return start >= 0 && end > start ? source.slice(start, end + 1) : "";
 }
 
-function parseCoachReviewSummary(text, count) {
+function parseImportReviewSummary(text, count) {
   const max = Math.max(0, Number(count) || 0);
   const byIndex = new Map();
   const jsonText = extractJsonArrayText(text);
@@ -530,8 +530,11 @@ function parseCoachReviewSummary(text, count) {
       if (Array.isArray(parsed)) {
         for (const item of parsed) {
           const index = Math.round(Number(item?.index));
-          const review = String(item?.review || item?.comment || "").trim();
-          if (index >= 1 && index <= max && review) byIndex.set(index - 1, review);
+          const selfReview = String(item?.selfReview || item?.self_review || item?.self || "").trim();
+          const coachReview = String(item?.coachReview || item?.coach_review || item?.review || item?.comment || "").trim();
+          if (index >= 1 && index <= max && (selfReview || coachReview)) {
+            byIndex.set(index - 1, { selfReview, coachReview });
+          }
         }
       }
     } catch {
@@ -544,7 +547,7 @@ function parseCoachReviewSummary(text, count) {
     if (!match) continue;
     const index = Number(match[1]);
     const review = match[2].trim();
-    if (index >= 1 && index <= max && review) byIndex.set(index - 1, review);
+    if (index >= 1 && index <= max && review) byIndex.set(index - 1, { selfReview: "", coachReview: review });
   }
   return byIndex;
 }
@@ -557,10 +560,13 @@ function buildCoachReviewSummaryPrompt(workouts, rawNote, coachReply) {
     user: `请把下面这次 AI Coach 点评压缩成训练详情卡片里的短点评。
 
 要求：
-- 给每条训练各写 1 条中文 coach review。
-- 每条 review 最多 28 个中文字符，具体、克制，不写泛泛鼓励。
+- 给每条训练各写 1 条中文 selfReview 和 1 条中文 coachReview。
+- selfReview 只总结跑者自己的主观感受；如果原始内容像语音转文字，有口误、重复、断句混乱，请修正成自然短句。不要加入教练观点。
+- coachReview 总结 AI Coach 对这次训练本身的判断，不写泛泛鼓励。
+- 每条 selfReview / coachReview 最多 28 个中文字符，具体、克制。
 - 优先总结教练对这次训练本身的判断；不要写下一次计划调整，除非教练明确把它作为本次点评重点。
-- 输出 JSON 数组，格式严格为 [{"index":1,"review":"..." }].
+- 如果没有跑者自评，selfReview 用空字符串。
+- 输出 JSON 数组，格式严格为 [{"index":1,"selfReview":"...","coachReview":"..." }].
 
 [Workouts]
 ${rows}
@@ -3725,7 +3731,7 @@ Rules:
     importToCalendar(assistantContent, msgId, { force: true });
   }
 
-  async function generateImportCoachReviewMap(reviewed, rawNote, coachReply = "") {
+  async function generateImportReviewSummaryMap(reviewed, rawNote, coachReply = "") {
     const rows = (Array.isArray(reviewed) ? reviewed : [reviewed])
       .filter(w => w?.id && !String(w.id).startsWith("temp-") && !String(w.id).startsWith("bulk-"));
     if (!rows.length || !String(coachReply || "").trim()) return new Map();
@@ -3736,25 +3742,27 @@ Rules:
       messages: [{ role: "user", content: prompt.user }],
       max_tokens: 500,
     });
-    return parseCoachReviewSummary(extractCoachReplyText(data), rows.length);
+    return parseImportReviewSummary(extractCoachReplyText(data), rows.length);
   }
 
   async function writeImportReviewNotes(reviewed, rawNote, coachReply = "") {
-    const feelingNote = buildImportSelfReviewNote(rawNote, coachReply, lang);
+    const fallbackFeelingNote = buildImportSelfReviewNote(rawNote, coachReply, lang);
     const rows = (Array.isArray(reviewed) ? reviewed : [reviewed])
       .filter(w => w?.id && !String(w.id).startsWith("temp-") && !String(w.id).startsWith("bulk-"));
     if (!rows.length) return;
-    let coachReviews = new Map();
+    let reviewSummaries = new Map();
     try {
-      coachReviews = await generateImportCoachReviewMap(rows, rawNote, coachReply);
+      reviewSummaries = await generateImportReviewSummaryMap(rows, rawNote, coachReply);
     } catch (err) {
       console.warn("[coach review] card summary generation failed:", err);
     }
-    if (!feelingNote && !coachReviews.size) return;
+    if (!fallbackFeelingNote && !reviewSummaries.size) return;
     await Promise.all(rows.map((w, idx) => {
       let note = String(w.note || "").trim();
+      const summary = reviewSummaries.get(idx) || {};
+      const feelingNote = buildImportSelfReviewNote(summary.selfReview || "", "", lang) || fallbackFeelingNote;
       if (feelingNote) note = mergeImportFeelingNote(note, feelingNote) || "";
-      const coachNote = buildImportCoachReviewNote(coachReviews.get(idx) || "", lang);
+      const coachNote = buildImportCoachReviewNote(summary.coachReview || "", lang);
       if (coachNote) note = mergeImportCoachReviewNote(note, coachNote) || "";
       if (note === String(w.note || "").trim()) return Promise.resolve();
       return updateLog(w.id, { note });

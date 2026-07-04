@@ -292,6 +292,8 @@ const COACH_CONTEXT_WINDOW_TOKENS = 200_000;
 const COACH_CONTEXT_WARN_REMAINING_TOKENS = 20_000;
 const COACH_CONTEXT_FIXED_OVERHEAD_TOKENS = 2_500;
 const COACH_IMAGE_ESTIMATE_TOKENS = 1_500;
+const MOBILE_CHAT_INITIAL_RENDER_COUNT = 24;
+const MOBILE_CHAT_RENDER_BATCH = 24;
 const PROACTIVE_ADJUSTMENT_SNOOZE_KEY = "ultreia.proactiveAdjustment.snoozedUntil";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_KEY = "ultreia.proactiveAdjustment.attemptedSignature";
 const PROACTIVE_ADJUSTMENT_ATTEMPT_LIMIT = 20;
@@ -380,6 +382,8 @@ const CoachChatMessages = memo(function CoachChatMessages({
   getPlanImportActionStatus,
   onStopExtraction,
 }) {
+  const [mobileRenderCount, setMobileRenderCount] = useState(MOBILE_CHAT_INITIAL_RENDER_COUNT);
+
   if (chatMessages.length === 0) {
     return (
       <div style={{ color: "var(--ink-3)", textAlign: "center", padding: 30, fontSize: 13, lineHeight: 1.6 }}>
@@ -395,10 +399,40 @@ const CoachChatMessages = memo(function CoachChatMessages({
   for (let k = chatMessages.length - 1; k >= 0; k--) {
     if (chatMessages[k].role === "user") { lastUserIdx = k; break; }
   }
+  const renderCount = isMobile
+    ? Math.min(chatMessages.length, Math.max(MOBILE_CHAT_INITIAL_RENDER_COUNT, mobileRenderCount))
+    : chatMessages.length;
+  const hiddenCount = Math.max(0, chatMessages.length - renderCount);
+  const visibleMessages = hiddenCount > 0 ? chatMessages.slice(hiddenCount) : chatMessages;
+  const nextOlderCount = Math.min(MOBILE_CHAT_RENDER_BATCH, hiddenCount);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      {chatMessages.map((m, i) => {
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setMobileRenderCount(count => Math.min(chatMessages.length, count + MOBILE_CHAT_RENDER_BATCH))}
+          style={{
+            alignSelf: "center",
+            border: "1px solid var(--rule)",
+            background: "var(--bg-elevated)",
+            color: "var(--ink-2)",
+            borderRadius: 6,
+            padding: "7px 12px",
+            minHeight: 0,
+            fontSize: 12,
+            lineHeight: 1.2,
+            fontFamily: "var(--font-sans)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          ↑ {t("coach.load_older_messages", { count: nextOlderCount, total: hiddenCount })}
+        </button>
+      )}
+      {visibleMessages.map((m, offset) => {
+        const i = hiddenCount + offset;
         const isUser = m.role === "user";
         const parsedMessage = parseCoachMessageMeta(m.content);
         const displayContent = parsedMessage.text;
@@ -446,7 +480,7 @@ const CoachChatMessages = memo(function CoachChatMessages({
             ? "var(--ink-3)"
             : "var(--ink-2)";
         return (
-          <div key={i} className="ultreia-msg-in" style={{
+          <div key={m.id || i} className="ultreia-msg-in" style={{
             alignSelf: isUser ? "flex-end" : "flex-start",
             // Mobile bubbles get wider so long messages don't squeeze into
             // a narrow column the user has to keep scrolling to read.

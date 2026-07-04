@@ -1293,6 +1293,7 @@ const dict = {
   "coach.prompt_hint":        { en: "This is sent as the system prompt with every message. Change it via Edit Profile or Coach Preferences.", zh: "这段会作为系统 Prompt 随每条消息发送。可通过「编辑资料」或「教练偏好」修改。" },
   "coach.prompt_zh_note":     { en: "(Chinese view is for reading only — the LLM always receives the English version for stable instruction-following.)", zh: "（中文版仅供阅读，发给 LLM 的始终是英文版，指令执行更稳定。）" },
   "coach.empty":              { en: "Daily check-in with your AI coach.\nYour profile, coach preferences, target races, and recent activities are sent automatically with each message.", zh: "和你的 AI 教练做每日打卡。\n你的个人资料、教练偏好、目标比赛和近期活动会随每条消息自动发送。" },
+  "coach.load_older_messages": { en: "Load {count} earlier · {total} hidden", zh: "加载更早 {count} 条 · 已收起 {total} 条" },
   "coach.choose_model_hint":   { en: "Codex preferred, DeepSeek fallback", zh: "优先 Codex，失败回退 DeepSeek" },
   "coach.thinking":           { en: "Coach is thinking...", zh: "教练思考中……" },
   "coach.notification_title":  { en: "AI Coach reply ready", zh: "AI 教练回复好了" },

@@ -67,26 +67,20 @@ const PagerPaneContent = memo(function PagerPaneContent({
   renderTab,
   renderTabPreview,
 }) {
-  const content = isFullPane
-    ? renderTab(idx)
-    : renderTabPreview && shouldShow
-      ? renderTabPreview(idx)
-      : shouldRender
-        ? renderTab(idx)
-        : null;
-  if (!content) return null;
+  const preview = renderTabPreview && shouldShow ? renderTabPreview(idx) : null;
+  const full = isFullPane || (!preview && shouldRender) ? renderTab(idx) : null;
+  if (!preview && !full) return null;
 
   return (
     <div
       className="ultreia-pager-content-shell"
       data-full-pane={isFullPane ? "true" : "false"}
     >
-      <div className={isFullPane ? "ultreia-pager-full-content" : "ultreia-pager-preview-content"}>
-        {content}
-      </div>
+      {preview && <div className="ultreia-pager-preview-content">{preview}</div>}
+      {full && <div className="ultreia-pager-full-content">{full}</div>}
     </div>
   );
-});
+}, (prev, next) => next.freeze && prev.idx === next.idx);
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderTabPreview = null, tabCount = 5, onRefresh = null, refreshing = false }) {
   const t = useT();
@@ -97,6 +91,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const visualTabRef = useRef(tab);
   const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
+  const [pagerDragFrozen, setPagerDragFrozen] = useState(false);
+  const pagerDragFrozenRef = useRef(false);
   const activePane = () => paneRefs.current[visualTabRef.current];
   const scrollSettleFrameRef = useRef(0);
   const trackScrollLeftRef = useRef(0);
@@ -164,6 +160,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const setPagerPreviewMode = useCallback((active) => {
     const track = trackRef.current;
     pagerDragIntentRef.current.dragging = active;
+    if (pagerDragFrozenRef.current !== active) {
+      pagerDragFrozenRef.current = active;
+      setPagerDragFrozen(active);
+    }
     if (!track) return;
     if (active) {
       track.dataset.dragging = "true";
@@ -407,6 +407,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
         shouldRender={shouldRender}
         shouldShow={shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview)}
         isFullPane={isFullPane}
+        freeze={pagerDragFrozen}
         renderTab={renderTab}
         renderTabPreview={renderTabPreview}
       />

@@ -31,6 +31,7 @@ const PAGER_EDGE_RESISTANCE = 0.28;
 const PAGER_RELEASE_DISTANCE_RATIO = 0.22;
 const PAGER_SETTLE_MIN_MS = 620;
 const PAGER_SETTLE_MAX_MS = 1120;
+const PREVIEW_CENTER_SLOT = 1;
 
 function triggerTabHaptic() {
   try {
@@ -167,7 +168,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const clamped = clampTabIndex(next, tabCount);
     const width = measurePagerWidth();
     setTrackScrollLeft(clamped * width);
-    applyPreviewStageX(-clamped * width);
+    applyPreviewStageX(-PREVIEW_CENTER_SLOT * width);
   }, [applyPreviewStageX, measurePagerWidth, setTrackScrollLeft, tabCount]);
 
   const setPagerPreviewMode = useCallback((active) => {
@@ -220,7 +221,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     ensureRenderedWindow(clamped);
     const width = measurePagerWidth();
     const from = previewStageXRef.current;
-    const to = -clamped * width;
+    const current = visualTabRef.current;
+    const targetSlot = clamped < current ? 0 : clamped > current ? 2 : PREVIEW_CENTER_SLOT;
+    const to = -targetSlot * width;
     const distance = to - from;
     if (Math.abs(distance) < 1) {
       applyPreviewStageX(to);
@@ -278,7 +281,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
       active: false,
       offset: 0,
     };
-    applyPreviewStageX(-visualTabRef.current * width);
+    applyPreviewStageX(-PREVIEW_CENTER_SLOT * width);
     setPagerPreviewMode(false);
   }, [applyPreviewStageX, clearPagerTimers, measurePagerWidth, setPagerPreviewMode]);
 
@@ -298,7 +301,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const current = visualTabRef.current;
     const offset = resistedPagerOffset(rawDx, current, tabCount, width);
     pagerDragIntentRef.current.offset = offset;
-    applyPreviewStageX(-current * width + offset);
+    applyPreviewStageX(-PREVIEW_CENTER_SLOT * width + offset);
   }, [applyPreviewStageX, measurePagerWidth, setPagerPreviewMode, tabCount]);
 
   useEffect(() => () => {
@@ -419,7 +422,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     );
   }
 
-  const previewStageTabs = getMobilePagerRenderWindow(visualTab, tabCount);
+  const previewStageSlots = [visualTab - 1, visualTab, visualTab + 1];
 
   return (
     <div
@@ -540,9 +543,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
             }}
           >
             <div ref={previewStageRef} className="ultreia-pager-preview-strip">
-              {TABS.map(({ idx }) => (
-                <div key={idx} className="ultreia-pager-preview-pane">
-                  {previewStageTabs.includes(idx) ? renderTabPreview(idx) : null}
+              {previewStageSlots.map((idx, slot) => (
+                <div key={`${slot}-${idx}`} className="ultreia-pager-preview-pane">
+                  {idx >= 0 && idx < tabCount ? renderTabPreview(idx) : null}
                 </div>
               ))}
             </div>

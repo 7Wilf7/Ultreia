@@ -174,11 +174,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     });
   }, [applyPreviewStageX]);
 
-  const alignPreviewStageToTab = useCallback((next) => {
-    const clamped = clampTabIndex(next, tabCount);
-    applyPreviewStageX(-clamped * measurePagerWidth());
-  }, [applyPreviewStageX, measurePagerWidth, tabCount]);
-
   const alignTrackToTab = useCallback((next) => {
     const clamped = clampTabIndex(next, tabCount);
     const width = measurePagerWidth();
@@ -296,16 +291,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const onPagerTouchStart = useCallback((event) => {
     clearPagerTimers();
     const touch = event.touches?.[0];
-    measurePagerWidth();
+    const width = measurePagerWidth();
     pagerDragIntentRef.current = {
       x: touch?.clientX ?? 0,
       y: touch?.clientY ?? 0,
       active: false,
       offset: 0,
     };
-    alignPreviewStageToTab(visualTabRef.current);
+    applyPreviewStageX(-visualTabRef.current * width);
     setPagerPreviewMode(false);
-  }, [alignPreviewStageToTab, clearPagerTimers, measurePagerWidth, setPagerPreviewMode]);
+  }, [applyPreviewStageX, clearPagerTimers, measurePagerWidth, setPagerPreviewMode]);
 
   const onPagerTouchMove = useCallback((event) => {
     const touch = event.touches?.[0];

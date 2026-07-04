@@ -359,10 +359,10 @@ summary::-webkit-details-marker { display: none; }
   z-index: 6;
   overflow: hidden;
   opacity: 0;
-  visibility: hidden;
   pointer-events: none;
   background: var(--bg);
   contain: layout paint style;
+  will-change: opacity;
 }
 
 .ultreia-pager-preview-strip {
@@ -385,26 +385,12 @@ summary::-webkit-details-marker { display: none; }
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
 }
 
-.ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-track {
-  visibility: hidden;
-}
-
 .ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-preview-stage {
   opacity: 1;
-  visibility: visible;
 }
 
 .ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-preview-strip {
   will-change: transform;
-}
-
-.ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-pane {
-  overflow-y: hidden !important;
-}
-
-.ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-pager-full-content {
-  visibility: hidden;
-  pointer-events: none;
 }
 
 .ultreia-mobile-shell[data-preview-dragging="true"] .ultreia-spinner {

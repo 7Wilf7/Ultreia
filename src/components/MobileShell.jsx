@@ -92,11 +92,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pendingDragXRef = useRef(0);
   const applyPaneTransforms = useCallback((px) => {
     const current = visualTabRef.current;
+    const width = mainRef.current?.clientWidth || window.innerWidth || 1;
     for (const [idx, pane] of Object.entries(paneRefs.current)) {
       if (!pane) continue;
       const offset = Number(idx) - current;
       if (!Number.isFinite(offset)) continue;
-      pane.style.transform = `translate3d(calc(${offset * 100}% + ${px}px), 0, 0)`;
+      if (Math.abs(offset) > 1) continue;
+      pane.style.transform = `translate3d(${(offset * width) + px}px, 0, 0)`;
     }
   }, []);
   const setDragXpx = useCallback((px, immediate = false) => {

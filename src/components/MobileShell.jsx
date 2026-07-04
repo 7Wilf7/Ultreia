@@ -127,8 +127,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       clearTrackHintTimer();
       delete el.dataset.settling;
       el.dataset.dragging = "true";
-      el.style.transition = "none";
-      el.style.willChange = "transform";
       return;
     }
     delete el.dataset.dragging;
@@ -141,8 +139,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       clearTrackHintTimer();
       delete el.dataset.dragging;
       el.dataset.settling = "true";
-      el.style.transition = TRACK_SNAP_TRANSITION;
-      el.style.willChange = "transform";
       return;
     }
     delete el.dataset.settling;
@@ -156,16 +152,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (!el) return;
       delete el.dataset.dragging;
       delete el.dataset.settling;
-      el.style.willChange = "";
     }, delay);
   }
 
   function currentTrackDragX() {
-    const el = trackRef.current;
-    const W = mainRef.current?.clientWidth || 1;
+    const el = paneRefs.current[visualTabRef.current] || trackRef.current;
     const tx = readTranslateX(el ? getComputedStyle(el).transform : "");
     if (!Number.isFinite(tx)) return dragXRef.current || 0;
-    return tx - (visualTabRef.current * -W);
+    return tx;
   }
 
   useEffect(() => () => {
@@ -233,11 +227,17 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         lastHapticAt.current = at;
       }
     }
-    commitVisualTab(next, { urgent: !animate });
     if (!animate) {
+      setTrackDragging(true);
+      setDragXpx(0, true);
       setInstant(true);
-      requestAnimationFrame(() => setInstant(false));
+      commitVisualTab(next, { urgent: true });
+      requestAnimationFrame(() => {
+        setInstant(false);
+        clearTrackMotionHintSoon(80);
+      });
     } else {
+      commitVisualTab(next);
       if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
       setTrackSettling(true);
       setDragXpx(0, true);
@@ -343,6 +343,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         setDragXpx(finalX, true);
         snapTimerRef.current = setTimeout(() => {
           snapTimerRef.current = null;
+          setTrackDragging(true);
           setInstant(true);
           commitVisualTab(next, { urgent: true });
           setDragXpx(0, true);
@@ -453,29 +454,33 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           </div>
         )}
 
-        {/* Pager track — width = tabCount viewports; translateX moves between
-            tabs (px during a drag → finger-following), translateY handles the
-            manual refresh offset. Each pane is its own scroller. */}
+        {/* Pager surface. Each tab pane is an independent 100%-width layer, so
+            a swipe moves only the visible current/neighbor panes instead of a
+            five-viewport-wide strip. */}
         <div style={{
-          display: "flex",
+          position: "relative",
           height: "100%",
-          width: `${tabCount * 100}%`,
-          transform: `translate3d(calc(${(-visualTab * 100) / tabCount}% + var(--drag-x, 0px)), ${pullY}px, 0)`,
-          transition: trackTransition,
-          willChange: (refreshing || instant) ? "transform" : undefined,
+          width: "100%",
+          overflow: "hidden",
+          transform: pullY ? `translate3d(0, ${pullY}px, 0)` : "translate3d(0, 0, 0)",
+          transition: refreshing ? TRACK_SNAP_TRANSITION : "none",
+          willChange: refreshing ? "transform" : undefined,
         }} ref={trackRef} className="ultreia-pager-track">
           {TABS.map(({ idx }) => {
             const shouldRender = renderedTabSet.has(idx) || (tapWindow
               ? idx >= tapWindow.from && idx <= tapWindow.to
               : Math.abs(idx - visualTab) <= 1);
+            const offset = idx - visualTab;
             return (
               <div
                 key={idx}
                 ref={setPaneRef(idx)}
+                className="ultreia-pager-pane"
                 style={{
-                  width: `${100 / tabCount}%`,
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
                   height: "100%",
-                  flexShrink: 0,
                   overflowY: "auto",
                   overflowX: "hidden",
                   overscrollBehavior: "contain",
@@ -483,6 +488,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   touchAction: "pan-y",
                   contain: "layout paint style",
                   backfaceVisibility: "hidden",
+                  transform: `translate3d(calc(${offset * 100}% + var(--drag-x, 0px)), 0, 0)`,
+                  transition: instant ? "none" : trackTransition,
+                  willChange: (refreshing || instant || Math.abs(offset) <= 1) ? "transform" : undefined,
+                  pointerEvents: idx === visualTab ? "auto" : "none",
+                  visibility: shouldRender ? "visible" : "hidden",
                   background: "linear-gradient(180deg, oklch(0.105 0.008 145 / 0.54), oklch(0.078 0.008 145 / 0.42))",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",

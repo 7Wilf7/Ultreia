@@ -336,12 +336,12 @@ summary::-webkit-details-marker { display: none; }
   transform: translateZ(0);
 }
 
-.ultreia-pager-track[data-dragging="true"] {
+.ultreia-pager-track[data-dragging="true"] > .ultreia-pager-pane {
   transition: none !important;
   will-change: transform;
 }
 
-.ultreia-pager-track[data-settling="true"] {
+.ultreia-pager-track[data-settling="true"] > .ultreia-pager-pane {
   will-change: transform;
 }
 

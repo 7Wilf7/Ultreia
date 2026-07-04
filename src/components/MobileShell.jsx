@@ -163,20 +163,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, []);
 
   const clearPagingState = useCallback(() => {
-    const track = trackRef.current;
-    if (track) {
-      delete track.dataset.paging;
-    }
     freezeTabContentRef.current = false;
     dragRenderedTargetRef.current = null;
     pagerGestureRef.current = null;
   }, []);
 
   const markPagingState = useCallback(() => {
-    const track = trackRef.current;
-    if (track) {
-      track.dataset.paging = "true";
-    }
     freezeTabContentRef.current = true;
   }, []);
 
@@ -265,14 +257,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const currentLeft = visualTabRef.current * width;
     if (!pagerTouchActiveRef.current && Math.abs(track.scrollLeft - currentLeft) > 2) {
       pagerTouchActiveRef.current = true;
-      markPagingState();
+      freezeTabContentRef.current = true;
     }
-    const scrollWindow = getMobilePagerScrollWindow(track.scrollLeft, width, tabCount);
-    const currentWindow = getMobilePagerRenderWindow(visualTabRef.current, tabCount);
-    const neededWindow = mergeTabWindows(scrollWindow, currentWindow);
-    if (neededWindow.every(idx => renderedTabsRef.current.includes(idx))) return;
+    const page = track.scrollLeft / width;
+    const low = Math.max(0, Math.min(tabCount - 1, Math.floor(page)));
+    const high = Math.max(0, Math.min(tabCount - 1, Math.ceil(page)));
+    const rendered = renderedTabsRef.current;
+    if (rendered.includes(low) && rendered.includes(high)) return;
     scrollRenderFrameRef.current = requestAnimationFrame(syncRenderedWindowToScroll);
-  }, [markPagingState, syncRenderedWindowToScroll, tabCount]);
+  }, [syncRenderedWindowToScroll, tabCount]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -581,11 +574,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   contain: "layout paint style",
                   overflowAnchor: "none",
                   backfaceVisibility: "hidden",
+                  transform: shouldRender ? "translateZ(0)" : "none",
+                  willChange: shouldRender ? "transform" : "auto",
+                  isolation: shouldRender ? "isolate" : "auto",
                   visibility: shouldRender ? "visible" : "hidden",
                   pointerEvents: shouldRender ? "auto" : "none",
-                  background: shouldRender
-                    ? "linear-gradient(180deg, oklch(0.105 0.008 145), oklch(0.078 0.008 145))"
-                    : "transparent",
+                  background: shouldRender ? "var(--bg)" : "transparent",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",

@@ -31,9 +31,8 @@ const PAGER_INTENT_PX = 4;
 const PAGER_VERTICAL_LOCK_PX = 7;
 const PAGER_AXIS_RATIO = 1.04;
 const PAGER_RELEASE_DISTANCE_RATIO = 0.18;
-const PAGER_RELEASE_VELOCITY_PX_MS = 0.38;
-const PAGER_SETTLE_MIN_MS = 420;
-const PAGER_SETTLE_MAX_MS = 760;
+const PAGER_SETTLE_MIN_MS = 620;
+const PAGER_SETTLE_MAX_MS = 1120;
 
 function triggerTabHaptic() {
   try {
@@ -54,8 +53,8 @@ function settleDurationForDistance(distance, width) {
   return Math.round(PAGER_SETTLE_MIN_MS + (PAGER_SETTLE_MAX_MS - PAGER_SETTLE_MIN_MS) * fraction);
 }
 
-function easeOutQuint(t) {
-  return 1 - Math.pow(1 - t, 5);
+function easeOutSine(t) {
+  return Math.sin((t * Math.PI) / 2);
 }
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false }) {
@@ -225,7 +224,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const startedAt = performance.now();
     const step = (now) => {
       const t = Math.min(1, (now - startedAt) / duration);
-      setTrackScrollLeft(from + distance * easeOutQuint(t));
+      setTrackScrollLeft(from + distance * easeOutSine(t));
       if (t < 1) {
         scrollSettleFrameRef.current = requestAnimationFrame(step);
         return;
@@ -251,7 +250,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     scrollRenderFrameRef.current = 0;
     const track = trackRef.current;
     if (!track) return;
-    const width = measurePagerWidth();
+    const width = pagerWidthRef.current || measurePagerWidth();
     trackScrollLeftRef.current = track.scrollLeft;
     const scrollWindow = getMobilePagerScrollWindow(track.scrollLeft, width, tabCount);
     const currentWindow = getMobilePagerRenderWindow(visualTabRef.current, tabCount);
@@ -262,8 +261,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track || scrollSettleFrameRef.current || scrollRenderFrameRef.current) return;
     trackScrollLeftRef.current = track.scrollLeft;
+    const width = pagerWidthRef.current || track.clientWidth || 1;
+    const currentLeft = visualTabRef.current * width;
+    if (!pagerTouchActiveRef.current && Math.abs(track.scrollLeft - currentLeft) > 2) {
+      pagerTouchActiveRef.current = true;
+      markPagingState();
+    }
+    const scrollWindow = getMobilePagerScrollWindow(track.scrollLeft, width, tabCount);
+    const currentWindow = getMobilePagerRenderWindow(visualTabRef.current, tabCount);
+    const neededWindow = mergeTabWindows(scrollWindow, currentWindow);
+    if (neededWindow.every(idx => renderedTabsRef.current.includes(idx))) return;
     scrollRenderFrameRef.current = requestAnimationFrame(syncRenderedWindowToScroll);
-  }, [syncRenderedWindowToScroll]);
+  }, [markPagingState, syncRenderedWindowToScroll, tabCount]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -289,11 +298,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       pointerId: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      lastX: event.clientX,
-      lastAt: event.timeStamp || performance.now(),
-      velocityX: 0,
       width,
-      baseX: -current * width,
       mode: "pending",
     };
     ensureRenderedWindow(current);
@@ -303,6 +308,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const onPagerPointerMove = useCallback((event) => {
     const gesture = pagerGestureRef.current;
     if (!gesture || gesture.pointerId !== event.pointerId || gesture.mode === "scrolling") return;
+    if (gesture.mode === "paging") return;
 
     const coalescedEvents = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : null;
     const latestEvent = coalescedEvents?.length ? coalescedEvents[coalescedEvents.length - 1] : event;
@@ -317,27 +323,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       gesture.mode = "paging";
       pagerTouchActiveRef.current = true;
       markPagingState();
+      const current = visualTabRef.current;
+      const target = dx < 0 ? current + 1 : current - 1;
+      if (target >= 0 && target < tabCount) {
+        ensureRenderedWindow(target);
+        dragRenderedTargetRef.current = target;
+      }
+      return;
     }
     if (gesture.mode === "pending" && absDy >= PAGER_VERTICAL_LOCK_PX && absDy > absDx * PAGER_AXIS_RATIO) {
       gesture.mode = "scrolling";
       return;
     }
-    if (gesture.mode !== "paging") return;
-
-    const current = visualTabRef.current;
-    const target = dx < 0 ? current + 1 : current - 1;
-    const validTarget = target >= 0 && target < tabCount ? target : null;
-    const previousTarget = dragRenderedTargetRef.current;
-    if (validTarget != null && previousTarget !== validTarget) {
-      ensureRenderedWindow(validTarget);
-      dragRenderedTargetRef.current = validTarget;
-    }
-
-    const now = latestEvent.timeStamp || event.timeStamp || performance.now();
-    const dt = Math.max(1, now - gesture.lastAt);
-    gesture.velocityX = (clientX - gesture.lastX) / dt;
-    gesture.lastX = clientX;
-    gesture.lastAt = now;
   }, [ensureRenderedWindow, markPagingState, tabCount]);
 
   const onPagerPointerEnd = useCallback((event) => {
@@ -356,8 +353,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const nearest = Math.round((trackRef.current?.scrollLeft || 0) / Math.max(1, width));
     const distanceThreshold = gesture.width * PAGER_RELEASE_DISTANCE_RATIO;
     let next = nearest;
-    if (dx <= -distanceThreshold || gesture.velocityX <= -PAGER_RELEASE_VELOCITY_PX_MS) next = current + 1;
-    if (dx >= distanceThreshold || gesture.velocityX >= PAGER_RELEASE_VELOCITY_PX_MS) next = current - 1;
+    if (dx <= -distanceThreshold) next = current + 1;
+    if (dx >= distanceThreshold) next = current - 1;
     settlePagerToTab(Math.max(0, Math.min(tabCount - 1, next)));
   }, [finishPagerGesture, measurePagerWidth, settlePagerToTab, tabCount]);
 

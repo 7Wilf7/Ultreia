@@ -354,10 +354,16 @@ summary::-webkit-details-marker { display: none; }
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] {
   overflow-y: hidden !important;
   isolation: isolate;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] > * {
   pointer-events: none;
+}
+
+.ultreia-pager-track[data-paging="true"] .ultreia-spinner {
+  animation-play-state: paused;
 }
 
 .ultreia-pager-pane {

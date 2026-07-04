@@ -70,6 +70,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const dragFrameRef = useRef(0);
   const pendingTrackXRef = useRef(null);
   const trackXRef = useRef(0);
+  const trackTransitionRef = useRef(null);
   const renderTrimTimerRef = useRef(null);
   const freezeTabContentRef = useRef(false);
   const cachedTabContentRef = useRef({});
@@ -119,11 +120,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     setVisualTab(clamped);
   }, [setRenderedWindow, tabCount]);
 
-  const applyTrackX = useCallback((x, transition = "none") => {
+  const applyTrackX = useCallback((x, transition = null) => {
     const track = trackRef.current;
     if (!track) return;
     trackXRef.current = x;
-    track.style.transition = transition;
+    if (transition !== null && transition !== trackTransitionRef.current) {
+      track.style.transition = transition;
+      trackTransitionRef.current = transition;
+    }
     track.style.transform = `translate3d(${x}px, ${pullYRef.current}px, 0)`;
   }, []);
 
@@ -516,8 +520,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           overflowAnchor: "none",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          transform: `translate3d(${-visualTab * 100}%, ${pullY}px, 0)`,
-          transition: refreshing ? REFRESH_SNAP_TRANSITION : "none",
           willChange: "transform",
           backfaceVisibility: "hidden",
         }}>

@@ -37,7 +37,8 @@ function inHorizontalScroller(node) {
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
-const SNAP_MS = 220;
+const SNAP_MS = 320;
+const TRACK_SNAP_TRANSITION = `transform ${SNAP_MS}ms cubic-bezier(0.2,0.82,0.18,1)`;
 const TAB_HAPTIC_MS = 8;
 
 function triggerTabHaptic() {
@@ -52,6 +53,21 @@ function sameTabWindow(a, b) {
   return Array.isArray(a) && Array.isArray(b)
     && a.length === b.length
     && a.every((value, idx) => value === b[idx]);
+}
+
+function readTranslateX(transform) {
+  if (!transform || transform === "none") return null;
+  const matrix3d = transform.match(/^matrix3d\((.+)\)$/);
+  if (matrix3d) {
+    const values = matrix3d[1].split(",").map(v => Number.parseFloat(v.trim()));
+    return Number.isFinite(values[12]) ? values[12] : null;
+  }
+  const matrix2d = transform.match(/^matrix\((.+)\)$/);
+  if (matrix2d) {
+    const values = matrix2d[1].split(",").map(v => Number.parseFloat(v.trim()));
+    return Number.isFinite(values[4]) ? values[4] : null;
+  }
+  return null;
 }
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, getInnerPager = null }) {
@@ -87,7 +103,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }
     if (!dragFrameRef.current) dragFrameRef.current = requestAnimationFrame(apply);
   };
-  const [dragging, setDragging] = useState(false);
   // `instant` suppresses the slide transition for a single render so a bottom-nav
   // tap teleports (no sweep through the empty panes between far tabs) and the
   // post-commit reposition doesn't double-animate.
@@ -95,11 +110,68 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const [tapWindow, setTapWindow] = useState(null);
   const tapWindowTimer = useRef(null);
   const snapTimerRef = useRef(null);
+  const trackHintTimerRef = useRef(null);
   const lastHapticAt = useRef(0);
+
+  function clearTrackHintTimer() {
+    if (trackHintTimerRef.current) {
+      clearTimeout(trackHintTimerRef.current);
+      trackHintTimerRef.current = null;
+    }
+  }
+
+  function setTrackDragging(active) {
+    const el = trackRef.current;
+    if (!el) return;
+    if (active) {
+      clearTrackHintTimer();
+      delete el.dataset.settling;
+      el.dataset.dragging = "true";
+      el.style.transition = "none";
+      el.style.willChange = "transform";
+      return;
+    }
+    delete el.dataset.dragging;
+  }
+
+  function setTrackSettling(active) {
+    const el = trackRef.current;
+    if (!el) return;
+    if (active) {
+      clearTrackHintTimer();
+      delete el.dataset.dragging;
+      el.dataset.settling = "true";
+      el.style.transition = TRACK_SNAP_TRANSITION;
+      el.style.willChange = "transform";
+      return;
+    }
+    delete el.dataset.settling;
+  }
+
+  function clearTrackMotionHintSoon(delay = SNAP_MS + 80) {
+    clearTrackHintTimer();
+    trackHintTimerRef.current = setTimeout(() => {
+      trackHintTimerRef.current = null;
+      const el = trackRef.current;
+      if (!el) return;
+      delete el.dataset.dragging;
+      delete el.dataset.settling;
+      el.style.willChange = "";
+    }, delay);
+  }
+
+  function currentTrackDragX() {
+    const el = trackRef.current;
+    const W = mainRef.current?.clientWidth || 1;
+    const tx = readTranslateX(el ? getComputedStyle(el).transform : "");
+    if (!Number.isFinite(tx)) return dragXRef.current || 0;
+    return tx - (visualTabRef.current * -W);
+  }
 
   useEffect(() => () => {
     if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
     if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
+    if (trackHintTimerRef.current) clearTimeout(trackHintTimerRef.current);
     if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
   }, []);
 
@@ -131,7 +203,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (tab === visualTabRef.current) return;
     commitVisualTab(tab);
     setDragXpx(0, true);
-    setDragging(false);
+    const el = trackRef.current;
+    if (el) delete el.dataset.dragging;
     setInstant(true);
     requestAnimationFrame(() => setInstant(false));
   }, [tab, commitVisualTab]);
@@ -166,19 +239,24 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       requestAnimationFrame(() => setInstant(false));
     } else {
       if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
-      setDragging(false);
+      setTrackSettling(true);
       setDragXpx(0, true);
       setTapWindow({ from: Math.min(current, next), to: Math.max(current, next) });
-      tapWindowTimer.current = setTimeout(() => setTapWindow(null), SNAP_MS + 90);
+      tapWindowTimer.current = setTimeout(() => {
+        setTapWindow(null);
+        clearTrackMotionHintSoon(80);
+      }, SNAP_MS + 90);
     }
     startTransition(() => setTab(next));
   }
 
   function onTouchStart(e) {
+    const interruptX = (snapTimerRef.current || trackHintTimerRef.current) ? currentTrackDragX() : 0;
     if (snapTimerRef.current) {
-      touch.current = null;
-      return;
+      clearTimeout(snapTimerRef.current);
+      snapTimerRef.current = null;
     }
+    if (trackHintTimerRef.current) clearTrackHintTimer();
     if (e.touches.length !== 1) {
       touch.current = null;
       return;
@@ -190,8 +268,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       skip: inHorizontalScroller(e.target),
       w: mainRef.current?.clientWidth || 1,
       mode: null,
+      startDragX: interruptX,
+      interrupted: Math.abs(interruptX) > 0.5,
     };
-    if (dragXRef.current) setDragXpx(0, true);
+    setDragXpx(interruptX, true);
   }
 
   function onTouchMove(e) {
@@ -199,11 +279,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const st = touch.current;
     if (!st || st.skip) return;
     const p = e.touches[0];
-    const dx = p.clientX - st.x;
+    const gestureDx = p.clientX - st.x;
     const dy = p.clientY - st.y;
 
     if (st.mode === null) {
-      if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
+      if (Math.abs(gestureDx) > Math.abs(dy) * 1.08 && Math.abs(gestureDx) > 8) {
         // Horizontal. If the current tab has an inner toggle (Training's
         // Activities/Charts, Races' Races/PR) that can still move in this
         // direction, leave it to that tab's own swipe handler — the top pager
@@ -211,21 +291,24 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         // out of the way; we don't move the outer track at all.)
         const current = visualTabRef.current;
         const inner = getInnerPager?.(current);
-        const dir = dx < 0 ? 1 : -1;
+        const dir = gestureDx < 0 ? 1 : -1;
         const innerCanMove = inner && ((dir > 0 && inner.index < inner.count - 1) || (dir < 0 && inner.index > 0));
         st.mode = innerCanMove ? "inner" : "page";
       }
-      else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) st.mode = "scroll";
+      else if (Math.abs(dy) > 6 || Math.abs(gestureDx) > 6) st.mode = "scroll";
       else return; // too small to classify yet
-      if (st.mode === "page") setDragging(true);
+      if (st.mode === "page") setTrackDragging(true);
     }
 
     if (st.mode === "page") {
       e.preventDefault?.();
       const current = visualTabRef.current;
       const atFirst = current <= 0, atLast = current >= tabCount - 1;
-      const d = ((atFirst && dx > 0) || (atLast && dx < 0)) ? dx * EDGE_RESIST : dx;
-      setDragXpx(d);
+      const rawDx = (st.startDragX || 0) + gestureDx;
+      const resistedDx = ((atFirst && rawDx > 0) || (atLast && rawDx < 0)) ? rawDx * EDGE_RESIST : rawDx;
+      const W = st.w || 1;
+      const d = Math.max(-W, Math.min(W, resistedDx));
+      setDragXpx(d, true);
     }
   }
 
@@ -234,17 +317,19 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     touch.current = null;
     if (!st) return;
 
-    if (st.mode === "page") {
+    if (st.mode === "page" || st.interrupted) {
       const W = st.w || 1;
       const dx = dragXRef.current;
       const dt = Math.max(1, (e.timeStamp || 0) - (st.t || 0));
-      const velocity = dx / dt;
+      const p = e.changedTouches?.[0];
+      const gestureDx = p ? p.clientX - st.x : dx - (st.startDragX || 0);
+      const velocity = st.mode === "page" ? gestureDx / dt : 0;
       const threshold = Math.min(W * 0.16, 58);
       const current = visualTabRef.current;
       let dir = 0;
       if ((dx <= -threshold || velocity < -0.38) && current < tabCount - 1) dir = 1;
       else if ((dx >= threshold || velocity > 0.38) && current > 0) dir = -1;
-      setDragging(false); // re-enable the snap transition
+      setTrackSettling(true);
       if (dir !== 0) {
         const next = current + dir;
         const finalX = dir === 1 ? -W : W;
@@ -255,22 +340,26 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         // Keep React out of the critical snap frames: the already-rendered
         // neighbor glides into place using only the compositor, then we commit
         // the logical tab after the transition has landed.
-        setDragXpx(finalX);
+        setDragXpx(finalX, true);
         snapTimerRef.current = setTimeout(() => {
           snapTimerRef.current = null;
           setInstant(true);
           commitVisualTab(next, { urgent: true });
           setDragXpx(0, true);
           startTransition(() => setTab(next));
-          requestAnimationFrame(() => setInstant(false));
+          requestAnimationFrame(() => {
+            setInstant(false);
+            clearTrackMotionHintSoon(80);
+          });
         }, SNAP_MS);
       } else {
-        requestAnimationFrame(() => setDragXpx(0, true)); // snap back
+        setDragXpx(0, true); // snap back
+        clearTrackMotionHintSoon();
       }
       return;
     }
     // 'scroll' / 'ignore' / unclassified — nothing to settle.
-    setDragging(false);
+    setTrackDragging(false);
   }
 
   function onTabTap(idx, e) {
@@ -324,7 +413,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   const pullY = refreshing ? 44 : 0;
-  const trackTransition = (dragging || instant) ? "none" : `transform ${SNAP_MS}ms cubic-bezier(0.18,0.86,0.24,1)`;
+  const trackTransition = instant ? "none" : TRACK_SNAP_TRANSITION;
 
   return (
     <div style={{
@@ -373,8 +462,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           width: `${tabCount * 100}%`,
           transform: `translate3d(calc(${(-visualTab * 100) / tabCount}% + var(--drag-x, 0px)), ${pullY}px, 0)`,
           transition: trackTransition,
-          willChange: (dragging || refreshing || instant) ? "transform" : undefined,
-        }} ref={trackRef}>
+          willChange: (refreshing || instant) ? "transform" : undefined,
+        }} ref={trackRef} className="ultreia-pager-track">
           {TABS.map(({ idx }) => {
             const shouldRender = renderedTabSet.has(idx) || (tapWindow
               ? idx >= tapWindow.from && idx <= tapWindow.to
@@ -392,6 +481,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   overscrollBehavior: "contain",
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-y",
+                  contain: "layout paint style",
+                  backfaceVisibility: "hidden",
                   background: "linear-gradient(180deg, oklch(0.105 0.008 145 / 0.54), oklch(0.078 0.008 145 / 0.42))",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",

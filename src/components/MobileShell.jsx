@@ -155,8 +155,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const track = trackRef.current;
     if (!track) return;
     trackScrollLeftRef.current = left;
-    track.scrollLeft = left;
-  }, []);
+    if (track.scrollLeft) track.scrollLeft = 0;
+    track.style.transform = `translate3d(${-left}px, ${pullY}px, 0)`;
+  }, [pullY]);
 
   const applyPreviewStageX = useCallback((x) => {
     previewStageXRef.current = x;
@@ -462,8 +463,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
           </div>
         )}
 
-        {/* Real tab content stays aligned underneath. Horizontal finger-follow
-            is handled by the lightweight preview stage below. */}
+        {/* Real tab content stays aligned underneath by transform, avoiding
+            WebKit/PWA scrollLeft drift on overflow-hidden tracks. Horizontal
+            finger-follow is handled by the lightweight preview stage below. */}
         <div
           ref={trackRef}
           className="ultreia-pager-track"
@@ -482,7 +484,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
             scrollbarWidth: "none",
             msOverflowStyle: "none",
             backfaceVisibility: "hidden",
-            transform: `translate3d(0, ${pullY}px, 0)`,
+            transform: `translate3d(${-visualTab * 100}%, ${pullY}px, 0)`,
             transition: refreshing ? REFRESH_SNAP_TRANSITION : "none",
           }}>
           {TABS.map(({ idx }) => {

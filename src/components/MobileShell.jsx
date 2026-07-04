@@ -174,6 +174,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     pagerGestureRef.current = null;
   }, []);
 
+  const markTouchingState = useCallback(() => {
+    const track = trackRef.current;
+    if (track) track.dataset.touching = "true";
+  }, []);
+
   const markPagingState = useCallback(() => {
     const track = trackRef.current;
     if (track) {
@@ -249,6 +254,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
     clearPagerTimers();
     clearPagingState();
+    markTouchingState();
     const width = measurePagerWidth();
     const current = visualTabRef.current;
     dragRenderedTargetRef.current = current;
@@ -265,7 +271,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     };
     ensureRenderedWindow(current);
     alignTrackToTab(current);
-  }, [alignTrackToTab, clearPagerTimers, clearPagingState, ensureRenderedWindow, measurePagerWidth]);
+  }, [alignTrackToTab, clearPagerTimers, clearPagingState, ensureRenderedWindow, markTouchingState, measurePagerWidth]);
 
   const onPagerPointerMove = useCallback((event) => {
     const gesture = pagerGestureRef.current;

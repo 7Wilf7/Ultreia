@@ -352,6 +352,8 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .ultreia-pager-track[data-touching="true"] .ultreia-pager-pane {
+  contain: strict !important;
+  isolation: isolate;
   transform: translate3d(0, 0, 0);
   will-change: transform;
 }

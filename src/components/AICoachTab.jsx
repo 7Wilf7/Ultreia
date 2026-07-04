@@ -490,8 +490,6 @@ const CoachChatMessages = memo(function CoachChatMessages({
             display: "flex", flexDirection: "column",
             alignItems: isUser ? "flex-end" : "flex-start",
             gap: 6, minWidth: 0,
-            contentVisibility: "auto",
-            containIntrinsicSize: isMobile ? "96px" : "112px",
             contain: "layout paint style",
           }}>
             <div className="selectable" style={{

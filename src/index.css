@@ -340,21 +340,6 @@ summary::-webkit-details-marker { display: none; }
   display: none;
 }
 
-.ultreia-pager-track[data-dragging="true"] {
-  cursor: grabbing;
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.ultreia-pager-track[data-dragging="true"] .ultreia-calendar-month-block {
-  position: relative !important;
-  top: auto !important;
-}
-
-.ultreia-pager-track[data-dragging="true"] .ultreia-pager-pane > * {
-  pointer-events: none;
-}
-
 .ultreia-pager-pane {
   min-width: 100%;
 }

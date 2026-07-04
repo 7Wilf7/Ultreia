@@ -1,11 +1,12 @@
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
 import { getMobilePagerRenderWindow } from "../utils/mobilePager";
 
 /**
- * Mobile chrome — no top header, a transform-only tab pager, fixed bottom
+ * Mobile chrome — no top header, a native horizontal tab pager, fixed bottom
  * 5-tab nav. `renderTab(idx)` paints any tab by index so the pager can show the
  * current tab AND a neighbor at once while you drag; the 5th tab (idx=4) is the
  * mobile-only Settings page.
@@ -19,15 +20,9 @@ import { getMobilePagerRenderWindow } from "../utils/mobilePager";
  * shows a small spinner badge.
  */
 const REFRESH_SNAP_TRANSITION = "transform 300ms cubic-bezier(0.2,0.82,0.18,1)";
+const SCROLL_SETTLE_MS = 90;
+const PAGER_SETTLE_MS = 520;
 const TAB_HAPTIC_MS = 8;
-const PAGER_INTENT_PX = 4;
-const PAGER_VERTICAL_LOCK_PX = 7;
-const PAGER_AXIS_RATIO = 1.06;
-const PAGER_EDGE_RESISTANCE = 0.32;
-const PAGER_RELEASE_DISTANCE_RATIO = 0.18;
-const PAGER_RELEASE_VELOCITY_PX_MS = 0.42;
-const PAGER_SETTLE_MS = 380;
-const PAGER_SETTLE_EASING = "cubic-bezier(0.20, 0.88, 0.18, 1)";
 
 function triggerTabHaptic() {
   try {
@@ -43,6 +38,14 @@ function sameTabWindow(a, b) {
     && a.every((value, idx) => value === b[idx]);
 }
 
+function mergeTabWindows(...windows) {
+  return [...new Set(windows.flat().filter(Number.isFinite))].sort((a, b) => a - b);
+}
+
+function easeOutQuart(x) {
+  return 1 - Math.pow(1 - x, 4);
+}
+
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false }) {
   const t = useT();
   const mainRef = useRef(null);
@@ -56,17 +59,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const renderedTabSet = new Set(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
   const scrollSettleTimerRef = useRef(null);
-  const dragFrameRef = useRef(0);
-  const pendingTrackXRef = useRef(null);
-  const trackXRef = useRef(0);
+  const settleFrameRef = useRef(0);
   const pagerTouchActiveRef = useRef(false);
-  const pointerGestureRef = useRef(null);
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
   const pointerDownRef = useRef({ idx: -1, at: 0, switched: false });
   const pullY = refreshing ? 44 : 0;
-  const pullYRef = useRef(pullY);
 
   const measurePagerWidth = useCallback(() => {
     return trackRef.current?.clientWidth || mainRef.current?.clientWidth || window.innerWidth || 1;
@@ -76,213 +75,143 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
   }
 
+  const setRenderedWindow = useCallback((nextRenderedTabs) => {
+    if (sameTabWindow(nextRenderedTabs, renderedTabsRef.current)) return;
+    renderedTabsRef.current = nextRenderedTabs;
+    setRenderedTabs(nextRenderedTabs);
+  }, []);
+
+  const ensureRenderedWindow = useCallback((next, { keepCurrent = true } = {}) => {
+    const clamped = Math.max(0, Math.min(tabCount - 1, next));
+    const targetWindow = getMobilePagerRenderWindow(clamped, tabCount);
+    const currentWindow = keepCurrent
+      ? getMobilePagerRenderWindow(visualTabRef.current, tabCount)
+      : [];
+    const nextRenderedTabs = mergeTabWindows(targetWindow, currentWindow);
+    setRenderedWindow(nextRenderedTabs);
+    return clamped;
+  }, [setRenderedWindow, tabCount]);
+
   const commitVisualTab = useCallback((next) => {
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
     const nextRenderedTabs = getMobilePagerRenderWindow(clamped, tabCount);
-    const renderedChanged = !sameTabWindow(nextRenderedTabs, renderedTabsRef.current);
-    renderedTabsRef.current = nextRenderedTabs;
     visualTabRef.current = clamped;
 
-    if (renderedChanged) setRenderedTabs(nextRenderedTabs);
+    setRenderedWindow(nextRenderedTabs);
     setVisualTab(clamped);
-  }, [tabCount]);
+  }, [setRenderedWindow, tabCount]);
 
-  const applyTrackX = useCallback((x, transition = "none") => {
-    const track = trackRef.current;
-    if (!track) return;
-    trackXRef.current = x;
-    track.style.transition = transition;
-    track.style.transform = `translate3d(${x}px, ${pullYRef.current}px, 0)`;
-  }, []);
-
-  const alignTrackToTab = useCallback((next, transition = "none") => {
-    const clamped = Math.max(0, Math.min(tabCount - 1, next));
-    applyTrackX(-clamped * measurePagerWidth(), transition);
-  }, [applyTrackX, measurePagerWidth, tabCount]);
-
-  const queueTrackX = useCallback((x) => {
-    pendingTrackXRef.current = x;
-    if (dragFrameRef.current) return;
-    dragFrameRef.current = requestAnimationFrame(() => {
-      dragFrameRef.current = 0;
-      const nextX = pendingTrackXRef.current;
-      pendingTrackXRef.current = null;
-      if (typeof nextX === "number") applyTrackX(nextX);
-    });
-  }, [applyTrackX]);
-
-  const finishPagerScroll = useCallback(() => {
+  const clearPagerTimers = useCallback(() => {
     if (scrollSettleTimerRef.current) {
       clearTimeout(scrollSettleTimerRef.current);
       scrollSettleTimerRef.current = null;
     }
-    const track = trackRef.current;
-    if (track) delete track.dataset.dragging;
+    if (settleFrameRef.current) {
+      cancelAnimationFrame(settleFrameRef.current);
+      settleFrameRef.current = 0;
+    }
+  }, []);
+
+  const nearestScrollTab = useCallback(() => {
+    const el = trackRef.current;
+    if (!el) return visualTabRef.current;
+    const width = measurePagerWidth();
+    return Math.max(0, Math.min(tabCount - 1, Math.round(el.scrollLeft / width)));
+  }, [measurePagerWidth, tabCount]);
+
+  const scrollToTab = useCallback((next, behavior = "auto") => {
+    const el = trackRef.current;
+    if (!el) return;
+    const left = Math.max(0, Math.min(tabCount - 1, next)) * measurePagerWidth();
+    if (Math.abs(el.scrollLeft - left) < 1) return;
+    el.scrollTo({ left, behavior });
+  }, [measurePagerWidth, tabCount]);
+
+  const finishSettledTab = useCallback((next) => {
+    const clamped = Math.max(0, Math.min(tabCount - 1, next));
     pagerTouchActiveRef.current = false;
-  }, []);
-
-  const beginPagerDrag = useCallback((event) => {
-    if (pagerTouchActiveRef.current) return;
-    pagerTouchActiveRef.current = true;
-    const track = trackRef.current;
-    if (track) {
-      track.dataset.dragging = "true";
-      track.style.transition = "none";
+    commitVisualTab(clamped);
+    scrollToTab(clamped, "auto");
+    if (clamped !== tabPropRef.current) {
+      tabPropRef.current = clamped;
+      startTransition(() => setTab(clamped));
     }
-    try {
-      if (event?.pointerId != null && track?.setPointerCapture) {
-        track.setPointerCapture(event.pointerId);
-      }
-    } catch { /* pointer capture is best-effort */ }
-  }, []);
+  }, [commitVisualTab, scrollToTab, setTab, tabCount]);
 
-  const completePagerSettle = useCallback((next) => {
-    finishPagerScroll();
-    commitVisualTab(next);
-    alignTrackToTab(next);
-    if (next !== tabPropRef.current) {
-      tabPropRef.current = next;
-      startTransition(() => setTab(next));
-    }
-  }, [alignTrackToTab, commitVisualTab, finishPagerScroll, setTab]);
-
-  const settlePagerToTab = useCallback((next) => {
-    if (scrollSettleTimerRef.current) {
-      clearTimeout(scrollSettleTimerRef.current);
-      scrollSettleTimerRef.current = null;
-    }
+  const animateScrollToTab = useCallback((next) => {
+    const el = trackRef.current;
+    if (!el) return;
+    clearPagerTimers();
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
-    alignTrackToTab(clamped, `transform ${PAGER_SETTLE_MS}ms ${PAGER_SETTLE_EASING}`);
+    ensureRenderedWindow(clamped);
+    const from = el.scrollLeft;
+    const to = clamped * measurePagerWidth();
+    const distance = to - from;
+    if (Math.abs(distance) < 1) {
+      el.scrollLeft = to;
+      finishSettledTab(clamped);
+      return;
+    }
+    const started = performance.now();
+    const step = (now) => {
+      const progress = Math.min(1, (now - started) / PAGER_SETTLE_MS);
+      el.scrollLeft = from + distance * easeOutQuart(progress);
+      if (progress < 1) {
+        settleFrameRef.current = requestAnimationFrame(step);
+        return;
+      }
+      settleFrameRef.current = 0;
+      el.scrollLeft = to;
+      finishSettledTab(clamped);
+    };
+    settleFrameRef.current = requestAnimationFrame(step);
+  }, [clearPagerTimers, ensureRenderedWindow, finishSettledTab, measurePagerWidth, tabCount]);
+
+  const settleScrollTab = useCallback(() => {
+    animateScrollToTab(nearestScrollTab());
+  }, [animateScrollToTab, nearestScrollTab]);
+
+  const scheduleScrollSettle = useCallback((delay = SCROLL_SETTLE_MS) => {
+    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
     scrollSettleTimerRef.current = setTimeout(() => {
       scrollSettleTimerRef.current = null;
-      completePagerSettle(clamped);
-    }, PAGER_SETTLE_MS + 50);
-  }, [alignTrackToTab, completePagerSettle, tabCount]);
+      settleScrollTab();
+    }, delay);
+  }, [settleScrollTab]);
 
-  const onPagerPointerDown = useCallback((event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (!event.isPrimary) return;
-    const width = measurePagerWidth();
-    pointerGestureRef.current = {
-      pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      lastX: event.clientX,
-      lastAt: event.timeStamp || performance.now(),
-      velocityX: 0,
-      width,
-      baseX: -visualTabRef.current * width,
-      mode: "pending",
-    };
-    if (scrollSettleTimerRef.current) {
-      clearTimeout(scrollSettleTimerRef.current);
-      scrollSettleTimerRef.current = null;
-    }
-    alignTrackToTab(visualTabRef.current);
-  }, [alignTrackToTab, measurePagerWidth]);
+  function onPagerScroll() {
+    if (settleFrameRef.current) return;
+    if (!pagerTouchActiveRef.current) scheduleScrollSettle();
+  }
 
-  const onPagerPointerMove = useCallback((event) => {
-    const gesture = pointerGestureRef.current;
-    if (!gesture || gesture.pointerId !== event.pointerId || gesture.mode === "scroll") return;
+  function onPagerTouchStart() {
+    pagerTouchActiveRef.current = true;
+    clearPagerTimers();
+    ensureRenderedWindow(visualTabRef.current);
+  }
 
-    const dx = event.clientX - gesture.x;
-    const dy = event.clientY - gesture.y;
-    const absDx = Math.abs(dx);
-    const absDy = Math.abs(dy);
-
-    if (gesture.mode === "pending" && absDx >= PAGER_INTENT_PX && absDx > absDy * PAGER_AXIS_RATIO) {
-      gesture.mode = "page";
-      beginPagerDrag(event);
-    }
-    if (gesture.mode === "pending" && absDy >= PAGER_VERTICAL_LOCK_PX && absDy > absDx * PAGER_AXIS_RATIO) {
-      gesture.mode = "scroll";
-      pointerGestureRef.current = null;
-      return;
-    }
-    if (gesture.mode !== "page") return;
-
-    if (event.cancelable) event.preventDefault();
-
-    const now = event.timeStamp || performance.now();
-    const dt = Math.max(1, now - gesture.lastAt);
-    gesture.velocityX = (event.clientX - gesture.lastX) / dt;
-    gesture.lastX = event.clientX;
-    gesture.lastAt = now;
-
-    const minX = -(tabCount - 1) * gesture.width;
-    const maxX = 0;
-    let nextX = gesture.baseX + dx;
-    if (nextX > maxX) nextX = maxX + (nextX - maxX) * PAGER_EDGE_RESISTANCE;
-    if (nextX < minX) nextX = minX + (nextX - minX) * PAGER_EDGE_RESISTANCE;
-    queueTrackX(nextX);
-  }, [beginPagerDrag, queueTrackX, tabCount]);
-
-  const onPagerPointerEnd = useCallback((event) => {
-    const gesture = pointerGestureRef.current;
-    if (!gesture || gesture.pointerId !== event.pointerId) return;
-    pointerGestureRef.current = null;
-
-    if (dragFrameRef.current) {
-      cancelAnimationFrame(dragFrameRef.current);
-      dragFrameRef.current = 0;
-    }
-    if (typeof pendingTrackXRef.current === "number") {
-      applyTrackX(pendingTrackXRef.current);
-      pendingTrackXRef.current = null;
-    }
-
-    if (gesture.mode !== "page") {
-      finishPagerScroll();
-      return;
-    }
-
-    const dx = event.clientX - gesture.x;
-    const current = visualTabRef.current;
-    const distanceThreshold = gesture.width * PAGER_RELEASE_DISTANCE_RATIO;
-    let next = current;
-    if (dx <= -distanceThreshold || gesture.velocityX <= -PAGER_RELEASE_VELOCITY_PX_MS) next = current + 1;
-    if (dx >= distanceThreshold || gesture.velocityX >= PAGER_RELEASE_VELOCITY_PX_MS) next = current - 1;
-    settlePagerToTab(Math.max(0, Math.min(tabCount - 1, next)));
-  }, [applyTrackX, finishPagerScroll, settlePagerToTab, tabCount]);
+  function onPagerTouchEnd() {
+    pagerTouchActiveRef.current = false;
+    scheduleScrollSettle();
+  }
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
-    alignTrackToTab(tab);
     if (tab === visualTabRef.current) return undefined;
-    const frame = requestAnimationFrame(() => commitVisualTab(tab));
+    commitVisualTab(tab);
+    const frame = requestAnimationFrame(() => scrollToTab(tab, "auto"));
     return () => cancelAnimationFrame(frame);
-  }, [tab, alignTrackToTab, commitVisualTab]);
-
-  useLayoutEffect(() => {
-    pullYRef.current = pullY;
-    alignTrackToTab(visualTabRef.current, refreshing ? REFRESH_SNAP_TRANSITION : "none");
-  }, [alignTrackToTab, pullY, refreshing]);
+  }, [tab, commitVisualTab, scrollToTab]);
 
   useEffect(() => () => {
-    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
-    if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
-  }, []);
+    clearPagerTimers();
+  }, [clearPagerTimers]);
 
   useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return undefined;
-    track.addEventListener("pointerdown", onPagerPointerDown, { passive: true });
-    track.addEventListener("pointermove", onPagerPointerMove, { passive: false });
-    track.addEventListener("pointerup", onPagerPointerEnd, { passive: true });
-    track.addEventListener("pointercancel", onPagerPointerEnd, { passive: true });
-    return () => {
-      track.removeEventListener("pointerdown", onPagerPointerDown);
-      track.removeEventListener("pointermove", onPagerPointerMove);
-      track.removeEventListener("pointerup", onPagerPointerEnd);
-      track.removeEventListener("pointercancel", onPagerPointerEnd);
-    };
-  }, [onPagerPointerDown, onPagerPointerEnd, onPagerPointerMove]);
-
-  useEffect(() => {
-    const onResize = () => alignTrackToTab(visualTabRef.current);
+    const onResize = () => scrollToTab(visualTabRef.current, "auto");
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
-  }, [alignTrackToTab]);
+  }, [scrollToTab]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -292,8 +221,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
-  // Jump to `next` tab. Bottom-nav taps stay instant; finger drags use the
-  // transform-only pager above.
+  // Jump to `next` tab. Bottom-nav taps stay instant; finger drags are owned by
+  // the browser's native horizontal scroll path.
   function go(next, { haptic = false, hapticAt = 0 } = {}) {
     const current = visualTabRef.current;
     if (next === current || next < 0 || next >= tabCount) return;
@@ -304,8 +233,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         lastHapticAt.current = at;
       }
     }
-    commitVisualTab(next);
-    alignTrackToTab(next);
+    clearPagerTimers();
+    flushSync(() => commitVisualTab(next));
+    scrollToTab(next, "auto");
     tabPropRef.current = next;
     startTransition(() => setTab(next));
   }
@@ -396,25 +326,32 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           </div>
         )}
 
-        {/* Horizontal paging is imperative and transform-only while dragging:
-            no React state changes on pointermove, so the finger-follow path
-            stays on the compositor instead of re-rendering heavy tab DOM. */}
+        {/* Horizontal paging uses native scroll while the finger is down. React
+            only syncs the selected tab after release, so holding between two
+            panes stays as close to device refresh rate as the WebView allows. */}
         <div
           ref={trackRef}
           className="ultreia-pager-track"
+          onScroll={onPagerScroll}
+          onTouchStartCapture={onPagerTouchStart}
+          onTouchEndCapture={onPagerTouchEnd}
+          onTouchCancelCapture={onPagerTouchEnd}
           style={{
           display: "flex",
           height: "100%",
           width: "100%",
-          overflow: "visible",
+          overflowX: "auto",
+          overflowY: "hidden",
+          scrollSnapType: "x proximity",
+          scrollBehavior: "auto",
           overscrollBehaviorX: "contain",
-          touchAction: "pan-y",
+          WebkitOverflowScrolling: "touch",
+          touchAction: "pan-x pan-y",
           scrollbarWidth: "none",
           msOverflowStyle: "none",
-          transform: `translate3d(${-visualTab * 100}%, ${pullY}px, 0)`,
+          transform: pullY ? `translate3d(0, ${pullY}px, 0)` : "translate3d(0, 0, 0)",
           transition: refreshing ? REFRESH_SNAP_TRANSITION : "none",
-          willChange: "transform",
-          contain: "layout paint style",
+          willChange: refreshing ? "transform" : undefined,
           backfaceVisibility: "hidden",
         }}>
           {TABS.map(({ idx }) => {
@@ -431,16 +368,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   height: "100%",
                   overflowY: "auto",
                   overflowX: "hidden",
+                  scrollSnapAlign: "start",
                   overscrollBehavior: "contain",
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-x pan-y",
                   contain: "layout paint style",
-                  contentVisibility: shouldRender ? "visible" : "hidden",
-                  containIntrinsicSize: "100vw 100vh",
                   backfaceVisibility: "hidden",
-                  transform: "translate3d(0, 0, 0)",
                   pointerEvents: shouldRender ? "auto" : "none",
-                  visibility: shouldRender ? "visible" : "hidden",
                   background: "linear-gradient(180deg, oklch(0.105 0.008 145), oklch(0.078 0.008 145))",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",

@@ -245,7 +245,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     // (handled in JS) instead of letting them scroll the page — so swiping the
     // calendar no longer drags the weather strip below. The weather strip sits
     // outside this block and scrolls normally.
-    touchAction: "none",
+    touchAction: "pan-x",
   } : {};
 
   return (

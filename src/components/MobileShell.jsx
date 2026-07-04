@@ -89,9 +89,9 @@ const PagerPaneContent = memo(function PagerPaneContent({
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderTabPreview = null, tabCount = 5, onRefresh = null, refreshing = false }) {
   const t = useT();
-  const shellRef = useRef(null);
   const mainRef = useRef(null);
   const trackRef = useRef(null);
+  const previewOverlayRef = useRef(null);
   const previewStageRef = useRef(null);
   const paneRefs = useRef({});
   const [visualTab, setVisualTab] = useState(tab);
@@ -99,10 +99,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
-  const previewMoveFrameRef = useRef(0);
   const previewSettleFrameRef = useRef(0);
   const previewStageXRef = useRef(0);
-  const previewStageQueuedXRef = useRef(0);
   const trackScrollLeftRef = useRef(0);
   const pagerWidthRef = useRef(1);
   const renderTrimTimerRef = useRef(null);
@@ -165,15 +163,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     if (stage) stage.style.transform = `translate3d(${x}px, 0, 0)`;
   }, []);
 
-  const queuePreviewStageX = useCallback((x) => {
-    previewStageQueuedXRef.current = x;
-    if (previewMoveFrameRef.current) return;
-    previewMoveFrameRef.current = requestAnimationFrame(() => {
-      previewMoveFrameRef.current = 0;
-      applyPreviewStageX(previewStageQueuedXRef.current);
-    });
-  }, [applyPreviewStageX]);
-
   const alignTrackToTab = useCallback((next) => {
     const clamped = clampTabIndex(next, tabCount);
     const width = measurePagerWidth();
@@ -182,21 +171,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   }, [applyPreviewStageX, measurePagerWidth, setTrackScrollLeft, tabCount]);
 
   const setPagerPreviewMode = useCallback((active) => {
-    const shell = shellRef.current;
+    const overlay = previewOverlayRef.current;
     pagerDragIntentRef.current.active = active;
-    if (!shell) return;
-    if (active) {
-      shell.dataset.previewDragging = "true";
-      return;
-    }
-    delete shell.dataset.previewDragging;
+    if (overlay) overlay.style.opacity = active ? "1" : "0";
   }, []);
 
   const clearPagerTimers = useCallback(() => {
-    if (previewMoveFrameRef.current) {
-      cancelAnimationFrame(previewMoveFrameRef.current);
-      previewMoveFrameRef.current = 0;
-    }
     if (previewSettleFrameRef.current) {
       cancelAnimationFrame(previewSettleFrameRef.current);
       previewSettleFrameRef.current = 0;
@@ -318,8 +298,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const current = visualTabRef.current;
     const offset = resistedPagerOffset(rawDx, current, tabCount, width);
     pagerDragIntentRef.current.offset = offset;
-    queuePreviewStageX(-current * width + offset);
-  }, [measurePagerWidth, queuePreviewStageX, setPagerPreviewMode, tabCount]);
+    applyPreviewStageX(-current * width + offset);
+  }, [applyPreviewStageX, measurePagerWidth, setPagerPreviewMode, tabCount]);
 
   useEffect(() => () => {
     clearPagerTimers();
@@ -443,7 +423,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
 
   return (
     <div
-      ref={shellRef}
       className="ultreia-mobile-shell"
       style={{
       height: "100dvh",
@@ -552,6 +531,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
         </div>
         {renderTabPreview && (
           <div
+            ref={previewOverlayRef}
             className="ultreia-pager-preview-stage"
             aria-hidden="true"
             style={{

@@ -360,8 +360,11 @@ summary::-webkit-details-marker { display: none; }
   pointer-events: none;
 }
 
-.ultreia-pager-track[data-paging="true"] .ultreia-spinner {
-  animation-play-state: paused;
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *,
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *::before,
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
 }
 
 .ultreia-pager-pane {

@@ -345,18 +345,9 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .ultreia-pager-scroll-content {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: 1fr;
   height: 100%;
   min-height: 100%;
   position: relative;
-}
-
-.ultreia-pager-preview-strip,
-.ultreia-pager-static-layer {
-  grid-column: 1;
-  grid-row: 1;
 }
 
 .ultreia-pager-preview-strip {
@@ -456,9 +447,9 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .ultreia-pager-static-layer {
-  position: sticky;
-  left: 0;
+  position: absolute;
   top: 0;
+  bottom: 0;
   z-index: 2;
   height: 100%;
   min-height: 100%;

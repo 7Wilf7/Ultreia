@@ -507,6 +507,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
               className="ultreia-pager-static-layer"
               aria-hidden={pagerDragFrozen}
               style={{
+                left: `${visualTab * (100 / tabCount)}%`,
                 width: `${100 / tabCount}%`,
                 pointerEvents: pagerDragFrozen ? "none" : "auto",
               }}

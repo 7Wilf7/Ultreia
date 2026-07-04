@@ -351,28 +351,28 @@ summary::-webkit-details-marker { display: none; }
   top: auto !important;
 }
 
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane {
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] {
   overflow-y: hidden !important;
   isolation: isolate;
   transform: translate3d(0, 0, 0);
   will-change: transform;
 }
 
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane,
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane * {
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"],
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] * {
   box-shadow: none !important;
   filter: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane > * {
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] > * {
   pointer-events: none;
 }
 
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *,
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *::before,
-.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane *::after {
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] *,
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] *::before,
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane[data-rendered="true"] *::after {
   animation-play-state: paused !important;
   transition: none !important;
 }

@@ -8,7 +8,6 @@ import {
   getMobilePagerRenderWindow,
   mergeTabWindows,
   shouldRenderMobilePagerPane,
-  shouldShowMobilePagerPane,
 } from "../utils/mobilePager";
 
 /**
@@ -61,25 +60,22 @@ function clampTabIndex(idx, count) {
 
 const PagerPaneContent = memo(function PagerPaneContent({
   idx,
-  shouldRender,
-  shouldShow,
-  isFullPane,
+  renderTab,
+}) {
+  return (
+    <div className="ultreia-pager-content-shell" data-full-pane="true">
+      <div className="ultreia-pager-full-content">{renderTab(idx)}</div>
+    </div>
+  );
+}, (prev, next) => next.freeze && prev.idx === next.idx);
+
+const PagerPreviewPane = memo(function PagerPreviewPane({
+  idx,
   renderTab,
   renderTabPreview,
 }) {
-  const preview = renderTabPreview && shouldShow ? renderTabPreview(idx) : null;
-  const full = isFullPane || (!preview && shouldRender) ? renderTab(idx) : null;
-  if (!preview && !full) return null;
-
-  return (
-    <div
-      className="ultreia-pager-content-shell"
-      data-full-pane={isFullPane ? "true" : "false"}
-    >
-      {preview && <div className="ultreia-pager-preview-content">{preview}</div>}
-      {full && <div className="ultreia-pager-full-content">{full}</div>}
-    </div>
-  );
+  const preview = renderTabPreview ? renderTabPreview(idx) : renderTab(idx);
+  return <div className="ultreia-pager-preview-content">{preview}</div>;
 }, (prev, next) => next.freeze && prev.idx === next.idx);
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderTabPreview = null, tabCount = 5, onRefresh = null, refreshing = false }) {
@@ -400,19 +396,28 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   }
 
   function renderPaneContent(idx, shouldRender) {
-    const isFullPane = shouldRender && (idx === visualTab || idx === tab);
+    if (!shouldRender) return null;
     return (
       <PagerPaneContent
         idx={idx}
-        shouldRender={shouldRender}
-        shouldShow={shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview)}
-        isFullPane={isFullPane}
+        freeze={pagerDragFrozen}
+        renderTab={renderTab}
+      />
+    );
+  }
+
+  function renderPreviewPane(idx) {
+    return (
+      <PagerPreviewPane
+        idx={idx}
         freeze={pagerDragFrozen}
         renderTab={renderTab}
         renderTabPreview={renderTabPreview}
       />
     );
   }
+
+  const activeShouldRender = shouldRenderMobilePagerPane(visualTab, renderedTabs, visualTab, tab);
 
   return (
     <div
@@ -475,28 +480,46 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
             transform: `translate3d(0, ${pullY}px, 0)`,
             transition: refreshing ? REFRESH_SNAP_TRANSITION : "none",
           }}>
-          {TABS.map(({ idx }) => {
-            const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
-            const shouldShow = shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview);
-            const isInteractivePane = shouldRender && (idx === visualTab || idx === tab);
-            return (
+          <div
+            className="ultreia-pager-scroll-content"
+            style={{ width: `${tabCount * 100}%` }}
+          >
+            <div className="ultreia-pager-preview-strip" aria-hidden="true">
+              {TABS.map(({ idx }) => (
+                <div
+                  key={idx}
+                  className="ultreia-pager-preview-pane"
+                  style={{
+                    flex: `0 0 ${100 / tabCount}%`,
+                    width: `${100 / tabCount}%`,
+                  }}
+                >
+                  {renderPreviewPane(idx)}
+                </div>
+              ))}
+            </div>
+            <div
+              className="ultreia-pager-static-layer"
+              aria-hidden={pagerDragFrozen}
+              style={{
+                width: `${100 / tabCount}%`,
+                pointerEvents: pagerDragFrozen ? "none" : "auto",
+              }}
+            >
               <div
-                key={idx}
                 ref={(el) => {
                   if (!el) {
-                    delete paneRefs.current[idx];
+                    delete paneRefs.current[visualTab];
                     return;
                   }
-                  paneRefs.current[idx] = el;
+                  paneRefs.current[visualTab] = el;
                 }}
                 className="ultreia-pager-pane"
-                data-rendered={shouldRender ? "true" : "false"}
-                data-preview={shouldRender ? "false" : "true"}
-                aria-hidden={!isInteractivePane}
+                data-rendered={activeShouldRender ? "true" : "false"}
+                data-preview="false"
+                aria-hidden={pagerDragFrozen}
                 style={{
                   position: "relative",
-                  flex: "0 0 100%",
-                  minWidth: "100%",
                   width: "100%",
                   height: "100%",
                   overflowY: "auto",
@@ -509,18 +532,17 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
                   backfaceVisibility: "hidden",
                   transform: "none",
                   willChange: "auto",
-                  isolation: shouldShow ? "isolate" : "auto",
-                  visibility: shouldShow ? "visible" : "hidden",
-                  pointerEvents: isInteractivePane ? "auto" : "none",
-                  background: shouldShow ? "var(--bg)" : "transparent",
+                  isolation: "isolate",
+                  visibility: activeShouldRender ? "visible" : "hidden",
+                  background: "var(--bg)",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
                 }}>
-                {renderPaneContent(idx, shouldRender)}
+                {renderPaneContent(visualTab, activeShouldRender)}
               </div>
-            );
-          })}
+            </div>
+          </div>
         </div>
       </main>
 

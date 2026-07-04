@@ -7,6 +7,7 @@ import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
   mergeTabWindows,
+  shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
 
 /**
@@ -64,7 +65,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const visualTabRef = useRef(tab);
   const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
-  const renderedTabSet = new Set(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
   const scrollSettleTimerRef = useRef(null);
   const dragFrameRef = useRef(0);
@@ -531,7 +531,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         }}>
           {/* eslint-disable-next-line react-hooks/refs -- Drag-time pane caching intentionally reads refs during render to avoid re-rendering heavy tab trees mid-gesture. */}
           {TABS.map(({ idx }) => {
-            const shouldRender = renderedTabSet.has(idx);
+            const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
             return (
               <div
                 key={idx}

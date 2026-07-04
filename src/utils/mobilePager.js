@@ -48,3 +48,7 @@ export function getMobilePagerJumpWindow(from, to, count) {
     getMobilePagerRenderWindow(to, count),
   );
 }
+
+export function shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, propTab) {
+  return renderedTabs.includes(idx) || idx === visualTab || idx === propTab;
+}

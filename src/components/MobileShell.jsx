@@ -3,7 +3,12 @@ import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
-import { getMobilePagerRenderWindow } from "../utils/mobilePager";
+import {
+  getMobilePagerJumpWindow,
+  getMobilePagerRenderWindow,
+  getMobilePagerScrollWindow,
+  mergeTabWindows,
+} from "../utils/mobilePager";
 
 /**
  * Mobile chrome — no top header, a native horizontal tab pager, fixed bottom
@@ -40,10 +45,6 @@ function sameTabWindow(a, b) {
     && a.every((value, idx) => value === b[idx]);
 }
 
-function mergeTabWindows(...windows) {
-  return [...new Set(windows.flat().filter(Number.isFinite))].sort((a, b) => a - b);
-}
-
 function easeOutQuart(x) {
   return 1 - Math.pow(1 - x, 4);
 }
@@ -62,6 +63,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const activePane = () => paneRefs.current[visualTabRef.current];
   const scrollSettleTimerRef = useRef(null);
   const settleFrameRef = useRef(0);
+  const scrollRenderFrameRef = useRef(0);
+  const renderTrimTimerRef = useRef(null);
   const pagerTouchActiveRef = useRef(false);
   const pagerGestureRef = useRef(null);
   const tabPropRef = useRef(tab);
@@ -95,9 +98,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     return clamped;
   }, [setRenderedWindow, tabCount]);
 
-  const commitVisualTab = useCallback((next) => {
+  const commitVisualTab = useCallback((next, { renderedWindow = null } = {}) => {
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
-    const nextRenderedTabs = getMobilePagerRenderWindow(clamped, tabCount);
+    const nextRenderedTabs = renderedWindow
+      ? mergeTabWindows(renderedWindow)
+      : getMobilePagerRenderWindow(clamped, tabCount);
     visualTabRef.current = clamped;
 
     setRenderedWindow(nextRenderedTabs);
@@ -112,6 +117,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (settleFrameRef.current) {
       cancelAnimationFrame(settleFrameRef.current);
       settleFrameRef.current = 0;
+    }
+    if (scrollRenderFrameRef.current) {
+      cancelAnimationFrame(scrollRenderFrameRef.current);
+      scrollRenderFrameRef.current = 0;
+    }
+    if (renderTrimTimerRef.current) {
+      clearTimeout(renderTrimTimerRef.current);
+      renderTrimTimerRef.current = null;
     }
   }, []);
 
@@ -143,6 +156,30 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (Math.abs(el.scrollLeft - left) < 1) return;
     el.scrollTo({ left, behavior });
   }, [measurePagerWidth, tabCount]);
+
+  const syncRenderedWindowToScroll = useCallback(() => {
+    scrollRenderFrameRef.current = 0;
+    const el = trackRef.current;
+    if (!el) return;
+    const scrollWindow = getMobilePagerScrollWindow(el.scrollLeft, measurePagerWidth(), tabCount);
+    const currentWindow = getMobilePagerRenderWindow(visualTabRef.current, tabCount);
+    setRenderedWindow(mergeTabWindows(scrollWindow, currentWindow));
+  }, [measurePagerWidth, setRenderedWindow, tabCount]);
+
+  const scheduleScrollRenderWindow = useCallback(() => {
+    if (scrollRenderFrameRef.current) return;
+    scrollRenderFrameRef.current = requestAnimationFrame(syncRenderedWindowToScroll);
+  }, [syncRenderedWindowToScroll]);
+
+  const scheduleRenderedWindowTrim = useCallback((next, delay = 180) => {
+    if (renderTrimTimerRef.current) clearTimeout(renderTrimTimerRef.current);
+    const clamped = Math.max(0, Math.min(tabCount - 1, next));
+    renderTrimTimerRef.current = setTimeout(() => {
+      renderTrimTimerRef.current = null;
+      if (pagerTouchActiveRef.current || settleFrameRef.current || visualTabRef.current !== clamped) return;
+      setRenderedWindow(getMobilePagerRenderWindow(clamped, tabCount));
+    }, delay);
+  }, [setRenderedWindow, tabCount]);
 
   const finishSettledTab = useCallback((next) => {
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
@@ -198,6 +235,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, [settleScrollTab]);
 
   function onPagerScroll() {
+    scheduleScrollRenderWindow();
     if (settleFrameRef.current) return;
     if (!pagerTouchActiveRef.current) scheduleScrollSettle();
   }
@@ -213,6 +251,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   function onPagerTouchEnd() {
     pagerTouchActiveRef.current = false;
+    scheduleScrollRenderWindow();
     scheduleScrollSettle();
   }
 
@@ -310,8 +349,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     }
     clearPagerTimers();
-    flushSync(() => commitVisualTab(next));
+    const jumpWindow = getMobilePagerJumpWindow(current, next, tabCount);
+    flushSync(() => commitVisualTab(next, { renderedWindow: jumpWindow }));
     scrollToTab(next, "auto");
+    scheduleRenderedWindowTrim(next);
     tabPropRef.current = next;
     startTransition(() => setTab(next));
   }

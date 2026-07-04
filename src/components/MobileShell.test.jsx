@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getMobilePagerRenderWindow } from "../utils/mobilePager";
+import {
+  getMobilePagerJumpWindow,
+  getMobilePagerRenderWindow,
+  getMobilePagerScrollWindow,
+} from "../utils/mobilePager";
 
 describe("MobileShell pager render window", () => {
   it("keeps edge tabs with their only neighbor", () => {
@@ -14,5 +18,16 @@ describe("MobileShell pager render window", () => {
 
   it("keeps other middle tabs with immediate neighbors", () => {
     expect(getMobilePagerRenderWindow(3, 5)).toEqual([2, 3, 4]);
+  });
+
+  it("keeps panes around the native scroll position rendered", () => {
+    expect(getMobilePagerScrollWindow(0, 100, 5)).toEqual([0, 1]);
+    expect(getMobilePagerScrollWindow(160, 100, 5)).toEqual([1, 2]);
+    expect(getMobilePagerScrollWindow(260, 100, 5)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("keeps crossed panes mounted for direct bottom-nav jumps", () => {
+    expect(getMobilePagerJumpWindow(0, 4, 5)).toEqual([0, 1, 2, 3, 4]);
+    expect(getMobilePagerJumpWindow(2, 3, 5)).toEqual([1, 2, 3, 4]);
   });
 });

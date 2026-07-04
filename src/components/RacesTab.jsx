@@ -668,6 +668,9 @@ export function RacesTab({
     return (
       <div
         className="ultreia-no-motion-surface"
+        data-mobile-inner-swipe="true"
+        data-swipe-prev={mobileTopTab === "pr" ? "true" : "false"}
+        data-swipe-next={mobileTopTab === "races" ? "true" : "false"}
         onTouchStart={onTopSwipeStart}
         onTouchMove={onTopSwipeMove}
         onTouchEnd={onTopSwipeEnd}

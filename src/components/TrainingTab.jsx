@@ -395,6 +395,9 @@ export function TrainingTab({
 
   return (
     <div
+      data-mobile-inner-swipe={isMobile ? "true" : undefined}
+      data-swipe-prev={isMobile && view === "charts" ? "true" : "false"}
+      data-swipe-next={isMobile && view === "activities" ? "true" : "false"}
       onTouchStart={onSectionTouchStart}
       onTouchMove={onSectionTouchMove}
       onTouchEnd={onSectionTouchEnd}

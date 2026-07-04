@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
+  shouldOuterPagerHandleSwipe,
   shouldRenderMobilePagerPane,
   shouldShowMobilePagerPane,
 } from "../utils/mobilePager";
@@ -35,5 +36,26 @@ describe("MobileShell pager render window", () => {
   it("keeps preview panes visible when heavy content is not mounted", () => {
     expect(shouldShowMobilePagerPane(4, [0, 1], 0, 0, true)).toBe(true);
     expect(shouldShowMobilePagerPane(4, [0, 1], 0, 0, false)).toBe(false);
+  });
+
+  it("lets nested swipers keep gestures until their boundary", () => {
+    expect(shouldOuterPagerHandleSwipe({
+      direction: 1,
+      currentTab: 0,
+      tabCount: 5,
+      innerCanMove: true,
+    })).toBe(false);
+    expect(shouldOuterPagerHandleSwipe({
+      direction: 1,
+      currentTab: 0,
+      tabCount: 5,
+      innerCanMove: false,
+    })).toBe(true);
+    expect(shouldOuterPagerHandleSwipe({
+      direction: -1,
+      currentTab: 0,
+      tabCount: 5,
+      innerCanMove: false,
+    })).toBe(false);
   });
 });

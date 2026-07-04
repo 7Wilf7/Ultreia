@@ -345,11 +345,13 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .ultreia-pager-content-shell {
+  height: 100%;
   min-height: 100%;
   position: relative;
 }
 
 .ultreia-pager-full-content {
+  height: 100%;
   min-height: 100%;
 }
 

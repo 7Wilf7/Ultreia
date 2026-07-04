@@ -256,6 +256,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const absDy = Math.abs(dy);
       if (absDx >= PAGER_INTENT_PX && absDx > absDy * PAGER_AXIS_RATIO) {
         gesture.mode = "paging";
+        const current = visualTabRef.current;
+        const target = dx < 0 ? current + 1 : current - 1;
+        if (target >= 0 && target < tabCount) ensureRenderedWindow(target);
         markPagingState();
         return;
       }
@@ -278,7 +281,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       track.removeEventListener("touchend", onTouchEnd);
       track.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [markPagingState]);
+  }, [ensureRenderedWindow, markPagingState, tabCount]);
 
   useEffect(() => {
     const onResize = () => scrollToTab(visualTabRef.current, "auto");

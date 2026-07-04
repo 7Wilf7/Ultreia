@@ -250,7 +250,12 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
 
   return (
     <div>
-      <div style={monthBlockStyle} onTouchStart={onGridTouchStart} onTouchEnd={onGridTouchEnd}>
+      <div
+        className={isMobile ? "ultreia-calendar-month-block" : undefined}
+        style={monthBlockStyle}
+        onTouchStart={onGridTouchStart}
+        onTouchEnd={onGridTouchEnd}
+      >
       {/* Month navigation bar */}
       <div style={{
         display: "flex", alignItems: "center", gap: 10,

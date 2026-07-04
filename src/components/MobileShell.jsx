@@ -439,7 +439,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   containIntrinsicSize: "100vw 100vh",
                   backfaceVisibility: "hidden",
                   transform: "translate3d(0, 0, 0)",
-                  willChange: "transform",
                   pointerEvents: shouldRender ? "auto" : "none",
                   visibility: shouldRender ? "visible" : "hidden",
                   background: "linear-gradient(180deg, oklch(0.105 0.008 145), oklch(0.078 0.008 145))",

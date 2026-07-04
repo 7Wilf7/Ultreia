@@ -47,7 +47,8 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
   );
   const [fetchWeather, setFetchWeather] = useState(initialFetchWeather);
   const [askCoach, setAskCoach] = useState(workouts.length <= DETAIL_LIMIT);
-  const coachNotesRef = useRef(null);
+  const [coachNotes, setCoachNotes] = useState("");
+  const coachNotesComposingRef = useRef(false);
   const [rpeByIndex, setRpeByIndex] = useState({});
   const [bulkRpe, setBulkRpe] = useState("");
   const [strengthSubsByIndex, setStrengthSubsByIndex] = useState({});
@@ -115,7 +116,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
       workouts: patched,
       fetchWeather: fetchWeather && weatherEligibleCount > 0,
       askCoach,
-      coachNotes: String(coachNotesRef.current?.value || "").trim(),
+      coachNotes: coachNotes.trim(),
     });
   }
 
@@ -296,8 +297,19 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
               </label>
               {askCoach && (
                 <textarea
-                  ref={coachNotesRef}
                   rows={3}
+                  value={coachNotes}
+                  inputMode="text"
+                  lang="zh-CN"
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
+                  spellCheck={false}
+                  onCompositionStart={() => { coachNotesComposingRef.current = true; }}
+                  onCompositionEnd={e => {
+                    coachNotesComposingRef.current = false;
+                    setCoachNotes(e.currentTarget.value);
+                  }}
+                  onChange={e => setCoachNotes(e.currentTarget.value)}
                   placeholder={t("activities.import_review_coach_placeholder")}
                   style={{ ...s.input, marginTop: 8, resize: "vertical", minHeight: 74, lineHeight: 1.45 }}
                 />

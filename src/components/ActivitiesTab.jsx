@@ -7,7 +7,7 @@ import {
   recommendRunType, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace, formatDateShort, formatWeekdayShort, isDuplicate,
 } from "../utils/format";
-import { formatWorkoutNoteForDisplay } from "../utils/importReviewNotes";
+import { formatWorkoutReviewNoteParts } from "../utils/importReviewNotes";
 import { computeHRZones, calculateAge } from "../utils/profile";
 import { parseFitFile } from "../lib/fit";
 import { ActivityForm } from "./ActivityForm";
@@ -1429,7 +1429,8 @@ function ExpandedMetrics({ log: l, lang }) {
   const isCycling = l.type === "Cycling";
   const isSwimming = l.type === "Swimming";
   const isStrengthLike = l.type === "Strength" || l.type === "HIIT";
-  const displayNote = formatWorkoutNoteForDisplay(l.note, lang);
+  const reviewParts = formatWorkoutReviewNoteParts(l.note, lang);
+  const displayNote = reviewParts.other;
 
   return (
     <>
@@ -1489,6 +1490,51 @@ function ExpandedMetrics({ log: l, lang }) {
           {displayNote}
         </div>
       )}
+      <WorkoutReviewGrid parts={reviewParts} lang={lang} />
     </>
+  );
+}
+
+function WorkoutReviewGrid({ parts, lang }) {
+  const items = [
+    parts.selfReview ? { key: "self", label: lang === "zh" ? "自评" : "Self review", text: parts.selfReview } : null,
+    parts.coachReview ? { key: "coach", label: lang === "zh" ? "教练点评" : "Coach review", text: parts.coachReview } : null,
+  ].filter(Boolean);
+  if (!items.length) return null;
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: items.length > 1 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
+      gap: 8,
+    }}>
+      {items.map(item => (
+        <div key={item.key} title={item.text} style={{
+          minWidth: 0,
+          borderTop: "1px solid var(--rule-soft)",
+          paddingTop: 7,
+        }}>
+          <div style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 10.5,
+            color: "var(--ink-3)",
+            marginBottom: 3,
+          }}>
+            {item.label}
+          </div>
+          <div style={{
+            color: "var(--ink-2)",
+            display: "-webkit-box",
+            fontSize: 12,
+            lineHeight: 1.45,
+            overflow: "hidden",
+            overflowWrap: "anywhere",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: 2,
+          }}>
+            {item.text}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -10,7 +10,7 @@ import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, RUN_PACE_
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, formatPlanDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
-import { formatWorkoutNoteForDisplay } from "../utils/importReviewNotes";
+import { formatWorkoutReviewNoteParts } from "../utils/importReviewNotes";
 import { evaluatePlanOutcome } from "../utils/planMatch";
 import { planFields } from "../utils/planFields";
 
@@ -69,6 +69,42 @@ export function logHeadline(log) {
   }
   if (log.duration > 0) return formatDuration(log.duration);
   return "—";
+}
+
+function CalendarWorkoutReviewGrid({ parts, lang }) {
+  const items = [
+    parts.selfReview ? { key: "self", label: lang === "zh" ? "自评" : "Self review", text: parts.selfReview } : null,
+    parts.coachReview ? { key: "coach", label: lang === "zh" ? "教练点评" : "Coach review", text: parts.coachReview } : null,
+  ].filter(Boolean);
+  if (!items.length) return null;
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: items.length > 1 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
+      gap: 8,
+      marginTop: 7,
+    }}>
+      {items.map(item => (
+        <div key={item.key} title={item.text} style={{ minWidth: 0, borderTop: "1px solid var(--rule-soft)", paddingTop: 6 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, color: "var(--ink-3)", marginBottom: 3 }}>
+            {item.label}
+          </div>
+          <div style={{
+            color: "var(--ink-2)",
+            display: "-webkit-box",
+            fontSize: 12,
+            lineHeight: 1.45,
+            overflow: "hidden",
+            overflowWrap: "anywhere",
+            WebkitBoxOrient: "vertical",
+            WebkitLineClamp: 2,
+          }}>
+            {item.text}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Two-line weather: feels / temp / humidity, then sky / wind / AQI.
@@ -513,22 +549,27 @@ export function CalendarDayModal({
                       </div>
                     </div>
                     {(() => {
-                      const displayNote = formatWorkoutNoteForDisplay(l.note, lang);
-                      return displayNote ? (
-                      <div title={displayNote} style={{
-                        marginTop: 7,
-                        color: "var(--ink-2)",
-                        display: "-webkit-box",
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        overflow: "hidden",
-                        overflowWrap: "anywhere",
-                        WebkitBoxOrient: "vertical",
-                        WebkitLineClamp: 2,
-                        whiteSpace: "pre-wrap",
-                      }}>
-                        {displayNote}
-                      </div>
+                      const reviewParts = formatWorkoutReviewNoteParts(l.note, lang);
+                      return (reviewParts.other || reviewParts.selfReview || reviewParts.coachReview) ? (
+                        <>
+                          {reviewParts.other && (
+                            <div title={reviewParts.other} style={{
+                              marginTop: 7,
+                              color: "var(--ink-2)",
+                              display: "-webkit-box",
+                              fontSize: 12,
+                              lineHeight: 1.5,
+                              overflow: "hidden",
+                              overflowWrap: "anywhere",
+                              WebkitBoxOrient: "vertical",
+                              WebkitLineClamp: 2,
+                              whiteSpace: "pre-wrap",
+                            }}>
+                              {reviewParts.other}
+                            </div>
+                          )}
+                          <CalendarWorkoutReviewGrid parts={reviewParts} lang={lang} />
+                        </>
                       ) : null;
                     })()}
                     {/* Plan reconciliation — past plans show their outcome and a

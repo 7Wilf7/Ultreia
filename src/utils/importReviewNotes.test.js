@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildImportSelfReviewNote, formatWorkoutNoteForDisplay, mergeImportFeelingNote } from "./importReviewNotes";
+import {
+  buildImportCoachReviewNote,
+  buildImportSelfReviewNote,
+  formatWorkoutNoteForDisplay,
+  formatWorkoutReviewNoteParts,
+  mergeImportCoachReviewNote,
+  mergeImportFeelingNote,
+} from "./importReviewNotes";
 
 describe("import review note helpers", () => {
   it("builds a concise language-neutral selfreview note", () => {
@@ -24,18 +31,39 @@ describe("import review note helpers", () => {
     expect(note).not.toContain("整体强度可控");
   });
 
-  it("localizes the self review label at display time", () => {
-    expect(formatWorkoutNoteForDisplay("selfreview: 腿很沉", "zh")).toBe("自评：腿很沉");
-    expect(formatWorkoutNoteForDisplay("selfreview: 腿很沉", "en")).toBe("Self review: 腿很沉");
-    expect(formatWorkoutNoteForDisplay("换了新鞋\n自评：腿很沉", "en"))
-      .toBe("换了新鞋\nSelf review: 腿很沉");
+  it("builds a concise coach review note from AI text", () => {
+    expect(buildImportCoachReviewNote("完成质量不错，心率控制稳定。下次保持 easy。", "zh"))
+      .toBe("coachreview: 完成质量不错，心率控制稳定");
+    expect(buildImportCoachReviewNote("Controlled aerobic work. Keep the next run easy.", "en"))
+      .toBe("coachreview: Controlled aerobic work");
   });
 
-  it("merges without duplicating the same feeling note", () => {
+  it("localizes review labels at display time", () => {
+    expect(formatWorkoutNoteForDisplay("selfreview: 腿很沉", "zh")).toBe("自评：腿很沉");
+    expect(formatWorkoutNoteForDisplay("selfreview: 腿很沉", "en")).toBe("Self review: 腿很沉");
+    expect(formatWorkoutNoteForDisplay("coachreview: 控制得不错", "zh")).toBe("教练点评：控制得不错");
+    expect(formatWorkoutNoteForDisplay("换了新鞋\n自评：腿很沉\ncoachreview: 控制得不错", "en"))
+      .toBe("换了新鞋\nSelf review: 腿很沉\nCoach review: 控制得不错");
+  });
+
+  it("splits display note parts for the activity detail two-column layout", () => {
+    expect(formatWorkoutReviewNoteParts("换了新鞋\nselfreview: 腿很沉\ncoachreview: 控制得不错", "zh"))
+      .toEqual({
+        other: "换了新鞋",
+        selfReview: "腿很沉",
+        coachReview: "控制得不错",
+      });
+  });
+
+  it("merges without duplicating review notes", () => {
     const note = "selfreview: 腿很沉";
     expect(mergeImportFeelingNote("", note)).toBe(note);
     expect(mergeImportFeelingNote("换了新鞋", note)).toBe("换了新鞋\nselfreview: 腿很沉");
     expect(mergeImportFeelingNote(`换了新鞋\n${note}`, note)).toBe(`换了新鞋\n${note}`);
     expect(mergeImportFeelingNote("换了新鞋\n自评：腿很沉", note)).toBe("换了新鞋\n自评：腿很沉");
+
+    const coachNote = "coachreview: 控制得不错";
+    expect(mergeImportCoachReviewNote("换了新鞋", coachNote)).toBe("换了新鞋\ncoachreview: 控制得不错");
+    expect(mergeImportCoachReviewNote("换了新鞋\ncoachreview: 太激进", coachNote)).toBe("换了新鞋\ncoachreview: 控制得不错");
   });
 });

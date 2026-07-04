@@ -89,7 +89,13 @@ import {
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
-import { buildImportSelfReviewNote, formatWorkoutNoteForDisplay, mergeImportFeelingNote } from "./utils/importReviewNotes";
+import {
+  buildImportCoachReviewNote,
+  buildImportSelfReviewNote,
+  formatWorkoutNoteForDisplay,
+  mergeImportCoachReviewNote,
+  mergeImportFeelingNote,
+} from "./utils/importReviewNotes";
 import { s } from "./styles";
 import { formatWalletAmount } from "./lib/db/wallet";
 import { POSTER_FONT_CSS } from "./data/posterFonts";
@@ -497,6 +503,71 @@ ${noteLine}
 
 [New Activities]
 ${rows}`;
+}
+
+function extractCoachReplyText(data) {
+  const blocks = Array.isArray(data?.content) ? data.content : [];
+  return blocks.filter(b => b?.type === "text").map(b => b.text).join("") || "";
+}
+
+function extractJsonArrayText(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return "";
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const source = fenced ? fenced[1].trim() : raw;
+  const start = source.indexOf("[");
+  const end = source.lastIndexOf("]");
+  return start >= 0 && end > start ? source.slice(start, end + 1) : "";
+}
+
+function parseCoachReviewSummary(text, count) {
+  const max = Math.max(0, Number(count) || 0);
+  const byIndex = new Map();
+  const jsonText = extractJsonArrayText(text);
+  if (jsonText) {
+    try {
+      const parsed = JSON.parse(jsonText);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const index = Math.round(Number(item?.index));
+          const review = String(item?.review || item?.comment || "").trim();
+          if (index >= 1 && index <= max && review) byIndex.set(index - 1, review);
+        }
+      }
+    } catch {
+      // Fall through to the line parser below.
+    }
+  }
+  if (byIndex.size) return byIndex;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const match = line.trim().match(/^(\d+)[.)、:\s-]+(.+)$/);
+    if (!match) continue;
+    const index = Number(match[1]);
+    const review = match[2].trim();
+    if (index >= 1 && index <= max && review) byIndex.set(index - 1, review);
+  }
+  return byIndex;
+}
+
+function buildCoachReviewSummaryPrompt(workouts, rawNote, coachReply) {
+  const rows = workouts.map(describeWorkoutForCoach).join("\n");
+  const noteLine = rawNote ? `\n[Runner self review]\n${rawNote}\n` : "";
+  return {
+    system: "你是跑步教练的训练卡片摘要助手。只输出 JSON，不输出解释、Markdown 或额外文字。",
+    user: `请把下面这次 AI Coach 点评压缩成训练详情卡片里的短点评。
+
+要求：
+- 给每条训练各写 1 条中文 coach review。
+- 每条 review 最多 28 个中文字符，具体、克制，不写泛泛鼓励。
+- 优先总结教练对这次训练本身的判断；不要写下一次计划调整，除非教练明确把它作为本次点评重点。
+- 输出 JSON 数组，格式严格为 [{"index":1,"review":"..." }].
+
+[Workouts]
+${rows}
+${noteLine}
+[Coach reply]
+${coachReply}`,
+  };
 }
 
 function logIdentityForPrompt(l) {
@@ -964,6 +1035,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [races, setRaces] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
   const [dailyNotes, setDailyNotes] = useState([]);
+  const [dailyNotesHydrated, setDailyNotesHydrated] = useState(false);
   const [agentActions, setAgentActions] = useState([]);
   const [memoryFacts, setMemoryFacts] = useState([]);
 
@@ -1146,7 +1218,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
         // Daily notes — DAL returns date desc. Calendar indexes by date so
         // order isn't critical; we keep the DAL ordering as-is.
-        if (result.notes && !result.notes.error) setDailyNotes(result.notes.value);
+        if (result.notes && !result.notes.error) {
+          setDailyNotes(result.notes.value);
+          setDailyNotesHydrated(true);
+        } else if (result.notes?.error) {
+          setDailyNotesHydrated(false);
+        }
 
         if (result.trainingLocations && !result.trainingLocations.error) {
           const locs = sortTrainingLocationList(result.trainingLocations.value || []);
@@ -1869,7 +1946,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             setChatMessages={setChatMessages}
             appendLocalChatMessage={appendLocalChatMessage}
             clearAllChatMessages={clearAllChatMessages}
-            dailyNotes={dailyNotes} setDailyTags={setDailyTags} setReadiness={setReadiness}
+            dailyNotes={dailyNotes} dailyNotesHydrated={dailyNotesHydrated} setDailyTags={setDailyTags} setReadiness={setReadiness}
             itraPI={itraPI} setItraPI={setItraPI}
             profile={profile} setProfile={setProfile}
             coachConfig={coachConfig} setCoachConfig={setCoachConfig}
@@ -1900,7 +1977,7 @@ function AppShell({
   logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, agentActions = [], setAgentActions, memoryFacts = [], setMemoryFacts, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
-  dailyNotes, setDailyTags, setReadiness,
+  dailyNotes, dailyNotesHydrated, setDailyTags, setReadiness,
   itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
   lang, setLang,
   defaultLocation,
@@ -2033,6 +2110,7 @@ function AppShell({
   }, [showWeeklyReport, user?.id]);
 
   useEffect(() => {
+    if (!dailyNotesHydrated) return;
     const today = localDateKey(now);
     const note = dailyNotes.find(n => n.date === today);
     if (now.getHours() < 5 || readinessComplete(note?.readiness)) return;
@@ -2042,7 +2120,7 @@ function AppShell({
     } catch { /* private mode */ }
     const id = setTimeout(() => setReadinessPromptDate(today), 0);
     return () => clearTimeout(id);
-  }, [dailyNotes, now, profileEditorMode, readinessPromptDate, showTour]);
+  }, [dailyNotes, dailyNotesHydrated, now, profileEditorMode, readinessPromptDate, showTour]);
 
   function markReadinessPromptHandled(dateKey) {
     try { localStorage.setItem(`ultreia.readinessPrompt.${dateKey}`, "1"); } catch { /* private mode */ }
@@ -3647,13 +3725,40 @@ Rules:
     importToCalendar(assistantContent, msgId, { force: true });
   }
 
-  async function writeImportFeelingNotes(reviewed, rawNote, coachReply = "") {
+  async function generateImportCoachReviewMap(reviewed, rawNote, coachReply = "") {
+    const rows = (Array.isArray(reviewed) ? reviewed : [reviewed])
+      .filter(w => w?.id && !String(w.id).startsWith("temp-") && !String(w.id).startsWith("bulk-"));
+    if (!rows.length || !String(coachReply || "").trim()) return new Map();
+    const prompt = buildCoachReviewSummaryPrompt(rows, rawNote, coachReply);
+    const data = await db.usage.coachProxy({
+      kind: "coach_chat",
+      system: prompt.system,
+      messages: [{ role: "user", content: prompt.user }],
+      max_tokens: 500,
+    });
+    return parseCoachReviewSummary(extractCoachReplyText(data), rows.length);
+  }
+
+  async function writeImportReviewNotes(reviewed, rawNote, coachReply = "") {
     const feelingNote = buildImportSelfReviewNote(rawNote, coachReply, lang);
-    if (!feelingNote) return;
     const rows = (Array.isArray(reviewed) ? reviewed : [reviewed])
       .filter(w => w?.id && !String(w.id).startsWith("temp-") && !String(w.id).startsWith("bulk-"));
     if (!rows.length) return;
-    await Promise.all(rows.map(w => updateLog(w.id, { note: mergeImportFeelingNote(w.note, feelingNote) })));
+    let coachReviews = new Map();
+    try {
+      coachReviews = await generateImportCoachReviewMap(rows, rawNote, coachReply);
+    } catch (err) {
+      console.warn("[coach review] card summary generation failed:", err);
+    }
+    if (!feelingNote && !coachReviews.size) return;
+    await Promise.all(rows.map((w, idx) => {
+      let note = String(w.note || "").trim();
+      if (feelingNote) note = mergeImportFeelingNote(note, feelingNote) || "";
+      const coachNote = buildImportCoachReviewNote(coachReviews.get(idx) || "", lang);
+      if (coachNote) note = mergeImportCoachReviewNote(note, coachNote) || "";
+      if (note === String(w.note || "").trim()) return Promise.resolve();
+      return updateLog(w.id, { note });
+    }));
   }
 
   function collectPostImportHandledProactiveSignatures(reviewed) {
@@ -3680,8 +3785,8 @@ Rules:
       const coachReply = await sendChat(displayText, { ensureLogs: reviewed, modelMessage: modelText });
       if (coachReply) {
         if (handledSignatures.length) setHandledProactiveAdjustmentSignatures(handledSignatures);
-        writeImportFeelingNotes(reviewed, note, typeof coachReply === "string" ? coachReply : "").catch((err) => {
-          console.warn("[coach review] feeling note writeback failed:", err);
+        writeImportReviewNotes(reviewed, note, typeof coachReply === "string" ? coachReply : "").catch((err) => {
+          console.warn("[coach review] review note writeback failed:", err);
         });
       }
     } finally {

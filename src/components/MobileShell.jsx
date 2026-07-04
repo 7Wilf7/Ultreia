@@ -90,7 +90,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     el.scrollTo({ left, behavior });
   }, [measurePagerWidth, tabCount]);
 
-  const settleScrollTab = useCallback(() => {
+  const finishPagerScroll = useCallback(() => {
+    if (scrollSettleTimerRef.current) {
+      clearTimeout(scrollSettleTimerRef.current);
+      scrollSettleTimerRef.current = null;
+    }
+    const track = trackRef.current;
+    if (track) delete track.dataset.paging;
+    pagerTouchActiveRef.current = false;
+
     const next = nearestScrollTab();
     commitVisualTab(next);
     if (next !== tabPropRef.current) {
@@ -103,16 +111,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
     scrollSettleTimerRef.current = setTimeout(() => {
       scrollSettleTimerRef.current = null;
-      settleScrollTab();
+      finishPagerScroll();
     }, delay);
-  }, [settleScrollTab]);
-
-  function onPagerScroll() {
-    if (!pagerTouchActiveRef.current) scheduleScrollSettle();
-  }
+  }, [finishPagerScroll]);
 
   function onPagerTouchStart() {
     pagerTouchActiveRef.current = true;
+    const track = trackRef.current;
+    if (track) track.dataset.paging = "true";
     if (scrollSettleTimerRef.current) {
       clearTimeout(scrollSettleTimerRef.current);
       scrollSettleTimerRef.current = null;
@@ -121,7 +127,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   function onPagerTouchEnd() {
     pagerTouchActiveRef.current = false;
-    scheduleScrollSettle();
+    scheduleScrollSettle(320);
   }
 
   useLayoutEffect(() => {
@@ -135,6 +141,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   useEffect(() => () => {
     if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
   }, []);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return undefined;
+    track.addEventListener("scrollend", finishPagerScroll, { passive: true });
+    return () => track.removeEventListener("scrollend", finishPagerScroll);
+  }, [finishPagerScroll]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -254,7 +267,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         <div
           ref={trackRef}
           className="ultreia-pager-track"
-          onScroll={onPagerScroll}
           onTouchStartCapture={onPagerTouchStart}
           onTouchEndCapture={onPagerTouchEnd}
           onTouchCancelCapture={onPagerTouchEnd}

@@ -341,7 +341,9 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .ultreia-pager-track[data-dragging="true"] {
-  scroll-snap-type: none !important;
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .ultreia-pager-pane {

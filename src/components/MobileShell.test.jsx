@@ -3,6 +3,7 @@ import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
   shouldRenderMobilePagerPane,
+  shouldShowMobilePagerPane,
 } from "../utils/mobilePager";
 
 describe("MobileShell pager render window", () => {
@@ -29,5 +30,10 @@ describe("MobileShell pager render window", () => {
     expect(shouldRenderMobilePagerPane(3, [0, 1], 3, 0)).toBe(true);
     expect(shouldRenderMobilePagerPane(4, [0, 1], 0, 4)).toBe(true);
     expect(shouldRenderMobilePagerPane(2, [0, 1], 3, 4)).toBe(false);
+  });
+
+  it("keeps preview panes visible when heavy content is not mounted", () => {
+    expect(shouldShowMobilePagerPane(4, [0, 1], 0, 0, true)).toBe(true);
+    expect(shouldShowMobilePagerPane(4, [0, 1], 0, 0, false)).toBe(false);
   });
 });

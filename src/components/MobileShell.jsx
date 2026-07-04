@@ -8,6 +8,7 @@ import {
   getMobilePagerRenderWindow,
   mergeTabWindows,
   shouldRenderMobilePagerPane,
+  shouldShowMobilePagerPane,
 } from "../utils/mobilePager";
 
 /**
@@ -16,10 +17,10 @@ import {
  * current tab AND a neighbor at once while you drag; the 5th tab (idx=4) is the
  * mobile-only Settings page.
  *
- * Each tab is its OWN scroll container. Only the active pane and its immediate
- * neighbors render heavy content; keeping every tab mounted made later swipes
- * re-render Training + Calendar + Coach + Races + Settings together and caused
- * dropped frames on Android/PWA.
+ * Each tab is its OWN scroll container. Only the active pane renders heavy
+ * content; inactive panes can show lightweight previews so the native scroll
+ * track never exposes a blank screen while we keep heavy DOM out of the drag
+ * path.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
@@ -52,7 +53,7 @@ function easeOutSine(t) {
   return Math.sin((t * Math.PI) / 2);
 }
 
-export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false }) {
+export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderTabPreview = null, tabCount = 5, onRefresh = null, refreshing = false }) {
   const t = useT();
   const mainRef = useRef(null);
   const trackRef = useRef(null);
@@ -321,6 +322,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   function renderPaneContent(idx, shouldRender) {
+    const isFullPane = shouldRender && (idx === visualTab || idx === tab);
+    if (isFullPane) return renderTab(idx);
+    if (renderTabPreview) return renderTabPreview(idx);
     if (!shouldRender) return null;
     return renderTab(idx);
   }
@@ -386,6 +390,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           }}>
           {TABS.map(({ idx }) => {
             const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
+            const shouldShow = shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview);
             return (
               <div
                 key={idx}
@@ -398,7 +403,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 }}
                 className="ultreia-pager-pane"
                 data-rendered={shouldRender ? "true" : "false"}
-                aria-hidden={!shouldRender}
+                data-preview={shouldRender ? "false" : "true"}
+                aria-hidden={!shouldShow}
                 style={{
                   position: "relative",
                   flex: "0 0 100%",
@@ -413,12 +419,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   contain: "layout paint style",
                   overflowAnchor: "none",
                   backfaceVisibility: "hidden",
-                  transform: shouldRender ? "translateZ(0)" : "none",
-                  willChange: shouldRender ? "transform" : "auto",
-                  isolation: shouldRender ? "isolate" : "auto",
-                  visibility: shouldRender ? "visible" : "hidden",
+                  transform: shouldShow ? "translateZ(0)" : "none",
+                  willChange: shouldShow ? "transform" : "auto",
+                  isolation: shouldShow ? "isolate" : "auto",
+                  visibility: shouldShow ? "visible" : "hidden",
                   pointerEvents: shouldRender ? "auto" : "none",
-                  background: shouldRender ? "var(--bg)" : "transparent",
+                  background: shouldShow ? "var(--bg)" : "transparent",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",

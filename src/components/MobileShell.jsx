@@ -6,7 +6,6 @@ import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./I
 import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
-  getMobilePagerScrollWindow,
   mergeTabWindows,
   shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
@@ -58,38 +57,21 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const mainRef = useRef(null);
   const trackRef = useRef(null);
   const paneRefs = useRef({});
-  const paneRefCallbacksRef = useRef({});
   const [visualTab, setVisualTab] = useState(tab);
   const visualTabRef = useRef(tab);
   const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
   const scrollSettleFrameRef = useRef(0);
-  const scrollRenderFrameRef = useRef(0);
   const trackScrollLeftRef = useRef(0);
   const pagerWidthRef = useRef(1);
   const renderTrimTimerRef = useRef(null);
-  const freezeTabContentRef = useRef(false);
-  const cachedTabContentRef = useRef({});
   const pagerTouchActiveRef = useRef(false);
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
   const pointerDownRef = useRef({ idx: -1, at: 0, switched: false });
   const pullY = refreshing ? 44 : 0;
-
-  const setPaneRef = (idx) => {
-    if (!paneRefCallbacksRef.current[idx]) {
-      paneRefCallbacksRef.current[idx] = (el) => {
-        if (!el) {
-          delete paneRefs.current[idx];
-          return;
-        }
-        paneRefs.current[idx] = el;
-      };
-    }
-    return paneRefCallbacksRef.current[idx];
-  };
 
   const measurePagerWidth = useCallback(() => {
     const width = trackRef.current?.clientWidth || mainRef.current?.clientWidth || window.innerWidth || 1;
@@ -146,18 +128,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(scrollSettleFrameRef.current);
       scrollSettleFrameRef.current = 0;
     }
-    if (scrollRenderFrameRef.current) {
-      cancelAnimationFrame(scrollRenderFrameRef.current);
-      scrollRenderFrameRef.current = 0;
-    }
     if (renderTrimTimerRef.current) {
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
     }
-  }, []);
-
-  const clearPagingState = useCallback(() => {
-    freezeTabContentRef.current = false;
   }, []);
 
   const scheduleRenderedWindowTrim = useCallback((next, delay = 180) => {
@@ -172,9 +146,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   const finishPagerGesture = useCallback(() => {
     clearPagerTimers();
-    clearPagingState();
     pagerTouchActiveRef.current = false;
-  }, [clearPagerTimers, clearPagingState]);
+  }, [clearPagerTimers]);
 
   const completePagerSettle = useCallback((next) => {
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
@@ -226,35 +199,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     settlePagerToTab(nearest);
   }, [measurePagerWidth, settlePagerToTab, tabCount]);
 
-  const syncRenderedWindowToScroll = useCallback(() => {
-    scrollRenderFrameRef.current = 0;
-    const track = trackRef.current;
-    if (!track) return;
-    const width = pagerWidthRef.current || measurePagerWidth();
-    trackScrollLeftRef.current = track.scrollLeft;
-    const scrollWindow = getMobilePagerScrollWindow(track.scrollLeft, width, tabCount);
-    const currentWindow = getMobilePagerRenderWindow(visualTabRef.current, tabCount);
-    setRenderedWindow(mergeTabWindows(scrollWindow, currentWindow));
-  }, [measurePagerWidth, setRenderedWindow, tabCount]);
-
-  const onPagerScroll = useCallback(() => {
-    const track = trackRef.current;
-    if (!track || scrollSettleFrameRef.current || scrollRenderFrameRef.current) return;
-    trackScrollLeftRef.current = track.scrollLeft;
-    const width = pagerWidthRef.current || track.clientWidth || 1;
-    const currentLeft = visualTabRef.current * width;
-    if (!pagerTouchActiveRef.current && Math.abs(track.scrollLeft - currentLeft) > 2) {
-      pagerTouchActiveRef.current = true;
-      freezeTabContentRef.current = true;
-    }
-    const page = track.scrollLeft / width;
-    const low = Math.max(0, Math.min(tabCount - 1, Math.floor(page)));
-    const high = Math.max(0, Math.min(tabCount - 1, Math.ceil(page)));
-    const rendered = renderedTabsRef.current;
-    if (rendered.includes(low) && rendered.includes(high)) return;
-    scrollRenderFrameRef.current = requestAnimationFrame(syncRenderedWindowToScroll);
-  }, [syncRenderedWindowToScroll, tabCount]);
-
   useLayoutEffect(() => {
     tabPropRef.current = tab;
     if (tab !== visualTabRef.current) commitVisualTab(tab);
@@ -276,8 +220,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => () => {
     clearPagerTimers();
-    clearPagingState();
-  }, [clearPagerTimers, clearPagingState]);
+  }, [clearPagerTimers]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -285,27 +228,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     track.addEventListener("touchstart", onPagerTouchStart, { passive: true });
     track.addEventListener("touchend", onPagerTouchEnd, { passive: true });
     track.addEventListener("touchcancel", onPagerTouchEnd, { passive: true });
-    track.addEventListener("scroll", onPagerScroll, { passive: true });
     return () => {
       track.removeEventListener("touchstart", onPagerTouchStart);
       track.removeEventListener("touchend", onPagerTouchEnd);
       track.removeEventListener("touchcancel", onPagerTouchEnd);
-      track.removeEventListener("scroll", onPagerScroll);
     };
-  }, [onPagerScroll, onPagerTouchEnd, onPagerTouchStart]);
+  }, [onPagerTouchEnd, onPagerTouchStart]);
 
   useEffect(() => {
     const onResize = () => alignTrackToTab(visualTabRef.current);
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, [alignTrackToTab]);
-
-  useEffect(() => {
-    const rendered = new Set(renderedTabs);
-    Object.keys(cachedTabContentRef.current).forEach((key) => {
-      if (!rendered.has(Number(key))) delete cachedTabContentRef.current[key];
-    });
-  }, [renderedTabs]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -328,7 +262,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     }
     clearPagerTimers();
-    clearPagingState();
     const jumpWindow = getMobilePagerJumpWindow(current, next, tabCount);
     flushSync(() => commitVisualTab(next, { renderedWindow: jumpWindow }));
     alignTrackToTab(next);
@@ -389,12 +322,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   function renderPaneContent(idx, shouldRender) {
     if (!shouldRender) return null;
-    if (freezeTabContentRef.current && Object.prototype.hasOwnProperty.call(cachedTabContentRef.current, idx)) {
-      return cachedTabContentRef.current[idx];
-    }
-    const content = renderTab(idx);
-    cachedTabContentRef.current[idx] = content;
-    return content;
+    return renderTab(idx);
   }
 
   return (
@@ -456,13 +384,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             transform: `translate3d(0, ${pullY}px, 0)`,
             transition: refreshing ? REFRESH_SNAP_TRANSITION : "none",
           }}>
-          {/* eslint-disable-next-line react-hooks/refs -- Drag-time pane caching intentionally reads refs during render to avoid re-rendering heavy tab trees mid-gesture. */}
           {TABS.map(({ idx }) => {
             const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
             return (
               <div
                 key={idx}
-                ref={setPaneRef(idx)}
+                ref={(el) => {
+                  if (!el) {
+                    delete paneRefs.current[idx];
+                    return;
+                  }
+                  paneRefs.current[idx] = el;
+                }}
                 className="ultreia-pager-pane"
                 data-rendered={shouldRender ? "true" : "false"}
                 aria-hidden={!shouldRender}

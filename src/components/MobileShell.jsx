@@ -83,18 +83,28 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const renderedTabSet = new Set(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
 
-  // Horizontal pager drag offset. During finger-following this updates a CSS
-  // variable directly instead of setState on every touchmove; rendering the
-  // active tab + neighbor per frame is what made PWA swipes feel dropped.
+  // Horizontal pager drag offset. During finger-following this writes pane
+  // transforms directly instead of setState or inherited CSS vars on every
+  // touchmove; rendering/style-recalc in the drag loop is what made PWA swipes
+  // feel dropped.
   const dragXRef = useRef(0);
   const dragFrameRef = useRef(0);
   const pendingDragXRef = useRef(0);
-  const setDragXpx = (px, immediate = false) => {
+  const applyPaneTransforms = useCallback((px) => {
+    const current = visualTabRef.current;
+    for (const [idx, pane] of Object.entries(paneRefs.current)) {
+      if (!pane) continue;
+      const offset = Number(idx) - current;
+      if (!Number.isFinite(offset)) continue;
+      pane.style.transform = `translate3d(calc(${offset * 100}% + ${px}px), 0, 0)`;
+    }
+  }, []);
+  const setDragXpx = useCallback((px, immediate = false) => {
     dragXRef.current = px;
     pendingDragXRef.current = px;
     const apply = () => {
       dragFrameRef.current = 0;
-      trackRef.current?.style.setProperty("--drag-x", `${pendingDragXRef.current}px`);
+      applyPaneTransforms(pendingDragXRef.current);
     };
     if (immediate) {
       if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
@@ -102,7 +112,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       return;
     }
     if (!dragFrameRef.current) dragFrameRef.current = requestAnimationFrame(apply);
-  };
+  }, [applyPaneTransforms]);
   // `instant` suppresses the slide transition for a single render so a bottom-nav
   // tap teleports (no sweep through the empty panes between far tabs) and the
   // post-commit reposition doesn't double-animate.
@@ -201,7 +211,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (el) delete el.dataset.dragging;
     setInstant(true);
     requestAnimationFrame(() => setInstant(false));
-  }, [tab, commitVisualTab]);
+  }, [tab, commitVisualTab, setDragXpx]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -215,6 +225,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   // significant move: 'page' (horizontal → tab pager), 'scroll' (vertical → let the pane scroll), or
   // 'ignore' (started inside a horizontal scroller).
   const touch = useRef(null);
+  const nativeTouchHandlersRef = useRef(null);
 
   // Jump to `next` tab. Used by drag-commit AND by bottom-nav taps.
   function go(next, { animate = true, haptic = false, hapticAt = 0 } = {}) {
@@ -363,6 +374,32 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     setTrackDragging(false);
   }
 
+  useEffect(() => {
+    nativeTouchHandlersRef.current = {
+      start: onTouchStart,
+      move: onTouchMove,
+      end: onTouchEnd,
+    };
+  });
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return undefined;
+    const handleStart = (event) => nativeTouchHandlersRef.current?.start?.(event);
+    const handleMove = (event) => nativeTouchHandlersRef.current?.move?.(event);
+    const handleEnd = (event) => nativeTouchHandlersRef.current?.end?.(event);
+    el.addEventListener("touchstart", handleStart, { passive: true });
+    el.addEventListener("touchmove", handleMove, { passive: false });
+    el.addEventListener("touchend", handleEnd, { passive: true });
+    el.addEventListener("touchcancel", handleEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", handleStart);
+      el.removeEventListener("touchmove", handleMove);
+      el.removeEventListener("touchend", handleEnd);
+      el.removeEventListener("touchcancel", handleEnd);
+    };
+  }, []);
+
   function onTabTap(idx, e) {
     const now = e?.timeStamp ?? 0;
     const current = visualTabRef.current;
@@ -429,15 +466,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       <div className="ultreia-ambient-layer" aria-hidden="true" />
       <main
         ref={mainRef}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         style={{
           flex: 1, minHeight: 0,
           overflow: "hidden",
           position: "relative",
           zIndex: 1,
           background: "transparent",
+          touchAction: "pan-y",
         }}>
         {/* Refresh indicator shown while a manual sync is running. */}
         {refreshing && (
@@ -488,7 +523,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   touchAction: "pan-y",
                   contain: "layout paint style",
                   backfaceVisibility: "hidden",
-                  transform: `translate3d(calc(${offset * 100}% + var(--drag-x, 0px)), 0, 0)`,
+                  transform: `translate3d(${offset * 100}%, 0, 0)`,
                   transition: instant ? "none" : trackTransition,
                   willChange: (refreshing || instant || Math.abs(offset) <= 1) ? "transform" : undefined,
                   pointerEvents: idx === visualTab ? "auto" : "none",

@@ -307,6 +307,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-x pan-y",
                   contain: "layout paint style",
+                  contentVisibility: shouldRender ? "auto" : "hidden",
+                  containIntrinsicSize: "100vw 100vh",
                   backfaceVisibility: "hidden",
                   pointerEvents: shouldRender ? "auto" : "none",
                   visibility: shouldRender ? "visible" : "hidden",

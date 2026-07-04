@@ -8,6 +8,7 @@ import {
   getMobilePagerRenderWindow,
   mergeTabWindows,
   shouldRenderMobilePagerPane,
+  shouldShowMobilePagerPane,
 } from "../utils/mobilePager";
 
 /**
@@ -15,9 +16,10 @@ import {
  * nav. Finger-follow stays on the browser compositor path; React only settles
  * the selected tab after release.
  *
- * Only the active tab renders heavy, scrollable content. The horizontal track
- * carries lightweight skeleton previews so the moving layer stays cheap while
- * the real page remains stationary underneath.
+ * Each tab is its OWN scroll container. Only the active pane renders heavy
+ * content; inactive panes can show lightweight previews so the native scroll
+ * track never exposes a blank screen while we keep heavy DOM out of the drag
+ * path.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
@@ -59,39 +61,34 @@ function clampTabIndex(idx, count) {
 
 const PagerPaneContent = memo(function PagerPaneContent({
   idx,
+  shouldRender,
+  shouldShow,
+  isFullPane,
   renderTab,
+  renderTabPreview,
 }) {
-  return (
-    <div className="ultreia-pager-content-shell" data-full-pane="true">
-      <div className="ultreia-pager-full-content">{renderTab(idx)}</div>
-    </div>
-  );
-}, (prev, next) => next.freeze && prev.idx === next.idx);
+  const content = isFullPane
+    ? renderTab(idx)
+    : renderTabPreview && shouldShow
+      ? renderTabPreview(idx)
+      : shouldRender
+        ? renderTab(idx)
+        : null;
+  if (!content) return null;
 
-const PagerDragPreviewPane = memo(function PagerDragPreviewPane({
-  Icon,
-  title,
-}) {
   return (
-    <div className="ultreia-pager-drag-preview" aria-hidden="true">
-      <div className="ultreia-pager-drag-preview-head">
-        <span className="ultreia-pager-drag-preview-icon"><Icon size={17} /></span>
-        <span className="ultreia-pager-drag-preview-title">{title}</span>
-      </div>
-      <div className="ultreia-pager-drag-preview-metrics">
-        <span />
-        <span />
-      </div>
-      <div className="ultreia-pager-drag-preview-lines">
-        <span />
-        <span />
-        <span />
+    <div
+      className="ultreia-pager-content-shell"
+      data-full-pane={isFullPane ? "true" : "false"}
+    >
+      <div className={isFullPane ? "ultreia-pager-full-content" : "ultreia-pager-preview-content"}>
+        {content}
       </div>
     </div>
   );
 });
 
-export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false }) {
+export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderTabPreview = null, tabCount = 5, onRefresh = null, refreshing = false }) {
   const t = useT();
   const mainRef = useRef(null);
   const trackRef = useRef(null);
@@ -100,8 +97,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const visualTabRef = useRef(tab);
   const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
-  const [pagerDragFrozen, setPagerDragFrozen] = useState(false);
-  const pagerDragFrozenRef = useRef(false);
   const activePane = () => paneRefs.current[visualTabRef.current];
   const scrollSettleFrameRef = useRef(0);
   const trackScrollLeftRef = useRef(0);
@@ -169,10 +164,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const setPagerPreviewMode = useCallback((active) => {
     const track = trackRef.current;
     pagerDragIntentRef.current.dragging = active;
-    if (pagerDragFrozenRef.current !== active) {
-      pagerDragFrozenRef.current = active;
-      setPagerDragFrozen(active);
-    }
     if (!track) return;
     if (active) {
       track.dataset.dragging = "true";
@@ -409,17 +400,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   function renderPaneContent(idx, shouldRender) {
-    if (!shouldRender) return null;
+    const isFullPane = shouldRender && (idx === visualTab || idx === tab);
     return (
       <PagerPaneContent
         idx={idx}
-        freeze={pagerDragFrozen}
+        shouldRender={shouldRender}
+        shouldShow={shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview)}
+        isFullPane={isFullPane}
         renderTab={renderTab}
+        renderTabPreview={renderTabPreview}
       />
     );
   }
-
-  const activeShouldRender = shouldRenderMobilePagerPane(visualTab, renderedTabs, visualTab, tab);
 
   return (
     <div
@@ -482,50 +474,28 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             transform: `translate3d(0, ${pullY}px, 0)`,
             transition: refreshing ? REFRESH_SNAP_TRANSITION : "none",
           }}>
-          <div
-            className="ultreia-pager-scroll-content"
-            style={{ width: `${tabCount * 100}%` }}
-          >
-            <div className="ultreia-pager-preview-strip" aria-hidden="true">
-              {TABS.map(({ idx, key, Icon }) => (
-                <div
-                  key={idx}
-                  className="ultreia-pager-preview-pane"
-                  style={{
-                    flex: `0 0 ${100 / tabCount}%`,
-                    width: `${100 / tabCount}%`,
-                  }}
-                >
-                  <PagerDragPreviewPane
-                    Icon={Icon}
-                    title={t(key)}
-                  />
-                </div>
-              ))}
-            </div>
-            <div
-              className="ultreia-pager-static-layer"
-              aria-hidden={pagerDragFrozen}
-              style={{
-                left: `${visualTab * (100 / tabCount)}%`,
-                width: `${100 / tabCount}%`,
-                pointerEvents: pagerDragFrozen ? "none" : "auto",
-              }}
-            >
+          {TABS.map(({ idx }) => {
+            const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
+            const shouldShow = shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview);
+            const isInteractivePane = shouldRender && (idx === visualTab || idx === tab);
+            return (
               <div
+                key={idx}
                 ref={(el) => {
                   if (!el) {
-                    delete paneRefs.current[visualTab];
+                    delete paneRefs.current[idx];
                     return;
                   }
-                  paneRefs.current[visualTab] = el;
+                  paneRefs.current[idx] = el;
                 }}
                 className="ultreia-pager-pane"
-                data-rendered={activeShouldRender ? "true" : "false"}
-                data-preview="false"
-                aria-hidden={pagerDragFrozen}
+                data-rendered={shouldRender ? "true" : "false"}
+                data-preview={shouldRender ? "false" : "true"}
+                aria-hidden={!isInteractivePane}
                 style={{
                   position: "relative",
+                  flex: "0 0 100%",
+                  minWidth: "100%",
                   width: "100%",
                   height: "100%",
                   overflowY: "auto",
@@ -538,17 +508,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   backfaceVisibility: "hidden",
                   transform: "none",
                   willChange: "auto",
-                  isolation: "isolate",
-                  visibility: activeShouldRender ? "visible" : "hidden",
-                  background: "var(--bg)",
+                  isolation: shouldShow ? "isolate" : "auto",
+                  visibility: shouldShow ? "visible" : "hidden",
+                  pointerEvents: isInteractivePane ? "auto" : "none",
+                  background: shouldShow ? "var(--bg)" : "transparent",
                   padding: "14px 14px 0",
                   paddingTop: "max(env(safe-area-inset-top), 14px)",
                   paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
                 }}>
-                {renderPaneContent(visualTab, activeShouldRender)}
+                {renderPaneContent(idx, shouldRender)}
               </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       </main>
 

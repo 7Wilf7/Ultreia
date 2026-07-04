@@ -61,6 +61,7 @@ import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
 import { MobileShell } from "./components/MobileShell";
+import { MobileTabPreview } from "./components/MobileTabPreview";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
   BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, SettingsIcon, TrophyIcon, WalletIcon,
@@ -4190,6 +4191,20 @@ Rules:
     );
     return null;
   };
+  const renderTabPreview = (which) => (
+    <MobileTabPreview
+      tabIndex={which}
+      t={t}
+      lang={lang}
+      logs={logs}
+      races={races}
+      dailyNotes={dailyNotes}
+      chatMessages={chatMessages}
+      chatLoading={chatLoading}
+      codexRunnerStatus={codexRunnerStatus}
+      now={now}
+    />
+  );
   const modals = (
     <>
       {contextCompressing && (
@@ -4589,7 +4604,7 @@ Rules:
     return (
       <>
         <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}
-          renderTab={renderTab} tabCount={5}
+          renderTab={renderTab} renderTabPreview={renderTabPreview} tabCount={5}
           onRefresh={refresh} refreshing={refreshing} />
         {modals}
       </>

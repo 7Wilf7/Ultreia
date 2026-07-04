@@ -15,10 +15,9 @@ import {
  * nav. Finger-follow stays on the browser compositor path; React only settles
  * the selected tab after release.
  *
- * Each tab is its OWN scroll container. Only the active pane renders heavy
- * content; inactive panes can show lightweight previews so the native scroll
- * track never exposes a blank screen while we keep heavy DOM out of the drag
- * path.
+ * Only the active tab renders heavy, scrollable content. The horizontal track
+ * carries lightweight skeleton previews so the moving layer stays cheap while
+ * the real page remains stationary underneath.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
@@ -69,16 +68,30 @@ const PagerPaneContent = memo(function PagerPaneContent({
   );
 }, (prev, next) => next.freeze && prev.idx === next.idx);
 
-const PagerPreviewPane = memo(function PagerPreviewPane({
-  idx,
-  renderTab,
-  renderTabPreview,
+const PagerDragPreviewPane = memo(function PagerDragPreviewPane({
+  Icon,
+  title,
 }) {
-  const preview = renderTabPreview ? renderTabPreview(idx) : renderTab(idx);
-  return <div className="ultreia-pager-preview-content">{preview}</div>;
-}, (prev, next) => next.freeze && prev.idx === next.idx);
+  return (
+    <div className="ultreia-pager-drag-preview" aria-hidden="true">
+      <div className="ultreia-pager-drag-preview-head">
+        <span className="ultreia-pager-drag-preview-icon"><Icon size={17} /></span>
+        <span className="ultreia-pager-drag-preview-title">{title}</span>
+      </div>
+      <div className="ultreia-pager-drag-preview-metrics">
+        <span />
+        <span />
+      </div>
+      <div className="ultreia-pager-drag-preview-lines">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  );
+});
 
-export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderTabPreview = null, tabCount = 5, onRefresh = null, refreshing = false }) {
+export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false }) {
   const t = useT();
   const mainRef = useRef(null);
   const trackRef = useRef(null);
@@ -406,17 +419,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     );
   }
 
-  function renderPreviewPane(idx) {
-    return (
-      <PagerPreviewPane
-        idx={idx}
-        freeze={pagerDragFrozen}
-        renderTab={renderTab}
-        renderTabPreview={renderTabPreview}
-      />
-    );
-  }
-
   const activeShouldRender = shouldRenderMobilePagerPane(visualTab, renderedTabs, visualTab, tab);
 
   return (
@@ -485,7 +487,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
             style={{ width: `${tabCount * 100}%` }}
           >
             <div className="ultreia-pager-preview-strip" aria-hidden="true">
-              {TABS.map(({ idx }) => (
+              {TABS.map(({ idx, key, Icon }) => (
                 <div
                   key={idx}
                   className="ultreia-pager-preview-pane"
@@ -494,7 +496,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
                     width: `${100 / tabCount}%`,
                   }}
                 >
-                  {renderPreviewPane(idx)}
+                  <PagerDragPreviewPane
+                    Icon={Icon}
+                    title={t(key)}
+                  />
                 </div>
               ))}
             </div>

@@ -20,9 +20,11 @@ import { getMobilePagerRenderWindow } from "../utils/mobilePager";
  * shows a small spinner badge.
  */
 const REFRESH_SNAP_TRANSITION = "transform 300ms cubic-bezier(0.2,0.82,0.18,1)";
-const SCROLL_SETTLE_MS = 90;
-const PAGER_SETTLE_MS = 520;
+const SCROLL_SETTLE_MS = 130;
+const PAGER_SETTLE_MS = 560;
 const TAB_HAPTIC_MS = 8;
+const PAGER_INTENT_PX = 5;
+const PAGER_AXIS_RATIO = 1.08;
 
 function triggerTabHaptic() {
   try {
@@ -61,6 +63,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const scrollSettleTimerRef = useRef(null);
   const settleFrameRef = useRef(0);
   const pagerTouchActiveRef = useRef(false);
+  const pagerGestureRef = useRef(null);
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
@@ -112,6 +115,17 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }
   }, []);
 
+  const clearPagingState = useCallback(() => {
+    const track = trackRef.current;
+    if (track) delete track.dataset.paging;
+    pagerGestureRef.current = null;
+  }, []);
+
+  const markPagingState = useCallback(() => {
+    const track = trackRef.current;
+    if (track) track.dataset.paging = "true";
+  }, []);
+
   const nearestScrollTab = useCallback(() => {
     const el = trackRef.current;
     if (!el) return visualTabRef.current;
@@ -130,13 +144,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const finishSettledTab = useCallback((next) => {
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
     pagerTouchActiveRef.current = false;
+    clearPagingState();
     commitVisualTab(clamped);
     scrollToTab(clamped, "auto");
     if (clamped !== tabPropRef.current) {
       tabPropRef.current = clamped;
       startTransition(() => setTab(clamped));
     }
-  }, [commitVisualTab, scrollToTab, setTab, tabCount]);
+  }, [clearPagingState, commitVisualTab, scrollToTab, setTab, tabCount]);
 
   const animateScrollToTab = useCallback((next) => {
     const el = trackRef.current;
@@ -187,6 +202,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   function onPagerTouchStart() {
     pagerTouchActiveRef.current = true;
     clearPagerTimers();
+    clearPagingState();
     ensureRenderedWindow(visualTabRef.current);
   }
 
@@ -205,7 +221,59 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => () => {
     clearPagerTimers();
-  }, [clearPagerTimers]);
+    clearPagingState();
+  }, [clearPagerTimers, clearPagingState]);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return undefined;
+
+    const onTouchStart = (event) => {
+      if (event.touches.length !== 1) {
+        pagerGestureRef.current = null;
+        return;
+      }
+      const touch = event.touches[0];
+      pagerGestureRef.current = {
+        x: touch.clientX,
+        y: touch.clientY,
+        mode: "pending",
+      };
+    };
+
+    const onTouchMove = (event) => {
+      const gesture = pagerGestureRef.current;
+      if (!gesture || gesture.mode !== "pending" || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - gesture.x;
+      const dy = touch.clientY - gesture.y;
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(dy);
+      if (absDx >= PAGER_INTENT_PX && absDx > absDy * PAGER_AXIS_RATIO) {
+        gesture.mode = "paging";
+        markPagingState();
+        return;
+      }
+      if (absDy >= PAGER_INTENT_PX && absDy > absDx * PAGER_AXIS_RATIO) {
+        gesture.mode = "scrolling";
+      }
+    };
+
+    const onTouchEnd = () => {
+      pagerGestureRef.current = null;
+    };
+
+    track.addEventListener("touchstart", onTouchStart, { passive: true });
+    track.addEventListener("touchmove", onTouchMove, { passive: true });
+    track.addEventListener("touchend", onTouchEnd, { passive: true });
+    track.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      track.removeEventListener("touchstart", onTouchStart);
+      track.removeEventListener("touchmove", onTouchMove);
+      track.removeEventListener("touchend", onTouchEnd);
+      track.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [markPagingState]);
 
   useEffect(() => {
     const onResize = () => scrollToTab(visualTabRef.current, "auto");
@@ -326,9 +394,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           </div>
         )}
 
-        {/* Horizontal paging uses native scroll while the finger is down. React
-            only syncs the selected tab after release, so holding between two
-            panes stays as close to device refresh rate as the WebView allows. */}
+        {/* Horizontal paging uses native scroll while the finger is down. There
+            is no scroll-snap during touch; React only settles to the nearest tab
+            after release, so holding between panes remains fully finger-driven. */}
         <div
           ref={trackRef}
           className="ultreia-pager-track"
@@ -342,7 +410,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           width: "100%",
           overflowX: "auto",
           overflowY: "hidden",
-          scrollSnapType: "x proximity",
+          scrollSnapType: "none",
           scrollBehavior: "auto",
           overscrollBehaviorX: "contain",
           WebkitOverflowScrolling: "touch",
@@ -368,7 +436,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   height: "100%",
                   overflowY: "auto",
                   overflowX: "hidden",
-                  scrollSnapAlign: "start",
                   overscrollBehavior: "contain",
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-x pan-y",

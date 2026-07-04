@@ -94,10 +94,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const [instant, setInstant] = useState(false);
   const [tapWindow, setTapWindow] = useState(null);
   const tapWindowTimer = useRef(null);
+  const snapTimerRef = useRef(null);
   const lastHapticAt = useRef(0);
 
   useEffect(() => () => {
     if (tapWindowTimer.current) clearTimeout(tapWindowTimer.current);
+    if (snapTimerRef.current) clearTimeout(snapTimerRef.current);
     if (dragFrameRef.current) cancelAnimationFrame(dragFrameRef.current);
   }, []);
 
@@ -173,6 +175,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   function onTouchStart(e) {
+    if (snapTimerRef.current) {
+      touch.current = null;
+      return;
+    }
     if (e.touches.length !== 1) {
       touch.current = null;
       return;
@@ -240,11 +246,24 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       else if ((dx >= threshold || velocity > 0.38) && current > 0) dir = -1;
       setDragging(false); // re-enable the snap transition
       if (dir !== 0) {
-        // Commit immediately so rapid repeated swipes can start from the new
-        // tab without waiting for the old 280ms delayed setTab.
-        setDragXpx(dx + (dir === 1 ? W : -W), true);
-        go(current + dir, { animate: false, haptic: true, hapticAt: e.timeStamp || 0 });
-        requestAnimationFrame(() => setDragXpx(0, true));
+        const next = current + dir;
+        const finalX = dir === 1 ? -W : W;
+        if ((e.timeStamp || 0) - lastHapticAt.current > 60) {
+          triggerTabHaptic();
+          lastHapticAt.current = e.timeStamp || 0;
+        }
+        // Keep React out of the critical snap frames: the already-rendered
+        // neighbor glides into place using only the compositor, then we commit
+        // the logical tab after the transition has landed.
+        setDragXpx(finalX);
+        snapTimerRef.current = setTimeout(() => {
+          snapTimerRef.current = null;
+          setInstant(true);
+          commitVisualTab(next, { urgent: true });
+          setDragXpx(0, true);
+          startTransition(() => setTab(next));
+          requestAnimationFrame(() => setInstant(false));
+        }, SNAP_MS);
       } else {
         requestAnimationFrame(() => setDragXpx(0, true)); // snap back
       }

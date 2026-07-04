@@ -671,6 +671,7 @@ export function RacesTab({
         onTouchStart={onTopSwipeStart}
         onTouchMove={onTopSwipeMove}
         onTouchEnd={onTopSwipeEnd}
+        style={{ minHeight: "100%" }}
       >
         {/* Sticky header: top tab strip + (Races sub-tab strip when active).
             Side margins bleed past main's 14px gutters. Negative `top`

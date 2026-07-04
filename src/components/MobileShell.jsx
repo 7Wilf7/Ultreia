@@ -37,7 +37,7 @@ function inHorizontalScroller(node) {
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
-const SNAP_MS = 320;
+const SNAP_MS = 240;
 const TRACK_SNAP_TRANSITION = `transform ${SNAP_MS}ms cubic-bezier(0.2,0.82,0.18,1)`;
 const TAB_HAPTIC_MS = 8;
 
@@ -90,17 +90,55 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const dragXRef = useRef(0);
   const dragFrameRef = useRef(0);
   const pendingDragXRef = useRef(0);
-  const applyPaneTransforms = useCallback((px) => {
-    const current = visualTabRef.current;
-    const width = mainRef.current?.clientWidth || window.innerWidth || 1;
+  const activeDragDirectionRef = useRef(0);
+  const activeDragKeyRef = useRef("");
+  const setActiveDragPanes = useCallback((current, dir, width) => {
+    const normalizedDir = dir === 1 || dir === -1 ? dir : 0;
+    const key = `${current}:${normalizedDir}:${Math.round(width)}`;
+    if (activeDragKeyRef.current === key) return;
+
+    activeDragDirectionRef.current = normalizedDir;
+    activeDragKeyRef.current = key;
+    const track = trackRef.current;
+    if (track) {
+      if (normalizedDir) track.dataset.dragScope = "active";
+      else delete track.dataset.dragScope;
+    }
+
     for (const [idx, pane] of Object.entries(paneRefs.current)) {
       if (!pane) continue;
       const offset = Number(idx) - current;
-      if (!Number.isFinite(offset)) continue;
-      if (Math.abs(offset) > 1) continue;
-      pane.style.transform = `translate3d(${(offset * width) + px}px, 0, 0)`;
+      const active = offset === 0 || (normalizedDir !== 0 && offset === normalizedDir);
+      if (active) pane.dataset.dragActive = "true";
+      else delete pane.dataset.dragActive;
+
+      if (!active && Math.abs(offset) <= 1) {
+        pane.style.transform = `translate3d(${offset * width}px, 0, 0)`;
+      }
     }
   }, []);
+  const clearPaneDragActivity = useCallback(() => {
+    activeDragDirectionRef.current = 0;
+    activeDragKeyRef.current = "";
+    const track = trackRef.current;
+    if (track) delete track.dataset.dragScope;
+    for (const pane of Object.values(paneRefs.current)) {
+      pane?.removeAttribute("data-drag-active");
+    }
+  }, []);
+  const applyPaneTransforms = useCallback((px) => {
+    const current = visualTabRef.current;
+    const width = mainRef.current?.clientWidth || window.innerWidth || 1;
+    const dir = px < -0.5 ? 1 : px > 0.5 ? -1 : activeDragDirectionRef.current;
+    setActiveDragPanes(current, dir, width);
+
+    const currentPane = paneRefs.current[current];
+    if (currentPane) currentPane.style.transform = `translate3d(${px}px, 0, 0)`;
+    if (dir === 1 || dir === -1) {
+      const targetPane = paneRefs.current[current + dir];
+      if (targetPane) targetPane.style.transform = `translate3d(${(dir * width) + px}px, 0, 0)`;
+    }
+  }, [setActiveDragPanes]);
   const setDragXpx = useCallback((px, immediate = false) => {
     dragXRef.current = px;
     pendingDragXRef.current = px;
@@ -142,6 +180,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       return;
     }
     delete el.dataset.dragging;
+    clearPaneDragActivity();
   }
 
   function setTrackSettling(active) {
@@ -154,6 +193,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       return;
     }
     delete el.dataset.settling;
+    clearPaneDragActivity();
   }
 
   function clearTrackMotionHintSoon(delay = SNAP_MS + 80) {
@@ -164,6 +204,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (!el) return;
       delete el.dataset.dragging;
       delete el.dataset.settling;
+      clearPaneDragActivity();
     }, delay);
   }
 
@@ -211,9 +252,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     setDragXpx(0, true);
     const el = trackRef.current;
     if (el) delete el.dataset.dragging;
+    clearPaneDragActivity();
     setInstant(true);
     requestAnimationFrame(() => setInstant(false));
-  }, [tab, commitVisualTab, setDragXpx]);
+  }, [tab, clearPaneDragActivity, commitVisualTab, setDragXpx]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },

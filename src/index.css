@@ -356,6 +356,10 @@ summary::-webkit-details-marker { display: none; }
   will-change: transform;
 }
 
+.ultreia-pager-track[data-paging="true"] .ultreia-pager-pane {
+  overflow-y: hidden !important;
+}
+
 .ultreia-pager-track[data-paging="true"] .ultreia-pager-pane > * {
   pointer-events: none;
 }

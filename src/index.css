@@ -342,15 +342,15 @@ summary::-webkit-details-marker { display: none; }
   will-change: transform;
 }
 
+.ultreia-pager-track[data-settling="true"] > .ultreia-pager-pane {
+  background: linear-gradient(180deg, oklch(0.105 0.008 145), oklch(0.078 0.008 145)) !important;
+  will-change: transform;
+}
+
 .ultreia-pager-track[data-drag-scope="active"][data-dragging="true"] > .ultreia-pager-pane:not([data-drag-active="true"]),
 .ultreia-pager-track[data-drag-scope="active"][data-settling="true"] > .ultreia-pager-pane:not([data-drag-active="true"]) {
   visibility: hidden !important;
   will-change: auto;
-}
-
-.ultreia-pager-track[data-settling="true"] > .ultreia-pager-pane {
-  background: linear-gradient(180deg, oklch(0.105 0.008 145), oklch(0.078 0.008 145)) !important;
-  will-change: transform;
 }
 
 .ultreia-no-motion-surface button {

@@ -37,7 +37,10 @@ function inHorizontalScroller(node) {
 // Edge resistance when dragging past the first/last tab, snap-animation timing,
 // and how far you must drag (fraction of width, capped) to commit a tab change.
 const EDGE_RESIST = 0.35;
-const SNAP_MS = 240;
+const PAGE_SLOP_PX = 3;
+const SCROLL_SLOP_PX = 6;
+const GESTURE_DOMINANCE = 1.04;
+const SNAP_MS = 300;
 const TRACK_SNAP_TRANSITION = `transform ${SNAP_MS}ms cubic-bezier(0.2,0.82,0.18,1)`;
 const TAB_HAPTIC_MS = 8;
 
@@ -90,6 +93,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const dragXRef = useRef(0);
   const dragFrameRef = useRef(0);
   const pendingDragXRef = useRef(0);
+  const dragWidthRef = useRef(1);
   const activeDragDirectionRef = useRef(0);
   const activeDragKeyRef = useRef("");
   const setActiveDragPanes = useCallback((current, dir, width) => {
@@ -128,7 +132,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, []);
   const applyPaneTransforms = useCallback((px) => {
     const current = visualTabRef.current;
-    const width = mainRef.current?.clientWidth || window.innerWidth || 1;
+    const width = dragWidthRef.current || 1;
     const dir = px < -0.5 ? 1 : px > 0.5 ? -1 : activeDragDirectionRef.current;
     setActiveDragPanes(current, dir, width);
 
@@ -162,6 +166,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const snapTimerRef = useRef(null);
   const trackHintTimerRef = useRef(null);
   const lastHapticAt = useRef(0);
+
+  const measurePagerWidth = useCallback(() => {
+    const width = mainRef.current?.clientWidth || window.innerWidth || 1;
+    dragWidthRef.current = width;
+    return width;
+  }, []);
 
   function clearTrackHintTimer() {
     if (trackHintTimerRef.current) {
@@ -248,6 +258,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => {
     if (tab === visualTabRef.current) return;
+    measurePagerWidth();
     commitVisualTab(tab);
     setDragXpx(0, true);
     const el = trackRef.current;
@@ -255,7 +266,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPaneDragActivity();
     setInstant(true);
     requestAnimationFrame(() => setInstant(false));
-  }, [tab, clearPaneDragActivity, commitVisualTab, setDragXpx]);
+  }, [tab, clearPaneDragActivity, commitVisualTab, measurePagerWidth, setDragXpx]);
 
   const TABS = [
     { key: "tabs.training", idx: 0, Icon: FootIcon },
@@ -275,6 +286,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   function go(next, { animate = true, haptic = false, hapticAt = 0 } = {}) {
     const current = visualTabRef.current;
     if (next === current || next < 0 || next >= tabCount) return;
+    measurePagerWidth();
     if (haptic) {
       const at = hapticAt || lastHapticAt.current + 61;
       if (at - lastHapticAt.current > 60) {
@@ -306,6 +318,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   function onTouchStart(e) {
+    const width = measurePagerWidth();
     const interruptX = (snapTimerRef.current || trackHintTimerRef.current) ? currentTrackDragX() : 0;
     if (snapTimerRef.current) {
       clearTimeout(snapTimerRef.current);
@@ -321,12 +334,17 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       x: p.clientX, y: p.clientY,
       t: e.timeStamp || 0,
       skip: inHorizontalScroller(e.target),
-      w: mainRef.current?.clientWidth || 1,
+      w: width,
       mode: null,
       startDragX: interruptX,
       interrupted: Math.abs(interruptX) > 0.5,
+      firstPageMove: true,
     };
-    setDragXpx(interruptX, true);
+    if (Math.abs(interruptX) > 0.5) setDragXpx(interruptX, true);
+    else {
+      dragXRef.current = 0;
+      pendingDragXRef.current = 0;
+    }
   }
 
   function onTouchMove(e) {
@@ -336,9 +354,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const p = e.touches[0];
     const gestureDx = p.clientX - st.x;
     const dy = p.clientY - st.y;
+    const absDx = Math.abs(gestureDx);
+    const absDy = Math.abs(dy);
 
     if (st.mode === null) {
-      if (Math.abs(gestureDx) > Math.abs(dy) * 1.08 && Math.abs(gestureDx) > 8) {
+      if (absDx > PAGE_SLOP_PX && absDx > absDy * GESTURE_DOMINANCE) {
         // Horizontal. If the current tab has an inner toggle (Training's
         // Activities/Charts, Races' Races/PR) that can still move in this
         // direction, leave it to that tab's own swipe handler — the top pager
@@ -350,7 +370,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         const innerCanMove = inner && ((dir > 0 && inner.index < inner.count - 1) || (dir < 0 && inner.index > 0));
         st.mode = innerCanMove ? "inner" : "page";
       }
-      else if (Math.abs(dy) > 6 || Math.abs(gestureDx) > 6) st.mode = "scroll";
+      else if (absDy > SCROLL_SLOP_PX && absDy > absDx * GESTURE_DOMINANCE) st.mode = "scroll";
       else return; // too small to classify yet
       if (st.mode === "page") setTrackDragging(true);
     }
@@ -363,7 +383,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const resistedDx = ((atFirst && rawDx > 0) || (atLast && rawDx < 0)) ? rawDx * EDGE_RESIST : rawDx;
       const W = st.w || 1;
       const d = Math.max(-W, Math.min(W, resistedDx));
-      setDragXpx(d, true);
+      setDragXpx(d, st.firstPageMove);
+      st.firstPageMove = false;
     }
   }
 

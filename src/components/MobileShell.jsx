@@ -79,6 +79,26 @@ function innerSwipeCanMove(target, direction) {
     : inner.dataset.swipePrev === "true";
 }
 
+function copyScrollPositions(source, clone) {
+  const sourceNodes = [source, ...source.querySelectorAll("*")];
+  const cloneNodes = [clone, ...clone.querySelectorAll("*")];
+  sourceNodes.forEach((sourceNode, idx) => {
+    const cloneNode = cloneNodes[idx];
+    if (!cloneNode) return;
+    if (sourceNode.scrollTop) cloneNode.scrollTop = sourceNode.scrollTop;
+    if (sourceNode.scrollLeft) cloneNode.scrollLeft = sourceNode.scrollLeft;
+  });
+}
+
+function scrubFrozenClone(root) {
+  root.setAttribute("aria-hidden", "true");
+  root.setAttribute("inert", "");
+  root.querySelectorAll("[id]").forEach(node => node.removeAttribute("id"));
+  root.querySelectorAll("input, textarea, select, button, a").forEach(node => {
+    node.setAttribute("tabindex", "-1");
+  });
+}
+
 const PagerPaneContent = memo(function PagerPaneContent({
   shouldRender,
   renderTab,
@@ -98,6 +118,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const t = useT();
   const mainRef = useRef(null);
   const trackRef = useRef(null);
+  const freezeLayerRef = useRef(null);
   const paneRefs = useRef({});
   const [visualTab, setVisualTab] = useState(tab);
   const visualTabRef = useRef(tab);
@@ -107,6 +128,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pagerAnimationRef = useRef(null);
   const pagerAnimationFrameRef = useRef(0);
   const pagerDragRef = useRef(null);
+  const pagerFreezeRef = useRef(null);
   const pagerDragActiveNotifiedRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const trackOffsetRef = useRef(0);
@@ -133,6 +155,99 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     track.style.transition = "none";
     track.style.transform = transformForOffset(left);
   }, [transformForOffset]);
+
+  const clearFrozenDragLayer = useCallback(() => {
+    const frozen = pagerFreezeRef.current;
+    if (frozen?.animation) {
+      frozen.animation.onfinish = null;
+      frozen.animation.oncancel = null;
+      try { frozen.animation.cancel(); } catch { /* animation cancel is best-effort */ }
+    }
+    pagerFreezeRef.current = null;
+    const layer = freezeLayerRef.current;
+    if (layer) {
+      layer.style.visibility = "hidden";
+      layer.style.opacity = "0";
+      layer.replaceChildren();
+    }
+    const track = trackRef.current;
+    if (track) track.style.visibility = "visible";
+  }, []);
+
+  const setFrozenOffset = useCallback((offset) => {
+    const frozen = pagerFreezeRef.current;
+    if (!frozen?.track) return;
+    frozen.offset = offset;
+    frozen.track.style.transition = "none";
+    frozen.track.style.transform = transformForOffset(offset);
+  }, [transformForOffset]);
+
+  const activateFrozenDragLayer = useCallback((current) => {
+    const layer = freezeLayerRef.current;
+    const realTrack = trackRef.current;
+    if (!layer || !realTrack) return null;
+
+    clearFrozenDragLayer();
+    const width = measurePagerWidth();
+    const height = mainRef.current?.clientHeight || realTrack.clientHeight || window.innerHeight || 1;
+    const frozenTrack = document.createElement("div");
+    frozenTrack.className = "ultreia-pager-freeze-track";
+    Object.assign(frozenTrack.style, {
+      display: "flex",
+      width: `${width * 3}px`,
+      height: `${height}px`,
+      transform: transformForOffset(-width),
+      willChange: "transform",
+      backfaceVisibility: "hidden",
+      contain: "strict",
+    });
+
+    [current - 1, current, current + 1].forEach((idx) => {
+      const paneShell = document.createElement("div");
+      paneShell.className = "ultreia-pager-freeze-pane";
+      Object.assign(paneShell.style, {
+        flex: `0 0 ${width}px`,
+        width: `${width}px`,
+        height: `${height}px`,
+        overflow: "hidden",
+        background: "var(--bg)",
+        contain: "strict",
+        backfaceVisibility: "hidden",
+      });
+
+      const source = idx >= 0 && idx < tabCount ? paneRefs.current[idx] : null;
+      if (source) {
+        const clone = source.cloneNode(true);
+        clone.classList.add("ultreia-pager-frozen-clone");
+        scrubFrozenClone(clone);
+        Object.assign(clone.style, {
+          width: `${width}px`,
+          minWidth: `${width}px`,
+          height: `${height}px`,
+          pointerEvents: "none",
+          userSelect: "none",
+        });
+        copyScrollPositions(source, clone);
+        paneShell.appendChild(clone);
+      }
+
+      frozenTrack.appendChild(paneShell);
+    });
+
+    layer.replaceChildren(frozenTrack);
+    layer.style.visibility = "visible";
+    layer.style.opacity = "1";
+    realTrack.style.visibility = "hidden";
+    const frozen = {
+      current,
+      width,
+      track: frozenTrack,
+      offset: -width,
+      animation: null,
+    };
+    pagerFreezeRef.current = frozen;
+    return frozen;
+  }, [clearFrozenDragLayer, measurePagerWidth, tabCount, transformForOffset]);
 
   function scrollActiveToTop() {
     activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
@@ -175,6 +290,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       animation.oncancel = null;
       try { animation.cancel(); } catch { /* animation cancel is best-effort */ }
     }
+    if (pagerFreezeRef.current?.animation) {
+      const animation = pagerFreezeRef.current.animation;
+      pagerFreezeRef.current.animation = null;
+      animation.onfinish = null;
+      animation.oncancel = null;
+      try { animation.cancel(); } catch { /* animation cancel is best-effort */ }
+    }
     if (pagerAnimationFrameRef.current) {
       cancelAnimationFrame(pagerAnimationFrameRef.current);
       pagerAnimationFrameRef.current = 0;
@@ -197,36 +319,42 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   const completePagerSettle = useCallback((next = visualTabRef.current) => {
     const clamped = clampTabIndex(next, tabCount);
+    const hadFrozenLayer = !!pagerFreezeRef.current;
     pagerDragRef.current = null;
     flushSync(() => commitVisualTab(clamped));
     alignTrackToTab(clamped);
+    if (hadFrozenLayer) clearFrozenDragLayer();
     if (clamped !== tabPropRef.current) {
       tabPropRef.current = clamped;
       startTransition(() => setTab(clamped));
     }
     notifyPagerDragActive(false);
     scheduleRenderedWindowTrim(clamped);
-  }, [alignTrackToTab, commitVisualTab, notifyPagerDragActive, scheduleRenderedWindowTrim, setTab, tabCount]);
+  }, [alignTrackToTab, clearFrozenDragLayer, commitVisualTab, notifyPagerDragActive, scheduleRenderedWindowTrim, setTab, tabCount]);
 
   const animateTrackToTab = useCallback((next) => {
     clearPagerTimers();
     const clamped = clampTabIndex(next, tabCount);
     const width = measurePagerWidth();
-    const from = trackOffsetRef.current;
-    const to = -clamped * width;
+    const frozen = pagerFreezeRef.current;
+    const from = frozen ? frozen.offset : trackOffsetRef.current;
+    const to = frozen
+      ? -frozen.width - (clamped - frozen.current) * frozen.width
+      : -clamped * width;
     const distance = to - from;
     notifyPagerDragActive(true);
 
     if (Math.abs(distance) < 1 || prefersReducedMotion()) {
-      setTrackOffset(to);
+      if (frozen) setFrozenOffset(to);
+      else setTrackOffset(to);
       completePagerSettle(clamped);
       return;
     }
 
     const duration = settleDurationForDistance(distance, width);
-    const track = trackRef.current;
-    if (track && typeof track.animate === "function") {
-      const animation = track.animate(
+    const animatedTrack = frozen?.track || trackRef.current;
+    if (animatedTrack && typeof animatedTrack.animate === "function") {
+      const animation = animatedTrack.animate(
         [
           { transform: transformForOffset(from) },
           { transform: transformForOffset(to) },
@@ -237,15 +365,26 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           fill: "forwards",
         },
       );
-      pagerAnimationRef.current = animation;
+      if (frozen) frozen.animation = animation;
+      else pagerAnimationRef.current = animation;
       animation.onfinish = () => {
-        if (pagerAnimationRef.current !== animation) return;
-        pagerAnimationRef.current = null;
-        setTrackOffset(to);
+        if (frozen) {
+          if (frozen.animation !== animation) return;
+          frozen.animation = null;
+          setFrozenOffset(to);
+        } else {
+          if (pagerAnimationRef.current !== animation) return;
+          pagerAnimationRef.current = null;
+          setTrackOffset(to);
+        }
         completePagerSettle(clamped);
       };
       animation.oncancel = () => {
-        if (pagerAnimationRef.current === animation) pagerAnimationRef.current = null;
+        if (frozen) {
+          if (frozen.animation === animation) frozen.animation = null;
+        } else if (pagerAnimationRef.current === animation) {
+          pagerAnimationRef.current = null;
+        }
       };
       return;
     }
@@ -253,17 +392,20 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const startedAt = performance.now();
     const step = (now) => {
       const progress = Math.min(1, (now - startedAt) / duration);
-      setTrackOffset(from + distance * easeInOutSine(progress));
+      const nextOffset = from + distance * easeInOutSine(progress);
+      if (frozen) setFrozenOffset(nextOffset);
+      else setTrackOffset(nextOffset);
       if (progress < 1) {
         pagerAnimationFrameRef.current = requestAnimationFrame(step);
         return;
       }
       pagerAnimationFrameRef.current = 0;
-      setTrackOffset(to);
+      if (frozen) setFrozenOffset(to);
+      else setTrackOffset(to);
       completePagerSettle(clamped);
     };
     pagerAnimationFrameRef.current = requestAnimationFrame(step);
-  }, [clearPagerTimers, completePagerSettle, measurePagerWidth, notifyPagerDragActive, setTrackOffset, tabCount, transformForOffset]);
+  }, [clearPagerTimers, completePagerSettle, measurePagerWidth, notifyPagerDragActive, setFrozenOffset, setTrackOffset, tabCount, transformForOffset]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -277,7 +419,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => () => {
     clearPagerTimers();
-  }, [clearPagerTimers]);
+    clearFrozenDragLayer();
+  }, [clearFrozenDragLayer, clearPagerTimers]);
 
   useEffect(() => {
     const main = mainRef.current;
@@ -295,6 +438,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         return;
       }
       clearPagerTimers();
+      clearFrozenDragLayer();
       const width = measurePagerWidth();
       const current = visualTabRef.current;
       const baseOffset = -current * width;
@@ -341,6 +485,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           drag.mode = "drag";
           suppressClickUntilRef.current = performance.now() + 450;
           try { main.setPointerCapture?.(drag.pointerId); } catch { /* pointer capture is best-effort */ }
+          const frozen = activateFrozenDragLayer(drag.current);
+          if (frozen) {
+            drag.frozen = true;
+            drag.freezeBaseOffset = -frozen.width;
+          }
           notifyPagerDragActive(true);
         } else if (Math.abs(dy) > PAGER_DRAG_START_PX || Math.abs(dx) > PAGER_DRAG_START_PX) {
           drag.mode = "scroll";
@@ -361,7 +510,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       drag.velocity = (point.clientX - drag.lastX) / Math.max(1, now - drag.lastAt);
       drag.lastX = point.clientX;
       drag.lastAt = now;
-      setTrackOffset(drag.baseOffset + drag.delta);
+      trackOffsetRef.current = drag.baseOffset + drag.delta;
+      if (drag.frozen) setFrozenOffset(drag.freezeBaseOffset + drag.delta);
+      else setTrackOffset(drag.baseOffset + drag.delta);
     };
 
     const settlePagerDrag = (e) => {
@@ -370,6 +521,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       releasePointerCapture(drag.pointerId);
       if (drag.mode !== "drag") {
         pagerDragRef.current = null;
+        clearFrozenDragLayer();
         notifyPagerDragActive(false);
         return;
       }
@@ -401,6 +553,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         return;
       }
       pagerDragRef.current = null;
+      clearFrozenDragLayer();
       notifyPagerDragActive(false);
     };
 
@@ -427,9 +580,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     };
   }, [
     animateTrackToTab,
+    activateFrozenDragLayer,
+    clearFrozenDragLayer,
     clearPagerTimers,
     measurePagerWidth,
     notifyPagerDragActive,
+    setFrozenOffset,
     setTrackOffset,
     tabCount,
   ]);
@@ -460,6 +616,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     }
     clearPagerTimers();
+    clearFrozenDragLayer();
     pagerDragRef.current = null;
     notifyPagerDragActive(false);
     const jumpWindow = getMobilePagerJumpWindow(current, next, tabCount);
@@ -641,6 +798,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             );
           })}
         </div>
+        <div
+          ref={freezeLayerRef}
+          className="ultreia-pager-freeze-layer"
+          aria-hidden="true"
+        />
       </main>
 
       {/* Bottom tab bar */}

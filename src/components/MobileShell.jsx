@@ -55,10 +55,6 @@ function settleDurationForDistance(distance, width) {
   return Math.round(PAGER_SETTLE_MIN_MS + (PAGER_SETTLE_MAX_MS - PAGER_SETTLE_MIN_MS) * fraction);
 }
 
-function getTouchPoint(event) {
-  return event?.touches?.[0] || event?.changedTouches?.[0] || null;
-}
-
 function resistedPagerLeft(left, min, max) {
   if (left < min) return min + (left - min) * PAGER_EDGE_RESISTANCE;
   if (left > max) return max + (left - max) * PAGER_EDGE_RESISTANCE;
@@ -333,14 +329,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track) return undefined;
 
-    const onPagerTouchStart = (event) => {
-      if (event.touches?.length !== 1 || shouldSkipPagerDrag(event.target)) {
+    const onPagerPointerDown = (event) => {
+      if (event.pointerType === "mouse" || event.isPrimary === false || shouldSkipPagerDrag(event.target)) {
         pagerGestureRef.current = null;
         return;
       }
       clearPagerTimers();
-      const point = getTouchPoint(event);
-      if (!point) return;
       pagerTouchingRef.current = true;
       pagerTouchActiveRef.current = false;
       const width = measurePagerWidth();
@@ -348,11 +342,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       setTrackOffset(current * width);
       pagerGestureRef.current = {
         mode: null,
-        startX: point.clientX,
-        startY: point.clientY,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
         startAt: event.timeStamp || performance.now(),
         startLeft: current * width,
-        lastX: point.clientX,
+        lastX: event.clientX,
         lastAt: event.timeStamp || performance.now(),
         lastLeft: current * width,
         current,
@@ -361,22 +356,26 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       };
     };
 
-    const enterPagerDrag = () => {
+    const enterPagerDrag = (event) => {
       const gesture = pagerGestureRef.current;
       if (!gesture || gesture.mode === "drag") return;
       gesture.mode = "drag";
+      try {
+        if (event?.pointerId !== undefined && track.setPointerCapture) {
+          track.setPointerCapture(event.pointerId);
+        }
+      } catch { /* pointer capture is best-effort */ }
       pagerTouchActiveRef.current = true;
       suppressClickUntilRef.current = performance.now() + 450;
       setPagerTouchingAttribute(true);
       notifyPagerDragActive(true);
     };
 
-    const onPagerTouchMove = (event) => {
+    const onPagerPointerMove = (event) => {
       const gesture = pagerGestureRef.current;
-      const point = getTouchPoint(event);
-      if (!gesture || !point) return;
-      const dx = point.clientX - gesture.startX;
-      const dy = point.clientY - gesture.startY;
+      if (!gesture || gesture.pointerId !== event.pointerId) return;
+      const dx = event.clientX - gesture.startX;
+      const dy = event.clientY - gesture.startY;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
 
@@ -391,7 +390,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             gesture.mode = "inner";
             return;
           }
-          enterPagerDrag();
+          enterPagerDrag(event);
         } else {
           gesture.mode = "scroll";
           return;
@@ -405,21 +404,21 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const maxLeft = (tabCount - 1) * gesture.width;
       const nextLeft = resistedPagerLeft(gesture.startLeft - dx, 0, maxLeft);
       scheduleTrackOffset(nextLeft);
-      gesture.lastX = point.clientX;
+      gesture.lastX = event.clientX;
       gesture.lastAt = event.timeStamp || performance.now();
       gesture.lastLeft = nextLeft;
     };
 
-    const onPagerTouchEnd = (event) => {
+    const onPagerPointerEnd = (event) => {
       const gesture = pagerGestureRef.current;
+      if (gesture?.pointerId !== undefined && event.pointerId !== gesture.pointerId) return;
       pagerTouchingRef.current = false;
       if (gesture?.mode === "drag") {
         event.preventDefault();
         event.stopPropagation();
         flushTrackOffset();
-        const point = getTouchPoint(event);
         const endedAt = event.timeStamp || performance.now();
-        const dx = point ? point.clientX - gesture.startX : gesture.startLeft - trackOffsetRef.current;
+        const dx = Number.isFinite(event.clientX) ? event.clientX - gesture.startX : gesture.startLeft - trackOffsetRef.current;
         const dt = Math.max(1, endedAt - gesture.startAt);
         const velocity = dx / dt;
         const width = gesture.width || pagerWidthRef.current || measurePagerWidth();
@@ -430,6 +429,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           next = clampTabIndex(gesture.current + (dx < 0 ? 1 : -1), tabCount);
         }
         pagerGestureRef.current = null;
+        try {
+          if (event.pointerId !== undefined && track.releasePointerCapture) {
+            track.releasePointerCapture(event.pointerId);
+          }
+        } catch { /* already released */ }
         suppressClickUntilRef.current = performance.now() + 450;
         animatePagerToTab(next);
         return;
@@ -445,16 +449,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     };
 
-    track.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
-    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
-    track.addEventListener("touchend", onPagerTouchEnd, { capture: true, passive: false });
-    track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true, passive: false });
+    track.addEventListener("pointerdown", onPagerPointerDown, { capture: true });
+    track.addEventListener("pointermove", onPagerPointerMove, { capture: true });
+    track.addEventListener("pointerup", onPagerPointerEnd, { capture: true });
+    track.addEventListener("pointercancel", onPagerPointerEnd, { capture: true });
     track.addEventListener("click", suppressClickAfterDrag, true);
     return () => {
-      track.removeEventListener("touchstart", onPagerTouchStart, true);
-      track.removeEventListener("touchmove", onPagerTouchMove, true);
-      track.removeEventListener("touchend", onPagerTouchEnd, true);
-      track.removeEventListener("touchcancel", onPagerTouchEnd, true);
+      track.removeEventListener("pointerdown", onPagerPointerDown, true);
+      track.removeEventListener("pointermove", onPagerPointerMove, true);
+      track.removeEventListener("pointerup", onPagerPointerEnd, true);
+      track.removeEventListener("pointercancel", onPagerPointerEnd, true);
       track.removeEventListener("click", suppressClickAfterDrag, true);
     };
   }, [

@@ -4,6 +4,7 @@
 
 ## 2026-07-05
 
+- **移动端 Tab 横滑改走 Pointer Events**：外层分页器不再用 `touchmove + preventDefault` 作为主手势路径，改为 `pointerdown / pointermove` 配合 `touch-action: pan-y`；确认横向后才 capture 指针并接管拖动，纵向滑动仍交给各 Tab 自己滚动，减少 Android PWA 半屏按住横滑时浏览器与 JS 争抢手势造成的延迟。
 - **移动端 Tab 横滑防重渲染抢位移**：真实页面 pane 的横向 `transform` 完全交给手势路径写入，React render 不再声明这个属性，避免 AI / 天气 / Runner 等状态更新时把半屏拖动位置重置。AI Coach 流式回复在外层 Tab 横滑期间也会先缓存最新 token，松手后再刷新聊天内容，减少半屏拖动中的重渲染干扰。
 - **移动端 Tab 横滑合成面积收窄**：横滑时不再移动 5 屏宽的页面 strip，改为只让当前页和相邻真实页面按整屏绝对定位分别移动，半屏同显时的合成层面积更小。AI Coach 内部 Runner 秒级计时也会在外层 Tab 横滑期间暂停，减少刚好撞上手势时的重渲染。
 - **移动端 Tab 横滑写入按帧对齐**：半屏按住横滑时，触摸事件只记录最新横向位置，实际 `translate3d` 写入按屏幕刷新帧执行；松手前会同步最新位置再吸附。同时把横滑时关闭全局背景光效的选择器从 `:has()` 改成 body data 标记，减少拖动确认瞬间的样式重算。

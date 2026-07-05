@@ -368,10 +368,6 @@ summary::-webkit-details-marker { display: none; }
   backface-visibility: hidden;
 }
 
-.ultreia-mobile-shell[data-pager-touching="true"] .ultreia-pager-strip {
-  will-change: transform;
-}
-
 body[data-ultreia-pager-touching="true"]::before,
 body[data-ultreia-pager-touching="true"]::after {
   opacity: 0 !important;

@@ -2529,7 +2529,7 @@ export function AICoachTab({
         overscrollBehaviorX: "auto",
         overscrollBehaviorY: "contain",
         WebkitOverflowScrolling: "touch",
-        touchAction: "pan-y",
+        touchAction: "pan-x pan-y",
         contain: "layout paint",
         ...(isMobile ? {
           background: "var(--bg-elevated)",

@@ -56,6 +56,7 @@ const PagerPaneContent = memo(function PagerPaneContent({
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, onPagerDragActiveChange = null }) {
   const t = useT();
+  const shellRef = useRef(null);
   const mainRef = useRef(null);
   const trackRef = useRef(null);
   const paneRefs = useRef({});
@@ -90,6 +91,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track) return;
     track.scrollLeft = left;
+  }, []);
+
+  const setPagerTouchingAttribute = useCallback((active) => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    if (active) shell.dataset.pagerTouching = "true";
+    else delete shell.dataset.pagerTouching;
   }, []);
 
   function scrollActiveToTop() {
@@ -149,8 +157,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const finishPagerGesture = useCallback(() => {
     pagerTouchActiveRef.current = false;
     pagerTouchingRef.current = false;
+    setPagerTouchingAttribute(false);
     notifyPagerDragActive(false);
-  }, [notifyPagerDragActive]);
+  }, [notifyPagerDragActive, setPagerTouchingAttribute]);
 
   const completePagerFromScroll = useCallback(() => {
     if (pagerSettleTimerRef.current) {
@@ -204,6 +213,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const current = visualTabRef.current;
       setTrackOffset(current * width);
       touchStartScrollLeftRef.current = current * width;
+      setPagerTouchingAttribute(true);
       notifyPagerDragActive(true);
     };
 
@@ -260,6 +270,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     notifyPagerDragActive,
     schedulePagerCommitFromScroll,
     setTrackOffset,
+    setPagerTouchingAttribute,
   ]);
 
   useEffect(() => {
@@ -359,6 +370,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   return (
     <div
+      ref={shellRef}
       className="ultreia-mobile-shell"
       style={{
         height: "100dvh",
@@ -421,7 +433,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             scrollbarWidth: "none",
             msOverflowStyle: "none",
             backfaceVisibility: "hidden",
-            willChange: refreshing ? "transform" : "auto",
+            willChange: refreshing ? "transform, scroll-position" : "scroll-position",
             transform: refreshing ? `translate3d(0, ${pullY}px, 0)` : "none",
             transition: "none",
           }}>
@@ -456,11 +468,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   overscrollBehavior: "contain",
                   WebkitOverflowScrolling: "touch",
                   touchAction: "pan-x pan-y",
-                  contain: "layout paint style",
+                  contain: "strict",
                   overflowAnchor: "none",
                   backfaceVisibility: "hidden",
-                  transform: "none",
-                  willChange: "auto",
+                  transform: "translate3d(0, 0, 0)",
+                  willChange: shouldShow ? "transform" : "auto",
                   isolation: shouldShow ? "isolate" : "auto",
                   visibility: shouldShow ? "visible" : "hidden",
                   pointerEvents: isInteractivePane ? "auto" : "none",

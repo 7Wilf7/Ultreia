@@ -2525,7 +2525,7 @@ export function AICoachTab({
         overflowY: "auto",
         overscrollBehavior: "contain",
         WebkitOverflowScrolling: "touch",
-        touchAction: "pan-y",
+        touchAction: "pan-x pan-y",
         contain: "layout paint",
         ...(isMobile ? {
           background: "var(--bg-elevated)",

@@ -22,6 +22,7 @@ import { buildMemoryFactReview, buildMemoryFactSnapshotFromReview, extractMemory
 import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { shouldAutoQuietProactiveAction, shouldAutoTriggerPlanDeviation, shouldAutoTriggerRecoveryGuard } from "../utils/actionPlanFilters";
+import { normalizeComposerTextChange } from "../utils/composerInput";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon, PinIcon } from "./Icons";
@@ -768,21 +769,35 @@ export function AICoachTab({
   const [coachImages, setCoachImages] = useState([]);
   const [composerInput, setComposerInput] = useState(() => String(chatInput || ""));
   const composerInputRef = useRef(composerInput);
+  const composerFocusedRef = useRef(false);
+  const composerComposingRef = useRef(false);
+  const lastParentDraftWriteRef = useRef(String(chatInput || ""));
+  const pendingSelectionRestoreRef = useRef(null);
   const syncComposerInput = useCallback((value) => {
     const next = String(value ?? "");
     composerInputRef.current = next;
     setComposerInput(next);
+    lastParentDraftWriteRef.current = next;
     setChatInput?.(next);
   }, [setChatInput]);
   const handleComposerInputChange = useCallback((event) => {
-    const next = event.target.value;
+    const normalized = normalizeComposerTextChange(composerInputRef.current, event.target.value, {
+      inputType: event.nativeEvent?.inputType,
+      selectionStart: event.target.selectionStart,
+    });
+    const next = normalized.value;
     composerInputRef.current = next;
+    if (normalized.changed && normalized.selectionStart != null) {
+      pendingSelectionRestoreRef.current = normalized.selectionStart;
+    }
     setComposerInput(next);
   }, []);
   const deferredComposerInput = useDeferredValue(composerInput);
 
   useEffect(() => {
     const next = String(chatInput || "");
+    if (next === lastParentDraftWriteRef.current && next !== composerInputRef.current) return;
+    if ((composerFocusedRef.current || composerComposingRef.current) && next !== "") return;
     if (next === composerInputRef.current) return;
     composerInputRef.current = next;
     setComposerInput(next);
@@ -791,9 +806,13 @@ export function AICoachTab({
   // Keep typing responsive: keystrokes update local state immediately, while
   // the lifted AppShell draft only syncs after the user pauses.
   useEffect(() => {
+    if (composerComposingRef.current) return undefined;
     const timer = setTimeout(() => {
       const next = composerInputRef.current;
-      if (next !== String(chatInput || "")) setChatInput?.(next);
+      if (next !== String(chatInput || "")) {
+        lastParentDraftWriteRef.current = next;
+        setChatInput?.(next);
+      }
     }, 250);
     return () => clearTimeout(timer);
   }, [chatInput, composerInput, setChatInput]);
@@ -1226,16 +1245,33 @@ export function AICoachTab({
     clearTimeout(scrollIdleTimer.current);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isMobile) return;
     const el = chatInputRef.current;
     if (!el) return;
+    const active = typeof document !== "undefined" && document.activeElement === el;
+    const selectionStart = active ? el.selectionStart : null;
+    const selectionEnd = active ? el.selectionEnd : null;
+    const selectionDirection = active ? el.selectionDirection : "none";
+    const scrollTop = el.scrollTop;
     const minHeight = 32;
     const maxHeight = Math.round(13 * 1.35 * 7 + 18);
     const hasText = composerInput.trim().length > 0;
     el.style.height = `${minHeight}px`;
     if (hasText) {
       el.style.height = `${Math.min(Math.max(el.scrollHeight, minHeight), maxHeight)}px`;
+    }
+    const pendingSelection = pendingSelectionRestoreRef.current;
+    pendingSelectionRestoreRef.current = null;
+    if (active && !composerComposingRef.current) {
+      const nextSelectionStart = pendingSelection ?? selectionStart;
+      const nextSelectionEnd = pendingSelection ?? selectionEnd;
+      try {
+        if (nextSelectionStart != null && nextSelectionEnd != null) {
+          el.setSelectionRange(nextSelectionStart, nextSelectionEnd, selectionDirection || "none");
+        }
+      } catch { /* selection can fail for some IME states */ }
+      el.scrollTop = scrollTop;
     }
   }, [composerInput, isMobile]);
 
@@ -2647,6 +2683,17 @@ export function AICoachTab({
             rows={isMobile ? 1 : 9}
             value={composerInput}
             onChange={handleComposerInputChange}
+            onFocus={() => { composerFocusedRef.current = true; }}
+            onBlur={() => {
+              composerFocusedRef.current = false;
+              lastParentDraftWriteRef.current = composerInputRef.current;
+              setChatInput?.(composerInputRef.current);
+            }}
+            onCompositionStart={() => { composerComposingRef.current = true; }}
+            onCompositionEnd={(event) => {
+              composerComposingRef.current = false;
+              handleComposerInputChange(event);
+            }}
             onKeyDown={e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) handleSend(); }}
             disabled={contextCompressing}
             style={{

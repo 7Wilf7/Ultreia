@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -8,6 +8,7 @@ import {
   coachComposerInputStyle,
   coachComposerSendButtonStyle,
 } from "./CoachComposerControls";
+import { normalizeComposerTextChange } from "../utils/composerInput";
 
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
@@ -72,6 +73,7 @@ export function WeeklyReportPage({
 }) {
   const t = useT();
   const [discussionText, setDiscussionText] = useState("");
+  const discussionTextRef = useRef("");
   const range = useMemo(() => {
     if (selectedRange?.start && selectedRange?.end) {
       return {
@@ -94,6 +96,22 @@ export function WeeklyReportPage({
   }, [reports, range.start, range.end]);
   const canDiscuss = !!selected && discussionText.trim().length > 0;
 
+  function handleDiscussionTextChange(event) {
+    const normalized = normalizeComposerTextChange(discussionTextRef.current, event.target.value, {
+      inputType: event.nativeEvent?.inputType,
+      selectionStart: event.target.selectionStart,
+    });
+    discussionTextRef.current = normalized.value;
+    setDiscussionText(normalized.value);
+    if (normalized.changed && normalized.selectionStart != null) {
+      requestAnimationFrame(() => {
+        try {
+          event.target.setSelectionRange(normalized.selectionStart, normalized.selectionStart);
+        } catch { /* ignore selection restore failures */ }
+      });
+    }
+  }
+
   function sendDiscussion() {
     if (!canDiscuss) return;
     onDiscussReport?.(selected, buildReportDiscussionMessage({
@@ -102,6 +120,7 @@ export function WeeklyReportPage({
       sourceText: selected?.text || "",
       extraText: discussionText,
     }));
+    discussionTextRef.current = "";
     setDiscussionText("");
   }
 
@@ -230,7 +249,7 @@ export function WeeklyReportPage({
         }}>
           <textarea
             value={discussionText}
-            onChange={e => setDiscussionText(e.target.value)}
+            onChange={handleDiscussionTextChange}
             rows={1}
             style={{
               ...coachComposerInputStyle({ isMobile: true }),

@@ -71,6 +71,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const suppressClickUntilRef = useRef(0);
   const trackOffsetRef = useRef(0);
   const pagerWidthRef = useRef(1);
+  const touchStartScrollLeftRef = useRef(0);
   const renderTrimTimerRef = useRef(null);
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
@@ -202,6 +203,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const width = measurePagerWidth();
       const current = visualTabRef.current;
       setTrackOffset(current * width);
+      touchStartScrollLeftRef.current = current * width;
+      notifyPagerDragActive(true);
     };
 
     const onPagerTouchEnd = () => {
@@ -209,7 +212,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const width = pagerWidthRef.current || measurePagerWidth();
       const left = track.scrollLeft ?? trackOffsetRef.current;
       const currentLeft = visualTabRef.current * width;
-      if (pagerTouchActiveRef.current || Math.abs(left - currentLeft) > 1) {
+      const moved = Math.abs(left - currentLeft) > 1 || Math.abs(left - touchStartScrollLeftRef.current) > 1;
+      if (moved) {
+        pagerTouchActiveRef.current = true;
+        suppressClickUntilRef.current = performance.now() + 450;
         schedulePagerCommitFromScroll();
         return;
       }
@@ -223,34 +229,27 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     };
 
-    const onTrackScroll = () => {
-      const left = track.scrollLeft;
-      trackOffsetRef.current = left;
+    const onTrackScrollEnd = () => {
+      if (pagerTouchingRef.current) return;
       const width = pagerWidthRef.current || measurePagerWidth();
+      const left = track.scrollLeft ?? trackOffsetRef.current;
       const currentLeft = visualTabRef.current * width;
-      if (Math.abs(left - currentLeft) > 1) {
+      if (pagerTouchActiveRef.current || Math.abs(left - currentLeft) > 1) {
         pagerTouchActiveRef.current = true;
         suppressClickUntilRef.current = performance.now() + 450;
-        notifyPagerDragActive(true);
-        if (!pagerTouchingRef.current) schedulePagerCommitFromScroll();
+        schedulePagerCommitFromScroll(0);
       }
-    };
-
-    const onTrackScrollEnd = () => {
-      if (!pagerTouchingRef.current && pagerTouchActiveRef.current) schedulePagerCommitFromScroll(0);
     };
 
     track.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
     track.addEventListener("touchend", onPagerTouchEnd, { capture: true, passive: true });
     track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true, passive: true });
-    track.addEventListener("scroll", onTrackScroll, { passive: true });
     track.addEventListener("scrollend", onTrackScrollEnd, { passive: true });
     track.addEventListener("click", suppressClickAfterDrag, true);
     return () => {
       track.removeEventListener("touchstart", onPagerTouchStart, true);
       track.removeEventListener("touchend", onPagerTouchEnd, true);
       track.removeEventListener("touchcancel", onPagerTouchEnd, true);
-      track.removeEventListener("scroll", onTrackScroll);
       track.removeEventListener("scrollend", onTrackScrollEnd);
       track.removeEventListener("click", suppressClickAfterDrag, true);
     };

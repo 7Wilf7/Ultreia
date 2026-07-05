@@ -342,7 +342,6 @@ summary::-webkit-details-marker { display: none; }
 
 .ultreia-pager-strip {
   backface-visibility: hidden;
-  transform: translate3d(0, 0, 0);
 }
 
 .ultreia-pager-pane {
@@ -367,7 +366,6 @@ summary::-webkit-details-marker { display: none; }
 .ultreia-mobile-shell[data-pager-touching="true"] .ultreia-pager-strip,
 .ultreia-mobile-shell[data-pager-touching="true"] .ultreia-pager-full-content {
   backface-visibility: hidden;
-  transform: translate3d(0, 0, 0);
 }
 
 body[data-ultreia-pager-touching="true"]::before,

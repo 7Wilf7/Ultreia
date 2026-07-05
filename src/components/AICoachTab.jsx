@@ -744,7 +744,10 @@ export function AICoachTab({
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
   useEffect(() => {
-    const timer = setInterval(() => setRunnerNowMs(Date.now()), 1000);
+    const timer = setInterval(() => {
+      if (typeof document !== "undefined" && document.body?.dataset?.ultreiaPagerTouching === "true") return;
+      setRunnerNowMs(Date.now());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
   const [showCoachConfig, setShowCoachConfig] = useState(false);

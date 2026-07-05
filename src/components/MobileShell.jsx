@@ -15,7 +15,7 @@ import {
  * pager for cross-tab swipes.
  *
  * Each tab is its OWN vertical scroll container. Horizontal finger-follow is
- * handled by a compositor transform on the real pane strip: no React state,
+ * handled by compositor transforms on the visible real panes: no React state,
  * no layout reads, and no browser snap negotiation while the finger is moving.
  */
 const TAB_HAPTIC_MS = 8;
@@ -137,9 +137,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   const applyTrackOffset = useCallback((left) => {
     trackOffsetRef.current = left;
-    const strip = stripRef.current;
-    if (!strip) return;
-    strip.style.transform = `translate3d(${-left}px, 0, 0)`;
+    const width = pagerWidthRef.current || 1;
+    Object.entries(paneRefs.current).forEach(([key, pane]) => {
+      if (!pane) return;
+      const idx = Number(key);
+      if (!Number.isFinite(idx)) return;
+      pane.style.transform = `translate3d(${(idx * width) - left}px, 0, 0)`;
+    });
   }, []);
 
   const setTrackOffset = useCallback((left) => {
@@ -629,12 +633,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             ref={stripRef}
             className="ultreia-pager-strip"
             style={{
-              display: "flex",
+              position: "absolute",
+              inset: 0,
               height: "100%",
               width: "100%",
-              transform: "translate3d(0, 0, 0)",
               transition: "none",
-              willChange: "transform",
               backfaceVisibility: "hidden",
             }}>
             {TABS.map(({ idx }) => {
@@ -656,9 +659,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   data-preview={shouldRender ? "false" : "true"}
                   aria-hidden={!isInteractivePane}
                   style={{
-                    position: "relative",
-                    flex: "0 0 100%",
-                    minWidth: "100%",
+                    position: "absolute",
+                    inset: 0,
+                    display: shouldShow ? "block" : "none",
                     width: "100%",
                     height: "100%",
                     overflowY: "auto",
@@ -673,7 +676,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                     contain: "strict",
                     overflowAnchor: "none",
                     backfaceVisibility: "hidden",
-                    transform: "translate3d(0, 0, 0)",
+                    transform: `translate3d(${(idx - visualTab) * 100}%, 0, 0)`,
                     willChange: shouldShow ? "transform" : "auto",
                     isolation: shouldShow ? "isolate" : "auto",
                     visibility: shouldShow ? "visible" : "hidden",

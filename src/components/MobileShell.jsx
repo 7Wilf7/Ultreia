@@ -7,7 +7,6 @@ import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
   mergeTabWindows,
-  shouldOuterPagerHandleSwipe,
   shouldRenderMobilePagerPane,
   shouldShowMobilePagerPane,
 } from "../utils/mobilePager";
@@ -25,12 +24,9 @@ import {
  * shows a small spinner badge.
  */
 const TAB_HAPTIC_MS = 8;
-const PAGER_DRAG_INTENT_PX = 7;
-const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_RELEASE_DISTANCE_RATIO = 0.18;
 const PAGER_SETTLE_MIN_MS = 620;
 const PAGER_SETTLE_MAX_MS = 920;
-const PAGER_SKIP_SELECTOR = "button,input,textarea,select,a,[role='button'],[data-dropdown-menu],[data-no-pager-swipe]";
 
 function triggerTabHaptic() {
   try {
@@ -57,18 +53,6 @@ function easeInOutSine(t) {
 
 function clampTabIndex(idx, count) {
   return Math.max(0, Math.min(count - 1, idx));
-}
-
-function shouldSkipPagerSwipe(target) {
-  return !!target?.closest?.(PAGER_SKIP_SELECTOR);
-}
-
-function innerCanMoveForSwipe(target, direction) {
-  const inner = target?.closest?.("[data-mobile-inner-swipe='true']");
-  if (!inner) return false;
-  return direction > 0
-    ? inner.dataset.swipeNext === "true"
-    : inner.dataset.swipePrev === "true";
 }
 
 const PagerPaneContent = memo(function PagerPaneContent({
@@ -133,7 +117,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const pagerWidthRef = useRef(1);
   const renderTrimTimerRef = useRef(null);
   const pagerTouchActiveRef = useRef(false);
-  const pagerDragIntentRef = useRef({ x: 0, y: 0, dx: 0, startLeft: 0, target: null, mode: null });
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
@@ -178,9 +161,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const setDragOverlayMode = useCallback((active) => {
     const track = trackRef.current;
     if (active) {
-      if (track) track.dataset.dragOverlay = "true";
+      if (track && track.dataset.dragOverlay !== "true") track.dataset.dragOverlay = "true";
     } else {
-      if (track) delete track.dataset.dragOverlay;
+      if (track?.dataset.dragOverlay) delete track.dataset.dragOverlay;
     }
   }, []);
 
@@ -285,15 +268,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   }, [alignTrackToTab, pullY]);
 
   const onPagerTouchEnd = useCallback(() => {
-    const mode = pagerDragIntentRef.current.mode;
-    if (mode === "pager") {
-      const didSettle = settlePagerFromCurrentOffset();
-      if (!didSettle) {
-        pagerTouchActiveRef.current = false;
-        setDragOverlayMode(false);
-      }
-      return;
-    }
     const didSettle = settlePagerFromCurrentOffset();
     if (!didSettle) {
       pagerTouchActiveRef.current = false;
@@ -301,64 +275,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     }
   }, [setDragOverlayMode, settlePagerFromCurrentOffset]);
 
-  const onPagerTouchStart = useCallback((event) => {
+  const onPagerTouchStart = useCallback(() => {
     clearPagerTimers();
     setDragOverlayMode(false);
     const width = measurePagerWidth();
     const current = visualTabRef.current;
     const currentLeft = current * width;
     setTrackOffset(currentLeft);
-    const touch = event.touches?.[0];
-    pagerDragIntentRef.current = {
-      x: touch?.clientX ?? 0,
-      y: touch?.clientY ?? 0,
-      dx: 0,
-      startLeft: currentLeft,
-      target: event.target,
-      mode: null,
-    };
   }, [clearPagerTimers, measurePagerWidth, setDragOverlayMode, setTrackOffset]);
-
-  const onPagerTouchMove = useCallback((event) => {
-    const st = pagerDragIntentRef.current;
-    const touch = event.touches?.[0];
-    if (!touch) return;
-    const dx = touch.clientX - st.x;
-    const dy = touch.clientY - st.y;
-    const ax = Math.abs(dx);
-    const ay = Math.abs(dy);
-
-    if (st.mode == null) {
-      if (ax > ay * PAGER_DRAG_AXIS_RATIO && ax > PAGER_DRAG_INTENT_PX) {
-        const direction = dx < 0 ? 1 : -1;
-        const innerCanMove = innerCanMoveForSwipe(st.target, direction);
-        const shouldHandle = !shouldSkipPagerSwipe(st.target) && shouldOuterPagerHandleSwipe({
-          direction,
-          currentTab: visualTabRef.current,
-          tabCount,
-          innerCanMove,
-        });
-        st.mode = shouldHandle ? "pager" : "pass";
-        if (shouldHandle) {
-          pagerTouchActiveRef.current = true;
-          if (hasDragPreview) setDragOverlayMode(true);
-        } else {
-          return;
-        }
-      } else if (ay > 6 || ax > 6) {
-        st.mode = "scroll";
-        return;
-      } else {
-        return;
-      }
-    }
-
-    if (st.mode !== "pager") return;
-    st.dx = dx;
-    const track = trackRef.current;
-    const nativeLeft = track?.scrollLeft ?? trackOffsetRef.current;
-    trackOffsetRef.current = nativeLeft;
-  }, [hasDragPreview, setDragOverlayMode, tabCount]);
 
   useEffect(() => () => {
     clearPagerTimers();
@@ -368,21 +292,26 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const track = trackRef.current;
     if (!track) return undefined;
     const onTrackScroll = () => {
-      trackOffsetRef.current = track.scrollLeft;
+      const left = track.scrollLeft;
+      trackOffsetRef.current = left;
+      const width = pagerWidthRef.current || measurePagerWidth();
+      const currentLeft = visualTabRef.current * width;
+      if (Math.abs(left - currentLeft) > 2) {
+        pagerTouchActiveRef.current = true;
+        if (hasDragPreview) setDragOverlayMode(true);
+      }
     };
     track.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
-    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: true });
     track.addEventListener("touchend", onPagerTouchEnd, { capture: true, passive: true });
     track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true, passive: true });
     track.addEventListener("scroll", onTrackScroll, { passive: true });
     return () => {
       track.removeEventListener("touchstart", onPagerTouchStart, true);
-      track.removeEventListener("touchmove", onPagerTouchMove, true);
       track.removeEventListener("touchend", onPagerTouchEnd, true);
       track.removeEventListener("touchcancel", onPagerTouchEnd, true);
       track.removeEventListener("scroll", onTrackScroll);
     };
-  }, [onPagerTouchEnd, onPagerTouchMove, onPagerTouchStart]);
+  }, [hasDragPreview, measurePagerWidth, onPagerTouchEnd, onPagerTouchStart, setDragOverlayMode]);
 
   useEffect(() => {
     const onResize = () => alignTrackToTab(visualTabRef.current);

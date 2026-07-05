@@ -354,14 +354,49 @@ summary::-webkit-details-marker { display: none; }
   position: relative;
 }
 
-.ultreia-pager-preview-content {
-  display: none;
-  position: sticky;
+.ultreia-pager-drag-stage {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  background: var(--bg);
+  contain: strict;
+  backface-visibility: hidden;
+}
+
+.ultreia-pager-drag-strip {
+  position: relative;
+  height: 100%;
+  transition: none;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translate3d(0, 0, 0);
+}
+
+.ultreia-pager-drag-pane {
+  position: absolute;
   top: 0;
+  bottom: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  padding: 14px 14px 0;
+  padding-top: max(env(safe-area-inset-top), 14px);
+  padding-bottom: calc(76px + env(safe-area-inset-bottom));
+  contain: strict;
+  backface-visibility: hidden;
+}
+
+.ultreia-pager-preview-content {
+  display: block;
+  position: relative;
   z-index: 4;
   height: 100%;
   min-height: 100%;
-  margin-bottom: -100%;
   overflow: hidden;
   pointer-events: none;
   contain: layout paint style;
@@ -522,11 +557,12 @@ summary::-webkit-details-marker { display: none; }
   backface-visibility: hidden;
 }
 
-.ultreia-mobile-shell[data-pager-previewing="true"] .ultreia-pager-preview-content {
-  display: block;
+.ultreia-mobile-shell[data-pager-previewing="true"] .ultreia-pager-drag-stage {
+  visibility: visible;
+  opacity: 1;
 }
 
-.ultreia-mobile-shell[data-pager-previewing="true"] .ultreia-pager-full-content {
+.ultreia-mobile-shell[data-pager-previewing="true"] .ultreia-pager-track {
   visibility: hidden;
   pointer-events: none;
 }

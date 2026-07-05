@@ -376,6 +376,24 @@ summary::-webkit-details-marker { display: none; }
   -webkit-backdrop-filter: none !important;
 }
 
+body:has(.ultreia-mobile-shell[data-pager-touching="true"])::before,
+body:has(.ultreia-mobile-shell[data-pager-touching="true"])::after {
+  opacity: 0 !important;
+  animation: none !important;
+  filter: none !important;
+  mix-blend-mode: normal !important;
+}
+
+.ultreia-mobile-shell[data-pager-touching="true"] .ultreia-ambient-layer {
+  opacity: 0 !important;
+}
+
+.ultreia-mobile-shell[data-pager-touching="true"] .ultreia-mobile-bottom-nav,
+.ultreia-mobile-shell[data-pager-touching="true"] .ultreia-mobile-tab-icon {
+  box-shadow: none !important;
+  transition: none !important;
+}
+
 .ultreia-no-motion-surface button {
   transition: none !important;
 }

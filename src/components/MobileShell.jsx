@@ -489,7 +489,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       </main>
 
       {/* Bottom tab bar */}
-      <nav style={{
+      <nav className="ultreia-mobile-bottom-nav" style={{
         position: "fixed",
         left: 0,
         right: 0,
@@ -537,7 +537,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 minWidth: 0,
               }}
             >
-              <span style={{
+              <span className="ultreia-mobile-tab-icon" style={{
                 position: "relative",
                 display: "inline-flex",
                 alignItems: "center",

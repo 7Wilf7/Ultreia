@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
+  resolveMobilePagerTouchStart,
   shouldOuterPagerHandleSwipe,
   shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
@@ -51,5 +52,41 @@ describe("MobileShell pager render window", () => {
       tabCount: 5,
       innerCanMove: false,
     })).toBe(false);
+  });
+
+  it("starts a new drag from the settle target when the previous settle is interrupted", () => {
+    expect(resolveMobilePagerTouchStart({
+      visualTab: 2,
+      trackLeft: 568,
+      width: 400,
+      tabCount: 5,
+      settleTarget: 2,
+    })).toEqual({
+      current: 2,
+      startLeft: 568,
+    });
+
+    expect(resolveMobilePagerTouchStart({
+      visualTab: 2,
+      trackLeft: 1048,
+      width: 400,
+      tabCount: 5,
+      settleTarget: 2,
+    })).toEqual({
+      current: 2,
+      startLeft: 1048,
+    });
+  });
+
+  it("uses the aligned visual tab when no settle animation is active", () => {
+    expect(resolveMobilePagerTouchStart({
+      visualTab: 3,
+      trackLeft: 1048,
+      width: 400,
+      tabCount: 5,
+    })).toEqual({
+      current: 3,
+      startLeft: 1200,
+    });
   });
 });

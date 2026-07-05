@@ -37,3 +37,20 @@ export function shouldOuterPagerHandleSwipe({ direction, currentTab, tabCount, i
   if (direction < 0) return currentTab > 0;
   return false;
 }
+
+export function resolveMobilePagerTouchStart({
+  visualTab,
+  trackLeft = 0,
+  width = 1,
+  tabCount,
+  settleTarget = null,
+}) {
+  const safeWidth = Math.max(1, width || 1);
+  const isSettling = Number.isFinite(settleTarget);
+  const current = clampTab(isSettling ? settleTarget : visualTab, tabCount);
+
+  return {
+    current,
+    startLeft: isSettling ? trackLeft : current * safeWidth,
+  };
+}

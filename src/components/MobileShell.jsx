@@ -7,6 +7,7 @@ import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
   mergeTabWindows,
+  resolveMobilePagerTouchStart,
   shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
 
@@ -118,6 +119,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerSettleTimerRef = useRef(null);
   const pagerSettleFrameRef = useRef(0);
+  const pagerSettleTargetRef = useRef(null);
   const pagerDragFrameRef = useRef(0);
   const pagerTouchActiveRef = useRef(false);
   const pagerTouchingRef = useRef(false);
@@ -229,6 +231,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(pagerSettleFrameRef.current);
       pagerSettleFrameRef.current = 0;
     }
+    pagerSettleTargetRef.current = null;
     if (pagerDragFrameRef.current) {
       cancelAnimationFrame(pagerDragFrameRef.current);
       pagerDragFrameRef.current = 0;
@@ -279,6 +282,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(pagerSettleFrameRef.current);
       pagerSettleFrameRef.current = 0;
     }
+    pagerSettleTargetRef.current = null;
     const width = measurePagerWidth();
     const left = trackOffsetRef.current;
     const clamped = clampTabIndex(Math.round(left / Math.max(1, width)), tabCount);
@@ -306,6 +310,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const from = trackOffsetRef.current;
     const to = clamped * width;
     const distance = to - from;
+    const current = visualTabRef.current;
+    pagerSettleTargetRef.current = clamped;
+    if (clamped !== current) {
+      flushSync(() => commitVisualTab(clamped, {
+        renderedWindow: getMobilePagerJumpWindow(current, clamped, tabCount),
+      }));
+    }
     if (Math.abs(distance) < 1) {
       setTrackOffset(to);
       completePagerFromOffset();
@@ -327,7 +338,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       completePagerFromOffset();
     };
     pagerSettleFrameRef.current = requestAnimationFrame(step);
-  }, [completePagerFromOffset, measurePagerWidth, setTrackOffset, tabCount]);
+  }, [commitVisualTab, completePagerFromOffset, measurePagerWidth, setTrackOffset, tabCount]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -350,10 +361,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (!track) return undefined;
 
     const beginPagerTouch = (point = null, target = null, timeStamp = 0) => {
+      const wasSettling = Boolean(pagerSettleFrameRef.current || pagerSettleTimerRef.current);
+      const settlingLeft = trackOffsetRef.current;
+      const settleTarget = wasSettling ? (pagerSettleTargetRef.current ?? visualTabRef.current) : null;
       clearPagerTimers();
       const width = measurePagerWidth();
-      const current = visualTabRef.current;
-      const startLeft = current * width;
+      const { current, startLeft } = resolveMobilePagerTouchStart({
+        visualTab: visualTabRef.current,
+        trackLeft: settlingLeft,
+        width,
+        tabCount,
+        settleTarget,
+      });
       setTrackOffset(startLeft);
       pagerGestureRef.current = {
         touching: true,
@@ -443,7 +462,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             return;
           }
           const direction = dx < 0 ? 1 : -1;
-          const current = visualTabRef.current;
+          const current = gesture.current ?? visualTabRef.current;
           const canOuterMove = (direction > 0 && current < tabCount - 1) || (direction < 0 && current > 0);
           gesture.mode = canOuterMove ? "outer" : "blocked";
           if (canOuterMove) beginOuterDrag(gesture);

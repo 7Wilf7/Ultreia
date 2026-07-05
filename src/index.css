@@ -365,14 +365,15 @@ summary::-webkit-details-marker { display: none; }
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  visibility: hidden;
+  visibility: visible;
   background: var(--bg);
   contain: layout paint style;
+  transform: translateZ(0);
+  will-change: opacity;
 }
 
 .ultreia-pager-preview-overlay[data-active="true"] {
   opacity: 1;
-  visibility: visible;
 }
 
 .ultreia-pager-preview-stage {
@@ -382,6 +383,7 @@ summary::-webkit-details-marker { display: none; }
   backface-visibility: hidden;
   will-change: transform;
   transform: translate3d(0, 0, 0);
+  contain: layout paint style;
 }
 
 .ultreia-pager-preview-pane {

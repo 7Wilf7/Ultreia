@@ -18,7 +18,7 @@ import {
  * Each tab is its OWN vertical scroll container. The real heavy panes stay
  * parked while the finger is down; the half-screen swipe preview is a separate
  * lightweight layer that moves with translate3d and never asks React to render
- * during touchmove.
+ * while the pointer is moving.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
  * shows a small spinner badge.
@@ -28,9 +28,9 @@ const PAGER_DRAG_START_PX = 8;
 const PAGER_DRAG_AXIS_RATIO = 1.08;
 const PAGER_RELEASE_DISTANCE_RATIO = 0.22;
 const PAGER_RELEASE_VELOCITY = 0.34;
-const PAGER_SETTLE_MIN_MS = 460;
-const PAGER_SETTLE_MAX_MS = 760;
-const PAGER_SETTLE_EASING = "cubic-bezier(0.16, 1, 0.3, 1)";
+const PAGER_SETTLE_MIN_MS = 520;
+const PAGER_SETTLE_MAX_MS = 880;
+const PAGER_SETTLE_EASING = "cubic-bezier(0.22, 0.61, 0.36, 1)";
 const PREVIEW_CENTER_SLOT = 1;
 const PREVIEW_ROWS = [0, 1, 2, 3, 4, 5];
 
@@ -144,6 +144,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pagerDragActiveNotifiedRef = useRef(false);
   const trackOffsetRef = useRef(0);
   const pagerWidthRef = useRef(1);
+  const dragPreviewBaseOffsetRef = useRef(-PREVIEW_CENTER_SLOT);
   const renderTrimTimerRef = useRef(null);
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
@@ -154,6 +155,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const measurePagerWidth = useCallback(() => {
     const width = trackRef.current?.clientWidth || mainRef.current?.clientWidth || window.innerWidth || 1;
     pagerWidthRef.current = width;
+    dragPreviewBaseOffsetRef.current = -PREVIEW_CENTER_SLOT * width;
     return width;
   }, []);
 
@@ -188,8 +190,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const setPreviewStageOffset = useCallback((delta = 0, transition = "none") => {
     const stage = previewStageRef.current;
     if (!stage) return;
-    const width = pagerWidthRef.current || 1;
-    const left = -PREVIEW_CENTER_SLOT * width + delta;
+    const left = dragPreviewBaseOffsetRef.current + delta;
     stage.style.transition = transition;
     stage.style.transform = `translate3d(${left}px, 0, 0)`;
   }, []);
@@ -278,8 +279,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const main = mainRef.current;
     if (!main) return undefined;
 
-    const onPagerTouchStart = (e) => {
-      if (e.touches.length !== 1 || shouldSkipPagerSwipe(e.target)) {
+    const releasePointerCapture = (pointerId) => {
+      try {
+        if (main.hasPointerCapture?.(pointerId)) main.releasePointerCapture(pointerId);
+      } catch { /* pointer capture is best-effort */ }
+    };
+
+    const onPagerPointerDown = (e) => {
+      if ((e.pointerType && e.pointerType !== "touch" && e.pointerType !== "pen") || shouldSkipPagerSwipe(e.target)) {
         pagerDragRef.current = null;
         return;
       }
@@ -288,23 +295,27 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const current = visualTabRef.current;
       alignTrackToTab(current);
       pagerDragRef.current = {
+        pointerId: e.pointerId,
         mode: null,
-        startX: e.touches[0].clientX,
-        startY: e.touches[0].clientY,
-        lastX: e.touches[0].clientX,
+        target: e.target,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: e.clientX,
         lastAt: e.timeStamp || performance.now(),
         startAt: e.timeStamp || performance.now(),
         width,
         current,
         delta: 0,
+        velocity: 0,
       };
       setPreviewStageOffset(0, "none");
     };
 
-    const onPagerTouchMove = (e) => {
+    const onPagerPointerMove = (e) => {
       const drag = pagerDragRef.current;
-      if (!drag || e.touches.length !== 1) return;
-      const point = e.touches[0];
+      if (!drag || e.pointerId !== drag.pointerId) return;
+      const samples = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : null;
+      const point = samples?.length ? samples[samples.length - 1] : e;
       const dx = point.clientX - drag.startX;
       const dy = point.clientY - drag.startY;
 
@@ -322,6 +333,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             return;
           }
           drag.mode = "drag";
+          try { main.setPointerCapture?.(drag.pointerId); } catch { /* pointer capture is best-effort */ }
           notifyPagerDragActive(true);
           setPreviewLayerActive(true);
         } else if (Math.abs(dy) > PAGER_DRAG_START_PX || Math.abs(dx) > PAGER_DRAG_START_PX) {
@@ -337,15 +349,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
       const minDelta = drag.current < tabCount - 1 ? -drag.width : 0;
       const maxDelta = drag.current > 0 ? drag.width : 0;
+      const now = e.timeStamp || performance.now();
       drag.delta = clamp(dx, minDelta, maxDelta);
+      drag.velocity = (point.clientX - drag.lastX) / Math.max(1, now - drag.lastAt);
       drag.lastX = point.clientX;
-      drag.lastAt = e.timeStamp || performance.now();
+      drag.lastAt = now;
       setPreviewStageOffset(drag.delta, "none");
     };
 
     const settlePagerDrag = (e) => {
       const drag = pagerDragRef.current;
-      if (!drag) return;
+      if (!drag || e.pointerId !== drag.pointerId) return;
+      releasePointerCapture(drag.pointerId);
       if (drag.mode !== "drag") {
         pagerDragRef.current = null;
         notifyPagerDragActive(false);
@@ -354,14 +369,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         return;
       }
 
-      e?.preventDefault?.();
       e?.stopPropagation?.();
-      const dt = Math.max(1, (e?.timeStamp || performance.now()) - drag.startAt);
-      const velocity = drag.delta / dt;
       const distanceThreshold = drag.width * PAGER_RELEASE_DISTANCE_RATIO;
-      const direction = drag.delta < 0 ? 1 : drag.delta > 0 ? -1 : 0;
+      const velocityDirection = Math.abs(drag.velocity) >= PAGER_RELEASE_VELOCITY
+        ? (drag.velocity < 0 ? 1 : -1)
+        : 0;
+      const distanceDirection = drag.delta < 0 ? 1 : drag.delta > 0 ? -1 : 0;
+      const direction = velocityDirection || distanceDirection;
       const shouldCommit = direction !== 0
-        && (Math.abs(drag.delta) >= distanceThreshold || Math.abs(velocity) >= PAGER_RELEASE_VELOCITY);
+        && (Math.abs(drag.delta) >= distanceThreshold || Math.abs(drag.velocity) >= PAGER_RELEASE_VELOCITY);
       const next = shouldCommit ? clampTabIndex(drag.current + direction, tabCount) : drag.current;
       const finalDelta = next === drag.current ? 0 : next > drag.current ? -drag.width : drag.width;
       const duration = settleDurationForDistance(finalDelta - drag.delta, drag.width);
@@ -376,15 +392,23 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }, duration + 40);
     };
 
-    main.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
-    main.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: true });
-    main.addEventListener("touchend", settlePagerDrag, { capture: true, passive: false });
-    main.addEventListener("touchcancel", cancelPagerGesture, { capture: true, passive: true });
+    const cancelPointerGesture = (e) => {
+      const drag = pagerDragRef.current;
+      if (drag) releasePointerCapture(drag.pointerId);
+      cancelPagerGesture(e);
+    };
+
+    main.addEventListener("pointerdown", onPagerPointerDown, { capture: true, passive: true });
+    main.addEventListener("pointermove", onPagerPointerMove, { capture: true, passive: true });
+    main.addEventListener("pointerrawupdate", onPagerPointerMove, { capture: true, passive: true });
+    main.addEventListener("pointerup", settlePagerDrag, { capture: true, passive: true });
+    main.addEventListener("pointercancel", cancelPointerGesture, { capture: true, passive: true });
     return () => {
-      main.removeEventListener("touchstart", onPagerTouchStart, true);
-      main.removeEventListener("touchmove", onPagerTouchMove, true);
-      main.removeEventListener("touchend", settlePagerDrag, true);
-      main.removeEventListener("touchcancel", cancelPagerGesture, true);
+      main.removeEventListener("pointerdown", onPagerPointerDown, true);
+      main.removeEventListener("pointermove", onPagerPointerMove, true);
+      main.removeEventListener("pointerrawupdate", onPagerPointerMove, true);
+      main.removeEventListener("pointerup", settlePagerDrag, true);
+      main.removeEventListener("pointercancel", cancelPointerGesture, true);
     };
   }, [
     alignTrackToTab,

@@ -31,10 +31,6 @@ export function shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, propTa
   return renderedTabs.includes(idx) || idx === visualTab || idx === propTab;
 }
 
-export function shouldShowMobilePagerPane(idx, renderedTabs, visualTab, propTab, hasPreview = false) {
-  return hasPreview || shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, propTab);
-}
-
 export function shouldOuterPagerHandleSwipe({ direction, currentTab, tabCount, innerCanMove = false }) {
   if (innerCanMove) return false;
   if (direction > 0) return currentTab < tabCount - 1;

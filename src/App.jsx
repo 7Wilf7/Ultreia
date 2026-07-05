@@ -61,7 +61,6 @@ import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
 import { MobileShell } from "./components/MobileShell";
-import { MobileTabPreview } from "./components/MobileTabPreview";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
 import {
   BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, SettingsIcon, TrophyIcon, WalletIcon,
@@ -4203,20 +4202,6 @@ Rules:
     );
     return null;
   };
-  const renderTabPreview = (which) => (
-    <MobileTabPreview
-      tabIndex={which}
-      t={t}
-      lang={lang}
-      logs={logs}
-      races={races}
-      dailyNotes={dailyNotes}
-      chatMessages={chatMessages}
-      chatLoading={chatLoading}
-      codexRunnerStatus={codexRunnerStatus}
-      now={now}
-    />
-  );
   const modals = (
     <>
       {contextCompressing && (
@@ -4610,13 +4595,12 @@ Rules:
   );
 
   if (isMobile) {
-    // MobileShell owns the mobile pager; renderTab(idx) paints the real tab,
-    // while renderTabPreview(idx) feeds the lightweight drag layer. Index 4 is
-    // the mobile Settings page (handled inside renderTab).
+    // MobileShell owns the mobile pager; renderTab(idx) paints the real tab.
+    // Index 4 is the mobile Settings page (handled inside renderTab).
     return (
       <>
         <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}
-          renderTab={renderTab} renderTabPreview={renderTabPreview} tabCount={5}
+          renderTab={renderTab} tabCount={5}
           onRefresh={refresh} refreshing={refreshing}
           onPagerDragActiveChange={handleMobilePagerDragActiveChange} />
         {modals}

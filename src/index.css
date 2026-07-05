@@ -358,12 +358,6 @@ summary::-webkit-details-marker { display: none; }
   background: var(--bg);
 }
 
-.ultreia-pager-preview-content {
-  min-height: 100%;
-  pointer-events: none;
-  contain: layout paint style;
-}
-
 .ultreia-pager-preview-overlay {
   position: absolute;
   inset: 0;
@@ -401,6 +395,82 @@ summary::-webkit-details-marker { display: none; }
   padding: 14px 14px 0;
   padding-top: max(env(safe-area-inset-top), 14px);
   padding-bottom: calc(76px + env(safe-area-inset-bottom));
+}
+
+.ultreia-pager-static-preview {
+  min-height: 100%;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  color: var(--ink-1);
+  pointer-events: none;
+  user-select: none;
+  contain: layout paint style;
+}
+
+.ultreia-pager-static-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.ultreia-pager-static-preview-icon {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+  background: var(--panel);
+}
+
+.ultreia-pager-static-preview-title {
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.ultreia-pager-static-preview-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ultreia-pager-static-preview-metrics span,
+.ultreia-pager-static-preview-bars span {
+  display: block;
+  border: 1px solid var(--rule-soft);
+  border-radius: 8px;
+  background: oklch(0.15 0.012 145 / 0.72);
+}
+
+.ultreia-pager-static-preview-metrics span {
+  height: 72px;
+}
+
+.ultreia-pager-static-preview-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.ultreia-pager-static-preview-bars span {
+  height: 54px;
+}
+
+.ultreia-pager-static-preview-bars span[data-row="1"],
+.ultreia-pager-static-preview-bars span[data-row="4"] {
+  width: 86%;
+}
+
+.ultreia-pager-static-preview-bars span[data-row="2"] {
+  width: 72%;
+}
+
+.ultreia-pager-static-preview-bars span[data-row="5"] {
+  width: 64%;
 }
 
 .ultreia-no-motion-surface button {

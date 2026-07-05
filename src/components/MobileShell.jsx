@@ -27,6 +27,7 @@ const PAGER_RELEASE_VELOCITY = 0.30;
 const PAGER_SETTLE_MIN_MS = 680;
 const PAGER_SETTLE_MAX_MS = 1080;
 const PAGER_SETTLE_EASING = "cubic-bezier(0.18, 0.78, 0.16, 1)";
+const FROZEN_PREWARM_OPACITY = "0.001";
 
 function triggerTabHaptic() {
   try {
@@ -184,6 +185,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     pagerFreezeRef.current = null;
     const layer = freezeLayerRef.current;
     if (layer) {
+      layer.dataset.state = "empty";
       layer.style.visibility = "hidden";
       layer.style.opacity = "0";
       layer.replaceChildren();
@@ -260,8 +262,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     });
 
     layer.replaceChildren(frozenTrack);
-    layer.style.visibility = visible ? "visible" : "hidden";
-    layer.style.opacity = visible ? "1" : "0";
+    layer.dataset.state = visible ? "active" : "prewarm";
+    layer.style.visibility = "visible";
+    layer.style.opacity = visible ? "1" : FROZEN_PREWARM_OPACITY;
     realTrack.style.visibility = visible ? "hidden" : "visible";
     const frozen = {
       current,
@@ -303,6 +306,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     pagerFreezeRef.current = activeFrozen;
     activeFrozen.track.style.transition = "none";
     activeFrozen.track.style.transform = transformForOffset(activeFrozen.offset);
+    layer.dataset.state = "active";
     layer.style.visibility = "visible";
     layer.style.opacity = "1";
     realTrack.style.visibility = "hidden";

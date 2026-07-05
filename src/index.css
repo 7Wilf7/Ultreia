@@ -370,12 +370,24 @@ summary::-webkit-details-marker { display: none; }
   contain: strict;
   backface-visibility: hidden;
   transform: translateZ(0);
+  will-change: opacity, transform;
+}
+
+.ultreia-pager-freeze-layer[data-state="prewarm"] {
+  visibility: visible;
+  opacity: 0.001;
+}
+
+.ultreia-pager-freeze-layer[data-state="active"] {
+  visibility: visible;
+  opacity: 1;
 }
 
 .ultreia-pager-freeze-track {
   pointer-events: none;
   user-select: none;
   transform: translateZ(0);
+  will-change: transform;
 }
 
 .ultreia-pager-freeze-pane,

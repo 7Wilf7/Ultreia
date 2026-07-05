@@ -21,9 +21,12 @@ import {
 const TAB_HAPTIC_MS = 8;
 const PAGER_SETTLE_MIN_MS = 320;
 const PAGER_SETTLE_MAX_MS = 760;
+const PAGER_DRAG_AXIS_LOCK_PX = 8;
+const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
 const PAGER_DRAG_MAX_DISTANCE_PX = 86;
 const PAGER_SCROLL_SETTLE_MS = 120;
+const PAGER_EDGE_RESISTANCE = 0.32;
 
 function triggerTabHaptic() {
   try {
@@ -50,6 +53,24 @@ function easeOutCubic(t) {
 function settleDurationForDistance(distance, width) {
   const fraction = Math.min(1, Math.abs(distance) / Math.max(1, width));
   return Math.round(PAGER_SETTLE_MIN_MS + (PAGER_SETTLE_MAX_MS - PAGER_SETTLE_MIN_MS) * fraction);
+}
+
+function resistedPagerLeft(left, min, max) {
+  if (left < min) return min + (left - min) * PAGER_EDGE_RESISTANCE;
+  if (left > max) return max + (left - max) * PAGER_EDGE_RESISTANCE;
+  return left;
+}
+
+function shouldSkipPagerDrag(target) {
+  return !!target?.closest?.("input,textarea,select,[contenteditable='true'],[data-dropdown-menu]");
+}
+
+function innerSwipeOwnsGesture(target, dx) {
+  const inner = target?.closest?.("[data-mobile-inner-swipe='true']");
+  if (!inner) return false;
+  if (dx < 0) return inner.dataset.swipeNext === "true";
+  if (dx > 0) return inner.dataset.swipePrev === "true";
+  return false;
 }
 
 const PagerPaneContent = memo(function PagerPaneContent({
@@ -321,18 +342,25 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track) return undefined;
 
-    const beginNativeTouch = () => {
+    const beginNativeTouch = (point = null, target = null) => {
       clearPagerTimers();
-      primePagerDragRendering();
       pagerGestureRef.current = {
         touching: true,
         current: visualTabRef.current,
         startLeft: track.scrollLeft,
+        x: point?.clientX ?? 0,
+        y: point?.clientY ?? 0,
+        target,
+        mode: null,
       };
     };
 
     const endNativeTouch = (event) => {
       if (event?.pointerType === "touch") return;
+      const mode = pagerGestureRef.current?.mode;
+      if (mode === "outer") {
+        event?.stopPropagation?.();
+      }
       pagerGestureRef.current = {
         ...pagerGestureRef.current,
         touching: false,
@@ -341,12 +369,52 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     };
 
     const onPagerTouchStart = (event) => {
-      if (event.touches.length === 1) beginNativeTouch();
+      if (event.touches.length === 1) beginNativeTouch(event.touches[0], event.target);
+    };
+
+    const onPagerTouchMove = (event) => {
+      const gesture = pagerGestureRef.current;
+      if (!gesture?.touching || event.touches.length !== 1 || shouldSkipPagerDrag(gesture.target)) return;
+      const point = event.touches[0];
+      const dx = point.clientX - gesture.x;
+      const dy = point.clientY - gesture.y;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      if (gesture.mode == null) {
+        if (absX > PAGER_DRAG_AXIS_LOCK_PX && absX > absY * PAGER_DRAG_AXIS_RATIO) {
+          if (innerSwipeOwnsGesture(gesture.target, dx)) {
+            gesture.mode = "inner";
+            return;
+          }
+          const direction = dx < 0 ? 1 : -1;
+          const current = visualTabRef.current;
+          const canOuterMove = (direction > 0 && current < tabCount - 1) || (direction < 0 && current > 0);
+          gesture.mode = canOuterMove ? "outer" : "blocked";
+          if (canOuterMove) {
+            const next = clampTabIndex(current + direction, tabCount);
+            setRenderedWindow(getMobilePagerJumpWindow(current, next, tabCount));
+            primePagerDragRendering();
+          }
+        } else if (absY > PAGER_DRAG_AXIS_LOCK_PX || absX > PAGER_DRAG_AXIS_LOCK_PX) {
+          gesture.mode = "vertical";
+        } else {
+          return;
+        }
+      }
+
+      if (gesture.mode !== "outer") return;
+      event.preventDefault();
+      event.stopPropagation();
+      const width = pagerWidthRef.current || measurePagerWidth();
+      const maxLeft = Math.max(0, (tabCount - 1) * width);
+      const nextLeft = resistedPagerLeft(gesture.startLeft - dx, 0, maxLeft);
+      applyTrackOffset(nextLeft);
     };
 
     const onPagerPointerDown = (event) => {
       if (event.pointerType === "mouse" && event.button !== 0) return;
-      if (event.pointerType !== "touch") beginNativeTouch();
+      if (event.pointerType !== "touch") beginNativeTouch(event, event.target);
     };
 
     const onPagerScroll = () => {
@@ -378,6 +446,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     track.addEventListener("scroll", onPagerScroll, { passive: true });
     track.addEventListener("scrollend", onPagerScrollEnd);
     track.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
+    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
     track.addEventListener("touchend", endNativeTouch, { capture: true, passive: true });
     track.addEventListener("touchcancel", endNativeTouch, { capture: true, passive: true });
     track.addEventListener("pointerdown", onPagerPointerDown, { capture: true });
@@ -388,6 +457,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       track.removeEventListener("scroll", onPagerScroll);
       track.removeEventListener("scrollend", onPagerScrollEnd);
       track.removeEventListener("touchstart", onPagerTouchStart, true);
+      track.removeEventListener("touchmove", onPagerTouchMove, true);
       track.removeEventListener("touchend", endNativeTouch, true);
       track.removeEventListener("touchcancel", endNativeTouch, true);
       track.removeEventListener("pointerdown", onPagerPointerDown, true);
@@ -399,10 +469,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPagerTimers,
     measurePagerWidth,
     notifyPagerDragActive,
+    applyTrackOffset,
     primePagerDragRendering,
     scheduleNativeScrollSettle,
     settleNativeScroll,
     setPagerTouchingAttribute,
+    setRenderedWindow,
+    tabCount,
   ]);
 
   useEffect(() => {

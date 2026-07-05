@@ -136,14 +136,25 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     return width;
   }, []);
 
+  const applyPaneTransform = useCallback((idx, transform) => {
+    const pane = paneRefs.current[idx];
+    if (pane) pane.style.transform = transform;
+  }, []);
+
   const applyTrackOffset = useCallback((left) => {
     trackOffsetRef.current = left;
     const transform = `translate3d(${-left}px, 0, 0)`;
-    Object.values(paneRefs.current).forEach((pane) => {
-      if (!pane) return;
-      pane.style.transform = transform;
-    });
-  }, []);
+    const rendered = renderedTabsRef.current;
+    for (let i = 0; i < rendered.length; i += 1) {
+      applyPaneTransform(rendered[i], transform);
+    }
+    if (!rendered.includes(visualTabRef.current)) {
+      applyPaneTransform(visualTabRef.current, transform);
+    }
+    if (tabPropRef.current !== visualTabRef.current && !rendered.includes(tabPropRef.current)) {
+      applyPaneTransform(tabPropRef.current, transform);
+    }
+  }, [applyPaneTransform]);
 
   const setTrackOffset = useCallback((left) => {
     pendingTrackOffsetRef.current = null;
@@ -334,8 +345,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track) return undefined;
 
-    const onPagerPointerDown = (event) => {
-      if (event.pointerType === "mouse" || event.isPrimary === false || shouldSkipPagerDrag(event.target)) {
+    const beginPagerGesture = ({ source, pointerId, clientX, clientY, timeStamp, target }) => {
+      if (shouldSkipPagerDrag(target)) {
         pagerGestureRef.current = null;
         return;
       }
@@ -347,26 +358,43 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       setTrackOffset(current * width);
       pagerGestureRef.current = {
         mode: null,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        startAt: event.timeStamp || performance.now(),
+        source,
+        pointerId,
+        startX: clientX,
+        startY: clientY,
+        startAt: timeStamp || performance.now(),
         startLeft: current * width,
-        lastX: event.clientX,
-        lastAt: event.timeStamp || performance.now(),
+        lastX: clientX,
+        lastAt: timeStamp || performance.now(),
         lastLeft: current * width,
         current,
         width,
-        target: event.target,
+        target,
       };
     };
 
-    const enterPagerDrag = (event) => {
+    const onPagerPointerDown = (event) => {
+      if (pagerGestureRef.current?.source === "touch") return;
+      if (event.pointerType === "mouse" || event.isPrimary === false) {
+        pagerGestureRef.current = null;
+        return;
+      }
+      beginPagerGesture({
+        source: "pointer",
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        timeStamp: event.timeStamp,
+        target: event.target,
+      });
+    };
+
+    const enterPagerDrag = (event, source = "pointer") => {
       const gesture = pagerGestureRef.current;
       if (!gesture || gesture.mode === "drag") return;
       gesture.mode = "drag";
       try {
-        if (event?.pointerId !== undefined && track.setPointerCapture) {
+        if (source === "pointer" && event?.pointerId !== undefined && track.setPointerCapture) {
           track.setPointerCapture(event.pointerId);
         }
       } catch { /* pointer capture is best-effort */ }
@@ -376,12 +404,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       notifyPagerDragActive(true);
     };
 
-    const onPagerPointerMove = (event) => {
+    const movePagerGesture = ({ event, pointerId, clientX, clientY, timeStamp, source }) => {
       const gesture = pagerGestureRef.current;
-      if (!gesture || gesture.pointerId !== event.pointerId) return;
-      const sample = latestPointerSample(event);
-      const dx = sample.clientX - gesture.startX;
-      const dy = sample.clientY - gesture.startY;
+      if (!gesture || gesture.source !== source || gesture.pointerId !== pointerId) return;
+      const dx = clientX - gesture.startX;
+      const dy = clientY - gesture.startY;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
 
@@ -396,7 +423,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             gesture.mode = "inner";
             return;
           }
-          enterPagerDrag(event);
+          enterPagerDrag(event, source);
         } else {
           gesture.mode = "scroll";
           return;
@@ -410,21 +437,33 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const maxLeft = (tabCount - 1) * gesture.width;
       const nextLeft = resistedPagerLeft(gesture.startLeft - dx, 0, maxLeft);
       scheduleTrackOffset(nextLeft);
-      gesture.lastX = sample.clientX;
-      gesture.lastAt = sample.timeStamp || event.timeStamp || performance.now();
+      gesture.lastX = clientX;
+      gesture.lastAt = timeStamp || event.timeStamp || performance.now();
       gesture.lastLeft = nextLeft;
     };
 
-    const onPagerPointerEnd = (event) => {
+    const onPagerPointerMove = (event) => {
+      const sample = latestPointerSample(event);
+      movePagerGesture({
+        event,
+        source: "pointer",
+        pointerId: event.pointerId,
+        clientX: sample.clientX,
+        clientY: sample.clientY,
+        timeStamp: sample.timeStamp || event.timeStamp,
+      });
+    };
+
+    const endPagerGesture = ({ event, source, pointerId, clientX, timeStamp }) => {
       const gesture = pagerGestureRef.current;
-      if (gesture?.pointerId !== undefined && event.pointerId !== gesture.pointerId) return;
+      if (!gesture || gesture.source !== source || gesture.pointerId !== pointerId) return;
       pagerTouchingRef.current = false;
       if (gesture?.mode === "drag") {
-        event.preventDefault();
+        if (event.cancelable) event.preventDefault();
         event.stopPropagation();
         flushTrackOffset();
-        const endedAt = event.timeStamp || performance.now();
-        const dx = Number.isFinite(event.clientX) ? event.clientX - gesture.startX : gesture.startLeft - trackOffsetRef.current;
+        const endedAt = timeStamp || event.timeStamp || performance.now();
+        const dx = Number.isFinite(clientX) ? clientX - gesture.startX : gesture.startLeft - trackOffsetRef.current;
         const dt = Math.max(1, endedAt - gesture.startAt);
         const velocity = dx / dt;
         const width = gesture.width || pagerWidthRef.current || measurePagerWidth();
@@ -436,7 +475,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         }
         pagerGestureRef.current = null;
         try {
-          if (event.pointerId !== undefined && track.releasePointerCapture) {
+          if (source === "pointer" && event.pointerId !== undefined && track.releasePointerCapture) {
             track.releasePointerCapture(event.pointerId);
           }
         } catch { /* already released */ }
@@ -446,6 +485,61 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
       pagerGestureRef.current = null;
       finishPagerGesture();
+    };
+
+    const onPagerPointerEnd = (event) => {
+      endPagerGesture({
+        event,
+        source: "pointer",
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        timeStamp: event.timeStamp,
+      });
+    };
+
+    const onPagerTouchStart = (event) => {
+      if (pagerGestureRef.current?.source === "pointer") return;
+      if (event.touches.length !== 1) {
+        pagerGestureRef.current = null;
+        return;
+      }
+      const touch = event.touches[0];
+      beginPagerGesture({
+        source: "touch",
+        pointerId: touch.identifier,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        timeStamp: event.timeStamp,
+        target: event.target,
+      });
+    };
+
+    const onPagerTouchMove = (event) => {
+      const gesture = pagerGestureRef.current;
+      if (!gesture || gesture.source !== "touch" || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      movePagerGesture({
+        event,
+        source: "touch",
+        pointerId: gesture.pointerId,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        timeStamp: event.timeStamp,
+      });
+    };
+
+    const onPagerTouchEnd = (event) => {
+      const gesture = pagerGestureRef.current;
+      if (!gesture || gesture.source !== "touch") return;
+      const changed = Array.from(event.changedTouches || []);
+      const touch = changed.find(item => item.identifier === gesture.pointerId) || changed[0];
+      endPagerGesture({
+        event,
+        source: "touch",
+        pointerId: gesture.pointerId,
+        clientX: touch?.clientX,
+        timeStamp: event.timeStamp,
+      });
     };
 
     const suppressClickAfterDrag = (e) => {
@@ -460,6 +554,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     track.addEventListener("pointermove", onPagerPointerMove, { capture: true });
     track.addEventListener("pointerup", onPagerPointerEnd, { capture: true });
     track.addEventListener("pointercancel", onPagerPointerEnd, { capture: true });
+    track.addEventListener("touchstart", onPagerTouchStart, { capture: true });
+    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
+    track.addEventListener("touchend", onPagerTouchEnd, { capture: true });
+    track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true });
     track.addEventListener("click", suppressClickAfterDrag, true);
     return () => {
       track.removeEventListener("pointerdown", onPagerPointerDown, true);
@@ -467,6 +565,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       track.removeEventListener("pointermove", onPagerPointerMove, true);
       track.removeEventListener("pointerup", onPagerPointerEnd, true);
       track.removeEventListener("pointercancel", onPagerPointerEnd, true);
+      track.removeEventListener("touchstart", onPagerTouchStart, true);
+      track.removeEventListener("touchmove", onPagerTouchMove, true);
+      track.removeEventListener("touchend", onPagerTouchEnd, true);
+      track.removeEventListener("touchcancel", onPagerTouchEnd, true);
       track.removeEventListener("click", suppressClickAfterDrag, true);
     };
   }, [
@@ -663,6 +765,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                       return;
                     }
                     paneRefs.current[idx] = el;
+                    el.style.transform = `translate3d(${-trackOffsetRef.current}px, 0, 0)`;
                   }}
                   className="ultreia-pager-pane"
                   data-rendered={shouldRender ? "true" : "false"}

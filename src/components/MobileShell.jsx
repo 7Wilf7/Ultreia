@@ -131,7 +131,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
-  const pointerDownRef = useRef({ idx: -1, at: 0, switched: false });
+  const recentPointerTabPressRef = useRef({});
   const pullY = refreshing ? 44 : 0;
 
   const measurePagerWidth = useCallback(() => {
@@ -529,17 +529,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     startTransition(() => setTab(next));
   }
 
-  function onTabTap(idx, e) {
-    const now = e?.timeStamp ?? 0;
+  function activateTab(idx, at) {
     const current = visualTabRef.current;
-    const pointerDown = pointerDownRef.current;
-    if (pointerDown.switched && pointerDown.idx === idx && idx === current && now - pointerDown.at < 500) {
-      pointerDownRef.current = { idx: -1, at: 0, switched: false };
-      return;
-    }
     const prev = lastTabTap.current;
-    lastTabTap.current = { idx, at: now };
-    if (idx === current && prev.idx === idx && now - prev.at < 320) {
+    lastTabTap.current = { idx, at };
+    if (idx === current && prev.idx === idx && at - prev.at < 320) {
       if (idx === 0 && onRefresh) {
         const pane = activePane();
         if ((pane?.scrollTop || 0) > 4) {
@@ -552,31 +546,28 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       scrollActiveToTop();
       return;
     }
-    go(idx, { haptic: true, hapticAt: now });
-  }
-
-  function commitTabPress(idx, e) {
-    const current = visualTabRef.current;
-    const switched = idx !== current;
-    const at = e.timeStamp || 0;
-    const previous = pointerDownRef.current;
-    if (!switched && previous.switched && previous.idx === idx && at - previous.at < 140) {
-      return;
-    }
-    pointerDownRef.current = { idx, at, switched };
-    if (switched) {
+    if (idx !== current) {
       lastTabTap.current = { idx: -1, at: 0 };
       go(idx, { haptic: true, hapticAt: at });
     }
   }
 
-  function onTabPointerDown(idx, e) {
-    if (e.pointerType === "mouse") return;
-    commitTabPress(idx, e);
+  function onTabTap(idx, e) {
+    const now = e?.timeStamp || 0;
+    const recentPointerAt = recentPointerTabPressRef.current[idx] || 0;
+    if (now - recentPointerAt < 750) {
+      e?.preventDefault?.();
+      return;
+    }
+    activateTab(idx, now);
   }
 
-  function onTabTouchStart(idx, e) {
-    commitTabPress(idx, e);
+  function onTabPointerDown(idx, e) {
+    if (e.pointerType === "mouse") return;
+    const at = e.timeStamp || 0;
+    recentPointerTabPressRef.current[idx] = at;
+    e.preventDefault?.();
+    activateTab(idx, at);
   }
 
   function renderPaneContent(idx, shouldRender) {
@@ -746,7 +737,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             <button
               key={key}
               onPointerDown={(e) => onTabPointerDown(idx, e)}
-              onTouchStart={(e) => onTabTouchStart(idx, e)}
               onClick={(e) => onTabTap(idx, e)}
               style={{
                 background: "transparent",
@@ -756,8 +746,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 minHeight: 64,
                 fontFamily: "var(--font-sans)",
                 fontSize: 12,
-                fontWeight: active ? 600 : 500,
-                color: active ? "var(--ink-1)" : "var(--ink-3)",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -785,7 +773,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 color: active ? "var(--accent-dark)" : "var(--ink-3)",
                 transform: active ? "translateY(-1px)" : "none",
                 boxShadow: active ? "0 0 0 1px oklch(0.54 0.055 138 / 0.13), 0 0 22px oklch(0.38 0.060 138 / 0.18)" : "none",
-                transition: "transform 90ms var(--ease-out), box-shadow 90ms var(--ease-out)",
+                transition: "none",
               }}>
                 <Icon size={20} />
                 {showSpinner && (
@@ -807,6 +795,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                 overflow: "hidden",
                 textOverflow: "ellipsis",
                 whiteSpace: "nowrap",
+                color: active ? "var(--ink-1)" : "var(--ink-3)",
+                fontWeight: active ? 600 : 500,
+                transition: "none",
               }}>{t(key)}</span>
             </button>
           );

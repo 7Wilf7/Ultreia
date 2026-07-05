@@ -13,12 +13,12 @@ import {
 } from "../utils/mobilePager";
 
 /**
- * Mobile chrome — no top header, a transform-driven tab pager, fixed bottom
- * 5-tab nav. Finger-follow stays on the compositor path; React only settles
- * the selected tab after release.
+ * Mobile chrome — no top header, a native-scroll tab pager, fixed bottom
+ * 5-tab nav. Finger-follow stays on the browser compositor path; React only
+ * settles the selected tab after release.
  *
  * Each tab is its OWN scroll container. Only the active pane renders heavy
- * content; inactive panes can show lightweight previews so the transform track
+ * content; inactive panes can show lightweight previews so the scroll track
  * never exposes a blank screen while we keep heavy DOM out of the drag path.
  *
  * `coachBusy` — when AI Coach has any in-flight request the AI Coach tab cell
@@ -57,10 +57,6 @@ function easeInOutSine(t) {
 
 function clampTabIndex(idx, count) {
   return Math.max(0, Math.min(count - 1, idx));
-}
-
-function clampPagerOffset(left, width, count) {
-  return Math.max(0, Math.min((count - 1) * width, left));
 }
 
 function shouldSkipPagerSwipe(target) {
@@ -137,11 +133,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerSettleFrameRef = useRef(0);
   const trackOffsetRef = useRef(0);
-  const trackOffsetYRef = useRef(0);
   const pagerWidthRef = useRef(1);
   const renderTrimTimerRef = useRef(null);
   const pagerTouchActiveRef = useRef(false);
-  const pagerDragIntentRef = useRef({ x: 0, y: 0, startLeft: 0, width: 1, target: null, mode: null });
+  const pagerDragIntentRef = useRef({ x: 0, y: 0, target: null, mode: null });
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
@@ -149,13 +144,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const pullY = refreshing ? 44 : 0;
 
   const measurePagerWidth = useCallback(() => {
-    const width = mainRef.current?.clientWidth
-      || ((trackRef.current?.clientWidth || 0) / Math.max(1, tabCount))
-      || window.innerWidth
-      || 1;
+    const width = trackRef.current?.clientWidth || mainRef.current?.clientWidth || window.innerWidth || 1;
     pagerWidthRef.current = width;
     return width;
-  }, [tabCount]);
+  }, []);
 
   function scrollActiveToTop() {
     activePane()?.scrollTo?.({ top: 0, behavior: "smooth" });
@@ -193,7 +185,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     trackOffsetRef.current = left;
     const track = trackRef.current;
     if (!track) return;
-    track.style.transform = `translate3d(${-left}px, ${trackOffsetYRef.current}px, 0)`;
+    track.scrollLeft = left;
   }, []);
 
   const setDragLiteMode = useCallback((active) => {
@@ -281,7 +273,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const settlePagerFromCurrentOffset = useCallback(() => {
     if (pagerSettleFrameRef.current) return true;
     const width = measurePagerWidth();
-    const left = trackOffsetRef.current;
+    const left = trackRef.current?.scrollLeft ?? trackOffsetRef.current;
     const currentLeft = visualTabRef.current * width;
     if (!pagerTouchActiveRef.current && Math.abs(left - currentLeft) < 1) return false;
     pagerTouchActiveRef.current = true;
@@ -300,15 +292,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   }, [tab, alignTrackToTab, commitVisualTab]);
 
   useLayoutEffect(() => {
-    trackOffsetYRef.current = pullY;
     alignTrackToTab(visualTabRef.current);
   }, [alignTrackToTab, pullY]);
 
-  const onPagerTouchEnd = useCallback((event) => {
+  const onPagerTouchEnd = useCallback(() => {
     const mode = pagerDragIntentRef.current.mode;
     if (mode === "pager") {
-      if (event?.cancelable) event.preventDefault();
-      event?.stopPropagation?.();
       const didSettle = settlePagerFromCurrentOffset();
       if (!didSettle) {
         pagerTouchActiveRef.current = false;
@@ -326,17 +315,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const onPagerTouchStart = useCallback((event) => {
     clearPagerTimers();
     setDragLiteMode(false);
-    const width = measurePagerWidth();
     const touch = event.touches?.[0];
     pagerDragIntentRef.current = {
       x: touch?.clientX ?? 0,
       y: touch?.clientY ?? 0,
-      startLeft: trackOffsetRef.current,
-      width,
       target: event.target,
       mode: null,
     };
-  }, [clearPagerTimers, measurePagerWidth, setDragLiteMode]);
+  }, [clearPagerTimers, setDragLiteMode]);
 
   const onPagerTouchMove = useCallback((event) => {
     const st = pagerDragIntentRef.current;
@@ -373,11 +359,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     }
 
     if (st.mode !== "pager") return;
-    if (event.cancelable) event.preventDefault();
-    event.stopPropagation();
-    const width = st.width || pagerWidthRef.current || measurePagerWidth();
-    setTrackOffset(clampPagerOffset(st.startLeft - dx, width, tabCount));
-  }, [measurePagerWidth, setDragLiteMode, setTrackOffset, tabCount]);
+  }, [setDragLiteMode, tabCount]);
 
   useEffect(() => () => {
     clearPagerTimers();
@@ -387,9 +369,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const track = trackRef.current;
     if (!track) return undefined;
     track.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
-    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
-    track.addEventListener("touchend", onPagerTouchEnd, { capture: true, passive: false });
-    track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true, passive: false });
+    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: true });
+    track.addEventListener("touchend", onPagerTouchEnd, { capture: true, passive: true });
+    track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true, passive: true });
     return () => {
       track.removeEventListener("touchstart", onPagerTouchStart, true);
       track.removeEventListener("touchmove", onPagerTouchMove, true);
@@ -413,7 +395,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   ];
 
   // Jump to `next` tab. Bottom-nav taps stay instant; finger drags stay on the
-  // compositor transform path above.
+  // browser's native horizontal scroll path above.
   function go(next, { haptic = false, hapticAt = 0 } = {}) {
     const current = visualTabRef.current;
     if (next === current || next < 0 || next >= tabCount) return;
@@ -536,32 +518,34 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
           </div>
         )}
 
-        {/* Horizontal paging moves the pane strip with transform so finger-follow
-            stays off React's render path; React only settles state after release. */}
+        {/* Horizontal paging uses native scrolling so finger-follow stays off
+            React's render path; React only settles state after release. */}
         <div
           ref={trackRef}
           className="ultreia-pager-track"
           style={{
             display: "flex",
             height: "100%",
-            width: `${tabCount * 100}%`,
-            overflow: "visible",
+            width: "100%",
+            overflowX: "auto",
+            overflowY: "hidden",
             overscrollBehaviorX: "contain",
             touchAction: "pan-x pan-y",
             scrollSnapType: "none",
             scrollBehavior: "auto",
+            WebkitOverflowScrolling: "touch",
             overflowAnchor: "none",
             scrollbarWidth: "none",
             msOverflowStyle: "none",
             backfaceVisibility: "hidden",
-            willChange: "transform",
+            willChange: refreshing ? "transform" : "auto",
+            transform: refreshing ? `translate3d(0, ${pullY}px, 0)` : "none",
             transition: "none",
           }}>
           {TABS.map(({ idx }) => {
             const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
             const shouldShow = shouldShowMobilePagerPane(idx, renderedTabs, visualTab, tab, !!renderTabPreview);
             const isInteractivePane = shouldRender && (idx === visualTab || idx === tab);
-            const paneWidth = `${100 / tabCount}%`;
             return (
               <div
                 key={idx}
@@ -578,9 +562,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
                 aria-hidden={!isInteractivePane}
                 style={{
                   position: "relative",
-                  flex: `0 0 ${paneWidth}`,
-                  minWidth: paneWidth,
-                  width: paneWidth,
+                  flex: "0 0 100%",
+                  minWidth: "100%",
+                  width: "100%",
                   height: "100%",
                   overflowY: "auto",
                   overflowX: "hidden",

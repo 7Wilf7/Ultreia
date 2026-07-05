@@ -365,7 +365,9 @@ summary::-webkit-details-marker { display: none; }
 }
 
 .ultreia-pager-track[data-drag-lite="true"] .ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-full-content {
-  display: none;
+  visibility: hidden;
+  pointer-events: none;
+  content-visibility: hidden;
 }
 
 .ultreia-pager-track[data-drag-lite="true"] .ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-live-preview {

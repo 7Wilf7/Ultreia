@@ -2517,7 +2517,7 @@ export function AICoachTab({
         maxHeight: isMobile ? undefined : 500,
         display: "flex", flexDirection: "column", minWidth: 0,
       }}>
-      <div ref={chatScrollRef} onScroll={onChatScroll} className="ultreia-scroll-stable" style={{
+      <div ref={chatScrollRef} onScroll={onChatScroll} className="ultreia-scroll-stable" data-mobile-vertical-scroll="true" style={{
         ...s.card,
         marginBottom: 0,
         flex: 1,

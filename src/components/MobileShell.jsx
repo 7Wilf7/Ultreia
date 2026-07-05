@@ -15,12 +15,11 @@ import {
  * pager for cross-tab swipes.
  *
  * Each tab is its OWN vertical scroll container. Horizontal finger-follow is
- * transform-only on a lightweight preview strip; the heavy real pages are
- * revealed again only after the finger settles on a tab.
+ * rAF-batched transform-only movement on the real adjacent pages.
  */
 const TAB_HAPTIC_MS = 8;
-const PAGER_SETTLE_MIN_MS = 420;
-const PAGER_SETTLE_MAX_MS = 920;
+const PAGER_SETTLE_MIN_MS = 520;
+const PAGER_SETTLE_MAX_MS = 1080;
 const PAGER_DRAG_AXIS_LOCK_PX = 8;
 const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
@@ -88,91 +87,6 @@ function horizontalScrollerOwnsGesture(target, dx, stopAt) {
   return false;
 }
 
-function PagerPanePreview({ idx, label }) {
-  const rows = idx === 1 ? 42 : idx === 2 ? 5 : idx === 3 ? 4 : idx === 4 ? 6 : 5;
-  const yearLabel = String(new Date().getFullYear());
-  return (
-    <div className="ultreia-pager-preview-content" aria-hidden="true">
-      <div className="ultreia-pager-preview-head">
-        <span className="ultreia-pager-preview-dot" />
-        <span>{label}</span>
-      </div>
-      {idx === 1 ? (
-        <>
-          <div className="ultreia-pager-preview-calendar-nav">
-            <span />
-            <strong>{yearLabel}</strong>
-            <span />
-          </div>
-          <div className="ultreia-pager-preview-calendar">
-            {Array.from({ length: rows }).map((_, i) => (
-              <span key={i} className={i % 7 === 5 || i % 7 === 6 ? "is-muted" : ""} />
-            ))}
-          </div>
-          <div className="ultreia-pager-preview-weather">
-            <span />
-            <span />
-            <span />
-          </div>
-        </>
-      ) : idx === 2 ? (
-        <>
-          <div className="ultreia-pager-preview-pills">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="ultreia-pager-preview-chat">
-            {Array.from({ length: rows }).map((_, i) => (
-              <span key={i} className={i % 2 ? "is-user" : ""} />
-            ))}
-          </div>
-          <div className="ultreia-pager-preview-composer" />
-        </>
-      ) : (
-        <>
-          <div className="ultreia-pager-preview-metrics">
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="ultreia-pager-preview-list">
-            {Array.from({ length: rows }).map((_, i) => (
-              <span key={i} />
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function PagerDragPreviewStage({ tabs, tabCount, setPreviewStripRef, t }) {
-  return (
-    <div className="ultreia-pager-drag-stage" aria-hidden="true">
-      <div
-        ref={setPreviewStripRef}
-        className="ultreia-pager-drag-strip"
-        style={{ width: `${tabCount * 100}%` }}
-      >
-        {tabs.map(({ key, idx }) => (
-          <div
-            key={idx}
-            className="ultreia-pager-drag-pane"
-            style={{
-              left: `${idx * (100 / tabCount)}%`,
-              width: `${100 / tabCount}%`,
-            }}
-          >
-            <PagerPanePreview idx={idx} label={t(key)} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const PagerPaneContent = memo(function PagerPaneContent({
   shouldRender,
   renderTab,
@@ -194,7 +108,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const mainRef = useRef(null);
   const trackRef = useRef(null);
   const stripRef = useRef(null);
-  const previewStripRef = useRef(null);
   const paneRefs = useRef({});
   const [visualTab, setVisualTab] = useState(tab);
   const visualTabRef = useRef(tab);
@@ -203,13 +116,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerSettleTimerRef = useRef(null);
   const pagerSettleFrameRef = useRef(0);
+  const pagerDragFrameRef = useRef(0);
   const pagerTouchActiveRef = useRef(false);
   const pagerTouchingRef = useRef(false);
-  const pagerPreviewingRef = useRef(false);
   const pagerDragActiveNotifiedRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const trackOffsetRef = useRef(0);
-  const previewOffsetRef = useRef(0);
+  const pendingTrackOffsetRef = useRef(null);
   const pagerWidthRef = useRef(1);
   const pagerGestureRef = useRef({ touching: false, current: tab, startLeft: tab });
   const renderTrimTimerRef = useRef(null);
@@ -242,38 +155,33 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     applyTrackOffset(left);
   }, [applyTrackOffset]);
 
-  const applyPreviewOffset = useCallback((left) => {
-    previewOffsetRef.current = left;
-    const strip = previewStripRef.current;
-    if (strip) {
-      strip.style.transform = `translate3d(${-left}px, 0, 0)`;
+  const flushQueuedTrackOffset = useCallback(() => {
+    if (pagerDragFrameRef.current) {
+      cancelAnimationFrame(pagerDragFrameRef.current);
+      pagerDragFrameRef.current = 0;
     }
-  }, []);
+    const pending = pendingTrackOffsetRef.current;
+    pendingTrackOffsetRef.current = null;
+    if (pending != null) applyTrackOffset(pending);
+  }, [applyTrackOffset]);
 
-  const setPreviewStripRef = useCallback((el) => {
-    previewStripRef.current = el;
-    if (el) el.style.transform = `translate3d(${-previewOffsetRef.current}px, 0, 0)`;
-  }, []);
+  const queueTrackOffset = useCallback((left) => {
+    trackOffsetRef.current = left;
+    pendingTrackOffsetRef.current = left;
+    if (pagerDragFrameRef.current) return;
+    pagerDragFrameRef.current = requestAnimationFrame(() => {
+      pagerDragFrameRef.current = 0;
+      const pending = pendingTrackOffsetRef.current;
+      pendingTrackOffsetRef.current = null;
+      if (pending != null) applyTrackOffset(pending);
+    });
+  }, [applyTrackOffset]);
 
   const setPagerTouchingAttribute = useCallback((active) => {
     const shell = shellRef.current;
     if (shell) {
       if (active) shell.dataset.pagerTouching = "true";
       else delete shell.dataset.pagerTouching;
-    }
-    if (typeof document !== "undefined") {
-      if (active) document.body.dataset.ultreiaPagerTouching = "true";
-      else delete document.body.dataset.ultreiaPagerTouching;
-    }
-  }, []);
-
-  const setPagerPreviewingAttribute = useCallback((active) => {
-    if (pagerPreviewingRef.current === active) return;
-    pagerPreviewingRef.current = active;
-    const shell = shellRef.current;
-    if (shell) {
-      if (active) shell.dataset.pagerPreviewing = "true";
-      else delete shell.dataset.pagerPreviewing;
     }
   }, []);
 
@@ -319,6 +227,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(pagerSettleFrameRef.current);
       pagerSettleFrameRef.current = 0;
     }
+    if (pagerDragFrameRef.current) {
+      cancelAnimationFrame(pagerDragFrameRef.current);
+      pagerDragFrameRef.current = 0;
+    }
+    pendingTrackOffsetRef.current = null;
     if (renderTrimTimerRef.current) {
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
@@ -344,9 +257,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     pagerTouchActiveRef.current = false;
     pagerTouchingRef.current = false;
     setPagerTouchingAttribute(false);
-    setPagerPreviewingAttribute(false);
     notifyPagerDragActive(false);
-  }, [notifyPagerDragActive, setPagerPreviewingAttribute, setPagerTouchingAttribute]);
+  }, [notifyPagerDragActive, setPagerTouchingAttribute]);
 
   const primePagerDragRendering = useCallback(() => {
     if (pagerTouchingRef.current) return;
@@ -378,7 +290,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     scheduleRenderedWindowTrim(clamped);
   }, [alignTrackToTab, commitVisualTab, finishPagerGesture, measurePagerWidth, scheduleRenderedWindowTrim, setTab, tabCount]);
 
-  const animatePagerToTab = useCallback((next, { preview = false } = {}) => {
+  const animatePagerToTab = useCallback((next) => {
     if (pagerSettleTimerRef.current) {
       clearTimeout(pagerSettleTimerRef.current);
       pagerSettleTimerRef.current = null;
@@ -389,12 +301,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }
     const clamped = clampTabIndex(next, tabCount);
     const width = measurePagerWidth();
-    const from = preview ? previewOffsetRef.current : trackOffsetRef.current;
+    const from = trackOffsetRef.current;
     const to = clamped * width;
     const distance = to - from;
-    const writeOffset = preview ? applyPreviewOffset : setTrackOffset;
     if (Math.abs(distance) < 1) {
-      writeOffset(to);
       setTrackOffset(to);
       completePagerFromOffset();
       return;
@@ -405,18 +315,17 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const step = (now) => {
       const progress = Math.min(1, (now - startedAt) / duration);
       const nextLeft = from + distance * easeOutCubic(progress);
-      writeOffset(nextLeft);
+      setTrackOffset(nextLeft);
       if (progress < 1) {
         pagerSettleFrameRef.current = requestAnimationFrame(step);
         return;
       }
       pagerSettleFrameRef.current = 0;
-      writeOffset(to);
       setTrackOffset(to);
       completePagerFromOffset();
     };
     pagerSettleFrameRef.current = requestAnimationFrame(step);
-  }, [applyPreviewOffset, completePagerFromOffset, measurePagerWidth, setTrackOffset, tabCount]);
+  }, [completePagerFromOffset, measurePagerWidth, setTrackOffset, tabCount]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -431,9 +340,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   useEffect(() => () => {
     clearPagerTimers();
     setPagerTouchingAttribute(false);
-    setPagerPreviewingAttribute(false);
     notifyPagerDragActive(false);
-  }, [clearPagerTimers, notifyPagerDragActive, setPagerPreviewingAttribute, setPagerTouchingAttribute]);
+  }, [clearPagerTimers, notifyPagerDragActive, setPagerTouchingAttribute]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -459,10 +367,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     };
 
     const beginOuterDrag = (gesture) => {
-      applyPreviewOffset(gesture.startLeft);
+      flushQueuedTrackOffset();
+      setTrackOffset(gesture.startLeft);
       suppressClickUntilRef.current = performance.now() + 450;
       primePagerDragRendering();
-      setPagerPreviewingAttribute(true);
     };
 
     const endPagerTouch = (event) => {
@@ -471,10 +379,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         event?.preventDefault?.();
         event?.stopPropagation?.();
         const gesture = pagerGestureRef.current;
+        flushQueuedTrackOffset();
         const width = pagerWidthRef.current || measurePagerWidth();
         const current = gesture.current ?? visualTabRef.current;
         const currentLeft = current * width;
-        const left = previewOffsetRef.current;
+        const left = trackOffsetRef.current;
         const delta = left - currentLeft;
         const threshold = Math.min(width * PAGER_DRAG_DISTANCE_FRACTION, PAGER_DRAG_MAX_DISTANCE_PX);
         const velocity = Number(gesture.velocity) || 0;
@@ -490,7 +399,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
           ...gesture,
           touching: false,
         };
-        animatePagerToTab(next, { preview: true });
+        animatePagerToTab(next);
         return;
       }
       pagerGestureRef.current = {
@@ -546,7 +455,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const width = pagerWidthRef.current || measurePagerWidth();
       const maxLeft = Math.max(0, (tabCount - 1) * width);
       const nextLeft = resistedPagerLeft(gesture.startLeft - dx, 0, maxLeft);
-      applyPreviewOffset(nextLeft);
+      queueTrackOffset(nextLeft);
     };
 
     const suppressClickAfterDrag = (e) => {
@@ -571,11 +480,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, [
     animatePagerToTab,
     clearPagerTimers,
+    flushQueuedTrackOffset,
     measurePagerWidth,
-    applyPreviewOffset,
     primePagerDragRendering,
-    setPagerPreviewingAttribute,
-    setRenderedWindow,
+    queueTrackOffset,
+    setTrackOffset,
     tabCount,
   ]);
 
@@ -593,7 +502,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     { key: "tabs.settings", idx: 4, Icon: SettingsIcon },
   ];
 
-  // Bottom-nav taps stay instant; finger drags use the lightweight preview pager.
+  // Bottom-nav taps stay instant; finger drags move the real adjacent pages.
   function go(next, { haptic = false, hapticAt = 0 } = {}) {
     const current = visualTabRef.current;
     if (next === current || next < 0 || next >= tabCount) return;
@@ -787,8 +696,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                     contain: "strict",
                     overflowAnchor: "none",
                     backfaceVisibility: "hidden",
-                    // Horizontal movement is native scroll on the outer
-                    // track, so panes stay ordinary vertical scrollers.
+                    // Horizontal movement is applied to the outer strip, so
+                    // panes stay ordinary vertical scrollers.
                     willChange: "auto",
                     isolation: shouldShow ? "isolate" : "auto",
                     visibility: shouldShow ? "visible" : "hidden",
@@ -804,12 +713,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             })}
           </div>
         </div>
-        <PagerDragPreviewStage
-          tabs={TABS}
-          tabCount={tabCount}
-          setPreviewStripRef={setPreviewStripRef}
-          t={t}
-        />
       </main>
 
       {/* Bottom tab bar */}

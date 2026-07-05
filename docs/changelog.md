@@ -4,6 +4,7 @@
 
 ## 2026-07-05
 
+- **移动端 Tab 横滑退出 preview 实验线**：底部 Tab 半屏拖动不再显示轻量骨架预览，也不再隐藏真实页面；AI Coach / Calendar 等相邻真实页面直接按 `requestAnimationFrame` 合帧写入 `translate3d` 跟随手指，拖动期间不触发 React 状态更新，并清理掉会造成视觉割裂的大范围拖动期样式降级。
 - **移动端内层横滑边界交接修复**：Training 的活动 / 图表、Races 的比赛 / 个人记录在内层已经滑到边界时，会明确把手势交还给底部 Tab，避免图表页继续滑向 Calendar 或个人记录页继续滑向 Settings 时没有反应。
 - **移动端 Tab 跟手路径去 scroll 化**：底部 Tab 横向拖动不再依赖外层 `scrollLeft` / `scroll` / `scrollend` 同步；确认横向后只移动一层轻量 preview strip 的 `translate3d`，真实页面停稳后再显示，进一步减少 AI Coach / Calendar 半屏按住来回拖时的输入延迟。
 - **移动端 Tab 半屏拖动轻量预览**：AI Coach / Calendar 等重页面在横向拖动期间会临时切到同尺寸轻量预览，真实页面不再参与每帧绘制；松手吸附节奏也放慢，避免半屏按住来回拖时出现割裂感或用过快动画掩盖卡顿。

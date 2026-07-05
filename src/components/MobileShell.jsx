@@ -131,6 +131,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerAnimationRef = useRef(null);
   const pagerAnimationFrameRef = useRef(0);
+  const pagerDragFrameRef = useRef(0);
   const pagerDragRef = useRef(null);
   const pagerFreezeRef = useRef(null);
   const frozenPrewarmTimerRef = useRef(null);
@@ -365,6 +366,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(pagerAnimationFrameRef.current);
       pagerAnimationFrameRef.current = 0;
     }
+    if (pagerDragFrameRef.current) {
+      cancelAnimationFrame(pagerDragFrameRef.current);
+      pagerDragFrameRef.current = 0;
+    }
     if (renderTrimTimerRef.current) {
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
@@ -376,7 +381,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
     renderTrimTimerRef.current = setTimeout(() => {
       renderTrimTimerRef.current = null;
-      if (pagerDragRef.current || pagerAnimationRef.current || pagerAnimationFrameRef.current || visualTabRef.current !== clamped) return;
+      if (pagerDragRef.current || pagerAnimationRef.current || pagerAnimationFrameRef.current || pagerDragFrameRef.current || visualTabRef.current !== clamped) return;
       setRenderedWindow(getMobilePagerRenderWindow(clamped, tabCount));
     }, delay);
   }, [setRenderedWindow, tabCount]);
@@ -519,6 +524,30 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       } catch { /* pointer capture is best-effort */ }
     };
 
+    const applyDragOffset = (drag, offset) => {
+      if (drag.frozen) setFrozenOffset(offset);
+      else setTrackOffset(offset);
+    };
+
+    const scheduleDragOffset = (drag, offset) => {
+      drag.pendingOffset = offset;
+      if (drag.frameId) return;
+      drag.frameId = requestAnimationFrame(() => {
+        if (pagerDragFrameRef.current === drag.frameId) pagerDragFrameRef.current = 0;
+        drag.frameId = 0;
+        applyDragOffset(drag, drag.pendingOffset);
+      });
+      pagerDragFrameRef.current = drag.frameId;
+    };
+
+    const flushDragOffset = (drag) => {
+      if (!drag?.frameId) return;
+      cancelAnimationFrame(drag.frameId);
+      if (pagerDragFrameRef.current === drag.frameId) pagerDragFrameRef.current = 0;
+      drag.frameId = 0;
+      applyDragOffset(drag, drag.pendingOffset);
+    };
+
     const onPagerPointerDown = (e) => {
       if ((e.pointerType && e.pointerType !== "touch" && e.pointerType !== "pen") || shouldSkipPagerSwipe(e.target)) {
         pagerDragRef.current = null;
@@ -543,6 +572,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         baseOffset,
         delta: 0,
         velocity: 0,
+        pendingOffset: baseOffset,
+        frameId: 0,
       };
     };
 
@@ -598,13 +629,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       drag.lastX = point.clientX;
       drag.lastAt = now;
       trackOffsetRef.current = drag.baseOffset + drag.delta;
-      if (drag.frozen) setFrozenOffset(drag.freezeBaseOffset + drag.delta);
-      else setTrackOffset(drag.baseOffset + drag.delta);
+      scheduleDragOffset(drag, drag.frozen ? drag.freezeBaseOffset + drag.delta : drag.baseOffset + drag.delta);
     };
 
     const settlePagerDrag = (e) => {
       const drag = pagerDragRef.current;
       if (!drag || e.pointerId !== drag.pointerId) return;
+      flushDragOffset(drag);
       releasePointerCapture(drag.pointerId);
       if (drag.mode !== "drag") {
         pagerDragRef.current = null;
@@ -631,6 +662,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
     const cancelPointerGesture = (e) => {
       const drag = pagerDragRef.current;
+      flushDragOffset(drag);
       if (drag) releasePointerCapture(drag.pointerId);
       if (drag?.mode === "drag") {
         e?.preventDefault?.();

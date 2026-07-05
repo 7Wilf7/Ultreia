@@ -353,15 +353,23 @@ summary::-webkit-details-marker { display: none; }
 .ultreia-pager-full-content {
   height: 100%;
   min-height: 100%;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
 }
 
-.ultreia-pager-track[data-drag-overlay="true"] {
-  opacity: 0;
+.ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-preview-content {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--bg);
 }
 
-.ultreia-pager-drag-overlay[data-active="true"] {
-  visibility: visible !important;
-  opacity: 1 !important;
+.ultreia-pager-track[data-drag-overlay="true"] .ultreia-pager-full-content {
+  visibility: hidden;
+  pointer-events: none;
+  content-visibility: hidden;
 }
 
 .ultreia-pager-preview-content {

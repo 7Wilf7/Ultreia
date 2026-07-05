@@ -80,6 +80,11 @@ function verticalScrollerOwnsGesture(target, dx, dy) {
   return absY > PAGER_DRAG_AXIS_LOCK_PX / 2 && absY >= absX * 0.85;
 }
 
+function latestPointerSample(event) {
+  const samples = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : null;
+  return samples?.length ? samples[samples.length - 1] : event;
+}
+
 const PagerPaneContent = memo(function PagerPaneContent({
   shouldRender,
   renderTab,
@@ -374,8 +379,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const onPagerPointerMove = (event) => {
       const gesture = pagerGestureRef.current;
       if (!gesture || gesture.pointerId !== event.pointerId) return;
-      const dx = event.clientX - gesture.startX;
-      const dy = event.clientY - gesture.startY;
+      const sample = latestPointerSample(event);
+      const dx = sample.clientX - gesture.startX;
+      const dy = sample.clientY - gesture.startY;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
 
@@ -398,14 +404,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
 
       if (gesture.mode !== "drag") return;
-      event.preventDefault();
+      if (event.cancelable) event.preventDefault();
       event.stopPropagation();
 
       const maxLeft = (tabCount - 1) * gesture.width;
       const nextLeft = resistedPagerLeft(gesture.startLeft - dx, 0, maxLeft);
       scheduleTrackOffset(nextLeft);
-      gesture.lastX = event.clientX;
-      gesture.lastAt = event.timeStamp || performance.now();
+      gesture.lastX = sample.clientX;
+      gesture.lastAt = sample.timeStamp || event.timeStamp || performance.now();
       gesture.lastLeft = nextLeft;
     };
 
@@ -450,12 +456,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     };
 
     track.addEventListener("pointerdown", onPagerPointerDown, { capture: true });
+    track.addEventListener("pointerrawupdate", onPagerPointerMove, { capture: true });
     track.addEventListener("pointermove", onPagerPointerMove, { capture: true });
     track.addEventListener("pointerup", onPagerPointerEnd, { capture: true });
     track.addEventListener("pointercancel", onPagerPointerEnd, { capture: true });
     track.addEventListener("click", suppressClickAfterDrag, true);
     return () => {
       track.removeEventListener("pointerdown", onPagerPointerDown, true);
+      track.removeEventListener("pointerrawupdate", onPagerPointerMove, true);
       track.removeEventListener("pointermove", onPagerPointerMove, true);
       track.removeEventListener("pointerup", onPagerPointerEnd, true);
       track.removeEventListener("pointercancel", onPagerPointerEnd, true);

@@ -2054,10 +2054,28 @@ function AppShell({
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
   const mobilePagerDraggingRef = useRef(false);
+  const pendingCoachStreamRef = useRef(null);
+  const flushPendingCoachStream = useCallback(() => {
+    const pending = pendingCoachStreamRef.current;
+    if (!pending) return;
+    pendingCoachStreamRef.current = null;
+    setChatMessages(prev => {
+      let changed = false;
+      const next = prev.map(m => {
+        if (m.id !== pending.id) return m;
+        changed = true;
+        return { ...m, content: pending.text };
+      });
+      return changed ? next : prev;
+    });
+  }, [setChatMessages]);
   const handleMobilePagerDragActiveChange = useCallback((active) => {
     mobilePagerDraggingRef.current = active;
-    if (!active) setNow(new Date());
-  }, []);
+    if (!active) {
+      setNow(new Date());
+      flushPendingCoachStream();
+    }
+  }, [flushPendingCoachStream]);
   const planDeviationTodayKey = localDateKey(now);
   const planDeviationSummary = useMemo(
     () => summarizePlanDeviation(logs, new Date(`${planDeviationTodayKey}T12:00:00`)),
@@ -3120,11 +3138,16 @@ function AppShell({
         signal: controller.signal,
         onToken: (text) => {
           if (controller.signal.aborted || runId !== chatRunRef.current) return;
+          if (mobilePagerDraggingRef.current) {
+            pendingCoachStreamRef.current = { id: streamingId, text };
+            return;
+          }
           setChatMessages(prev => prev.map(m => (
             m.id === streamingId ? { ...m, content: text } : m
           )));
         },
       });
+      if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
       if (controller.signal.aborted || runId !== chatRunRef.current) return false;
       const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
       finalReplyText = reply;
@@ -3157,8 +3180,10 @@ function AppShell({
       const finalContent = appendCoachMessageMeta(reply, meta);
       try {
         const saved = await db.coachMessages.appendMessage("assistant", finalContent);
+        if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
         setChatMessages(prev => prev.map(m => m.id === streamingId ? saved : m));
       } catch (err) {
+        if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
         setChatMessages(prev => prev.map(m => (
           m.id === streamingId ? { ...m, content: finalContent, isStreaming: false } : m
         )));
@@ -3169,6 +3194,7 @@ function AppShell({
         body: t("coach.notification_body"),
       });
     } catch (err) {
+      if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
       setChatMessages(prev => prev.filter(m => m.id !== streamingId));
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== chatRunRef.current) {
         return false;

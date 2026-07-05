@@ -137,12 +137,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   const applyTrackOffset = useCallback((left) => {
     trackOffsetRef.current = left;
-    const width = pagerWidthRef.current || 1;
-    Object.entries(paneRefs.current).forEach(([key, pane]) => {
+    const transform = `translate3d(${-left}px, 0, 0)`;
+    Object.values(paneRefs.current).forEach((pane) => {
       if (!pane) return;
-      const idx = Number(key);
-      if (!Number.isFinite(idx)) return;
-      pane.style.transform = `translate3d(${(idx * width) - left}px, 0, 0)`;
+      pane.style.transform = transform;
     });
   }, []);
 
@@ -660,7 +658,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                   aria-hidden={!isInteractivePane}
                   style={{
                     position: "absolute",
-                    inset: 0,
+                    top: 0,
+                    bottom: 0,
+                    left: `${idx * 100}%`,
                     display: shouldShow ? "block" : "none",
                     width: "100%",
                     height: "100%",
@@ -676,7 +676,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                     contain: "strict",
                     overflowAnchor: "none",
                     backfaceVisibility: "hidden",
-                    transform: `translate3d(${(idx - visualTab) * 100}%, 0, 0)`,
+                    // React deliberately does not own transform here. The
+                    // touch path writes it imperatively, so unrelated renders
+                    // cannot snap the pane away from the user's finger.
                     willChange: shouldShow ? "transform" : "auto",
                     isolation: shouldShow ? "isolate" : "auto",
                     visibility: shouldShow ? "visible" : "hidden",

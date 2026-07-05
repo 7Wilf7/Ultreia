@@ -77,6 +77,8 @@ export function inferMemoryFactCategory(fact = {}, fallbackCategory = "other") {
 function normalizeMemoryFactText(text = "") {
   return String(text || "")
     .toLowerCase()
+    .replace(/\b(?:and|or)\b/g, "")
+    .replace(/(?:或者|以及|并且|和|及|与|或)/g, "")
     .replace(/[，。；：、,.!?！？;:()[\]（）【】"'“”‘’`~\-—_/\\\s\u3000]/g, "")
     .replace(/(本人|用户|wilf|theuser|user)/g, "")
     .trim();
@@ -454,7 +456,8 @@ Guidelines:
 - Keep the memory grouped under these exact English section headings:
 ${enSections}
 - Under each heading, write one short fact per line as "- ...".
-- Return a COMPLETE, deduplicated active snapshot. Do not output only additions. If an old fact is outdated, replaced, or no longer useful, omit it.
+- Return a COMPLETE, deduplicated active snapshot. Do not output only additions.
+- Preserve every existing active fact unless the recent conversation clearly contradicts it, replaces it, or the app's current target-race data proves it obsolete. Lack of recent mention is NOT a reason to omit an old fact.
 - Use the categories strictly:
   - Injuries / Health: injuries, recovery needs, fatigue readiness, health risks, HRV/resting-HR/heart-rate risk signals.
   - Goals / Races: durable race-planning preferences or constraints not captured by the current target race fields.
@@ -467,9 +470,10 @@ ${enSections}
 - Keep durable facts only.
 - DROP session-specific things: today's specific question, one-off advice, temporary feelings that do not look durable.
 - Don't repeat what's already in the user's profile: age, location, basic stats.
-- Maximum ~500 words total. Trim older or less useful entries if needed.
+- Aim for ~500 words total. If the snapshot is too long, merge duplicate or overlapping facts; do not drop unrelated existing facts only to shorten it.
 - Leave a section empty if there is no durable fact for it.
 - If nothing meaningful should change, return the existing facts, but normalize them into the section structure when useful.
+- Avoid cosmetic rewrites. Do not change a fact only to swap punctuation or list connectors such as "/" vs "or" / "或".
 
 Output the updated Memory facts in BOTH English and Simplified Chinese — the SAME facts, SAME order, line-by-line correspondence — using EXACTLY this format and nothing else:
 ===EN===

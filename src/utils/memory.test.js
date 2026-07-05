@@ -136,6 +136,55 @@ describe("memory snapshot merge", () => {
     expect(snapshot.some(fact => fact.rowId === "row-2")).toBe(false);
   });
 
+  it("treats slash and connector rewrites as unchanged facts", () => {
+    const oldFacts = [
+      {
+        rowId: "row-1",
+        clientId: "old-1",
+        status: "active",
+        category: "injury_health",
+        contentZh: "无已知伤病；下坡离心负荷需谨慎，尤其在湿滑/技术地形。",
+      },
+    ];
+    const incomingFacts = [
+      {
+        clientId: "new-1",
+        status: "active",
+        category: "injury_health",
+        contentZh: "无已知伤病；下坡离心负荷需谨慎，尤其在湿滑或技术地形。",
+      },
+    ];
+
+    const review = buildMemoryFactReview(incomingFacts, oldFacts);
+
+    expect(review.counts).toMatchObject({ unchanged: 1, updated: 0, new: 0, removed: 0 });
+    expect(review.entries[0]).toMatchObject({ kind: "unchanged" });
+  });
+
+  it("keeps omitted facts unless the archive entry is selected", () => {
+    const oldFacts = [
+      {
+        rowId: "row-1",
+        clientId: "old-1",
+        status: "active",
+        category: "goals_races",
+        contentZh: "Hyrox 准备阶段目前接触不到 SkiErg、RowErg、雪橇或墙球器械。",
+      },
+    ];
+
+    const review = buildMemoryFactReview([], oldFacts);
+    const keptSnapshot = buildMemoryFactSnapshotFromReview(review.entries, new Set());
+    const archivedSnapshot = buildMemoryFactSnapshotFromReview(
+      review.entries,
+      new Set(review.entries.map(entry => entry.key)),
+    );
+
+    expect(review.counts).toMatchObject({ removed: 1 });
+    expect(keptSnapshot).toHaveLength(1);
+    expect(keptSnapshot[0]).toMatchObject({ rowId: "row-1" });
+    expect(archivedSnapshot).toHaveLength(0);
+  });
+
   it("reuses matching active fact rows and archives facts missing from the new snapshot", () => {
     const existingFacts = [
       {

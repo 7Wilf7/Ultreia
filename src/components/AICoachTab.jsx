@@ -4815,7 +4815,7 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
   );
   const defaultSelectedKeys = useMemo(() => new Set(
     review.entries
-      .filter(entry => entry.kind === "new" || entry.kind === "updated" || entry.kind === "removed")
+      .filter(entry => entry.kind === "new" || entry.kind === "updated")
       .map(entry => entry.key),
   ), [review.entries]);
   const defaultSelectedSignature = useMemo(

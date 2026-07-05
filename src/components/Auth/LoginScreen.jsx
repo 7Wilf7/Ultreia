@@ -5,6 +5,7 @@ import { ModalRoot } from "../ModalRoot";
 import { translate } from "../../i18n/translations";
 import { productLogoUrl } from "../../assets/logo";
 import { PRODUCT_PUBLIC_FEATURES } from "../../constants";
+import { Spinner } from "../Spinner";
 
 const LANG_KEY = "ultreia.lang";
 const SAVED_LOGINS_KEY = "ultreia.savedLogins";
@@ -239,8 +240,14 @@ function CreateAccountModal({ initialEmail, register, tt, isMobile, onClose, onR
             padding: "11px 18px",
             opacity: submitting || !email || !password || !password2 || !invite ? 0.55 : 1,
             cursor: submitting || !email || !password || !password2 || !invite ? "default" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
           }}
+          aria-busy={submitting ? "true" : undefined}
         >
+          {submitting && <Spinner size={13} thickness={1.6} color="currentColor" />}
           {submitting ? tt("login.creating") : tt("login.create")}
         </button>
       </form>
@@ -317,8 +324,14 @@ function ForgotPasswordModal({ initialEmail, sendPasswordReset, tt, isMobile, on
             padding: "11px 18px",
             opacity: submitting || !email ? 0.55 : 1,
             cursor: submitting || !email ? "default" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
           }}
+          aria-busy={submitting ? "true" : undefined}
         >
+          {submitting && <Spinner size={13} thickness={1.6} color="currentColor" />}
           {submitting ? tt("login.sending") : tt("login.send_reset")}
         </button>
       </form>
@@ -598,8 +611,14 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
             padding: "11px 18px",
             opacity: submitting || !canSubmit ? 0.55 : 1,
             cursor: submitting || !canSubmit ? "default" : "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 7,
           }}
+          aria-busy={submitting ? "true" : undefined}
         >
+          {submitting && <Spinner size={13} thickness={1.6} color="currentColor" />}
           {submitting ? tt("login.signing") : tt("login.signin")}
         </button>
 

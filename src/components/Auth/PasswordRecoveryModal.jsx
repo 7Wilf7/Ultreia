@@ -2,6 +2,7 @@ import { useState } from "react";
 import { s } from "../../styles";
 import { translate } from "../../i18n/translations";
 import { ModalRoot } from "../ModalRoot";
+import { Spinner } from "../Spinner";
 
 function initialLang() {
   try {
@@ -86,7 +87,9 @@ export function PasswordRecoveryModal({ completePasswordRecovery, onClose }) {
           )}
 
           <button type="submit" disabled={busy || !password || !password2}
-            style={{ ...s.btn, width: "100%", opacity: busy || !password || !password2 ? 0.5 : 1 }}>
+            aria-busy={busy ? "true" : undefined}
+            style={{ ...s.btn, width: "100%", opacity: busy || !password || !password2 ? 0.5 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+            {busy && <Spinner size={13} thickness={1.6} color="currentColor" />}
             {busy ? t("common.saving") : t("pwd.recovery_save")}
           </button>
         </form>

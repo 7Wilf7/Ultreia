@@ -42,6 +42,7 @@ import { ModalRoot } from "./ModalRoot";
 import { ItemActionModal } from "./ItemActionModal";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
+import { Spinner } from "./Spinner";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
 export function formatHeaderDate(yyyy_mm_dd, lang) {
@@ -202,6 +203,7 @@ export function CalendarDayModal({
   const [planKeySession, setPlanKeySession] = useState(false);
   const [planSubTypes, setPlanSubTypes] = useState([]);   // strength: Upper/Lower/Core
   const [editingId, setEditingId] = useState(null);
+  const [planSaving, setPlanSaving] = useState(false);
   // Tap a workout row -> a centered Edit/Delete action card (same pattern as
   // the Training list's ItemActionModal). actionTarget = the log.
   const [actionTarget, setActionTarget] = useState(null);
@@ -264,6 +266,7 @@ export function CalendarDayModal({
   }
 
   async function savePlan() {
+    if (planSaving) return;
     const f = planFields(planType);
     // Assemble the type-specific fields. Everything not shown for this type
     // stays zero/empty so switching type then saving doesn't carry stale values.
@@ -310,6 +313,7 @@ export function CalendarDayModal({
       planDetail,
       startedAt: timeOfDayToStartedAt(dateKey, planTimeOfDay),
     };
+    setPlanSaving(true);
     try {
       if (editingId) {
         // Edit mode: patch the existing planned row (stays is_planned=true).
@@ -326,6 +330,9 @@ export function CalendarDayModal({
       resetPlanForm();
       setPanel(null);
     } catch { /* alert shown by wrapper */ }
+    finally {
+      setPlanSaving(false);
+    }
   }
 
   function deleteLog(logId) {
@@ -828,11 +835,17 @@ export function CalendarDayModal({
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button onClick={() => { setPanel(null); resetPlanForm(); }} style={s.btnGhost}>
+                  <button onClick={() => { setPanel(null); resetPlanForm(); }} disabled={planSaving} style={{ ...s.btnGhost, opacity: planSaving ? 0.55 : 1 }}>
                     {t("common.cancel")}
                   </button>
-                  <button onClick={savePlan} style={s.btn}>
-                    {t("calendar.save_plan")}
+                  <button
+                    onClick={savePlan}
+                    disabled={planSaving}
+                    aria-busy={planSaving ? "true" : undefined}
+                    style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: planSaving ? 0.72 : 1 }}
+                  >
+                    {planSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+                    {planSaving ? t("common.saving") : t("calendar.save_plan")}
                   </button>
                 </div>
               </div>

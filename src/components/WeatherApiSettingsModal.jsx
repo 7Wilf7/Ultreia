@@ -4,6 +4,7 @@ import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
+import { Spinner } from "./Spinner";
 
 const LEGACY_FREE_WEATHER_LIMIT = 30;
 
@@ -59,10 +60,13 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
   }
 
   const hasKey = !!caiyunApiKey;
+  const closeIfIdle = () => {
+    if (!busy) onClose();
+  };
 
   return (
-    <ModalRoot onClose={onClose}>
-      <div onClick={onClose} className="ultreia-overlay-in" style={{
+    <ModalRoot onClose={closeIfIdle}>
+      <div onClick={closeIfIdle} className="ultreia-overlay-in" style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",
         backdropFilter: "blur(6px)",
@@ -85,7 +89,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("weather_api.title")}</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>
             {t("weather_api.hint")}
@@ -120,9 +124,14 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
           {hasKey && (
             <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
               <span style={{ ...s.muted, fontFamily: "var(--font-mono)" }}>{t("api.current", { key: maskedKey(caiyunApiKey) })}</span>
-              <button onClick={clear} disabled={busy}
-                style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", color: "var(--danger)", borderColor: "var(--danger)" }}>
-                {t("weather_api.clear")}
+              <button
+                onClick={clear}
+                disabled={busy}
+                aria-busy={busy ? "true" : undefined}
+                style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", color: "var(--danger)", borderColor: "var(--danger)", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, opacity: busy ? 0.62 : 1 }}
+              >
+                {busy && <Spinner size={12} thickness={1.5} color="currentColor" />}
+                {busy ? t("common.saving") : t("weather_api.clear")}
               </button>
             </div>
           )}
@@ -135,10 +144,15 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
-            <button onClick={save} disabled={busy || !draft.trim()}
-              style={{ ...s.btn, opacity: busy || !draft.trim() ? 0.5 : 1 }}>
-              {busy ? "…" : t("weather_api.save")}
+            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button
+              onClick={save}
+              disabled={busy || !draft.trim()}
+              aria-busy={busy ? "true" : undefined}
+              style={{ ...s.btn, opacity: busy || !draft.trim() ? 0.5 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}
+            >
+              {busy && <Spinner size={13} thickness={1.6} color="currentColor" />}
+              {busy ? t("common.saving") : t("weather_api.save")}
             </button>
           </div>
         </div>

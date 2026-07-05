@@ -8,6 +8,7 @@ import { useClickOutside } from "../utils/useClickOutside";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { weatherWindowEligible } from "../lib/weather";
 import { useAppDialog } from "./AppDialogContext";
+import { Spinner } from "./Spinner";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -91,6 +92,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
+  const [saving, setSaving] = useState(false);
   // Snapshot of the form's initial state — used to detect unsaved changes when
   // the user clicks outside in edit mode.
   const initialFormRef = useRef(initial ? fromLog(initial) : buildEmpty());
@@ -112,7 +114,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const isDirty = () => JSON.stringify(form) !== JSON.stringify(initialFormRef.current);
   const rootRef = useClickOutside(async () => {
     if (!isDirty() || await appDialog.confirm(t("form.discard_confirm"))) onCancel();
-  }, mode === "edit");
+  }, mode === "edit" && !saving);
 
   const isRun = RUN_GROUP_TYPES.includes(form.type);
   const isRoadRun = form.type === "Road Run";
@@ -179,7 +181,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
     setForm({ ...form, type: t, subTypes: nextSubTypes, fetchWeather: WEATHER_RELEVANT_TYPES.includes(t) });
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (saving) return;
     if (!form.date) { appDialog.alert(t("form.alert_date")); return; }
     const dur = formDurationSec;
     if (!dur) { appDialog.alert(t("form.alert_duration")); return; }
@@ -213,23 +216,28 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       if (!isNaN(d.getTime())) startedAt = d.toISOString();
     }
 
-    onSave({
-      date: form.date,
-      startedAt,
-      type: form.type,
-      subTypes: form.subTypes,
-      distance: dist,
-      duration: dur,
-      pace,
-      hr:        parseInt(form.hr)         || 0,
-      maxHR:     parseInt(form.maxHR)      || 0,
-      ascent:    showAscent ? (parseInt(form.ascent) || 0) : 0,
-      cadence:   showCadence ? (parseInt(form.cadence) || 0) : 0,
-      rpe,
-      note:      form.note.trim() || null,
-      // Only consulted by addLog (manual add). Edit/import ignore it.
-      fetchWeather: form.fetchWeather,
-    });
+    setSaving(true);
+    try {
+      await Promise.resolve(onSave({
+        date: form.date,
+        startedAt,
+        type: form.type,
+        subTypes: form.subTypes,
+        distance: dist,
+        duration: dur,
+        pace,
+        hr:        parseInt(form.hr)         || 0,
+        maxHR:     parseInt(form.maxHR)      || 0,
+        ascent:    showAscent ? (parseInt(form.ascent) || 0) : 0,
+        cadence:   showCadence ? (parseInt(form.cadence) || 0) : 0,
+        rpe,
+        note:      form.note.trim() || null,
+        // Only consulted by addLog (manual add). Edit/import ignore it.
+        fetchWeather: form.fetchWeather,
+      }));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -423,8 +431,16 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={handleSave} style={s.btn}>{mode === "edit" ? t("common.save_changes") : t("common.save")}</button>
-        <button onClick={onCancel} style={s.btnGhost}>{t("common.cancel")}</button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          aria-busy={saving ? "true" : undefined}
+          style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: saving ? 0.72 : 1 }}
+        >
+          {saving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+          {saving ? t("common.saving") : (mode === "edit" ? t("common.save_changes") : t("common.save"))}
+        </button>
+        <button onClick={onCancel} disabled={saving} style={{ ...s.btnGhost, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
       </div>
     </div>
   );

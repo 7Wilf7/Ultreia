@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { SingleWheelModal, TimeWheelModal } from "./WheelPicker";
+import { Spinner } from "./Spinner";
 
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -28,6 +29,7 @@ export function WeeklyReportSettingsModal({
   const [weekdayPickerOpen, setWeekdayPickerOpen] = useState(false);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [saving, setSaving] = useState(false);
   const weekdayOptions = WEEKDAYS.map(day => ({ value: day, label: t(`weekly_settings.day_${day}`) }));
   const infoText = [
     t("weekly_settings.auto_generate_desc"),
@@ -35,19 +37,30 @@ export function WeeklyReportSettingsModal({
     t("weekly_settings.behavior_note"),
   ].join("\n\n");
 
-  function save() {
-    setWeeklyReportSettings({
-      weeklyReportEnabled: enabled,
-      weeklyReportWeekday: weekday,
-      weeklyReportTime: time,
-      weeklyReportAfterSundayImport: afterSundayImport,
-    });
-    onClose();
+  function closeIfIdle() {
+    if (!saving) onClose();
+  }
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(setWeeklyReportSettings({
+        weeklyReportEnabled: enabled,
+        weeklyReportWeekday: weekday,
+        weeklyReportTime: time,
+        weeklyReportAfterSundayImport: afterSundayImport,
+      }));
+      onClose();
+    } catch (err) {
+      console.error("[weekly-report] settings save failed:", err);
+      setSaving(false);
+    }
   }
 
   return (
-    <ModalRoot onClose={onClose}>
-      <div style={s.overlay} onClick={onClose}>
+    <ModalRoot onClose={closeIfIdle}>
+      <div style={s.overlay} onClick={closeIfIdle}>
         <div style={s.modal} onClick={e => e.stopPropagation()}>
           <div style={s.header}>
             <div style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -58,7 +71,7 @@ export function WeeklyReportSettingsModal({
                 onClick={() => setShowInfo(v => !v)}
               />
             </div>
-            <button onClick={onClose} style={s.close} aria-label="Close">×</button>
+            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
           {showInfo && (
             <div style={s.infoPanel}>{infoText}</div>
@@ -71,6 +84,7 @@ export function WeeklyReportSettingsModal({
             <input
               type="checkbox"
               checked={enabled}
+              disabled={saving}
               onChange={e => setEnabled(e.target.checked)}
               style={{ width: 20, height: 20 }}
             />
@@ -79,11 +93,11 @@ export function WeeklyReportSettingsModal({
           <div style={{ opacity: enabled ? 1 : 0.45, pointerEvents: enabled ? "auto" : "none" }}>
             <div style={{ ...s.label, marginTop: 16 }}>{t("weekly_settings.schedule")}</div>
             <div style={s.scheduleGrid}>
-              <button type="button" onClick={() => setWeekdayPickerOpen(true)} style={s.scheduleButton}>
+              <button type="button" onClick={() => setWeekdayPickerOpen(true)} disabled={saving} style={s.scheduleButton}>
                 <span style={s.weekdayValue}>{t(`weekly_settings.day_${weekday}`)}</span>
                 <span style={s.scheduleChevron}>⌄</span>
               </button>
-              <button type="button" onClick={() => setTimePickerOpen(true)} style={s.scheduleButton}>
+              <button type="button" onClick={() => setTimePickerOpen(true)} disabled={saving} style={s.scheduleButton}>
                 <span style={s.timeValue}>{time}</span>
                 <span style={s.scheduleChevron}>⌄</span>
               </button>
@@ -97,14 +111,23 @@ export function WeeklyReportSettingsModal({
             <input
               type="checkbox"
               checked={afterSundayImport}
+              disabled={saving}
               onChange={e => setAfterSundayImport(e.target.checked)}
               style={{ width: 20, height: 20 }}
             />
           </label>
 
           <div style={s.actions}>
-            <button onClick={onClose} style={s.secondaryBtn}>{t("common.cancel")}</button>
-            <button onClick={save} style={s.primaryBtn}>{t("common.save")}</button>
+            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button
+              onClick={save}
+              disabled={saving}
+              aria-busy={saving ? "true" : undefined}
+              style={{ ...s.primaryBtn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: saving ? 0.72 : 1 }}
+            >
+              {saving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+              {saving ? t("common.saving") : t("common.save")}
+            </button>
           </div>
         </div>
       </div>

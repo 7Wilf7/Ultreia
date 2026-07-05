@@ -2,6 +2,7 @@ import { useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { Spinner } from "./Spinner";
 
 // Centered, blurred-backdrop modal — same chrome on mobile and desktop, so the
 // password change always feels like an inline confirmation step, not a
@@ -56,13 +57,16 @@ export function ChangePasswordModal({ changePassword, onClose }) {
       setBusy(false);
     }
   }
+  const closeIfIdle = () => {
+    if (!busy) onClose();
+  };
 
   // Always-centered card with a blurred backdrop. The blur is set on the
   // overlay layer (backdrop-filter) so the page behind reads as "frozen" —
   // emphasizes that the modal is the only thing the user can interact with.
   return (
-    <ModalRoot onClose={onClose}>
-      <div onClick={onClose} style={{
+    <ModalRoot onClose={closeIfIdle}>
+      <div onClick={closeIfIdle} style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "rgba(20,20,19,0.45)",
         backdropFilter: "blur(6px)",
@@ -86,7 +90,7 @@ export function ChangePasswordModal({ changePassword, onClose }) {
           }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("pwd.title")}</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
           <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6, fontSize: 12 }}>{t("pwd.hint")}</p>
 
@@ -130,10 +134,15 @@ export function ChangePasswordModal({ changePassword, onClose }) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
-            <button onClick={submit} disabled={busy || !oldPw || !pw || !pw2}
-              style={{ ...s.btn, opacity: busy || !oldPw || !pw || !pw2 ? 0.5 : 1 }}>
-              {busy ? "…" : t("pwd.save")}
+            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button
+              onClick={submit}
+              disabled={busy || !oldPw || !pw || !pw2}
+              aria-busy={busy ? "true" : undefined}
+              style={{ ...s.btn, opacity: busy || !oldPw || !pw || !pw2 ? 0.5 : 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}
+            >
+              {busy && <Spinner size={13} thickness={1.6} color="currentColor" />}
+              {busy ? t("common.saving") : t("pwd.save")}
             </button>
           </div>
         </div>

@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { TimeWheelModal } from "./WheelPicker";
+import { Spinner } from "./Spinner";
 
 const MAX_TIMES = 3;
 
@@ -32,6 +33,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
   const [times, setTimes] = useState(initial);
   // Which time row's wheel picker is open (null = none).
   const [editingIdx, setEditingIdx] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   const detectedTz = (() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; }
@@ -58,24 +60,31 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
     });
   }
 
-  function save() {
+  function closeIfIdle() {
+    if (!saving) onClose();
+  }
+
+  async function save() {
+    if (saving) return;
     // De-dupe + sort on the way out; if enabling with no slots, keep ["08:00"].
     const clean = [...new Set(times)].sort();
-    // Fire-and-forget: local state updates synchronously inside setPushSettings
-    // (see updateSettings in App), so the Settings cell reflects the change
-    // immediately and we close without waiting on the DB round-trip. The write
-    // persists in the background; a failure only logs (it'll re-sync on reload).
-    Promise.resolve(setPushSettings({
-      pushEnabled: enabled,
-      pushTimes: enabled ? (clean.length ? clean : ["08:00"]) : clean,
-      pushTimezone: detectedTz || pushTimezone || "",
-    })).catch((e) => console.error("[push] settings save failed:", e));
-    onClose();
+    setSaving(true);
+    try {
+      await Promise.resolve(setPushSettings({
+        pushEnabled: enabled,
+        pushTimes: enabled ? (clean.length ? clean : ["08:00"]) : clean,
+        pushTimezone: detectedTz || pushTimezone || "",
+      }));
+      onClose();
+    } catch (e) {
+      console.error("[push] settings save failed:", e);
+      setSaving(false);
+    }
   }
 
   return (
-    <ModalRoot onClose={onClose}>
-      <div onClick={onClose} className="ultreia-overlay-in" style={{
+    <ModalRoot onClose={closeIfIdle}>
+      <div onClick={closeIfIdle} className="ultreia-overlay-in" style={{
         position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
         background: "oklch(0.04 0.006 274 / 0.72)",
         backdropFilter: "blur(10px)", WebkitBackdropFilter: "blur(10px)",
@@ -98,7 +107,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
                 onClick={() => setShowInfo(v => !v)}
               />
             </div>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.modalCloseBtn, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
           {showInfo && (
             <div style={infoPanelStyle}>{infoText}</div>
@@ -108,6 +117,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <button
               onClick={() => setEnabled(v => !v)}
+              disabled={saving}
               role="switch"
               aria-checked={enabled}
               style={{
@@ -135,7 +145,9 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {times.map((tm, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <button onClick={() => setEditingIdx(i)}
+                  <button
+                    onClick={() => setEditingIdx(i)}
+                    disabled={saving}
                     style={{
                       ...s.input, maxWidth: 140, cursor: "pointer", textAlign: "left",
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
@@ -145,7 +157,10 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
                     <span style={{ fontSize: 11, color: "var(--ink-3)" }}>▾</span>
                   </button>
                   {times.length > 1 && (
-                    <button onClick={() => removeAt(i)} aria-label={t("push.remove_time")}
+                    <button
+                      onClick={() => removeAt(i)}
+                      disabled={saving}
+                      aria-label={t("push.remove_time")}
                       style={{
                         border: "none", background: "none", color: "var(--ink-3)",
                         cursor: "pointer", fontSize: 16, padding: "0 6px", lineHeight: 1,
@@ -155,7 +170,9 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
               ))}
             </div>
             {times.length < MAX_TIMES && (
-              <button onClick={addTime}
+              <button
+                onClick={addTime}
+                disabled={saving}
                 style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
                 {t("push.add_time")}
               </button>
@@ -166,8 +183,16 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
           </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
-            <button onClick={save} style={s.btn}>{t("common.save")}</button>
+            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.btnGhost, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button
+              onClick={save}
+              disabled={saving}
+              aria-busy={saving ? "true" : undefined}
+              style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: saving ? 0.72 : 1 }}
+            >
+              {saving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+              {saving ? t("common.saving") : t("common.save")}
+            </button>
           </div>
 
           {editingIdx != null && (

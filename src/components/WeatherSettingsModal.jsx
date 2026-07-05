@@ -2,24 +2,37 @@ import { useState } from "react";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { WEATHER_UPDATE_INTERVAL_OPTIONS } from "../lib/weather";
+import { Spinner } from "./Spinner";
 
 export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, setWeatherSettings, onClose }) {
   const t = useT();
   const [autoUpdate, setAutoUpdate] = useState(weatherAutoUpdate !== false);
   const [intervalHours, setIntervalHours] = useState(Number(weatherIntervalHours) || 3);
+  const [saving, setSaving] = useState(false);
 
-  function save() {
-    setWeatherSettings({ autoUpdate, intervalHours });
-    onClose();
+  function closeIfIdle() {
+    if (!saving) onClose();
+  }
+
+  async function save() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await Promise.resolve(setWeatherSettings({ autoUpdate, intervalHours }));
+      onClose();
+    } catch (err) {
+      console.error("[weather] settings save failed:", err);
+      setSaving(false);
+    }
   }
 
   return (
-    <ModalRoot onClose={onClose}>
-      <div style={s.overlay} onClick={onClose}>
+    <ModalRoot onClose={closeIfIdle}>
+      <div style={s.overlay} onClick={closeIfIdle}>
         <div style={s.modal} onClick={e => e.stopPropagation()}>
           <div style={s.header}>
             <h2 style={s.title}>{t("weather_settings.title")}</h2>
-            <button onClick={onClose} style={s.close} aria-label="Close">×</button>
+            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
 
           <label style={s.switchRow}>
@@ -30,6 +43,7 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
             <input
               type="checkbox"
               checked={autoUpdate}
+              disabled={saving}
               onChange={e => setAutoUpdate(e.target.checked)}
               style={{ width: 20, height: 20 }}
             />
@@ -43,6 +57,7 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
                   key={h}
                   type="button"
                   onClick={() => setIntervalHours(h)}
+                  disabled={saving}
                   style={s.segBtn(intervalHours === h)}
                 >
                   {h === 24 ? t("weather_settings.daily") : t("weather_settings.hours", { n: String(h) })}
@@ -54,8 +69,16 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
           <div style={s.note}>{t("weather_settings.behavior_note")}</div>
 
           <div style={s.actions}>
-            <button onClick={onClose} style={s.secondaryBtn}>{t("common.cancel")}</button>
-            <button onClick={save} style={s.primaryBtn}>{t("common.save")}</button>
+            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button
+              onClick={save}
+              disabled={saving}
+              aria-busy={saving ? "true" : undefined}
+              style={{ ...s.primaryBtn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: saving ? 0.72 : 1 }}
+            >
+              {saving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+              {saving ? t("common.saving") : t("common.save")}
+            </button>
           </div>
         </div>
       </div>

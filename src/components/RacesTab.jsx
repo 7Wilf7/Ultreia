@@ -11,6 +11,7 @@ import { ItemActionModal } from "./ItemActionModal";
 import { PersonalRecordsBar } from "./PersonalRecordsBar";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
+import { Spinner } from "./Spinner";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
 // the Target and History sections so every column lines up across both lists.
@@ -255,6 +256,7 @@ export function RacesTab({
   const [editingRaceId, setEditingRaceId] = useState(null);
   const [newRace, setNewRace] = useState(EMPTY_RACE(true));
   const [pastRaceWarning, setPastRaceWarning] = useState(null);
+  const [raceSaving, setRaceSaving] = useState(false);
   // Independent category filters for the two lists. Empty array = show all;
   // otherwise show only races whose `category` is in the set. Uncategorized
   // races drop out of any filtered view by design — they reappear once the
@@ -383,6 +385,7 @@ export function RacesTab({
   }
 
   async function commitRace(asTarget) {
+    if (raceSaving) return;
     const finalCategory = newRace.category || inferRaceCategory(newRace) || "";
     // Distance normalized to a plain number (km). UI always re-appends "km" on display.
     const distanceNum = parseDistanceKm(newRace.distance);
@@ -393,6 +396,7 @@ export function RacesTab({
       isTarget: asTarget,
       priority: asTarget ? newRace.priority : null,
     };
+    setRaceSaving(true);
     try {
       if (editingRaceId) {
         await updateRace(editingRaceId, built);
@@ -405,6 +409,8 @@ export function RacesTab({
       setPastRaceWarning(null);
     } catch {
       // alert already shown by the wrapper; keep the form open so the user can retry
+    } finally {
+      setRaceSaving(false);
     }
   }
 
@@ -605,8 +611,10 @@ export function RacesTab({
             {all.length > 0 && renderFilterChips(filter, setFilter)}
           </div>
           <button onClick={() => startAdd(kind)}
+            disabled={raceSaving}
             style={{
               ...(addingMode === kind ? s.btn : s.btnGhost),
+              opacity: raceSaving ? 0.55 : 1,
               padding: "6px 10px", fontSize: 12, flexShrink: 0,
               maxWidth: "44%",
               overflow: "hidden",
@@ -782,8 +790,16 @@ export function RacesTab({
                   <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
                   <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
-                    <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+                    <button
+                      onClick={() => commitRace(false)}
+                      disabled={raceSaving}
+                      aria-busy={raceSaving ? "true" : undefined}
+                      style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: raceSaving ? 0.72 : 1 }}
+                    >
+                      {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+                      {raceSaving ? t("common.saving") : t("races.past_warn_move")}
+                    </button>
+                    <button onClick={() => setPastRaceWarning(null)} disabled={raceSaving} style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1 }}>{t("common.cancel")}</button>
                   </div>
                 </div>
               )}
@@ -821,8 +837,8 @@ export function RacesTab({
       <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
 
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={() => startAdd("target")} style={addingMode === "target" ? s.btn : s.btnGhost}>{t("races.add_target")}</button>
-        <button onClick={() => startAdd("history")} style={addingMode === "history" ? s.btn : s.btnGhost}>{t("races.add_history")}</button>
+        <button onClick={() => startAdd("target")} disabled={raceSaving} style={{ ...(addingMode === "target" ? s.btn : s.btnGhost), opacity: raceSaving ? 0.55 : 1 }}>{t("races.add_target")}</button>
+        <button onClick={() => startAdd("history")} disabled={raceSaving} style={{ ...(addingMode === "history" ? s.btn : s.btnGhost), opacity: raceSaving ? 0.55 : 1 }}>{t("races.add_history")}</button>
         <span style={{ ...s.muted, fontSize: 11 }}>{t("races.edit_hint")}</span>
       </div>
 
@@ -831,8 +847,16 @@ export function RacesTab({
           <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
           <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
-            <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+            <button
+              onClick={() => commitRace(false)}
+              disabled={raceSaving}
+              aria-busy={raceSaving ? "true" : undefined}
+              style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: raceSaving ? 0.72 : 1 }}
+            >
+              {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+              {raceSaving ? t("common.saving") : t("races.past_warn_move")}
+            </button>
+            <button onClick={() => setPastRaceWarning(null)} disabled={raceSaving} style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1 }}>{t("common.cancel")}</button>
           </div>
         </div>
       )}
@@ -1306,11 +1330,19 @@ export function RacesTab({
         )}
 
         <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={tryAddRace} style={s.btn}>{isEdit ? t("common.save_changes") : t("common.save")}</button>
-          <button onClick={() => {
+          <button
+            onClick={tryAddRace}
+            disabled={raceSaving}
+            aria-busy={raceSaving ? "true" : undefined}
+            style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: raceSaving ? 0.72 : 1 }}
+          >
+            {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+            {raceSaving ? t("common.saving") : (isEdit ? t("common.save_changes") : t("common.save"))}
+          </button>
+          <button disabled={raceSaving} onClick={() => {
             if (isEdit) cancelEdit();
             else { cancelAdd(); }
-          }} style={s.btnGhost}>{t("common.cancel")}</button>
+          }} style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1 }}>{t("common.cancel")}</button>
         </div>
       </div>
     );

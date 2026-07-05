@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
@@ -111,12 +111,27 @@ export function InboxModal({
 }) {
   const t = useT();
   const appDialog = useAppDialog();
-  const tab = activeTab === "weekly" || activeTab === "other" ? activeTab : "daily";
   const scrollRef = useRef(null);
   const ioRef = useRef(null);
   const rowEls = useRef(new Map());
   const itemsRef = useRef(items);
+  const externalTab = activeTab === "weekly" || activeTab === "other" ? activeTab : "daily";
+  const [localTab, setLocalTab] = useState(externalTab);
+  const tab = localTab;
   useEffect(() => { itemsRef.current = items; }, [items]);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setLocalTab(externalTab);
+    });
+    return () => { cancelled = true; };
+  }, [externalTab]);
+
+  const selectTab = useCallback((next) => {
+    setLocalTab(next);
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    onTabChange?.(next);
+  }, [onTabChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -402,16 +417,16 @@ export function InboxModal({
         </div>
 
         <div style={styles.tabs}>
-          <button onClick={() => onTabChange?.("daily")} style={tabButtonStyle(tab === "daily")}>
+          <button onClick={() => selectTab("daily")} style={tabButtonStyle(tab === "daily")}>
             {t("inbox.tab_daily")}
           </button>
-          <button onClick={() => onTabChange?.("weekly")} style={tabButtonStyle(tab === "weekly", weeklyReportLoading)}>
+          <button onClick={() => selectTab("weekly")} style={tabButtonStyle(tab === "weekly", weeklyReportLoading)}>
             {t("inbox.tab_weekly")}
             {weeklyReportLoading && (
               <span className="ultreia-spinner" style={{ width: 10, height: 10, borderWidth: 1.5, marginLeft: 6 }} />
             )}
           </button>
-          <button onClick={() => onTabChange?.("other")} style={tabButtonStyle(tab === "other")}>
+          <button onClick={() => selectTab("other")} style={tabButtonStyle(tab === "other")}>
             {t("inbox.tab_other")}
           </button>
         </div>

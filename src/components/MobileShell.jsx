@@ -28,8 +28,8 @@ const TAB_HAPTIC_MS = 8;
 const PAGER_DRAG_INTENT_PX = 7;
 const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_RELEASE_DISTANCE_RATIO = 0.22;
-const PAGER_SETTLE_MIN_MS = 680;
-const PAGER_SETTLE_MAX_MS = 980;
+const PAGER_SETTLE_MIN_MS = 760;
+const PAGER_SETTLE_MAX_MS = 1220;
 const PAGER_SKIP_SELECTOR = "button,input,textarea,select,a,[role='button'],[data-dropdown-menu],[data-no-pager-swipe]";
 
 function triggerTabHaptic() {
@@ -115,9 +115,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   const renderedTabsRef = useRef(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerSettleFrameRef = useRef(0);
-  const dragOffsetFrameRef = useRef(0);
-  const pendingTrackOffsetRef = useRef(null);
   const trackOffsetRef = useRef(0);
+  const trackOffsetYRef = useRef(0);
   const pagerWidthRef = useRef(1);
   const renderTrimTimerRef = useRef(null);
   const pagerTouchActiveRef = useRef(false);
@@ -173,37 +172,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     trackOffsetRef.current = left;
     const track = trackRef.current;
     if (!track) return;
-    track.style.setProperty("--ultreia-pager-x", `${-left}px`);
+    track.style.transform = `translate3d(${-left}px, ${trackOffsetYRef.current}px, 0)`;
   }, []);
-
-  const cancelPendingTrackOffset = useCallback(() => {
-    if (dragOffsetFrameRef.current) {
-      cancelAnimationFrame(dragOffsetFrameRef.current);
-      dragOffsetFrameRef.current = 0;
-    }
-    pendingTrackOffsetRef.current = null;
-  }, []);
-
-  const flushPendingTrackOffset = useCallback(() => {
-    if (dragOffsetFrameRef.current) {
-      cancelAnimationFrame(dragOffsetFrameRef.current);
-      dragOffsetFrameRef.current = 0;
-    }
-    const next = pendingTrackOffsetRef.current;
-    pendingTrackOffsetRef.current = null;
-    if (Number.isFinite(next)) setTrackOffset(next);
-  }, [setTrackOffset]);
-
-  const scheduleTrackOffset = useCallback((left) => {
-    pendingTrackOffsetRef.current = left;
-    if (dragOffsetFrameRef.current) return;
-    dragOffsetFrameRef.current = requestAnimationFrame(() => {
-      dragOffsetFrameRef.current = 0;
-      const next = pendingTrackOffsetRef.current;
-      pendingTrackOffsetRef.current = null;
-      if (Number.isFinite(next)) setTrackOffset(next);
-    });
-  }, [setTrackOffset]);
 
   const alignTrackToTab = useCallback((next) => {
     const clamped = clampTabIndex(next, tabCount);
@@ -212,7 +182,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   }, [measurePagerWidth, setTrackOffset, tabCount]);
 
   const clearPagerTimers = useCallback(() => {
-    cancelPendingTrackOffset();
     if (pagerSettleFrameRef.current) {
       cancelAnimationFrame(pagerSettleFrameRef.current);
       pagerSettleFrameRef.current = 0;
@@ -221,7 +190,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
     }
-  }, [cancelPendingTrackOffset]);
+  }, []);
 
   const scheduleRenderedWindowTrim = useCallback((next, delay = 180) => {
     if (renderTrimTimerRef.current) clearTimeout(renderTrimTimerRef.current);
@@ -279,7 +248,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
 
   const settlePagerFromCurrentOffset = useCallback(() => {
     if (pagerSettleFrameRef.current) return true;
-    flushPendingTrackOffset();
     const width = measurePagerWidth();
     const left = trackOffsetRef.current;
     const currentLeft = visualTabRef.current * width;
@@ -291,7 +259,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const next = delta >= threshold ? current + 1 : delta <= -threshold ? current - 1 : current;
     settlePagerToTab(clampTabIndex(next, tabCount));
     return true;
-  }, [flushPendingTrackOffset, measurePagerWidth, settlePagerToTab, tabCount]);
+  }, [measurePagerWidth, settlePagerToTab, tabCount]);
 
   useLayoutEffect(() => {
     tabPropRef.current = tab;
@@ -300,7 +268,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
   }, [tab, alignTrackToTab, commitVisualTab]);
 
   useLayoutEffect(() => {
-    trackRef.current?.style.setProperty("--ultreia-pager-y", `${pullY}px`);
+    trackOffsetYRef.current = pullY;
     alignTrackToTab(visualTabRef.current);
   }, [alignTrackToTab, pullY]);
 
@@ -372,8 +340,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     if (event.cancelable) event.preventDefault();
     event.stopPropagation();
     const width = st.width || pagerWidthRef.current || measurePagerWidth();
-    scheduleTrackOffset(clampPagerOffset(st.startLeft - dx, width, tabCount));
-  }, [measurePagerWidth, scheduleTrackOffset, tabCount]);
+    setTrackOffset(clampPagerOffset(st.startLeft - dx, width, tabCount));
+  }, [measurePagerWidth, setTrackOffset, tabCount]);
 
   useEffect(() => () => {
     clearPagerTimers();
@@ -550,8 +518,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
             msOverflowStyle: "none",
             backfaceVisibility: "hidden",
             willChange: "transform",
-            "--ultreia-pager-y": `${pullY}px`,
-            transform: "translate3d(var(--ultreia-pager-x, 0px), var(--ultreia-pager-y, 0px), 0)",
             transition: "none",
           }}>
           {TABS.map(({ idx }) => {

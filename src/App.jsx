@@ -4598,9 +4598,9 @@ Rules:
   );
 
   if (isMobile) {
-    // MobileShell owns the native-scroll mobile pager; renderTab(idx) lets it
-    // paint the current tab and adjacent tabs. Index 4 is the mobile Settings
-    // page (handled inside renderTab).
+    // MobileShell owns the mobile pager; renderTab(idx) paints the real tab,
+    // while renderTabPreview(idx) feeds the lightweight drag layer. Index 4 is
+    // the mobile Settings page (handled inside renderTab).
     return (
       <>
         <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}

@@ -355,23 +355,13 @@ summary::-webkit-details-marker { display: none; }
   min-height: 100%;
 }
 
-.ultreia-pager-live-preview {
-  display: none;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: var(--bg);
-  contain: layout paint style;
+.ultreia-pager-track[data-drag-overlay="true"] {
+  opacity: 0;
 }
 
-.ultreia-pager-track[data-drag-lite="true"] .ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-full-content {
-  visibility: hidden;
-  pointer-events: none;
-  content-visibility: hidden;
-}
-
-.ultreia-pager-track[data-drag-lite="true"] .ultreia-pager-content-shell[data-full-pane="true"] > .ultreia-pager-live-preview {
-  display: block;
+.ultreia-pager-drag-overlay[data-active="true"] {
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .ultreia-pager-preview-content {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { RUN_GROUP_TYPES, TYPE_COLOR } from "../constants";
 import { messageContentForCoach } from "../utils/coachPrompt";
 import { formatDateShort, formatDurationShort, formatPaceFromSec } from "../utils/format";
@@ -15,6 +16,10 @@ function toDateKey(date) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function previewDateKey(value) {
+  return toDateKey(value || new Date());
 }
 
 function cleanText(value, max = 96) {
@@ -355,7 +360,7 @@ function SettingsPreview({ t, lang }) {
   );
 }
 
-export function MobileTabPreview({
+function MobileTabPreviewInner({
   tabIndex,
   t,
   lang,
@@ -379,3 +384,18 @@ export function MobileTabPreview({
     </PreviewFrame>
   );
 }
+
+function samePreviewProps(prev, next) {
+  return prev.tabIndex === next.tabIndex
+    && prev.t === next.t
+    && prev.lang === next.lang
+    && prev.logs === next.logs
+    && prev.races === next.races
+    && prev.dailyNotes === next.dailyNotes
+    && prev.chatMessages === next.chatMessages
+    && prev.chatLoading === next.chatLoading
+    && prev.codexRunnerStatus === next.codexRunnerStatus
+    && previewDateKey(prev.now) === previewDateKey(next.now);
+}
+
+export const MobileTabPreview = memo(MobileTabPreviewInner, samePreviewProps);

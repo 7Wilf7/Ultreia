@@ -2054,6 +2054,11 @@ function AppShell({
   const [racesSubTab, setRacesSubTab] = useState("target");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
+  const mobilePagerDraggingRef = useRef(false);
+  const handleMobilePagerDragActiveChange = useCallback((active) => {
+    mobilePagerDraggingRef.current = active;
+    if (!active) setNow(new Date());
+  }, []);
   const planDeviationTodayKey = localDateKey(now);
   const planDeviationSummary = useMemo(
     () => summarizePlanDeviation(logs, new Date(`${planDeviationTodayKey}T12:00:00`)),
@@ -2286,6 +2291,7 @@ function AppShell({
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
   const refreshCodexRunnerStatus = useCallback(async (options = {}) => {
     const force = options.force === true;
+    if (mobilePagerDraggingRef.current && !force) return null;
     if (runnerStatusAbortRef.current) {
       if (!force) return null;
       runnerStatusAbortRef.current.abort();
@@ -2294,19 +2300,23 @@ function AppShell({
     runnerStatusAbortRef.current = controller;
     try {
       const data = await db.usage.getRunnerStatus({ signal: controller.signal });
-      setCodexRunnerStatus(data || { state: "unknown", provider: "desktop_codex" });
+      if (!mobilePagerDraggingRef.current) {
+        setCodexRunnerStatus(data || { state: "unknown", provider: "desktop_codex" });
+      }
       return data;
     } catch (err) {
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted) return null;
-      setCodexRunnerStatus(prev => ({
-        ...prev,
-        provider: "desktop_codex",
-        state: "error",
-        runner_state: prev?.runner_state || "offline",
-        codex_status: prev?.codex_status || "unknown",
-        error: err?.message || String(err),
-        checked_at: new Date().toISOString(),
-      }));
+      if (!mobilePagerDraggingRef.current) {
+        setCodexRunnerStatus(prev => ({
+          ...prev,
+          provider: "desktop_codex",
+          state: "error",
+          runner_state: prev?.runner_state || "offline",
+          codex_status: prev?.codex_status || "unknown",
+          error: err?.message || String(err),
+          checked_at: new Date().toISOString(),
+        }));
+      }
       return null;
     } finally {
       if (runnerStatusAbortRef.current === controller) runnerStatusAbortRef.current = null;
@@ -3928,7 +3938,9 @@ Rules:
   }, [profile]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    const timer = setInterval(() => {
+      if (!mobilePagerDraggingRef.current) setNow(new Date());
+    }, 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -4605,7 +4617,8 @@ Rules:
       <>
         <MobileShell tab={tab} setTab={setTab} coachBusy={coachBusy}
           renderTab={renderTab} renderTabPreview={renderTabPreview} tabCount={5}
-          onRefresh={refresh} refreshing={refreshing} />
+          onRefresh={refresh} refreshing={refreshing}
+          onPagerDragActiveChange={handleMobilePagerDragActiveChange} />
         {modals}
       </>
     );

@@ -204,6 +204,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     notifyPagerDragActive(false);
   }, [notifyPagerDragActive, setPagerTouchingAttribute]);
 
+  const primePagerDragRendering = useCallback(() => {
+    if (pagerTouchingRef.current) return;
+    pagerTouchingRef.current = true;
+    pagerTouchActiveRef.current = true;
+    setPagerTouchingAttribute(true);
+    notifyPagerDragActive(true);
+  }, [notifyPagerDragActive, setPagerTouchingAttribute]);
+
   const completePagerFromOffset = useCallback(() => {
     if (pagerSettleTimerRef.current) {
       clearTimeout(pagerSettleTimerRef.current);
@@ -315,6 +323,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
     const beginNativeTouch = () => {
       clearPagerTimers();
+      primePagerDragRendering();
       pagerGestureRef.current = {
         touching: true,
         current: visualTabRef.current,
@@ -345,12 +354,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       trackOffsetRef.current = left;
       const width = pagerWidthRef.current || measurePagerWidth();
       const currentLeft = visualTabRef.current * width;
-      if (Math.abs(left - currentLeft) > 1 && !pagerTouchingRef.current) {
-        pagerTouchingRef.current = true;
-        pagerTouchActiveRef.current = true;
+      if (Math.abs(left - currentLeft) > 1) {
         suppressClickUntilRef.current = performance.now() + 450;
-        setPagerTouchingAttribute(true);
-        notifyPagerDragActive(true);
+        primePagerDragRendering();
       }
       if (!pagerGestureRef.current.touching) {
         scheduleNativeScrollSettle();
@@ -393,6 +399,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPagerTimers,
     measurePagerWidth,
     notifyPagerDragActive,
+    primePagerDragRendering,
     scheduleNativeScrollSettle,
     settleNativeScroll,
     setPagerTouchingAttribute,

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -166,9 +166,12 @@ export function TrainingTab({
   const t = useT();
   const isMobile = useIsMobile();
   const sectionTouch = useRef(null);
+  const [viewMotionDir, setViewMotionDir] = useState(0);
 
   function changeView(nextView) {
     if (nextView === view) return;
+    const order = { activities: 0, charts: 1 };
+    setViewMotionDir((order[nextView] ?? 0) > (order[view] ?? 0) ? 1 : -1);
     setView(nextView);
   }
 
@@ -393,6 +396,10 @@ export function TrainingTab({
     </>
   );
 
+  const viewMotionClass = isMobile && viewMotionDir
+    ? (viewMotionDir > 0 ? "ultreia-tab-in-right" : "ultreia-tab-in-left")
+    : undefined;
+
   return (
     <div
       data-mobile-inner-swipe={isMobile ? "true" : undefined}
@@ -445,29 +452,31 @@ export function TrainingTab({
       </div>
       )}
 
-      {view === "activities" && (
-        <>
+      <div key={view} className={viewMotionClass}>
+        {view === "activities" && (
+          <>
 
-          <ActivitiesTab
-            logs={logs}
-            addLog={addLog}
-            updateLog={updateLog}
-            bulkAddLogs={bulkAddLogs}
-            periodLogs={periodLogs}
-            setConfirmDelete={setConfirmDelete}
-            profile={profile}
-            toolbarStickyTop={toolbarTop}
-            stickyHeader={activitiesStickyHeader}
-            loadChip={loadChipEl}
-            onCoachReviewRequest={onCoachReviewRequest}
-            onWeeklyReportPromptRequest={onWeeklyReportPromptRequest}
-          />
-        </>
-      )}
+            <ActivitiesTab
+              logs={logs}
+              addLog={addLog}
+              updateLog={updateLog}
+              bulkAddLogs={bulkAddLogs}
+              periodLogs={periodLogs}
+              setConfirmDelete={setConfirmDelete}
+              profile={profile}
+              toolbarStickyTop={toolbarTop}
+              stickyHeader={activitiesStickyHeader}
+              loadChip={loadChipEl}
+              onCoachReviewRequest={onCoachReviewRequest}
+              onWeeklyReportPromptRequest={onWeeklyReportPromptRequest}
+            />
+          </>
+        )}
 
-      {view === "charts" && (
-        <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
-      )}
+        {view === "charts" && (
+          <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
+        )}
+      </div>
     </div>
   );
 }

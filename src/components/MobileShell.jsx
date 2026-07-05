@@ -78,7 +78,9 @@ function horizontalScrollerOwnsGesture(target, dx, stopAt) {
   let node = target;
   while (node && node !== stopAt && node.nodeType === 1) {
     const maxScroll = (node.scrollWidth || 0) - (node.clientWidth || 0);
-    if (maxScroll > 4) {
+    const overflowX = window.getComputedStyle?.(node)?.overflowX;
+    const canScrollX = overflowX === "auto" || overflowX === "scroll" || overflowX === "overlay";
+    if (canScrollX && maxScroll > 4) {
       if (dx < 0 && node.scrollLeft < maxScroll - 1) return true;
       if (dx > 0 && node.scrollLeft > 1) return true;
     }
@@ -352,6 +354,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       const width = measurePagerWidth();
       const current = visualTabRef.current;
       const startLeft = current * width;
+      setTrackOffset(startLeft);
       pagerGestureRef.current = {
         touching: true,
         current,
@@ -406,6 +409,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         ...pagerGestureRef.current,
         touching: false,
       };
+      flushQueuedTrackOffset();
+      alignTrackToTab(visualTabRef.current);
     };
 
     const onPagerTouchStart = (event) => {
@@ -479,6 +484,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     };
   }, [
     animatePagerToTab,
+    alignTrackToTab,
     clearPagerTimers,
     flushQueuedTrackOffset,
     measurePagerWidth,

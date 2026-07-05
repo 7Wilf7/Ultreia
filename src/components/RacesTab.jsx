@@ -81,9 +81,12 @@ export function RacesTab({
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const topSwipe = useRef(null);
+  const [topTabMotionDir, setTopTabMotionDir] = useState(0);
 
   function changeMobileTopTab(nextTab) {
     if (nextTab === mobileTopTab) return;
+    const order = { races: 0, pr: 1 };
+    setTopTabMotionDir((order[nextTab] ?? 0) > (order[mobileTopTab] ?? 0) ? 1 : -1);
     setMobileTopTab(nextTab);
   }
 
@@ -675,6 +678,9 @@ export function RacesTab({
   // sub-tabs Target / History; the count lives in the sub-tab label so the
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
+    const topTabMotionClass = topTabMotionDir
+      ? (topTabMotionDir > 0 ? "ultreia-tab-in-right" : "ultreia-tab-in-left")
+      : undefined;
     return (
       <div
         className="ultreia-no-motion-surface"
@@ -764,43 +770,45 @@ export function RacesTab({
         )}
         </div> {/* /sticky header */}
 
-        {mobileTopTab === "pr" && (
-          <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
-        )}
+        <div key={mobileTopTab} className={topTabMotionClass}>
+          {mobileTopTab === "pr" && (
+            <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
+          )}
 
-        {mobileTopTab === "races" && (
-          <>
-            {pastRaceWarning && (
-              <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
-                <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
-                <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
-                  <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+          {mobileTopTab === "races" && (
+            <>
+              {pastRaceWarning && (
+                <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
+                  <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
+                  <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={() => commitRace(false)} style={s.btn}>{t("races.past_warn_move")}</button>
+                    <button onClick={() => setPastRaceWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            <div>
-              {mobileSubTab === "target" && renderMobileSection({
-                kind: "target",
-                list: targetRacesList,
-                all: targetRacesAll,
-                filter: targetFilter,
-                setFilter: setTargetFilter,
-                emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
-              })}
-              {mobileSubTab === "history" && renderMobileSection({
-                kind: "history",
-                list: historyRacesList,
-                all: historyRacesAll,
-                filter: historyFilter,
-                setFilter: setHistoryFilter,
-                emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
-              })}
-            </div>
-          </>
-        )}
+              <div>
+                {mobileSubTab === "target" && renderMobileSection({
+                  kind: "target",
+                  list: targetRacesList,
+                  all: targetRacesAll,
+                  filter: targetFilter,
+                  setFilter: setTargetFilter,
+                  emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
+                })}
+                {mobileSubTab === "history" && renderMobileSection({
+                  kind: "history",
+                  list: historyRacesList,
+                  all: historyRacesAll,
+                  filter: historyFilter,
+                  setFilter: setHistoryFilter,
+                  emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
+                })}
+              </div>
+            </>
+          )}
+        </div>
         {modals}
       </div>
     );

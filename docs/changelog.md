@@ -4,6 +4,7 @@
 
 ## 2026-07-05
 
+- **移动端 Tab 横滑手势冲突修复**：Calendar 月历块不再保留横向默认手势，日历页可以继续横滑到 AI Coach；Races 卡片长按编辑 / 删除在外层 Tab 横滑期间会自动失效，避免从比赛页滑向 AI Coach 时误弹出赛事操作弹窗。同时把松手吸附动画从上一版的偏慢节奏略微调快。
 - **移动端 Tab 横滑退出 preview 实验线**：底部 Tab 半屏拖动不再显示轻量骨架预览，也不再隐藏真实页面；AI Coach / Calendar 等相邻真实页面直接按 `requestAnimationFrame` 合帧写入 `translate3d` 跟随手指，拖动期间不触发 React 状态更新，并清理掉会造成视觉割裂的大范围拖动期样式降级。
 - **移动端内层横滑边界交接修复**：Training 的活动 / 图表、Races 的比赛 / 个人记录在内层已经滑到边界时，会明确把手势交还给底部 Tab，避免图表页继续滑向 Calendar 或个人记录页继续滑向 Settings 时没有反应。
 - **移动端 Tab 跟手路径去 scroll 化**：底部 Tab 横向拖动不再依赖外层 `scrollLeft` / `scroll` / `scrollend` 同步；确认横向后只移动一层轻量 preview strip 的 `translate3d`，真实页面停稳后再显示，进一步减少 AI Coach / Calendar 半屏按住来回拖时的输入延迟。

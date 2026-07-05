@@ -18,8 +18,8 @@ import {
  * rAF-batched transform-only movement on the real adjacent pages.
  */
 const TAB_HAPTIC_MS = 8;
-const PAGER_SETTLE_MIN_MS = 520;
-const PAGER_SETTLE_MAX_MS = 1080;
+const PAGER_SETTLE_MIN_MS = 360;
+const PAGER_SETTLE_MAX_MS = 720;
 const PAGER_DRAG_AXIS_LOCK_PX = 8;
 const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_DRAG_DISTANCE_FRACTION = 0.18;

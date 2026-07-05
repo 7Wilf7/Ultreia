@@ -241,11 +241,9 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
     paddingBottom: 8,
     borderBottom: "1px solid var(--rule)",
     marginBottom: 14,
-    // Consume touch gestures on the calendar block for our month-change swipe
-    // (handled in JS) instead of letting them scroll the page — so swiping the
-    // calendar no longer drags the weather strip below. The weather strip sits
-    // outside this block and scrolls normally.
-    touchAction: "pan-x",
+    // Keep vertical movement available for the month-change swipe, but leave
+    // horizontal gestures free for the outer bottom-tab pager.
+    touchAction: "pan-y",
   } : {};
 
   return (

@@ -311,9 +311,19 @@ export function RacesTab({
   const [actionRace, setActionRace] = useState(null);
   const pressTimer = useRef(null);
   const longPressFired = useRef(false);
+  function outerPagerIsDragging() {
+    return typeof document !== "undefined"
+      && !!document.querySelector(".ultreia-mobile-shell[data-pager-touching='true']");
+  }
   function startPress(r) {
+    endPress();
     longPressFired.current = false;
-    pressTimer.current = setTimeout(() => { longPressFired.current = true; setActionRace(r); }, 450);
+    pressTimer.current = setTimeout(() => {
+      pressTimer.current = null;
+      if (outerPagerIsDragging()) return;
+      longPressFired.current = true;
+      setActionRace(r);
+    }, 450);
   }
   function endPress() {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }

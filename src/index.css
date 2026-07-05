@@ -370,8 +370,8 @@ summary::-webkit-details-marker { display: none; }
   transform: translate3d(0, 0, 0);
 }
 
-body:has(.ultreia-mobile-shell[data-pager-touching="true"])::before,
-body:has(.ultreia-mobile-shell[data-pager-touching="true"])::after {
+body[data-ultreia-pager-touching="true"]::before,
+body[data-ultreia-pager-touching="true"]::after {
   opacity: 0 !important;
   animation: none !important;
   filter: none !important;

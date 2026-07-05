@@ -113,11 +113,13 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerSettleTimerRef = useRef(null);
   const pagerSettleFrameRef = useRef(0);
+  const pagerDragFrameRef = useRef(0);
   const pagerTouchActiveRef = useRef(false);
   const pagerTouchingRef = useRef(false);
   const pagerDragActiveNotifiedRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const trackOffsetRef = useRef(0);
+  const pendingTrackOffsetRef = useRef(null);
   const pagerWidthRef = useRef(1);
   const pagerGestureRef = useRef(null);
   const renderTrimTimerRef = useRef(null);
@@ -133,18 +135,50 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     return width;
   }, []);
 
-  const setTrackOffset = useCallback((left) => {
+  const applyTrackOffset = useCallback((left) => {
     trackOffsetRef.current = left;
     const strip = stripRef.current;
     if (!strip) return;
     strip.style.transform = `translate3d(${-left}px, 0, 0)`;
   }, []);
 
+  const setTrackOffset = useCallback((left) => {
+    pendingTrackOffsetRef.current = null;
+    applyTrackOffset(left);
+  }, [applyTrackOffset]);
+
+  const scheduleTrackOffset = useCallback((left) => {
+    trackOffsetRef.current = left;
+    pendingTrackOffsetRef.current = left;
+    if (pagerDragFrameRef.current) return;
+    pagerDragFrameRef.current = requestAnimationFrame(() => {
+      pagerDragFrameRef.current = 0;
+      const pending = pendingTrackOffsetRef.current;
+      pendingTrackOffsetRef.current = null;
+      if (pending !== null) applyTrackOffset(pending);
+    });
+  }, [applyTrackOffset]);
+
+  const flushTrackOffset = useCallback(() => {
+    if (pagerDragFrameRef.current) {
+      cancelAnimationFrame(pagerDragFrameRef.current);
+      pagerDragFrameRef.current = 0;
+    }
+    const pending = pendingTrackOffsetRef.current;
+    pendingTrackOffsetRef.current = null;
+    if (pending !== null) applyTrackOffset(pending);
+  }, [applyTrackOffset]);
+
   const setPagerTouchingAttribute = useCallback((active) => {
     const shell = shellRef.current;
-    if (!shell) return;
-    if (active) shell.dataset.pagerTouching = "true";
-    else delete shell.dataset.pagerTouching;
+    if (shell) {
+      if (active) shell.dataset.pagerTouching = "true";
+      else delete shell.dataset.pagerTouching;
+    }
+    if (typeof document !== "undefined") {
+      if (active) document.body.dataset.ultreiaPagerTouching = "true";
+      else delete document.body.dataset.ultreiaPagerTouching;
+    }
   }, []);
 
   function scrollActiveToTop() {
@@ -189,6 +223,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(pagerSettleFrameRef.current);
       pagerSettleFrameRef.current = 0;
     }
+    if (pagerDragFrameRef.current) {
+      cancelAnimationFrame(pagerDragFrameRef.current);
+      pagerDragFrameRef.current = 0;
+    }
+    pendingTrackOffsetRef.current = null;
     if (renderTrimTimerRef.current) {
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
@@ -284,7 +323,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => () => {
     clearPagerTimers();
-  }, [clearPagerTimers]);
+    setPagerTouchingAttribute(false);
+    notifyPagerDragActive(false);
+  }, [clearPagerTimers, notifyPagerDragActive, setPagerTouchingAttribute]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -361,7 +402,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
       const maxLeft = (tabCount - 1) * gesture.width;
       const nextLeft = resistedPagerLeft(gesture.startLeft - dx, 0, maxLeft);
-      setTrackOffset(nextLeft);
+      scheduleTrackOffset(nextLeft);
       gesture.lastX = point.clientX;
       gesture.lastAt = event.timeStamp || performance.now();
       gesture.lastLeft = nextLeft;
@@ -373,6 +414,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (gesture?.mode === "drag") {
         event.preventDefault();
         event.stopPropagation();
+        flushTrackOffset();
         const point = getTouchPoint(event);
         const endedAt = event.timeStamp || performance.now();
         const dx = point ? point.clientX - gesture.startX : gesture.startLeft - trackOffsetRef.current;
@@ -419,7 +461,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     finishPagerGesture,
     measurePagerWidth,
     notifyPagerDragActive,
+    flushTrackOffset,
     setTrackOffset,
+    scheduleTrackOffset,
     setPagerTouchingAttribute,
     tabCount,
   ]);

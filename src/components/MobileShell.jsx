@@ -15,12 +15,12 @@ import {
  * pager for cross-tab swipes.
  *
  * Each tab is its OWN vertical scroll container. Horizontal finger-follow is
- * handled by compositor transforms on the visible real panes: no React state,
+ * handled by one compositor transform on the pager strip: no React state,
  * no layout reads, and no browser snap negotiation while the finger is moving.
  */
 const TAB_HAPTIC_MS = 8;
-const PAGER_SETTLE_MIN_MS = 220;
-const PAGER_SETTLE_MAX_MS = 560;
+const PAGER_SETTLE_MIN_MS = 320;
+const PAGER_SETTLE_MAX_MS = 760;
 const PAGER_DRAG_AXIS_LOCK_PX = 8;
 const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
@@ -114,13 +114,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const activePane = () => paneRefs.current[visualTabRef.current];
   const pagerSettleTimerRef = useRef(null);
   const pagerSettleFrameRef = useRef(0);
-  const pagerDragFrameRef = useRef(0);
   const pagerTouchActiveRef = useRef(false);
   const pagerTouchingRef = useRef(false);
   const pagerDragActiveNotifiedRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const trackOffsetRef = useRef(0);
-  const pendingTrackOffsetRef = useRef(null);
   const pagerWidthRef = useRef(1);
   const pagerGestureRef = useRef(null);
   const renderTrimTimerRef = useRef(null);
@@ -136,52 +134,28 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     return width;
   }, []);
 
-  const applyPaneTransform = useCallback((idx, transform) => {
-    const pane = paneRefs.current[idx];
-    if (pane) pane.style.transform = transform;
-  }, []);
-
   const applyTrackOffset = useCallback((left) => {
     trackOffsetRef.current = left;
-    const transform = `translate3d(${-left}px, 0, 0)`;
-    const rendered = renderedTabsRef.current;
-    for (let i = 0; i < rendered.length; i += 1) {
-      applyPaneTransform(rendered[i], transform);
+    if (stripRef.current) {
+      stripRef.current.style.transform = `translate3d(${-left}px, 0, 0)`;
     }
-    if (!rendered.includes(visualTabRef.current)) {
-      applyPaneTransform(visualTabRef.current, transform);
-    }
-    if (tabPropRef.current !== visualTabRef.current && !rendered.includes(tabPropRef.current)) {
-      applyPaneTransform(tabPropRef.current, transform);
-    }
-  }, [applyPaneTransform]);
+  }, []);
+
+  const setStripRef = useCallback((el) => {
+    stripRef.current = el;
+    if (el) el.style.transform = `translate3d(${-trackOffsetRef.current}px, 0, 0)`;
+  }, []);
 
   const setTrackOffset = useCallback((left) => {
-    pendingTrackOffsetRef.current = null;
     applyTrackOffset(left);
   }, [applyTrackOffset]);
 
   const scheduleTrackOffset = useCallback((left) => {
-    trackOffsetRef.current = left;
-    pendingTrackOffsetRef.current = left;
-    if (pagerDragFrameRef.current) return;
-    pagerDragFrameRef.current = requestAnimationFrame(() => {
-      pagerDragFrameRef.current = 0;
-      const pending = pendingTrackOffsetRef.current;
-      pendingTrackOffsetRef.current = null;
-      if (pending !== null) applyTrackOffset(pending);
-    });
+    applyTrackOffset(left);
   }, [applyTrackOffset]);
 
   const flushTrackOffset = useCallback(() => {
-    if (pagerDragFrameRef.current) {
-      cancelAnimationFrame(pagerDragFrameRef.current);
-      pagerDragFrameRef.current = 0;
-    }
-    const pending = pendingTrackOffsetRef.current;
-    pendingTrackOffsetRef.current = null;
-    if (pending !== null) applyTrackOffset(pending);
-  }, [applyTrackOffset]);
+  }, []);
 
   const setPagerTouchingAttribute = useCallback((active) => {
     const shell = shellRef.current;
@@ -237,11 +211,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       cancelAnimationFrame(pagerSettleFrameRef.current);
       pagerSettleFrameRef.current = 0;
     }
-    if (pagerDragFrameRef.current) {
-      cancelAnimationFrame(pagerDragFrameRef.current);
-      pagerDragFrameRef.current = 0;
-    }
-    pendingTrackOffsetRef.current = null;
     if (renderTrimTimerRef.current) {
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
@@ -549,15 +518,19 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     };
 
-    track.addEventListener("pointerdown", onPagerPointerDown, { capture: true });
-    track.addEventListener("pointerrawupdate", onPagerPointerMove, { capture: true });
-    track.addEventListener("pointermove", onPagerPointerMove, { capture: true });
-    track.addEventListener("pointerup", onPagerPointerEnd, { capture: true });
-    track.addEventListener("pointercancel", onPagerPointerEnd, { capture: true });
-    track.addEventListener("touchstart", onPagerTouchStart, { capture: true });
-    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
-    track.addEventListener("touchend", onPagerTouchEnd, { capture: true });
-    track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true });
+    const supportsPointer = typeof window !== "undefined" && "PointerEvent" in window;
+    if (supportsPointer) {
+      track.addEventListener("pointerdown", onPagerPointerDown, { capture: true });
+      track.addEventListener("pointerrawupdate", onPagerPointerMove, { capture: true });
+      track.addEventListener("pointermove", onPagerPointerMove, { capture: true });
+      track.addEventListener("pointerup", onPagerPointerEnd, { capture: true });
+      track.addEventListener("pointercancel", onPagerPointerEnd, { capture: true });
+    } else {
+      track.addEventListener("touchstart", onPagerTouchStart, { capture: true });
+      track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
+      track.addEventListener("touchend", onPagerTouchEnd, { capture: true });
+      track.addEventListener("touchcancel", onPagerTouchEnd, { capture: true });
+    }
     track.addEventListener("click", suppressClickAfterDrag, true);
     return () => {
       track.removeEventListener("pointerdown", onPagerPointerDown, true);
@@ -742,7 +715,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
             transition: "none",
           }}>
           <div
-            ref={stripRef}
+            ref={setStripRef}
             className="ultreia-pager-strip"
             style={{
               position: "absolute",
@@ -765,7 +738,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                       return;
                     }
                     paneRefs.current[idx] = el;
-                    el.style.transform = `translate3d(${-trackOffsetRef.current}px, 0, 0)`;
                   }}
                   className="ultreia-pager-pane"
                   data-rendered={shouldRender ? "true" : "false"}
@@ -791,10 +763,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                     contain: "strict",
                     overflowAnchor: "none",
                     backfaceVisibility: "hidden",
-                    // React deliberately does not own transform here. The
-                    // touch path writes it imperatively, so unrelated renders
-                    // cannot snap the pane away from the user's finger.
-                    willChange: shouldShow ? "transform" : "auto",
+                    // The pager strip owns the horizontal transform. Keeping
+                    // pane layers ordinary avoids moving several heavy pages
+                    // as separate compositor layers every frame.
+                    willChange: "auto",
                     isolation: shouldShow ? "isolate" : "auto",
                     visibility: shouldShow ? "visible" : "hidden",
                     pointerEvents: isInteractivePane ? "auto" : "none",

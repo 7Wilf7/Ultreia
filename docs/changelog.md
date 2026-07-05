@@ -4,6 +4,7 @@
 
 ## 2026-07-05
 
+- **移动端 Tab 半屏拖动再降帧成本**：AI Coach / 日历等相邻 Tab 半屏按住来回拖时，外层 pager 改为只移动一个页面 strip，不再给多个重页面 pane 分别写 `transform`；支持 Pointer Events 的 PWA 也不再同时挂 touchmove 兜底监听，减少主线程等待。松手吸附节奏同步放慢，避免过快切换带来的割裂感。
 - **移动端 Tab 横滑与 AI 聊天滚动修复**：外层 Tab pager 增加 touch 兜底路径，并与 pointer 路径共用同一套内层横滑边界判断；Training 的「图表」到日历、日历到 AI Coach 等相邻底部 Tab 可以继续横滑切换。AI Coach 对话列表明确按竖向滚动处理，恢复聊天内容上下滑。
 - **移动端 Tab 横滑使用最新指针采样**：外层 Tab 横滑会读取 pointer coalesced events 的最新采样点，并在支持的浏览器里监听 `pointerrawupdate`；每帧位移时更接近手指当前位置，减少高刷新率手机上半屏按住来回拖的跟手延迟。
 - **移动端 Tab 横滑改走 Pointer Events**：外层分页器不再用 `touchmove + preventDefault` 作为主手势路径，改为 `pointerdown / pointermove` 配合 `touch-action: pan-y`；确认横向后才 capture 指针并接管拖动，纵向滑动仍交给各 Tab 自己滚动，减少 Android PWA 半屏按住横滑时浏览器与 JS 争抢手势造成的延迟。

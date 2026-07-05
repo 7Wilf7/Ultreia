@@ -358,52 +358,6 @@ summary::-webkit-details-marker { display: none; }
   background: var(--bg);
 }
 
-.ultreia-pager-freeze-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 9;
-  overflow: hidden;
-  visibility: hidden;
-  opacity: 0;
-  pointer-events: none;
-  background: var(--bg);
-  contain: strict;
-  backface-visibility: hidden;
-  transform: translateZ(0);
-  will-change: opacity, transform;
-}
-
-.ultreia-pager-freeze-layer[data-state="prewarm"] {
-  visibility: visible;
-  opacity: 0.001;
-}
-
-.ultreia-pager-freeze-layer[data-state="active"] {
-  visibility: visible;
-  opacity: 1;
-}
-
-.ultreia-pager-freeze-track {
-  pointer-events: none;
-  user-select: none;
-  transform: translateZ(0);
-  will-change: transform;
-}
-
-.ultreia-pager-freeze-pane,
-.ultreia-pager-frozen-clone {
-  pointer-events: none !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
-
-.ultreia-pager-frozen-clone,
-.ultreia-pager-frozen-clone * {
-  animation-play-state: paused !important;
-  transition: none !important;
-  caret-color: transparent !important;
-}
-
 .ultreia-no-motion-surface button {
   transition: none !important;
 }

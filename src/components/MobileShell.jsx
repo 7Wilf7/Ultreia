@@ -19,8 +19,8 @@ import {
  * the finger is done.
  */
 const TAB_HAPTIC_MS = 8;
-const PAGER_SETTLE_MIN_MS = 320;
-const PAGER_SETTLE_MAX_MS = 760;
+const PAGER_SETTLE_MIN_MS = 420;
+const PAGER_SETTLE_MAX_MS = 920;
 const PAGER_DRAG_AXIS_LOCK_PX = 8;
 const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
@@ -65,12 +65,74 @@ function shouldSkipPagerDrag(target) {
   return !!target?.closest?.("input,textarea,select,[contenteditable='true'],[data-dropdown-menu]");
 }
 
-function innerSwipeOwnsGesture(target, dx) {
-  const inner = target?.closest?.("[data-mobile-inner-swipe='true']");
-  if (!inner) return false;
+function getInnerSwipe(target) {
+  return target?.closest?.("[data-mobile-inner-swipe='true']") || null;
+}
+
+function innerSwipeOwnsGesture(inner, dx) {
   if (dx < 0) return inner.dataset.swipeNext === "true";
   if (dx > 0) return inner.dataset.swipePrev === "true";
   return false;
+}
+
+function PagerPanePreview({ idx, label }) {
+  const rows = idx === 1 ? 42 : idx === 2 ? 5 : idx === 3 ? 4 : idx === 4 ? 6 : 5;
+  const yearLabel = String(new Date().getFullYear());
+  return (
+    <div className="ultreia-pager-preview-content" aria-hidden="true">
+      <div className="ultreia-pager-preview-head">
+        <span className="ultreia-pager-preview-dot" />
+        <span>{label}</span>
+      </div>
+      {idx === 1 ? (
+        <>
+          <div className="ultreia-pager-preview-calendar-nav">
+            <span />
+            <strong>{yearLabel}</strong>
+            <span />
+          </div>
+          <div className="ultreia-pager-preview-calendar">
+            {Array.from({ length: rows }).map((_, i) => (
+              <span key={i} className={i % 7 === 5 || i % 7 === 6 ? "is-muted" : ""} />
+            ))}
+          </div>
+          <div className="ultreia-pager-preview-weather">
+            <span />
+            <span />
+            <span />
+          </div>
+        </>
+      ) : idx === 2 ? (
+        <>
+          <div className="ultreia-pager-preview-pills">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="ultreia-pager-preview-chat">
+            {Array.from({ length: rows }).map((_, i) => (
+              <span key={i} className={i % 2 ? "is-user" : ""} />
+            ))}
+          </div>
+          <div className="ultreia-pager-preview-composer" />
+        </>
+      ) : (
+        <>
+          <div className="ultreia-pager-preview-metrics">
+            <span />
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="ultreia-pager-preview-list">
+            {Array.from({ length: rows }).map((_, i) => (
+              <span key={i} />
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 const PagerPaneContent = memo(function PagerPaneContent({
@@ -105,6 +167,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pagerScrollSettleTimerRef = useRef(null);
   const pagerTouchActiveRef = useRef(false);
   const pagerTouchingRef = useRef(false);
+  const pagerPreviewingRef = useRef(false);
   const pagerDragActiveNotifiedRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
   const trackOffsetRef = useRef(0);
@@ -148,6 +211,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (typeof document !== "undefined") {
       if (active) document.body.dataset.ultreiaPagerTouching = "true";
       else delete document.body.dataset.ultreiaPagerTouching;
+    }
+  }, []);
+
+  const setPagerPreviewingAttribute = useCallback((active) => {
+    if (pagerPreviewingRef.current === active) return;
+    pagerPreviewingRef.current = active;
+    const shell = shellRef.current;
+    if (shell) {
+      if (active) shell.dataset.pagerPreviewing = "true";
+      else delete shell.dataset.pagerPreviewing;
     }
   }, []);
 
@@ -222,8 +295,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     pagerTouchActiveRef.current = false;
     pagerTouchingRef.current = false;
     setPagerTouchingAttribute(false);
+    setPagerPreviewingAttribute(false);
     notifyPagerDragActive(false);
-  }, [notifyPagerDragActive, setPagerTouchingAttribute]);
+  }, [notifyPagerDragActive, setPagerPreviewingAttribute, setPagerTouchingAttribute]);
 
   const primePagerDragRendering = useCallback(() => {
     if (pagerTouchingRef.current) return;
@@ -335,8 +409,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   useEffect(() => () => {
     clearPagerTimers();
     setPagerTouchingAttribute(false);
+    setPagerPreviewingAttribute(false);
     notifyPagerDragActive(false);
-  }, [clearPagerTimers, notifyPagerDragActive, setPagerTouchingAttribute]);
+  }, [clearPagerTimers, notifyPagerDragActive, setPagerPreviewingAttribute, setPagerTouchingAttribute]);
 
   useEffect(() => {
     const track = trackRef.current;
@@ -383,18 +458,20 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
       if (gesture.mode == null) {
         if (absX > PAGER_DRAG_AXIS_LOCK_PX && absX > absY * PAGER_DRAG_AXIS_RATIO) {
-          if (innerSwipeOwnsGesture(gesture.target, dx)) {
+          const innerSwipe = getInnerSwipe(gesture.target);
+          if (innerSwipe && innerSwipeOwnsGesture(innerSwipe, dx)) {
             gesture.mode = "inner";
             return;
           }
           const direction = dx < 0 ? 1 : -1;
           const current = visualTabRef.current;
           const canOuterMove = (direction > 0 && current < tabCount - 1) || (direction < 0 && current > 0);
-          gesture.mode = canOuterMove ? "outer" : "blocked";
+          gesture.mode = canOuterMove ? (innerSwipe ? "outer" : "native") : "blocked";
           if (canOuterMove) {
             const next = clampTabIndex(current + direction, tabCount);
             setRenderedWindow(getMobilePagerJumpWindow(current, next, tabCount));
             primePagerDragRendering();
+            setPagerPreviewingAttribute(true);
           }
         } else if (absY > PAGER_DRAG_AXIS_LOCK_PX || absX > PAGER_DRAG_AXIS_LOCK_PX) {
           gesture.mode = "vertical";
@@ -425,6 +502,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (Math.abs(left - currentLeft) > 1) {
         suppressClickUntilRef.current = performance.now() + 450;
         primePagerDragRendering();
+        setPagerPreviewingAttribute(true);
       }
       if (!pagerGestureRef.current.touching) {
         scheduleNativeScrollSettle();
@@ -474,6 +552,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     scheduleNativeScrollSettle,
     settleNativeScroll,
     setPagerTouchingAttribute,
+    setPagerPreviewingAttribute,
     setRenderedWindow,
     tabCount,
   ]);
@@ -563,13 +642,16 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     commitTabPress(idx, e);
   }
 
-  function renderPaneContent(idx, shouldRender) {
+  function renderPaneContent(idx, shouldRender, label) {
     return (
-      <PagerPaneContent
-        idx={idx}
-        shouldRender={shouldRender}
-        renderTab={renderTab}
-      />
+      <>
+        <PagerPanePreview idx={idx} label={label} />
+        <PagerPaneContent
+          idx={idx}
+          shouldRender={shouldRender}
+          renderTab={renderTab}
+        />
+      </>
     );
   }
 
@@ -648,7 +730,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
               transition: "none",
               backfaceVisibility: "hidden",
             }}>
-            {TABS.map(({ idx }) => {
+            {TABS.map(({ key, idx }) => {
               const shouldRender = shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, tab);
               const shouldShow = shouldRender;
               const isInteractivePane = shouldRender && (idx === visualTab || idx === tab);
@@ -697,7 +779,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
                     paddingTop: "max(env(safe-area-inset-top), 14px)",
                     paddingBottom: "calc(76px + env(safe-area-inset-bottom))",
                   }}>
-                  {renderPaneContent(idx, shouldRender)}
+                  {renderPaneContent(idx, shouldRender, t(key))}
                 </div>
               );
             })}

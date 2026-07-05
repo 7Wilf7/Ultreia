@@ -28,8 +28,8 @@ const TAB_HAPTIC_MS = 8;
 const PAGER_DRAG_INTENT_PX = 7;
 const PAGER_DRAG_AXIS_RATIO = 1.12;
 const PAGER_RELEASE_DISTANCE_RATIO = 0.18;
-const PAGER_SETTLE_MIN_MS = 420;
-const PAGER_SETTLE_MAX_MS = 620;
+const PAGER_SETTLE_MIN_MS = 620;
+const PAGER_SETTLE_MAX_MS = 920;
 const PAGER_SKIP_SELECTOR = "button,input,textarea,select,a,[role='button'],[data-dropdown-menu],[data-no-pager-swipe]";
 
 function triggerTabHaptic() {
@@ -57,10 +57,6 @@ function easeInOutSine(t) {
 
 function clampTabIndex(idx, count) {
   return Math.max(0, Math.min(count - 1, idx));
-}
-
-function clampPagerOffset(left, width, count) {
-  return Math.max(0, Math.min((count - 1) * width, left));
 }
 
 function shouldSkipPagerSwipe(target) {
@@ -362,12 +358,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, renderT
     const track = trackRef.current;
     const nativeLeft = track?.scrollLeft ?? trackOffsetRef.current;
     trackOffsetRef.current = nativeLeft;
-    const width = pagerWidthRef.current || measurePagerWidth();
-    const expectedLeft = clampPagerOffset(st.startLeft - dx, width, tabCount);
-    if (Math.abs(nativeLeft - expectedLeft) > 4) {
-      setTrackOffset(expectedLeft);
-    }
-  }, [hasDragPreview, measurePagerWidth, setDragOverlayMode, setTrackOffset, tabCount]);
+  }, [hasDragPreview, setDragOverlayMode, tabCount]);
 
   useEffect(() => () => {
     clearPagerTimers();

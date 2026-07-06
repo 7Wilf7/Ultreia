@@ -998,12 +998,14 @@ export function RacesTab({
     const ascStr  = r.ascent && parseInt(r.ascent) > 0 ? `+${r.ascent} m` : "";
     const countdown = renderCountdown(r);
 
-    // Mobile: fixed-shape card.
-    //   Row 1 = date · priority · category tag · delete (every race).
-    //   Row 2 = race name (ellipsised) · time (right) — every race.
-    //   Row 3 = distance + ascent — Trail category only (it doesn't carry
-    //           the distance in its category tag the way Marathon/HM/10K
-    //           do, so the trail row needs to surface them explicitly).
+    // Mobile: target cards stay compact, while history cards give the race name
+    // its own line so long event names are readable.
+    //   Target row 1 = priority · category tag · subtype · countdown.
+    //   Target row 2 = date · race name (ellipsised) · time/ascent suffix.
+    //   Target row 3 = distance + ascent for Trail.
+    //   History row 1 = category tag · Actual.
+    //   History row 2 = race name only, allowed to wrap.
+    //   History row 3 = subtype / date / distance / ascent / time / ITRA when present.
     if (isNarrow) {
       const isTrailLike = r.category === "Trail";
       // Row 2 suffix: time (always) + ascent (only when NOT trail, since
@@ -1020,6 +1022,87 @@ export function RacesTab({
       const onMobileRaceCardTap = () => {
         if (raceWeather[r.id]) toggleWeather(r.id);
       };
+
+      if (!r.isTarget) {
+        const subtypeText = r.subtype
+          ? (r.category === "Hyrox" ? t(`enum.hyrox.${r.subtype}`) : r.subtype)
+          : "";
+        const historyDataParts = [
+          subtypeText,
+          r.date || "",
+          distStr,
+          ascStr,
+          timeStr,
+          r.itraScore ? `ITRA ${r.itraScore}` : "",
+        ].filter(Boolean);
+        return (
+          <div key={r.id}
+            onClick={(e) => clickRaceCardTap(r, onMobileRaceCardTap, e)}
+            onTouchStart={(e) => startRaceCardTap(r, e)}
+            onTouchEnd={(e) => endRaceCardTap(r, onMobileRaceCardTap, e)}
+            onTouchMove={moveRaceCardTap}
+            onTouchCancel={() => { activeRaceCardTap.current = null; endPress(); }}
+            onMouseDown={(e) => { if (!isRaceCardInteractiveTarget(e)) startPress(r); }}
+            onMouseUp={endPress}
+            onMouseLeave={endPress}
+            style={{
+              ...s.card, cursor: "pointer",
+              display: "flex", flexDirection: "column",
+              gap: 6, padding: "11px 14px",
+              overflow: "hidden",
+              touchAction: "manipulation",
+            }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0, flexWrap: "wrap" }}>
+              {r.category ? renderCategoryTag(r.category) : (
+                <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block", maxWidth: 170 }}>
+                  <Dropdown
+                    placeholder={t("races.set_category")}
+                    ariaLabel={t("races.set_category")}
+                    options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
+                    value=""
+                    onChange={(v) => updateRaceCategory(r.id, v)}
+                  />
+                </span>
+              )}
+              <span style={{
+                ...s.subTag,
+                color: "var(--ink-2)",
+                borderColor: "var(--rule-soft)",
+                background: "oklch(0.18 0.010 145 / 0.70)",
+                flexShrink: 0,
+              }}>
+                {t("races.history_actual_badge")}
+              </span>
+            </div>
+            <div
+              title={r.name}
+              style={{
+                fontWeight: 600,
+                fontSize: 14.5,
+                lineHeight: 1.35,
+                color: "var(--ink-1)",
+                overflowWrap: "anywhere",
+                wordBreak: "break-word",
+              }}>
+              {r.name}
+            </div>
+            {historyDataParts.length > 0 && (
+              <div style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 12,
+                lineHeight: 1.35,
+                color: "var(--ink-3)",
+                fontVariantNumeric: "tabular-nums",
+                overflowWrap: "anywhere",
+              }}>
+                {historyDataParts.join(" · ")}
+              </div>
+            )}
+            {weatherOpen[r.id] && renderRaceWeather(r)}
+          </div>
+        );
+      }
+
       return (
         <div key={r.id}
           onClick={(e) => clickRaceCardTap(r, onMobileRaceCardTap, e)}

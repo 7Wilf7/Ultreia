@@ -137,7 +137,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                   : t("activities.import_review_bulk_body", { n: count, coach: coachCount })}
               </p>
             </div>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("import-review-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
 
           {detailMode ? (
@@ -326,7 +326,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
           )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16 }}>
-            <button onClick={onClose} style={s.btnGhost}>
+            <button {...instantPress("import-review-cancel", onClose)} style={s.btnGhost}>
               {t("common.cancel")}
             </button>
             <button onClick={submit} disabled={confirmDisabled} style={{ ...s.btn, opacity: confirmDisabled ? 0.5 : 1 }}>

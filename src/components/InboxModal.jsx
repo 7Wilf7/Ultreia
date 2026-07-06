@@ -437,7 +437,7 @@ export function InboxModal({
       <div className="ultreia-overlay-in" style={styles.page}>
         <div style={styles.header}>
           <h2 style={styles.title}>{t("inbox.title")}</h2>
-          <button onClick={onClose} style={{ ...s.modalCloseBtn, marginTop: 0 }} aria-label="Close">×</button>
+          <button {...instantPress("inbox-close", onClose)} style={{ ...s.modalCloseBtn, marginTop: 0 }} aria-label="Close">×</button>
         </div>
 
         <div style={styles.tabs}>

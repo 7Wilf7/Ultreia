@@ -1819,7 +1819,7 @@ export function AICoachTab({
             <div style={s.modalCard(isMobile, { maxWidth: 600, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.behavior")}</h2>
-                <button onClick={() => setShowCoachConfig(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-config-close", () => setShowCoachConfig(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
               <CoachConfigDropdowns
@@ -1850,7 +1850,7 @@ export function AICoachTab({
                   <span>{t("coach.training_preferences")}</span>
                   <TrainingPreferenceHintIcon t={t} />
                 </h2>
-                <button onClick={() => setShowTrainingPreferences(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-training-preferences-close", () => setShowTrainingPreferences(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <TrainingPreferenceEditor
                 value={coachConfig.trainingPreferences}
@@ -1876,7 +1876,7 @@ export function AICoachTab({
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.current_focus")}</h2>
-                <button onClick={() => setShowCoachFocus(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-focus-close", () => setShowCoachFocus(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <CoachFocusPanel
                 races={races}
@@ -1910,7 +1910,7 @@ export function AICoachTab({
             <div style={s.modalCard(isMobile, { maxWidth: 600, float: true })} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.calendar_btn_label")}</h2>
-                <button onClick={() => setShowCalendarSettings(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-calendar-settings-close", () => setShowCalendarSettings(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.calendar_btn_hint")}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -1947,7 +1947,7 @@ export function AICoachTab({
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.recent_agent_actions")}</h2>
-                <button onClick={() => setShowAgentActions(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-agent-actions-close", () => setShowAgentActions(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <RecentAgentActions
                 actions={agentActions}
@@ -2005,7 +2005,7 @@ export function AICoachTab({
                         {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                       </button>
                     )}
-                    <button onClick={() => setShowMemory(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                    <button {...instantPress("coach-memory-close", () => setShowMemory(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
                   </div>
                 </div>
                 <div style={{ ...s.muted, marginTop: 6, lineHeight: 1.35, fontSize: 12 }}>{t("coach.memory_hint")}</div>
@@ -2051,7 +2051,7 @@ export function AICoachTab({
                 <div style={{ marginLeft: "auto" }}>
                   <PromptLangSwitch value={previewLang} onChange={setPreviewLang} />
                 </div>
-                <button onClick={() => setShowPromptPreview(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-prompt-preview-close", () => setShowPromptPreview(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <pre style={{
                 ...s.input, fontFamily: "var(--font-mono)", fontSize: 12,

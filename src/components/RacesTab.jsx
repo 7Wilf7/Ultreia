@@ -12,7 +12,7 @@ import { PersonalRecordsBar } from "./PersonalRecordsBar";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 import { useDeferredCommit } from "../hooks/useDeferredCommit";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
@@ -1480,6 +1480,8 @@ export function RacesTab({
 function RaceLocationField({ name, lat, lng, onPick, onText, onClear }) {
   const t = useT();
   const { lang } = useLanguage();
+  const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -1512,8 +1514,18 @@ function RaceLocationField({ name, lat, lng, onPick, onText, onClear }) {
           style={{ ...s.input, flex: 1 }}
         />
         {hasCoords && (
-          <button type="button" onClick={() => { onClear(); setResults([]); setOpen(false); }}
-            style={{ ...s.btnGhost, fontSize: 12, padding: "6px 10px", flexShrink: 0 }}>
+          <button
+            type="button"
+            {...instantPress("race-location-clear", () => { onClear(); setResults([]); setOpen(false); })}
+            style={{
+              ...s.btnGhost,
+              fontSize: 12,
+              padding: "6px 10px",
+              flexShrink: 0,
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
             {t("races.location_clear")}
           </button>
         )}
@@ -1530,12 +1542,14 @@ function RaceLocationField({ name, lat, lng, onPick, onText, onClear }) {
         }}>
           {results.map((r, i) => (
             <button key={i} type="button"
-              onClick={() => { onPick(r); setResults([]); setOpen(false); }}
+              {...instantTap(`race-location-result-${i}`, () => { onPick(r); setResults([]); setOpen(false); })}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 background: "transparent", border: "none",
                 borderBottom: i < results.length - 1 ? "1px solid var(--rule-soft)" : "none",
                 padding: "9px 12px", fontSize: 13, color: "var(--ink-1)", cursor: "pointer",
+                touchAction: "pan-y",
+                WebkitTapHighlightColor: "transparent",
               }}>
               {r.label}
             </button>

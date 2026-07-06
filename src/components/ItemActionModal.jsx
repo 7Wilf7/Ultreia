@@ -31,7 +31,12 @@ export function ItemActionModal({ title, onEdit, onDelete, onClose }) {
             }}>{title}</div>
           )}
           {onEdit && (
-            <button onClick={onEdit} style={ACTION_BTN}>{t("common.edit")}</button>
+            <button
+              {...instantPress("item-action-edit", onEdit)}
+              style={{ ...ACTION_BTN, touchAction: "manipulation" }}
+            >
+              {t("common.edit")}
+            </button>
           )}
           <button onClick={onDelete} style={{ ...ACTION_BTN, color: "var(--danger)", borderTop: onEdit ? "1px solid var(--rule-soft)" : "none" }}>
             {t("common.delete")}

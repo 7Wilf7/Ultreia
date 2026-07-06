@@ -34,7 +34,7 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
         <div style={s.modal} onClick={e => e.stopPropagation()}>
           <div style={s.header}>
             <h2 style={s.title}>{t("weather_settings.title")}</h2>
-            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
+            <button {...instantPress("weather-settings-close", closeIfIdle)} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
 
           <label style={s.switchRow}>
@@ -71,7 +71,7 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
           <div style={s.note}>{t("weather_settings.behavior_note")}</div>
 
           <div style={s.actions}>
-            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button {...instantPress("weather-settings-cancel", closeIfIdle)} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.cancel")}</button>
             <button
               onClick={save}
               disabled={saving}

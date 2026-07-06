@@ -91,7 +91,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("weather_api.title")}</h2>
-            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1 }} aria-label="Close">×</button>
+            <button {...instantPress("weather-api-close", closeIfIdle)} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>
             {t("weather_api.hint")}
@@ -146,7 +146,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button {...instantPress("weather-api-cancel", closeIfIdle)} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.cancel")}</button>
             <button
               onClick={save}
               disabled={busy || !draft.trim()}

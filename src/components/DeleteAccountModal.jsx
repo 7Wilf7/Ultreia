@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Permanent account deletion. Two password fields (must match + must be correct)
 // act as the confirmation gate. deleteAccount(password) re-authenticates, wipes
@@ -10,6 +11,7 @@ import { Spinner } from "./Spinner";
 // unmounts as the app returns to the login screen.
 export function DeleteAccountModal({ deleteAccount, onExportBackup, onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
@@ -69,7 +71,7 @@ export function DeleteAccountModal({ deleteAccount, onExportBackup, onClose }) {
           }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0, color: "var(--danger)" }}>{t("del.title")}</h2>
-            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1 }} aria-label="Close">×</button>
+            <button {...instantPress("delete-account-close", closeIfIdle)} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
 
           <div style={{
@@ -155,7 +157,7 @@ export function DeleteAccountModal({ deleteAccount, onExportBackup, onClose }) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button {...instantPress("delete-account-cancel", closeIfIdle)} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.cancel")}</button>
             <button onClick={submit} disabled={busy || !pw || !pw2}
               aria-busy={busy ? "true" : undefined}
               style={{

@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Centered, blurred-backdrop modal — same chrome on mobile and desktop, so the
 // password change always feels like an inline confirmation step, not a
@@ -11,6 +12,7 @@ import { Spinner } from "./Spinner";
 // with a friendly hint that points to the administrator reset path).
 export function ChangePasswordModal({ changePassword, onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [oldPw, setOldPw] = useState("");
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -90,7 +92,7 @@ export function ChangePasswordModal({ changePassword, onClose }) {
           }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("pwd.title")}</h2>
-            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1 }} aria-label="Close">×</button>
+            <button {...instantPress("change-password-close", closeIfIdle)} disabled={busy} style={{ ...s.modalCloseBtn, opacity: busy ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
           <p style={{ ...s.muted, marginBottom: 18, lineHeight: 1.6, fontSize: 12 }}>{t("pwd.hint")}</p>
 
@@ -134,7 +136,7 @@ export function ChangePasswordModal({ changePassword, onClose }) {
           )}
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={closeIfIdle} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button {...instantPress("change-password-cancel", closeIfIdle)} disabled={busy} style={{ ...s.btnGhost, opacity: busy ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.cancel")}</button>
             <button
               onClick={submit}
               disabled={busy || !oldPw || !pw || !pw2}

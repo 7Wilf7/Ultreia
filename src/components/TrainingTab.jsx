@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -185,7 +185,7 @@ export function TrainingTab({
     const order = { activities: 0, charts: 1 };
     setViewMotionDir((order[nextView] ?? 0) > (order[selectedView] ?? 0) ? 1 : -1);
     setSelectedView(nextView);
-    startTransition(() => setView(nextView));
+    setView(nextView);
   }
 
   function onSectionTouchStart(e) {

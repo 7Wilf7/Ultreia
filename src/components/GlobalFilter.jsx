@@ -4,7 +4,7 @@
 // Fast-Refresh rule — splitting these out would churn import sites for no
 // runtime benefit. Disabled deliberately.
 /* eslint-disable react-refresh/only-export-components */
-import { startTransition, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { RUN_GROUP_TYPES } from "../constants";
 // Cycling/Swimming sit under the "Run / Endurance" group visually but are NOT
 // runs — "All Run / Endurance" stays running-only, while each is filterable on
@@ -143,7 +143,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
     const nextFilter = dropdownValueToFilter(value);
     setLocalFilter(nextFilter);
     setOpen(false);
-    startTransition(() => setFilter(nextFilter));
+    setFilter(nextFilter);
   }
 
   // Two-level menu tree. Left column = "All Types" + 3 group headers; tapping a

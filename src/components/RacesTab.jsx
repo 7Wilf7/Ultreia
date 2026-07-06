@@ -1,4 +1,4 @@
-import { startTransition, useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR, getHyroxSubtypesForGender } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -109,14 +109,14 @@ export function RacesTab({
     const order = { races: 0, pr: 1 };
     setTopTabMotionDir((order[nextTab] ?? 0) > (order[selectedMobileTopTab] ?? 0) ? 1 : -1);
     setSelectedMobileTopTab(nextTab);
-    startTransition(() => setMobileTopTab(nextTab));
+    setMobileTopTab(nextTab);
   }
 
   function changeMobileSubTab(nextTab) {
     if (nextTab === selectedMobileSubTab) return;
     if (addingMode) cancelAdd();
     setSelectedMobileSubTab(nextTab);
-    startTransition(() => setMobileSubTab(nextTab));
+    setMobileSubTab(nextTab);
   }
 
   function onTopSwipeStart(e) {

@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getPeriodLabel, pastMonths, pastYears } from "../utils/period";
 import { useT } from "../i18n/LanguageContext";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
@@ -74,12 +74,12 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
 
   function commitPeriod(next) {
     setLocalPeriod(next);
-    startTransition(() => setPeriod(next));
+    setPeriod(next);
   }
 
   function commitDropdown(next) {
     setLocalDropdown(next);
-    startTransition(() => setPeriodDropdown(next));
+    setPeriodDropdown(next);
   }
 
   const visiblePeriod = localPeriod || period;

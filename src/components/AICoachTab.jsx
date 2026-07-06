@@ -1,4 +1,4 @@
-import { memo, startTransition, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
+import { memo, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -768,9 +768,7 @@ export function AICoachTab({
     const next = normalizeCoachConfig(nextConfig);
     optimisticCoachConfigRef.current = next;
     setOptimisticCoachConfig(next);
-    startTransition(() => {
-      setCoachConfig?.(next);
-    });
+    setCoachConfig?.(next);
   }, [setCoachConfig]);
   const patchCoachConfig = useCallback((patch) => {
     commitCoachConfig({

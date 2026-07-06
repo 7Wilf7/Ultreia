@@ -1441,12 +1441,12 @@ export function AICoachTab({
   }
   const pressCalendarButtonSetting = useCallback((key, enabled, event) => {
     if (event.pointerType === "mouse") return;
-    recentCalendarButtonPressRef.current.set(key, event.timeStamp || 0);
+    recentCalendarButtonPressRef.current.set(key, Date.now());
     event.preventDefault?.();
     setShowCalendarButton(enabled);
   }, [setShowCalendarButton]);
   const clickCalendarButtonSetting = useCallback((key, enabled, event) => {
-    const at = event.timeStamp || 0;
+    const at = Date.now();
     const recentAt = recentCalendarButtonPressRef.current.get(key) || 0;
     if (recentAt && at - recentAt < 750) {
       event.preventDefault?.();
@@ -1545,13 +1545,13 @@ export function AICoachTab({
   }, [coachHints, sendChat, setCoachHintsPending, syncComposerInput]);
   const pressCoachHintsProceed = useCallback((event) => {
     if (event.pointerType === "mouse") return;
-    recentCoachHintsProceedPressRef.current = event.timeStamp || 0;
+    recentCoachHintsProceedPressRef.current = Date.now();
     event.preventDefault?.();
     proceedCoachHints();
   }, [proceedCoachHints]);
   const clickCoachHintsProceed = useCallback((event) => {
     const recentAt = recentCoachHintsProceedPressRef.current || 0;
-    const at = event.timeStamp || 0;
+    const at = Date.now();
     if (recentAt && at - recentAt < 750) {
       event.preventDefault?.();
       return;
@@ -1756,12 +1756,12 @@ export function AICoachTab({
   }, [showContextUsage, updateContextUsagePopoverPosition]);
   const pressContextUsagePopover = useCallback((event) => {
     if (event.pointerType === "mouse") return;
-    contextUsagePointerAtRef.current = event.timeStamp || 0;
+    contextUsagePointerAtRef.current = Date.now();
     event.preventDefault?.();
     toggleContextUsagePopover();
   }, [toggleContextUsagePopover]);
   const clickContextUsagePopover = useCallback((event) => {
-    const at = event.timeStamp || 0;
+    const at = Date.now();
     if (contextUsagePointerAtRef.current && at - contextUsagePointerAtRef.current < 750) {
       event.preventDefault?.();
       return;
@@ -2699,13 +2699,13 @@ export function AICoachTab({
         <button
           onPointerDown={(event) => {
             if (event.pointerType === "mouse") return;
-            recentJumpPressRef.current.top = event.timeStamp || 0;
+            recentJumpPressRef.current.top = Date.now();
             event.preventDefault?.();
             scrollToTop();
           }}
           onClick={(event) => {
             const recentAt = recentJumpPressRef.current.top || 0;
-            const at = event.timeStamp || 0;
+            const at = Date.now();
             if (recentAt && at - recentAt < 750) {
               event.preventDefault?.();
               return;
@@ -2720,13 +2720,13 @@ export function AICoachTab({
         <button
           onPointerDown={(event) => {
             if (event.pointerType === "mouse") return;
-            recentJumpPressRef.current.bottom = event.timeStamp || 0;
+            recentJumpPressRef.current.bottom = Date.now();
             event.preventDefault?.();
             scrollToBottom("smooth");
           }}
           onClick={(event) => {
             const recentAt = recentJumpPressRef.current.bottom || 0;
-            const at = event.timeStamp || 0;
+            const at = Date.now();
             if (recentAt && at - recentAt < 750) {
               event.preventDefault?.();
               return;
@@ -4415,7 +4415,7 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
     if (event?.defaultPrevented) return;
     const at = event?.timeStamp || 0;
     const recentAt = recentRowTapRef.current.get(id) || 0;
-    if (at - recentAt < 750) {
+    if (recentAt && at - recentAt < 750) {
       event?.preventDefault?.();
       return;
     }

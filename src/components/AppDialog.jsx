@@ -62,13 +62,13 @@ export function AppDialogProvider({ children }) {
   const value = { alert, confirm };
   const pressResult = useCallback((key, result, event) => {
     if (event.pointerType === "mouse") return;
-    recentPressRef.current.set(key, event.timeStamp || 0);
+    recentPressRef.current.set(key, Date.now());
     event.preventDefault?.();
     close(result);
   }, [close]);
   const clickResult = useCallback((key, result, event) => {
     const recentAt = recentPressRef.current.get(key) || 0;
-    const at = event.timeStamp || 0;
+    const at = Date.now();
     if (recentAt && at - recentAt < 750) {
       event.preventDefault?.();
       return;

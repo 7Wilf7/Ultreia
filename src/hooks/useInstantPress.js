@@ -3,18 +3,22 @@ import { useCallback, useRef } from "react";
 const DUPLICATE_CLICK_WINDOW_MS = 750;
 const TAP_MOVE_TOLERANCE_PX = 10;
 
+function interactionNow() {
+  return Date.now();
+}
+
 export function useInstantPress({ duplicateClickWindowMs = DUPLICATE_CLICK_WINDOW_MS } = {}) {
   const recentPointerPressRef = useRef(new Map());
 
   return useCallback((key, onPress) => ({
     onPointerDown: (event) => {
       if (event.pointerType === "mouse") return;
-      recentPointerPressRef.current.set(key, event.timeStamp || 0);
+      recentPointerPressRef.current.set(key, interactionNow());
       event.preventDefault?.();
       onPress?.(event);
     },
     onClick: (event) => {
-      const at = event.timeStamp || 0;
+      const at = interactionNow();
       const hasRecentPointerPress = recentPointerPressRef.current.has(key);
       const recentAt = recentPointerPressRef.current.get(key) || 0;
       if (hasRecentPointerPress && at - recentAt < duplicateClickWindowMs) {
@@ -49,14 +53,14 @@ export function useInstantTap({
       const dx = event.clientX - active.x;
       const dy = event.clientY - active.y;
       if (Math.hypot(dx, dy) > moveTolerancePx) {
-        cancelledTapRef.current.set(key, event.timeStamp || 0);
+        cancelledTapRef.current.set(key, interactionNow());
         activeTapRef.current.delete(key);
       }
     },
     onPointerCancel: (event) => {
       const active = activeTapRef.current.get(key);
       if (!active || active.pointerId === event.pointerId) {
-        cancelledTapRef.current.set(key, event.timeStamp || 0);
+        cancelledTapRef.current.set(key, interactionNow());
         activeTapRef.current.delete(key);
       }
     },
@@ -67,13 +71,13 @@ export function useInstantTap({
       const dx = event.clientX - active.x;
       const dy = event.clientY - active.y;
       if (Math.hypot(dx, dy) > moveTolerancePx) return;
-      recentTapRef.current.set(key, event.timeStamp || 0);
+      recentTapRef.current.set(key, interactionNow());
       event.preventDefault?.();
       onTap?.(event);
     },
     onClick: (event) => {
       if (event.defaultPrevented) return;
-      const at = event.timeStamp || 0;
+      const at = interactionNow();
       const cancelledAt = cancelledTapRef.current.get(key) || 0;
       if (cancelledAt && at - cancelledAt < duplicateClickWindowMs) {
         event.preventDefault?.();

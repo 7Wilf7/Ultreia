@@ -175,16 +175,16 @@ export function InboxModal({
 
   const pressTab = useCallback((next, event) => {
     if (event?.pointerType === "mouse") return;
-    const at = event?.timeStamp || 0;
+    const at = Date.now();
     recentPointerTabPressRef.current[next] = at;
     event?.preventDefault?.();
     selectTab(next);
   }, [selectTab]);
 
   const clickTab = useCallback((next, event) => {
-    const at = event?.timeStamp || 0;
+    const at = Date.now();
     const recentAt = recentPointerTabPressRef.current[next] || 0;
-    if (at - recentAt < 750) {
+    if (recentAt && at - recentAt < 750) {
       event?.preventDefault?.();
       return;
     }

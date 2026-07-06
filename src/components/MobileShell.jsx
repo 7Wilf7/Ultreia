@@ -691,7 +691,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   function onTabTap(idx, e) {
     const now = e?.timeStamp || 0;
     const recentPointerAt = recentPointerTabPressRef.current[idx] || 0;
-    if (now - recentPointerAt < 750) {
+    if (recentPointerAt && now - recentPointerAt < 750) {
       e?.preventDefault?.();
       return;
     }

@@ -43,6 +43,7 @@ import { ItemActionModal } from "./ItemActionModal";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 // Pretty header date: "Thu, May 21 2026" / "5月21日 周四 2026"
 export function formatHeaderDate(yyyy_mm_dd, lang) {
@@ -151,6 +152,7 @@ const navBtn = {
   fontSize: 20, lineHeight: 1, cursor: "pointer",
   display: "inline-flex", alignItems: "center", justifyContent: "center",
   WebkitTapHighlightColor: "transparent",
+  touchAction: "manipulation",
 };
 
 function getDaySheetHeight({ isMobile, isPast, isToday }) {
@@ -168,6 +170,8 @@ export function CalendarDayModal({
   const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const isPast = !isFuture && !isToday;
   // A planned session is reconciled against the SAME-TYPE completed workouts on
   // this day, comparing the planned target (distance / ascent / duration) to
@@ -520,7 +524,7 @@ export function CalendarDayModal({
                 const color = TYPE_COLOR[l.type] || "var(--ink-2)";
                 return (
                   <div key={l.id}
-                    onClick={() => setActionTarget(l)}
+                    {...instantTap(`calendar-day-log-${l.id}`, () => setActionTarget(l))}
                     onContextMenu={e => e.preventDefault()}
                     style={{
                     border: "1px solid var(--rule)",
@@ -528,6 +532,7 @@ export function CalendarDayModal({
                     padding: "10px 12px",
                     background: l.isPlanned ? "var(--bg-elevated)" : "var(--bg)",
                     cursor: "pointer",
+                    touchAction: "manipulation",
                     WebkitTapHighlightColor: "transparent",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
@@ -589,7 +594,7 @@ export function CalendarDayModal({
                         <span style={{ fontFamily: "var(--font-mono)", fontSize: 11, color, letterSpacing: "0.04em" }}>{txt}</span>
                       );
                       const miniBtn = (txt, onClick) => (
-                        <button onClick={(e) => { e.stopPropagation(); onClick(); }} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11 }}>{txt}</button>
+                        <button {...instantPress(`calendar-plan-status-${l.id}-${txt}`, (e) => { e.stopPropagation(); onClick(); })} style={{ ...s.btnGhost, minHeight: 0, padding: "3px 9px", fontSize: 11, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{txt}</button>
                       );
                       // missed + partial can be manually accepted as done.
                       // Explicit done shows an undo; "skip" is no longer a
@@ -609,8 +614,8 @@ export function CalendarDayModal({
                 );
               })}
             </div>
-            <button onClick={() => setPanel("plan")}
-              style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
+            <button {...instantPress("calendar-add-plan-from-log-list", () => setPanel("plan"))}
+              style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
               {t("calendar.add_short")}
             </button>
           </div>
@@ -622,8 +627,8 @@ export function CalendarDayModal({
             <span style={{ color: "var(--ink-3)", fontSize: 13, fontFamily: "var(--font-mono)" }}>
               {hasPlannedRest ? t("calendar.empty_planned_rest") : (isFuture ? t("calendar.empty_future") : t("calendar.empty_past"))}
             </span>
-            <button onClick={() => setPanel("plan")}
-              style={{ ...s.btn, fontSize: 12, padding: "6px 14px" }}>
+            <button {...instantPress("calendar-add-plan-empty-day", () => setPanel("plan"))}
+              style={{ ...s.btn, fontSize: 12, padding: "6px 14px", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
               {t("calendar.add_short")}
             </button>
           </div>
@@ -641,12 +646,14 @@ export function CalendarDayModal({
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
               {DAILY_TAGS.map(tag => (
                 <button key={tag}
-                  onClick={() => toggleDayTag(tag)}
+                  {...instantPress(`calendar-day-tag-${tag}`, () => toggleDayTag(tag))}
                   style={{
                     ...s.chip(currentTags.includes(tag)),
                     width: "100%", minHeight: 0, padding: "8px 6px",
                     fontSize: 12, lineHeight: 1.25, textAlign: "center",
                     whiteSpace: "nowrap",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                   }}>
                   {DAILY_TAG_ICONS[tag] ? `${DAILY_TAG_ICONS[tag]} ` : ""}{t(`calendar.tag.${tag}`)}
                 </button>
@@ -667,8 +674,8 @@ export function CalendarDayModal({
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, flex: 1 }}>
                   {[1, 2, 3].map(v => (
                     <button key={v}
-                      onClick={() => setReadinessField(field, (readiness?.[field] === v) ? null : v)}
-                      style={{ ...s.chip((readiness?.[field] || null) === v), minHeight: 0, padding: "6px 4px", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {...instantPress(`calendar-readiness-${field}-${v}`, () => setReadinessField(field, (readiness?.[field] === v) ? null : v))}
+                      style={{ ...s.chip((readiness?.[field] || null) === v), minHeight: 0, padding: "6px 4px", fontSize: 12, whiteSpace: "nowrap", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                       {t(`calendar.readiness_lvl_${v}`)}
                     </button>
                   ))}
@@ -811,8 +818,8 @@ export function CalendarDayModal({
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {RUN_PACE_TYPES.map(rt => (
                           <button key={rt} type="button"
-                            onClick={() => setPlanRunType(planRunType === rt ? "" : rt)}
-                            style={{ ...s.chip(planRunType === rt), minHeight: 0, padding: "6px 12px", fontSize: 13 }}>
+                            {...instantPress(`calendar-plan-run-type-${rt}`, () => setPlanRunType(planRunType === rt ? "" : rt))}
+                            style={{ ...s.chip(planRunType === rt), minHeight: 0, padding: "6px 12px", fontSize: 13, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                             {t(`enum.subtype.${rt}`)}
                           </button>
                         ))}
@@ -826,8 +833,8 @@ export function CalendarDayModal({
                     <div style={{ ...s.muted, fontSize: 11, marginBottom: 6 }}>{t("calendar.plan_strength_area")}</div>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {STRENGTH_SUBS.map(sub => (
-                        <button key={sub} type="button" onClick={() => togglePlanSub(sub)}
-                          style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "6px 12px", fontSize: 13 }}>
+                        <button key={sub} type="button" {...instantPress(`calendar-plan-strength-${sub}`, () => togglePlanSub(sub))}
+                          style={{ ...s.chip(planSubTypes.includes(sub)), minHeight: 0, padding: "6px 12px", fontSize: 13, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                           {t(`enum.subtype.${sub}`)}
                         </button>
                       ))}
@@ -868,7 +875,7 @@ export function CalendarDayModal({
               gap: 6,
             }}>
               {onPrev ? (
-                <button onClick={onPrev} aria-label={lang === "zh" ? "前一天" : "Previous day"} style={navBtn}>‹</button>
+                <button {...instantPress("calendar-day-prev", onPrev)} aria-label={lang === "zh" ? "前一天" : "Previous day"} style={navBtn}>‹</button>
               ) : <div />}
               <div style={{ textAlign: "center", minWidth: 0 }}>
                 <div style={{
@@ -890,7 +897,7 @@ export function CalendarDayModal({
                 </div>
               </div>
               {onNext ? (
-                <button onClick={onNext} aria-label={lang === "zh" ? "后一天" : "Next day"} style={navBtn}>›</button>
+                <button {...instantPress("calendar-day-next", onNext)} aria-label={lang === "zh" ? "后一天" : "Next day"} style={navBtn}>›</button>
               ) : <div />}
             </div>
           </div>

@@ -10,6 +10,7 @@ import { planFields } from "../utils/planFields";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
@@ -269,6 +270,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const { lang } = useLanguage();
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const agentAction = action || buildCreatePlansAction(plans);
   const actionPlans = filterActionableProactivePlans(getCreatePlans(agentAction), agentAction);
   const [items, setItems] = useState(() => actionPlans.map(buildDraft));
@@ -779,8 +781,8 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                         const on = it.runType === rt;
                         return (
                           <button key={rt} type="button"
-                            onClick={() => patch(it._id, { runType: on ? "" : rt })}
-                            style={{ ...s.chip(on), minHeight: 0, padding: "4px 10px", fontSize: 12 }}>
+                            {...instantPress(`coach-plan-run-type-${it._id}-${rt}`, () => patch(it._id, { runType: on ? "" : rt }))}
+                            style={{ ...s.chip(on), minHeight: 0, padding: "4px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                             {t(`enum.subtype.${rt}`)}
                           </button>
                         );
@@ -794,11 +796,11 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                           const on = (it.subTypes || []).includes(sub);
                           return (
                             <button key={sub} type="button"
-                              onClick={() => {
+                              {...instantPress(`coach-plan-strength-${it._id}-${sub}`, () => {
                                 const nextSubs = on ? it.subTypes.filter(x => x !== sub) : [...(it.subTypes || []), sub];
                                 patch(it._id, { subTypes: nextSubs });
-                              }}
-                              style={{ ...s.chip(on), minHeight: 0, padding: "4px 10px", fontSize: 12 }}>
+                              })}
+                              style={{ ...s.chip(on), minHeight: 0, padding: "4px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                               {t(`enum.subtype.${sub}`)}
                             </button>
                           );

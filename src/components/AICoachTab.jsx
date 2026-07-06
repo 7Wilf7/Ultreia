@@ -30,7 +30,7 @@ import { ItemActionModal } from "./ItemActionModal";
 import { RaceBriefingModal } from "./RaceBriefingModal";
 import { useAppDialog } from "./AppDialogContext";
 import { Dropdown } from "./Dropdown";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -3979,13 +3979,18 @@ function groupMemoryFactsByCategory(facts, displayLang, t) {
 }
 
 function MemoryFactCategorySection({ group, expanded, onToggle, displayLang, onStatus, onDelete, t, appDialog }) {
+  const instantTap = useInstantTap();
   return (
     <div style={memoryFactCategorySectionStyle}>
       <button
         type="button"
         aria-expanded={expanded}
-        onClick={onToggle}
-        style={memoryFactCategoryHeaderButtonStyle}
+        {...instantTap(`memory-category-${group.category}`, onToggle)}
+        style={{
+          ...memoryFactCategoryHeaderButtonStyle,
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
+        }}
       >
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 }}>
           <div style={{ fontSize: 13, fontWeight: 650, color: "var(--ink-1)", minWidth: 0 }}>
@@ -4239,6 +4244,7 @@ function actionMatrixStatusStyle(status) {
 }
 
 function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceBriefing }) {
+  const instantPress = useInstantPress();
   const recent = useMemo(() => {
     return [...(actions || [])]
       .filter(Boolean)
@@ -4249,19 +4255,74 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
   const [actionTarget, setActionTarget] = useState(null);
   const pressTimer = useRef(null);
   const longPressFired = useRef(false);
-  function startPress(action) {
-    if (!onDelete) return;
-    longPressFired.current = false;
-    pressTimer.current = setTimeout(() => {
-      longPressFired.current = true;
-      setActionTarget(action);
-    }, 450);
+  const rowPressRef = useRef(null);
+  const recentRowTapRef = useRef(new Map());
+  function toggleOpen(id) {
+    setOpenId(current => current === id ? null : id);
   }
-  function endPress() {
+  function cancelRowPress() {
     if (pressTimer.current) {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
+    rowPressRef.current = null;
+  }
+  function startPress(action, event, id) {
+    if (event?.pointerType === "mouse") return;
+    longPressFired.current = false;
+    rowPressRef.current = {
+      id,
+      pointerId: event?.pointerId,
+      x: event?.clientX || 0,
+      y: event?.clientY || 0,
+    };
+    if (onDelete) {
+      pressTimer.current = setTimeout(() => {
+        longPressFired.current = true;
+        setActionTarget(action);
+      }, 450);
+    }
+  }
+  function movePress(event) {
+    const active = rowPressRef.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    if (Math.hypot((event.clientX || 0) - active.x, (event.clientY || 0) - active.y) > 10) {
+      cancelRowPress();
+    }
+  }
+  function endPress(event, id) {
+    if (event?.pointerType === "mouse") return;
+    const active = rowPressRef.current;
+    if (!active || active.id !== id || active.pointerId !== event.pointerId) {
+      cancelRowPress();
+      return;
+    }
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+    rowPressRef.current = null;
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    recentRowTapRef.current.set(id, event?.timeStamp || 0);
+    event?.preventDefault?.();
+    toggleOpen(id);
+  }
+  function clickRow(event, id) {
+    if (event?.defaultPrevented) return;
+    const at = event?.timeStamp || 0;
+    const recentAt = recentRowTapRef.current.get(id) || 0;
+    if (at - recentAt < 750) {
+      event?.preventDefault?.();
+      return;
+    }
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    toggleOpen(id);
   }
 
   if (!recent.length) {
@@ -4293,20 +4354,20 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
               background: "var(--bg-elevated)",
               overflow: "hidden",
             }}>
-              <button type="button" onClick={() => {
-                if (longPressFired.current) { longPressFired.current = false; return; }
-                setOpenId(open ? null : id);
-              }} style={{
+              <button type="button" onClick={(event) => clickRow(event, id)} style={{
                 width: "100%", border: "none", background: "transparent",
                 display: "grid", gridTemplateColumns: "1fr auto", gap: 10,
                 textAlign: "left", padding: "11px 12px", cursor: "pointer",
                 fontFamily: "var(--font-sans)", color: "var(--ink-1)",
                 WebkitTouchCallout: "none",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }}
-                onPointerDown={() => startPress(action)}
-                onPointerUp={endPress}
-                onPointerCancel={endPress}
-                onPointerLeave={endPress}
+                onPointerDown={(event) => startPress(action, event, id)}
+                onPointerMove={movePress}
+                onPointerUp={(event) => endPress(event, id)}
+                onPointerCancel={cancelRowPress}
+                onPointerLeave={cancelRowPress}
                 onContextMenu={e => e.preventDefault()}>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: "block", fontSize: 13, fontWeight: 650, marginBottom: 4 }}>
@@ -4338,26 +4399,30 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
                       {isRaceBriefingAction(action) && (
                         <button
                           type="button"
-                          onClick={() => onOpenRaceBriefing?.(action)}
+                          {...instantPress(`agent-action-open-briefing-${id}`, () => onOpenRaceBriefing?.(action))}
                           style={{
                             ...s.btn,
                             justifySelf: "start",
                             minHeight: 0,
                             padding: "6px 10px",
                             fontSize: 12,
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
                           }}>
                           {t("coach.race_briefing_open")}
                         </button>
                       )}
                       <button
                         type="button"
-                        onClick={() => onAskCoach(action)}
+                        {...instantPress(`agent-action-ask-coach-${id}`, () => onAskCoach(action))}
                         style={{
                           ...s.btnGhost,
                           justifySelf: "start",
                           minHeight: 0,
                           padding: "6px 10px",
                           fontSize: 12,
+                          touchAction: "manipulation",
+                          WebkitTapHighlightColor: "transparent",
                         }}>
                         {t("coach.agent_action_ask_coach")}
                       </button>

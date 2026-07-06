@@ -3,9 +3,11 @@ import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { WEATHER_UPDATE_INTERVAL_OPTIONS } from "../lib/weather";
 import { Spinner } from "./Spinner";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, setWeatherSettings, onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [autoUpdate, setAutoUpdate] = useState(weatherAutoUpdate !== false);
   const [intervalHours, setIntervalHours] = useState(Number(weatherIntervalHours) || 3);
   const [saving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
                 <button
                   key={h}
                   type="button"
-                  onClick={() => setIntervalHours(h)}
+                  {...instantPress(`weather-interval-${h}`, () => setIntervalHours(h))}
                   disabled={saving}
                   style={s.segBtn(intervalHours === h)}
                 >
@@ -123,6 +125,8 @@ const s = {
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
   }),
   note: {
     marginTop: 16,

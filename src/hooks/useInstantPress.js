@@ -72,6 +72,7 @@ export function useInstantTap({
       onTap?.(event);
     },
     onClick: (event) => {
+      if (event.defaultPrevented) return;
       const at = event.timeStamp || 0;
       const cancelledAt = cancelledTapRef.current.get(key) || 0;
       if (cancelledAt && at - cancelledAt < duplicateClickWindowMs) {

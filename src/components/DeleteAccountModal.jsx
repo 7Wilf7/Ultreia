@@ -101,8 +101,8 @@ export function DeleteAccountModal({ deleteAccount, onExportBackup, onClose }) {
               <span>{t("settings.export_backup_delete_hint")}</span>
               <button
                 type="button"
-                onClick={() => setConfirmBackup(true)}
-                style={{ ...s.btnGhost, minHeight: 0, padding: "5px 8px", fontSize: 11, flexShrink: 0 }}
+                {...instantPress("delete-account-backup-info", () => setConfirmBackup(true))}
+                style={{ ...s.btnGhost, minHeight: 0, padding: "5px 8px", fontSize: 11, flexShrink: 0, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               >
                 {t("settings.export_backup_short")}
               </button>
@@ -125,8 +125,8 @@ export function DeleteAccountModal({ deleteAccount, onExportBackup, onClose }) {
               </div>
               <div>{t("settings.export_backup_confirm_body")}</div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 10 }}>
-                <button type="button" onClick={() => setConfirmBackup(false)}
-                  style={{ ...s.btnGhost, minHeight: 0, padding: "6px 10px", fontSize: 12 }}>
+                <button type="button" {...instantPress("delete-account-backup-cancel", () => setConfirmBackup(false))}
+                  style={{ ...s.btnGhost, minHeight: 0, padding: "6px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                   {t("common.cancel")}
                 </button>
                 <button type="button" onClick={exportBackup}

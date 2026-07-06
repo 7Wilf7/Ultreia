@@ -1,4 +1,4 @@
-import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
@@ -27,8 +27,8 @@ const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
 const PAGER_DRAG_MAX_DISTANCE_PX = 86;
 const PAGER_DRAG_VELOCITY_PX_PER_MS = 0.38;
 const PAGER_EDGE_RESISTANCE = 0.32;
-const TAB_PREHEAT_DELAY_MS = 180;
-const TAB_PREHEAT_IDLE_TIMEOUT_MS = 1000;
+const TAB_PREHEAT_DELAY_MS = 60;
+const TAB_PREHEAT_IDLE_TIMEOUT_MS = 450;
 
 function triggerTabHaptic() {
   try {
@@ -226,7 +226,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const preheatAllTabs = useCallback(() => {
     if (preheatedAllTabsRef.current) return;
     preheatedAllTabsRef.current = true;
-    startTransition(() => setRenderedWindow(getAllTabIndexes(tabCount)));
+    setRenderedWindow(getAllTabIndexes(tabCount));
   }, [setRenderedWindow, tabCount]);
 
   const scheduleTabPreheat = useCallback((delay = TAB_PREHEAT_DELAY_MS) => {

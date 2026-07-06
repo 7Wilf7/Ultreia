@@ -652,7 +652,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => confirmDuplicates(true)} style={s.btn}>{t("activities.skip_dups")}</button>
             <button onClick={() => confirmDuplicates(false)} style={s.btnGhost}>{t("activities.add_anyway")}</button>
-            <button onClick={() => setDuplicateWarning(null)} style={s.btnGhost}>{t("common.cancel")}</button>
+            <button {...instantPress("duplicate-warning-cancel", () => setDuplicateWarning(null))} style={{ ...s.btnGhost, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.cancel")}</button>
           </div>
         </div>
       )}

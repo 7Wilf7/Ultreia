@@ -554,7 +554,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     commitVisualTab(next, { renderedWindow: targetWindow });
     alignTrackToTab(next);
     tabPropRef.current = next;
-    setTab(next);
+    startTransition(() => setTab(next));
     scheduleRenderedWindowTrim(next);
   }
 

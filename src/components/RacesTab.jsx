@@ -632,7 +632,8 @@ export function RacesTab({
           <div style={{ flex: 1, minWidth: 0 }}>
             {all.length > 0 && renderFilterChips(filter, setFilter)}
           </div>
-          <button onClick={() => startAdd(kind)}
+          <button
+            {...instantPress(`races-add-${kind}`, () => startAdd(kind))}
             disabled={raceSaving}
             style={{
               ...(addingMode === kind ? s.btn : s.btnGhost),
@@ -642,6 +643,8 @@ export function RacesTab({
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
             }}>
             + {kind === "target" ? t("races.add_target_short") : t("races.add_history_short")}
           </button>
@@ -863,8 +866,20 @@ export function RacesTab({
       <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
 
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <button onClick={() => startAdd("target")} disabled={raceSaving} style={{ ...(addingMode === "target" ? s.btn : s.btnGhost), opacity: raceSaving ? 0.55 : 1 }}>{t("races.add_target")}</button>
-        <button onClick={() => startAdd("history")} disabled={raceSaving} style={{ ...(addingMode === "history" ? s.btn : s.btnGhost), opacity: raceSaving ? 0.55 : 1 }}>{t("races.add_history")}</button>
+        <button
+          {...instantPress("races-add-target-desktop", () => startAdd("target"))}
+          disabled={raceSaving}
+          style={{ ...(addingMode === "target" ? s.btn : s.btnGhost), opacity: raceSaving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+        >
+          {t("races.add_target")}
+        </button>
+        <button
+          {...instantPress("races-add-history-desktop", () => startAdd("history"))}
+          disabled={raceSaving}
+          style={{ ...(addingMode === "history" ? s.btn : s.btnGhost), opacity: raceSaving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+        >
+          {t("races.add_history")}
+        </button>
         <span style={{ ...s.muted, fontSize: 11 }}>{t("races.edit_hint")}</span>
       </div>
 

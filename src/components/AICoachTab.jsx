@@ -871,7 +871,6 @@ export function AICoachTab({
   // Default to the state overview. Internal diagnostics are under Advanced so
   // the settings hub does not open on a prompt/debug surface.
   const [coachHubTab, setCoachHubTab] = useState("focus");
-  const renderedCoachHubTab = useDeferredValue(coachHubTab);
   // Long-chat hint is dismissible. Once dismissed it collapses to a
   // single-line tappable chip that sits between provider pills and the
   // chat scroll area — no longer occupies a full banner, but still
@@ -3077,7 +3076,7 @@ export function AICoachTab({
 
                 {/* Right content pane */}
                 <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "18px 22px" }}>
-                  {renderedCoachHubTab === "focus" && (
+                  {coachHubTab === "focus" && (
                     <CoachFocusPanel
                       races={races}
                       logs={logs}
@@ -3098,7 +3097,7 @@ export function AICoachTab({
                     />
                   )}
 
-                  {renderedCoachHubTab === "config" && (
+                  {coachHubTab === "config" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
                       <CoachConfigDropdowns
@@ -3111,7 +3110,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {renderedCoachHubTab === "trainingPrefs" && (
+                  {coachHubTab === "trainingPrefs" && (
                     <TrainingPreferenceEditor
                       value={coachConfig.trainingPreferences}
                       onChange={setTrainingPreferences}
@@ -3120,7 +3119,7 @@ export function AICoachTab({
                     />
                   )}
 
-                  {renderedCoachHubTab === "calendar" && (
+                  {coachHubTab === "calendar" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>{t("coach.calendar_btn_hint")}</div>
                       <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.calendar_btn_label")}</div>
@@ -3143,7 +3142,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {renderedCoachHubTab === "actions" && (
+                  {coachHubTab === "actions" && (
                     <RecentAgentActions
                       actions={agentActions}
                       t={t}
@@ -3156,7 +3155,7 @@ export function AICoachTab({
                     />
                   )}
 
-                  {renderedCoachHubTab === "adjust" && (
+                  {coachHubTab === "adjust" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>
                         {t("coach.proactive_manual_hint")}
@@ -3177,11 +3176,11 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {renderedCoachHubTab === "matrix" && (
+                  {coachHubTab === "matrix" && (
                     <CoachActionMatrix matrix={COACH_ACTION_MATRIX} lang={lang} t={t} />
                   )}
 
-                  {renderedCoachHubTab === "memory" && (
+                  {coachHubTab === "memory" && (
                     <div>
                       <div style={{ marginBottom: 14 }}>
                         {!memoryProposal && (
@@ -3223,7 +3222,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {renderedCoachHubTab === "prompt" && (
+                  {coachHubTab === "prompt" && (
                     <div>
                       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                         <PromptLangSwitch value={previewLang} onChange={setPreviewLang} />
@@ -3239,7 +3238,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {renderedCoachHubTab === "clear" && (
+                  {coachHubTab === "clear" && (
                     <div>
                       <p style={{ ...s.muted, lineHeight: 1.6, marginTop: 0 }}>
                         {t("coach.clear_hub_hint")}
@@ -3843,10 +3842,9 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
   const instantPress = useInstantPress();
   const [view, setView] = useState("current");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const renderedView = useDeferredValue(view);
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const baseFacts = useMemo(() => {
-    const statuses = renderedView === "archived" ? ["archived"] : ["active", "proposed"];
+    const statuses = view === "archived" ? ["archived"] : ["active", "proposed"];
     return [...(facts || [])]
       .filter(f => statuses.includes(f?.status || "active"))
       .sort((a, b) => {
@@ -3855,7 +3853,7 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
         if (byStatus) return byStatus;
         return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
       });
-  }, [facts, renderedView]);
+  }, [facts, view]);
   const categorySummary = useMemo(() => {
     const counts = new Map();
     for (const fact of baseFacts) {
@@ -3866,12 +3864,11 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
   }, [baseFacts]);
   const categoryExists = categorySummary.some(([category]) => category === categoryFilter);
   const selectedCategory = categoryFilter === "all" || categoryExists ? categoryFilter : "all";
-  const renderedCategory = useDeferredValue(selectedCategory);
   const visibleFacts = useMemo(() => {
-    return renderedCategory === "all"
+    return selectedCategory === "all"
       ? baseFacts
-      : baseFacts.filter(fact => (fact.category || "other") === renderedCategory);
-  }, [baseFacts, renderedCategory]);
+      : baseFacts.filter(fact => (fact.category || "other") === selectedCategory);
+  }, [baseFacts, selectedCategory]);
   const categoryOptions = useMemo(() => {
     if (!baseFacts.length) return [];
     return [["all", baseFacts.length], ...categorySummary];

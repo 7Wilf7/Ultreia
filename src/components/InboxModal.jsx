@@ -117,25 +117,61 @@ export function InboxModal({
   const rowEls = useRef(new Map());
   const itemsRef = useRef(items);
   const recentPointerTabPressRef = useRef({});
+  const parentTabRef = useRef(activeTab === "weekly" || activeTab === "other" ? activeTab : "daily");
+  const deferredParentTabFrameRef = useRef(0);
+  const deferredParentTabRef = useRef(null);
   const instantPress = useInstantPress();
   const instantTap = useInstantTap();
   const externalTab = activeTab === "weekly" || activeTab === "other" ? activeTab : "daily";
   const [localTab, setLocalTab] = useState(externalTab);
   const tab = localTab;
   useEffect(() => { itemsRef.current = items; }, [items]);
+
+  const cancelDeferredParentTabChange = useCallback(() => {
+    if (deferredParentTabFrameRef.current) {
+      cancelAnimationFrame(deferredParentTabFrameRef.current);
+      deferredParentTabFrameRef.current = 0;
+    }
+    deferredParentTabRef.current = null;
+  }, []);
+
+  const scheduleParentTabChange = useCallback((next) => {
+    cancelDeferredParentTabChange();
+    if (next === parentTabRef.current) return;
+    deferredParentTabRef.current = next;
+    // Keep the full-screen inbox tab switch visible before AppShell rerenders.
+    deferredParentTabFrameRef.current = requestAnimationFrame(() => {
+      deferredParentTabFrameRef.current = 0;
+      const pending = deferredParentTabRef.current;
+      deferredParentTabRef.current = null;
+      if (pending == null || pending === parentTabRef.current) return;
+      parentTabRef.current = pending;
+      onTabChange?.(pending);
+    });
+  }, [cancelDeferredParentTabChange, onTabChange]);
+
   useEffect(() => {
     let cancelled = false;
+    const pendingParentTab = deferredParentTabRef.current;
+    if (pendingParentTab != null && externalTab !== pendingParentTab) {
+      cancelDeferredParentTabChange();
+    }
+    parentTabRef.current = externalTab;
     queueMicrotask(() => {
       if (!cancelled) setLocalTab(externalTab);
     });
     return () => { cancelled = true; };
-  }, [externalTab]);
+  }, [cancelDeferredParentTabChange, externalTab]);
+
+  useEffect(() => () => {
+    cancelDeferredParentTabChange();
+  }, [cancelDeferredParentTabChange]);
 
   const selectTab = useCallback((next) => {
     setLocalTab(next);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    onTabChange?.(next);
-  }, [onTabChange]);
+    scheduleParentTabChange(next);
+  }, [scheduleParentTabChange]);
 
   const pressTab = useCallback((next, event) => {
     if (event?.pointerType === "mouse") return;

@@ -1,5 +1,4 @@
 import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
@@ -113,7 +112,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const stripRef = useRef(null);
   const paneRefs = useRef({});
   const [visualTab, setVisualTab] = useState(tab);
+  const [navTab, setNavTab] = useState(tab);
   const visualTabRef = useRef(tab);
+  const navTabRef = useRef(tab);
   const [renderedTabs, setRenderedTabs] = useState(() => getMobilePagerRenderWindow(tab, tabCount));
   const renderedTabsRef = useRef(renderedTabs);
   const activePane = () => paneRefs.current[visualTabRef.current];
@@ -205,10 +206,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       ? mergeTabWindows(renderedWindow)
       : getMobilePagerRenderWindow(clamped, tabCount);
     visualTabRef.current = clamped;
+    navTabRef.current = clamped;
 
     setRenderedWindow(nextRenderedTabs);
     setVisualTab(clamped);
+    setNavTab(clamped);
   }, [setRenderedWindow, tabCount]);
+
+  const commitNavTab = useCallback((next) => {
+    const clamped = clampTabIndex(next, tabCount);
+    navTabRef.current = clamped;
+    setNavTab(clamped);
+  }, [tabCount]);
 
   const notifyPagerDragActive = useCallback((active) => {
     if (pagerDragActiveNotifiedRef.current === active) return;
@@ -286,7 +295,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const width = measurePagerWidth();
     const left = trackOffsetRef.current;
     const clamped = clampTabIndex(Math.round(left / Math.max(1, width)), tabCount);
-    flushSync(() => commitVisualTab(clamped));
+    commitVisualTab(clamped);
     alignTrackToTab(clamped);
     if (clamped !== tabPropRef.current) {
       tabPropRef.current = clamped;
@@ -313,9 +322,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const current = visualTabRef.current;
     pagerSettleTargetRef.current = clamped;
     if (clamped !== current) {
-      flushSync(() => commitVisualTab(clamped, {
+      commitVisualTab(clamped, {
         renderedWindow: getMobilePagerJumpWindow(current, clamped, tabCount),
-      }));
+      });
     }
     if (Math.abs(distance) < 1) {
       setTrackOffset(to);
@@ -343,8 +352,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   useLayoutEffect(() => {
     tabPropRef.current = tab;
     if (tab !== visualTabRef.current) commitVisualTab(tab);
+    else if (tab !== navTabRef.current) commitNavTab(tab);
     alignTrackToTab(tab);
-  }, [tab, alignTrackToTab, commitVisualTab]);
+  }, [tab, alignTrackToTab, commitNavTab, commitVisualTab]);
 
   useLayoutEffect(() => {
     alignTrackToTab(visualTabRef.current);
@@ -541,11 +551,14 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPagerTimers();
     finishPagerGesture();
     const jumpWindow = getMobilePagerJumpWindow(current, next, tabCount);
-    flushSync(() => commitVisualTab(next, { renderedWindow: jumpWindow }));
+    commitNavTab(next);
     alignTrackToTab(next);
-    scheduleRenderedWindowTrim(next);
     tabPropRef.current = next;
-    startTransition(() => setTab(next));
+    startTransition(() => {
+      commitVisualTab(next, { renderedWindow: jumpWindow });
+      setTab(next);
+      scheduleRenderedWindowTrim(next);
+    });
   }
 
   function activateTab(idx, at) {
@@ -750,7 +763,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         WebkitTapHighlightColor: "transparent",
       }}>
         {TABS.map(({ key, idx, Icon }) => {
-          const active = visualTab === idx;
+          const active = navTab === idx;
           const showSpinner = idx === 2 && coachBusy;
           return (
             <button

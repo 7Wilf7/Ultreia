@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { startTransition, useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
@@ -115,6 +115,7 @@ export function InboxModal({
   const ioRef = useRef(null);
   const rowEls = useRef(new Map());
   const itemsRef = useRef(items);
+  const recentPointerTabPressRef = useRef({});
   const externalTab = activeTab === "weekly" || activeTab === "other" ? activeTab : "daily";
   const [localTab, setLocalTab] = useState(externalTab);
   const tab = localTab;
@@ -130,8 +131,28 @@ export function InboxModal({
   const selectTab = useCallback((next) => {
     setLocalTab(next);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    onTabChange?.(next);
+    startTransition(() => {
+      onTabChange?.(next);
+    });
   }, [onTabChange]);
+
+  const pressTab = useCallback((next, event) => {
+    if (event?.pointerType === "mouse") return;
+    const at = event?.timeStamp || 0;
+    recentPointerTabPressRef.current[next] = at;
+    event?.preventDefault?.();
+    selectTab(next);
+  }, [selectTab]);
+
+  const clickTab = useCallback((next, event) => {
+    const at = event?.timeStamp || 0;
+    const recentAt = recentPointerTabPressRef.current[next] || 0;
+    if (at - recentAt < 750) {
+      event?.preventDefault?.();
+      return;
+    }
+    selectTab(next);
+  }, [selectTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -417,16 +438,16 @@ export function InboxModal({
         </div>
 
         <div style={styles.tabs}>
-          <button onClick={() => selectTab("daily")} style={tabButtonStyle(tab === "daily")}>
+          <button onPointerDown={(event) => pressTab("daily", event)} onClick={(event) => clickTab("daily", event)} style={tabButtonStyle(tab === "daily")}>
             {t("inbox.tab_daily")}
           </button>
-          <button onClick={() => selectTab("weekly")} style={tabButtonStyle(tab === "weekly", weeklyReportLoading)}>
+          <button onPointerDown={(event) => pressTab("weekly", event)} onClick={(event) => clickTab("weekly", event)} style={tabButtonStyle(tab === "weekly", weeklyReportLoading)}>
             {t("inbox.tab_weekly")}
             {weeklyReportLoading && (
               <span className="ultreia-spinner" style={{ width: 10, height: 10, borderWidth: 1.5, marginLeft: 6 }} />
             )}
           </button>
-          <button onClick={() => selectTab("other")} style={tabButtonStyle(tab === "other")}>
+          <button onPointerDown={(event) => pressTab("other", event)} onClick={(event) => clickTab("other", event)} style={tabButtonStyle(tab === "other")}>
             {t("inbox.tab_other")}
           </button>
         </div>
@@ -580,6 +601,8 @@ const styles = {
     fontSize: 13,
     fontWeight: 650,
     cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",

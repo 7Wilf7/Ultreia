@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
+import { memo, startTransition, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -64,6 +64,15 @@ function normalizeTrainingPreferences(value) {
     if (Object.keys(entry).length) weeklyTemplate[String(day)] = entry;
   }
   return { weeklyTemplate };
+}
+
+function normalizeCoachConfig(value) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    ...DEFAULT_COACH_CONFIG,
+    ...source,
+    trainingPreferences: normalizeTrainingPreferences(source.trainingPreferences),
+  };
 }
 
 // Walk a hast subtree and collapse to plain text. Preserves newlines. Used
@@ -696,7 +705,7 @@ async function prepareCoachImageAttachment(file) {
 }
 
 export function AICoachTab({
-  coachConfig, setCoachConfig,
+  coachConfig: incomingCoachConfig, setCoachConfig,
   profile = null,
   chatMessages,
   logs = [], races = [],
@@ -739,6 +748,32 @@ export function AICoachTab({
   const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  const [optimisticCoachConfig, setOptimisticCoachConfig] = useState(() => normalizeCoachConfig(incomingCoachConfig));
+  const optimisticCoachConfigRef = useRef(optimisticCoachConfig);
+  useEffect(() => {
+    let cancelled = false;
+    const next = normalizeCoachConfig(incomingCoachConfig);
+    optimisticCoachConfigRef.current = next;
+    queueMicrotask(() => {
+      if (!cancelled) setOptimisticCoachConfig(next);
+    });
+    return () => { cancelled = true; };
+  }, [incomingCoachConfig]);
+  const commitCoachConfig = useCallback((nextConfig) => {
+    const next = normalizeCoachConfig(nextConfig);
+    optimisticCoachConfigRef.current = next;
+    setOptimisticCoachConfig(next);
+    startTransition(() => {
+      setCoachConfig?.(next);
+    });
+  }, [setCoachConfig]);
+  const patchCoachConfig = useCallback((patch) => {
+    commitCoachConfig({
+      ...optimisticCoachConfigRef.current,
+      ...patch,
+    });
+  }, [commitCoachConfig]);
+  const coachConfig = optimisticCoachConfig;
   const [runnerNowMs, setRunnerNowMs] = useState(() => Date.now());
   // Markdown component map depends on isMobile (mobile swaps wide tables to
   // stacked row cards). Memoize so we don't rebuild the renderer object on
@@ -833,6 +868,7 @@ export function AICoachTab({
   // Default to the state overview. Internal diagnostics are under Advanced so
   // the settings hub does not open on a prompt/debug surface.
   const [coachHubTab, setCoachHubTab] = useState("focus");
+  const renderedCoachHubTab = useDeferredValue(coachHubTab);
   // Long-chat hint is dismissible. Once dismissed it collapses to a
   // single-line tappable chip that sits between provider pills and the
   // chat scroll area — no longer occupies a full banner, but still
@@ -1388,13 +1424,13 @@ export function AICoachTab({
     setMemoryProposal(null);
   }
 
-  function setStyle(id)        { setCoachConfig({ ...coachConfig, style: id }); }
-  function setOutputLength(id) { setCoachConfig({ ...coachConfig, outputLength: id }); }
-  function setIntervention(id) { setCoachConfig({ ...coachConfig, intervention: id }); }
-  function setShowCalendarButton(v) { setCoachConfig({ ...coachConfig, showCalendarButton: v }); }
-  function setNightlyMemoryReview(v) { setCoachConfig({ ...coachConfig, nightlyMemoryReview: v }); }
+  function setStyle(id)        { patchCoachConfig({ style: id }); }
+  function setOutputLength(id) { patchCoachConfig({ outputLength: id }); }
+  function setIntervention(id) { patchCoachConfig({ intervention: id }); }
+  function setShowCalendarButton(v) { patchCoachConfig({ showCalendarButton: v }); }
+  function setNightlyMemoryReview(v) { patchCoachConfig({ nightlyMemoryReview: v }); }
   function setTrainingPreferences(next) {
-    setCoachConfig({ ...coachConfig, trainingPreferences: normalizeTrainingPreferences(next) });
+    patchCoachConfig({ trainingPreferences: normalizeTrainingPreferences(next) });
   }
 
   // Dynamic data block injected into the system prompt. Only the section titles
@@ -2954,7 +2990,7 @@ export function AICoachTab({
 
                 {/* Right content pane */}
                 <div style={{ flex: 1, minWidth: 0, overflowY: "auto", padding: "18px 22px" }}>
-                  {coachHubTab === "focus" && (
+                  {renderedCoachHubTab === "focus" && (
                     <CoachFocusPanel
                       races={races}
                       logs={logs}
@@ -2975,7 +3011,7 @@ export function AICoachTab({
                     />
                   )}
 
-                  {coachHubTab === "config" && (
+                  {renderedCoachHubTab === "config" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.behavior_hint")}</div>
                       <CoachConfigDropdowns
@@ -2988,7 +3024,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {coachHubTab === "trainingPrefs" && (
+                  {renderedCoachHubTab === "trainingPrefs" && (
                     <TrainingPreferenceEditor
                       value={coachConfig.trainingPreferences}
                       onChange={setTrainingPreferences}
@@ -2997,7 +3033,7 @@ export function AICoachTab({
                     />
                   )}
 
-                  {coachHubTab === "calendar" && (
+                  {renderedCoachHubTab === "calendar" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>{t("coach.calendar_btn_hint")}</div>
                       <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.calendar_btn_label")}</div>
@@ -3014,7 +3050,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {coachHubTab === "actions" && (
+                  {renderedCoachHubTab === "actions" && (
                     <RecentAgentActions
                       actions={agentActions}
                       t={t}
@@ -3027,7 +3063,7 @@ export function AICoachTab({
                     />
                   )}
 
-                  {coachHubTab === "adjust" && (
+                  {renderedCoachHubTab === "adjust" && (
                     <div>
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>
                         {t("coach.proactive_manual_hint")}
@@ -3048,11 +3084,11 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {coachHubTab === "matrix" && (
+                  {renderedCoachHubTab === "matrix" && (
                     <CoachActionMatrix matrix={COACH_ACTION_MATRIX} lang={lang} t={t} />
                   )}
 
-                  {coachHubTab === "memory" && (
+                  {renderedCoachHubTab === "memory" && (
                     <div>
                       <div style={{ marginBottom: 14 }}>
                         {!memoryProposal && (
@@ -3094,7 +3130,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {coachHubTab === "prompt" && (
+                  {renderedCoachHubTab === "prompt" && (
                     <div>
                       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                         <PromptLangSwitch value={previewLang} onChange={setPreviewLang} />
@@ -3110,7 +3146,7 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {coachHubTab === "clear" && (
+                  {renderedCoachHubTab === "clear" && (
                     <div>
                       <p style={{ ...s.muted, lineHeight: 1.6, marginTop: 0 }}>
                         {t("coach.clear_hub_hint")}
@@ -3704,9 +3740,10 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
   const appDialog = useAppDialog();
   const [view, setView] = useState("current");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const renderedView = useDeferredValue(view);
   const [expandedCategories, setExpandedCategories] = useState(() => new Set());
   const baseFacts = useMemo(() => {
-    const statuses = view === "archived" ? ["archived"] : ["active", "proposed"];
+    const statuses = renderedView === "archived" ? ["archived"] : ["active", "proposed"];
     return [...(facts || [])]
       .filter(f => statuses.includes(f?.status || "active"))
       .sort((a, b) => {
@@ -3715,7 +3752,7 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
         if (byStatus) return byStatus;
         return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
       });
-  }, [facts, view]);
+  }, [facts, renderedView]);
   const categorySummary = useMemo(() => {
     const counts = new Map();
     for (const fact of baseFacts) {
@@ -3726,11 +3763,12 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
   }, [baseFacts]);
   const categoryExists = categorySummary.some(([category]) => category === categoryFilter);
   const selectedCategory = categoryFilter === "all" || categoryExists ? categoryFilter : "all";
+  const renderedCategory = useDeferredValue(selectedCategory);
   const visibleFacts = useMemo(() => {
-    return selectedCategory === "all"
+    return renderedCategory === "all"
       ? baseFacts
-      : baseFacts.filter(fact => (fact.category || "other") === selectedCategory);
-  }, [baseFacts, selectedCategory]);
+      : baseFacts.filter(fact => (fact.category || "other") === renderedCategory);
+  }, [baseFacts, renderedCategory]);
   const categoryOptions = useMemo(() => {
     if (!baseFacts.length) return [];
     return [["all", baseFacts.length], ...categorySummary];

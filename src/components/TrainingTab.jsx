@@ -14,6 +14,7 @@ import { PeriodSelector } from "./PeriodSelector";
 import { ActivitiesTab } from "./ActivitiesTab";
 import { ChartsTab } from "./ChartsTab";
 import { useInstantPress } from "../hooks/useInstantPress";
+import { useDeferredCommit } from "../hooks/useDeferredCommit";
 
 // Activities ↔ Charts segmented toggle. Module-level (not defined inside
 // TrainingTab's render) so it keeps a stable identity across renders.
@@ -171,6 +172,7 @@ export function TrainingTab({
   const sectionTouch = useRef(null);
   const [viewMotionDir, setViewMotionDir] = useState(0);
   const [selectedView, setSelectedView] = useState(view);
+  const commitParentView = useDeferredCommit(setView);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,7 +187,7 @@ export function TrainingTab({
     const order = { activities: 0, charts: 1 };
     setViewMotionDir((order[nextView] ?? 0) > (order[selectedView] ?? 0) ? 1 : -1);
     setSelectedView(nextView);
-    setView(nextView);
+    commitParentView(nextView);
   }
 
   function onSectionTouchStart(e) {

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getPeriodLabel, pastMonths, pastYears } from "../utils/period";
 import { useT } from "../i18n/LanguageContext";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
+import { useDeferredCommit } from "../hooks/useDeferredCommit";
 
 // Single segment of the strip. Hoisted to module scope (was an inner function
 // of PeriodSelector, which re-created the component type every render and reset
@@ -55,6 +56,8 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
   const instantTap = useInstantTap();
   const [localPeriod, setLocalPeriod] = useState(period);
   const [localDropdown, setLocalDropdown] = useState(periodDropdown);
+  const commitParentPeriod = useDeferredCommit(setPeriod);
+  const commitParentDropdown = useDeferredCommit(setPeriodDropdown);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,12 +77,12 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
 
   function commitPeriod(next) {
     setLocalPeriod(next);
-    setPeriod(next);
+    commitParentPeriod(next);
   }
 
   function commitDropdown(next) {
     setLocalDropdown(next);
-    setPeriodDropdown(next);
+    commitParentDropdown(next);
   }
 
   const visiblePeriod = localPeriod || period;

@@ -11,6 +11,7 @@ import { RUN_GROUP_TYPES } from "../constants";
 // its own. Listed here so the predicate can match the individual selection.
 import { useT } from "../i18n/LanguageContext";
 import { useInstantPress } from "../hooks/useInstantPress";
+import { useDeferredCommit } from "../hooks/useDeferredCommit";
 
 /**
  * Filter state shape (held in App):
@@ -113,6 +114,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
   const [localFilter, setLocalFilter] = useState(filter);
   const wrapRef = useRef(null);
   const instantPress = useInstantPress();
+  const commitParentFilter = useDeferredCommit(setFilter);
 
   // Close on outside click. Cheap implementation — listens to mousedown +
   // touchstart so it works on both pointer and touch devices.
@@ -143,7 +145,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
     const nextFilter = dropdownValueToFilter(value);
     setLocalFilter(nextFilter);
     setOpen(false);
-    setFilter(nextFilter);
+    commitParentFilter(nextFilter);
   }
 
   // Two-level menu tree. Left column = "All Types" + 3 group headers; tapping a

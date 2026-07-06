@@ -13,6 +13,7 @@ import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
 import { useInstantPress } from "../hooks/useInstantPress";
+import { useDeferredCommit } from "../hooks/useDeferredCommit";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
 // the Target and History sections so every column lines up across both lists.
@@ -87,6 +88,8 @@ export function RacesTab({
   const [topTabMotionDir, setTopTabMotionDir] = useState(0);
   const [selectedMobileTopTab, setSelectedMobileTopTab] = useState(mobileTopTab || "races");
   const [selectedMobileSubTab, setSelectedMobileSubTab] = useState(mobileSubTab || "target");
+  const commitParentMobileTopTab = useDeferredCommit(setMobileTopTab);
+  const commitParentMobileSubTab = useDeferredCommit(setMobileSubTab);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,14 +112,14 @@ export function RacesTab({
     const order = { races: 0, pr: 1 };
     setTopTabMotionDir((order[nextTab] ?? 0) > (order[selectedMobileTopTab] ?? 0) ? 1 : -1);
     setSelectedMobileTopTab(nextTab);
-    setMobileTopTab(nextTab);
+    commitParentMobileTopTab(nextTab);
   }
 
   function changeMobileSubTab(nextTab) {
     if (nextTab === selectedMobileSubTab) return;
     if (addingMode) cancelAdd();
     setSelectedMobileSubTab(nextTab);
-    setMobileSubTab(nextTab);
+    commitParentMobileSubTab(nextTab);
   }
 
   function onTopSwipeStart(e) {
@@ -285,6 +288,10 @@ export function RacesTab({
   // user picks a category via the inline picker on the card.
   const [targetFilter, setTargetFilter] = useState([]);
   const [historyFilter, setHistoryFilter] = useState([]);
+  const [selectedTargetFilter, setSelectedTargetFilter] = useState(targetFilter);
+  const [selectedHistoryFilter, setSelectedHistoryFilter] = useState(historyFilter);
+  const commitTargetFilter = useDeferredCommit(setTargetFilter);
+  const commitHistoryFilter = useDeferredCommit(setHistoryFilter);
   // Mobile-only sub-navigation. Top tabs split PR (Personal Records bar)
   // from Races (the two lists). Inside Races, sub-tabs split Target vs
   // History — replacing the desktop's stacked sections. Defaults match the
@@ -458,6 +465,14 @@ export function RacesTab({
   function toggleFilter(filter, setFilter, cat) {
     setFilter(filter.includes(cat) ? filter.filter(c => c !== cat) : [...filter, cat]);
   }
+  function changeTargetFilter(next) {
+    setSelectedTargetFilter(next);
+    commitTargetFilter(next);
+  }
+  function changeHistoryFilter(next) {
+    setSelectedHistoryFilter(next);
+    commitHistoryFilter(next);
+  }
   function renderFilterChips(filter, setFilter) {
     // Mobile: single-select native dropdown — one row, far less screen real
     // estate than the chip grid. Trades multi-select for a cleaner layout
@@ -585,7 +600,7 @@ export function RacesTab({
             {targetFilter.length > 0 ? `${targetRacesList.length} / ${targetRacesAll.length}` : targetRacesAll.length}
           </span>
         </div>
-        {targetRacesAll.length > 0 && renderFilterChips(targetFilter, setTargetFilter)}
+        {targetRacesAll.length > 0 && renderFilterChips(selectedTargetFilter, changeTargetFilter)}
         {targetRacesList.length === 0 ? (
           <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", marginBottom: 22, fontSize: 13 }}>
             {targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target")}
@@ -607,7 +622,7 @@ export function RacesTab({
             {historyFilter.length > 0 ? `${historyRacesList.length} / ${historyRacesAll.length}` : historyRacesAll.length}
           </span>
         </div>
-        {historyRacesAll.length > 0 && renderFilterChips(historyFilter, setHistoryFilter)}
+        {historyRacesAll.length > 0 && renderFilterChips(selectedHistoryFilter, changeHistoryFilter)}
         {historyRacesList.length === 0 ? (
           <div style={{ ...s.cardDark, textAlign: "center", color: "var(--ink-3)", padding: "24px 16px", fontSize: 13 }}>
             {historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history")}

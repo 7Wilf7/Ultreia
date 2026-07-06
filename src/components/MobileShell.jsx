@@ -26,6 +26,8 @@ const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
 const PAGER_DRAG_MAX_DISTANCE_PX = 86;
 const PAGER_DRAG_VELOCITY_PX_PER_MS = 0.38;
 const PAGER_EDGE_RESISTANCE = 0.32;
+const TAB_PREHEAT_DELAY_MS = 900;
+const TAB_PREHEAT_IDLE_TIMEOUT_MS = 1600;
 
 function triggerTabHaptic() {
   try {
@@ -43,6 +45,10 @@ function sameTabWindow(a, b) {
 
 function clampTabIndex(idx, count) {
   return Math.max(0, Math.min(count - 1, idx));
+}
+
+function getAllTabIndexes(count) {
+  return Array.from({ length: Math.max(0, count) }, (_, idx) => idx);
 }
 
 function easeOutCubic(t) {
@@ -131,6 +137,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pagerWidthRef = useRef(1);
   const pagerGestureRef = useRef({ touching: false, current: tab, startLeft: tab });
   const renderTrimTimerRef = useRef(null);
+  const preheatHandleRef = useRef(null);
+  const preheatedAllTabsRef = useRef(false);
   const tabPropRef = useRef(tab);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
@@ -195,10 +203,60 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   const setRenderedWindow = useCallback((nextRenderedTabs) => {
-    if (sameTabWindow(nextRenderedTabs, renderedTabsRef.current)) return;
-    renderedTabsRef.current = nextRenderedTabs;
-    setRenderedTabs(nextRenderedTabs);
+    const normalizedTabs = preheatedAllTabsRef.current
+      ? mergeTabWindows(renderedTabsRef.current, nextRenderedTabs)
+      : nextRenderedTabs;
+    if (sameTabWindow(normalizedTabs, renderedTabsRef.current)) return;
+    renderedTabsRef.current = normalizedTabs;
+    setRenderedTabs(normalizedTabs);
   }, []);
+
+  const clearTabPreheat = useCallback(() => {
+    const handle = preheatHandleRef.current;
+    if (!handle) return;
+    if (handle.type === "idle" && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(handle.id);
+    } else {
+      clearTimeout(handle.id);
+    }
+    preheatHandleRef.current = null;
+  }, []);
+
+  const preheatAllTabs = useCallback(() => {
+    if (preheatedAllTabsRef.current) return;
+    preheatedAllTabsRef.current = true;
+    startTransition(() => setRenderedWindow(getAllTabIndexes(tabCount)));
+  }, [setRenderedWindow, tabCount]);
+
+  const scheduleTabPreheat = useCallback((delay = TAB_PREHEAT_DELAY_MS) => {
+    if (preheatedAllTabsRef.current || preheatHandleRef.current) return;
+    const run = () => {
+      preheatHandleRef.current = null;
+      preheatAllTabs();
+    };
+    const scheduleIdle = () => {
+      if (preheatedAllTabsRef.current || preheatHandleRef.current) return;
+      if (typeof window.requestIdleCallback === "function") {
+        preheatHandleRef.current = {
+          type: "idle",
+          id: window.requestIdleCallback(run, { timeout: TAB_PREHEAT_IDLE_TIMEOUT_MS }),
+        };
+      } else {
+        preheatHandleRef.current = { type: "timeout", id: window.setTimeout(run, 250) };
+      }
+    };
+    if (delay > 0) {
+      preheatHandleRef.current = {
+        type: "timeout",
+        id: window.setTimeout(() => {
+          preheatHandleRef.current = null;
+          scheduleIdle();
+        }, delay),
+      };
+      return;
+    }
+    scheduleIdle();
+  }, [preheatAllTabs]);
 
   const commitVisualTab = useCallback((next, { renderedWindow = null } = {}) => {
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
@@ -253,10 +311,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, []);
 
   const scheduleRenderedWindowTrim = useCallback((next, delay = 220) => {
+    if (preheatedAllTabsRef.current) return;
     if (renderTrimTimerRef.current) clearTimeout(renderTrimTimerRef.current);
     const clamped = Math.max(0, Math.min(tabCount - 1, next));
     renderTrimTimerRef.current = setTimeout(() => {
       renderTrimTimerRef.current = null;
+      if (preheatedAllTabsRef.current) return;
       if (pagerTouchActiveRef.current || pagerSettleTimerRef.current || pagerSettleFrameRef.current || visualTabRef.current !== clamped) return;
       setRenderedWindow(getMobilePagerRenderWindow(clamped, tabCount));
     }, delay);
@@ -362,9 +422,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
 
   useEffect(() => () => {
     clearPagerTimers();
+    clearTabPreheat();
     setPagerTouchingAttribute(false);
     notifyPagerDragActive(false);
-  }, [clearPagerTimers, notifyPagerDragActive, setPagerTouchingAttribute]);
+  }, [clearPagerTimers, clearTabPreheat, notifyPagerDragActive, setPagerTouchingAttribute]);
+
+  useEffect(() => {
+    scheduleTabPreheat();
+    return clearTabPreheat;
+  }, [clearTabPreheat, scheduleTabPreheat]);
 
   useEffect(() => {
     const track = trackRef.current;

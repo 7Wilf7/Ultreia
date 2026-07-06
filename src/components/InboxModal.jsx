@@ -119,7 +119,6 @@ export function InboxModal({
   const recentPointerTabPressRef = useRef({});
   const parentTabRef = useRef(activeTab === "weekly" || activeTab === "other" ? activeTab : "daily");
   const deferredParentTabFrameRef = useRef(0);
-  const deferredParentTabTimerRef = useRef(null);
   const deferredParentTabRef = useRef(null);
   const instantPress = useInstantPress();
   const instantTap = useInstantTap();
@@ -133,10 +132,6 @@ export function InboxModal({
       cancelAnimationFrame(deferredParentTabFrameRef.current);
       deferredParentTabFrameRef.current = 0;
     }
-    if (deferredParentTabTimerRef.current) {
-      clearTimeout(deferredParentTabTimerRef.current);
-      deferredParentTabTimerRef.current = null;
-    }
     deferredParentTabRef.current = null;
   }, []);
 
@@ -144,17 +139,15 @@ export function InboxModal({
     cancelDeferredParentTabChange();
     if (next === parentTabRef.current) return;
     deferredParentTabRef.current = next;
-    // Keep the full-screen inbox tab switch visible before AppShell rerenders.
+    // Defer parent sync out of the tap handler so the local tab switch is not
+    // blocked by AppShell rerendering, but avoid an additional timer.
     deferredParentTabFrameRef.current = requestAnimationFrame(() => {
       deferredParentTabFrameRef.current = 0;
-      deferredParentTabTimerRef.current = window.setTimeout(() => {
-        deferredParentTabTimerRef.current = null;
-        const pending = deferredParentTabRef.current;
-        deferredParentTabRef.current = null;
-        if (pending == null || pending === parentTabRef.current) return;
-        parentTabRef.current = pending;
-        onTabChange?.(pending);
-      }, 0);
+      const pending = deferredParentTabRef.current;
+      deferredParentTabRef.current = null;
+      if (pending == null || pending === parentTabRef.current) return;
+      parentTabRef.current = pending;
+      onTabChange?.(pending);
     });
   }, [cancelDeferredParentTabChange, onTabChange]);
 

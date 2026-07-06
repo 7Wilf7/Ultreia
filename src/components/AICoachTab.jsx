@@ -5221,6 +5221,7 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
 }
 
 function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t }) {
+  const instantTap = useInstantTap();
   const fact = entry.fact || entry.oldFact || {};
   const oldFact = entry.oldFact || null;
   const text = displayLang === "zh" ? (fact.contentZh || fact.contentEn || "") : (fact.contentEn || fact.contentZh || "");
@@ -5229,21 +5230,28 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
     : "";
   const removable = entry.kind === "removed";
   const label = t(`coach.memory_review_kind_${entry.kind}`);
+  const locked = disabled || entry.kind === "unchanged";
   return (
-    <label style={{
+    <button
+      type="button"
+      {...instantTap(`memory-review-entry-${entry.key}`, () => {
+        if (!locked) onToggle?.();
+      })}
+      disabled={locked}
+      aria-pressed={selected}
+      style={{
       ...memoryReviewEntryStyle,
+      width: "100%",
       borderColor: selected ? "var(--moss)" : "var(--rule)",
       background: selected ? "var(--moss-bg)" : "var(--panel-2)",
       opacity: disabled && entry.kind !== "unchanged" ? 0.72 : 1,
-      cursor: disabled || entry.kind === "unchanged" ? "default" : "pointer",
+      cursor: locked ? "default" : "pointer",
+      textAlign: "left",
+      fontFamily: "var(--font-sans)",
+      touchAction: "pan-y",
+      WebkitTapHighlightColor: "transparent",
     }}>
-      <input
-        type="checkbox"
-        checked={selected}
-        disabled={disabled || entry.kind === "unchanged"}
-        onChange={onToggle}
-        style={{ marginTop: 4, flexShrink: 0 }}
-      />
+      <span aria-hidden="true" style={memoryReviewCheckStyle(selected)} />
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
           <span style={{
@@ -5285,7 +5293,7 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
           {text || t("coach.memory_review_empty_fact")}
         </span>
       </span>
-    </label>
+    </button>
   );
 }
 
@@ -5309,6 +5317,19 @@ const memoryReviewEntryStyle = {
   border: "1px solid var(--rule)",
   borderRadius: 6,
 };
+
+const memoryReviewCheckStyle = (selected) => ({
+  width: 16,
+  height: 16,
+  minWidth: 0,
+  minHeight: 0,
+  flexShrink: 0,
+  marginTop: 3,
+  borderRadius: 4,
+  border: `1px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
+  background: selected ? "var(--moss)" : "var(--bg-elevated)",
+  boxShadow: selected ? "inset 0 0 0 3px var(--bg)" : "none",
+});
 
 const memoryReviewEmptyStyle = {
   ...s.muted,

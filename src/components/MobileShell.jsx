@@ -145,7 +145,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const deferredAppTabFrameRef = useRef(0);
   const deferredAppTabRef = useRef(null);
   const deferredVisualTabFrameRef = useRef(0);
-  const deferredVisualTabTimerRef = useRef(null);
   const deferredVisualTabRef = useRef(null);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
@@ -336,10 +335,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (deferredVisualTabFrameRef.current) {
       cancelAnimationFrame(deferredVisualTabFrameRef.current);
       deferredVisualTabFrameRef.current = 0;
-    }
-    if (deferredVisualTabTimerRef.current) {
-      clearTimeout(deferredVisualTabTimerRef.current);
-      deferredVisualTabTimerRef.current = null;
     }
     deferredVisualTabRef.current = null;
   }, []);
@@ -693,29 +688,27 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       return;
     }
 
-    // Cold tabs can mount a full page of work. Let the press feedback paint
-    // first, then mount/switch the page on the next frame.
+    // Cold tabs can mount a full page of work. Commit the nav highlight
+    // synchronously, then switch the page on the next frame without an extra
+    // timer so the real tab change stays close to the tap.
     flushSync(() => {
       commitNavTab(next);
     });
     deferredVisualTabRef.current = { next, renderedWindow: targetWindow };
     deferredVisualTabFrameRef.current = requestAnimationFrame(() => {
       deferredVisualTabFrameRef.current = 0;
-      deferredVisualTabTimerRef.current = window.setTimeout(() => {
-        deferredVisualTabTimerRef.current = null;
-        const pending = deferredVisualTabRef.current;
-        deferredVisualTabRef.current = null;
-        if (!pending) return;
-        const target = clampTabIndex(pending.next, tabCount);
-        if (target !== visualTabRef.current) {
-          commitVisualTabImmediately(target, { renderedWindow: pending.renderedWindow });
-        } else if (target !== navTabRef.current) {
-          commitNavTab(target);
-        }
-        alignTrackToTab(target);
-        scheduleAppTabCommit(target);
-        scheduleRenderedWindowTrim(target);
-      }, 0);
+      const pending = deferredVisualTabRef.current;
+      deferredVisualTabRef.current = null;
+      if (!pending) return;
+      const target = clampTabIndex(pending.next, tabCount);
+      if (target !== visualTabRef.current) {
+        commitVisualTabImmediately(target, { renderedWindow: pending.renderedWindow });
+      } else if (target !== navTabRef.current) {
+        commitNavTab(target);
+      }
+      alignTrackToTab(target);
+      scheduleAppTabCommit(target);
+      scheduleRenderedWindowTrim(target);
     });
   }
 

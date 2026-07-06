@@ -2,8 +2,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ModalRoot } from "./ModalRoot";
 import { s } from "../styles";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 export function RaceBriefingModal({ action, t, isMobile, mdComponents, onClose }) {
+  const instantPress = useInstantPress();
   const race = action?.payload?.raceBriefing || {};
   const markdown = String(action?.payload?.briefingMarkdown || "").trim();
   return (
@@ -27,7 +29,7 @@ export function RaceBriefingModal({ action, t, isMobile, mdComponents, onClose }
                 {[race.date, t("coach.race_briefing_days", { days: race.daysToRace ?? "-" }), [race.category, race.subtype].filter(Boolean).join(" / ")].filter(Boolean).join(" · ")}
               </div>
             </div>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("race-briefing-close-x", onClose)} style={{ ...s.modalCloseBtn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
           <div style={{
             borderTop: "1px solid var(--rule)",
@@ -45,7 +47,7 @@ export function RaceBriefingModal({ action, t, isMobile, mdComponents, onClose }
             )}
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-            <button type="button" onClick={onClose} style={{ ...s.btn, fontSize: 12, padding: "7px 12px" }}>
+            <button type="button" {...instantPress("race-briefing-close", onClose)} style={{ ...s.btn, fontSize: 12, padding: "7px 12px", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
               {t("common.close")}
             </button>
           </div>

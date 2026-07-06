@@ -2515,11 +2515,13 @@ export function AICoachTab({
             {proactiveAdjustment.existingAction ? (
               <button
                 type="button"
-                onClick={() => onOpenProactiveAction?.(proactiveAdjustment.existingAction)}
+                {...instantPress("proactive-open-existing", () => onOpenProactiveAction?.(proactiveAdjustment.existingAction))}
                 style={{
                   ...s.btn,
                   fontSize: 12,
                   padding: "6px 10px",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 {t("coach.proactive_open")}
               </button>
@@ -2589,11 +2591,13 @@ export function AICoachTab({
             {raceBriefing.existingAction ? (
               <button
                 type="button"
-                onClick={() => setRaceBriefingAction(raceBriefing.existingAction)}
+                {...instantPress("race-briefing-open-existing-banner", () => setRaceBriefingAction(raceBriefing.existingAction))}
                 style={{
                   ...s.btn,
                   fontSize: 12,
                   padding: "6px 10px",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 {t("coach.race_briefing_open")}
               </button>
@@ -2902,7 +2906,7 @@ export function AICoachTab({
                       border: "1px solid var(--rule)", borderRadius: 8, padding: "10px 12px",
                     }}>
                       <span style={{ flex: 1, fontSize: 13, lineHeight: 1.5, color: "var(--ink-1)" }}>{coachHintMeta[id].text}</span>
-                      <button onClick={coachHintMeta[id].jump} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", minHeight: 0, flexShrink: 0 }}>
+                      <button {...instantPress(`coach-hint-jump-${id}`, coachHintMeta[id].jump)} style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", minHeight: 0, flexShrink: 0, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                         {t("coach.hint_go")}
                       </button>
                     </div>
@@ -2957,7 +2961,7 @@ export function AICoachTab({
               }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px 6px" }}>
                   <div style={{ ...s.section, margin: 0 }}>{t("coach.settings_title")}</div>
-                  <button onClick={() => setShowCoachMenu(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                  <button {...instantPress("coach-menu-close", () => setShowCoachMenu(false))} style={{ ...s.modalCloseBtn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
                 </div>
 
                 {row(t("coach.current_focus"), () => openSub(() => setShowCoachFocus(true)))}
@@ -3011,7 +3015,7 @@ export function AICoachTab({
                 padding: "14px 18px", borderBottom: "1px solid var(--rule)",
               }}>
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.settings_title")}</h2>
-                <button onClick={() => setShowCoachHub(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-hub-close", () => setShowCoachHub(false))} style={{ ...s.modalCloseBtn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
               </div>
 
               {/* Body: left tabs + right content */}
@@ -3508,6 +3512,7 @@ function CoachFocusPanel({
     && !raceBriefing.existingAction
     && typeof onRaceBriefingRequest === "function"
   );
+  const instantPress = useInstantPress();
 
   return (
     <div style={{ display: "grid", gap: 10 }}>
@@ -3580,8 +3585,8 @@ function CoachFocusPanel({
             raceBriefing.existingAction ? (
               <button
                 type="button"
-                onClick={() => onOpenRaceBriefing?.(raceBriefing.existingAction)}
-                style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "7px 11px" }}
+                {...instantPress("focus-open-race-briefing", () => onOpenRaceBriefing?.(raceBriefing.existingAction))}
+                style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "7px 11px", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               >
                 {t("coach.race_briefing_open")}
               </button>

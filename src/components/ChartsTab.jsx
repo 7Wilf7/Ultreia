@@ -340,7 +340,7 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
               <path d={`${path} L ${points[points.length - 1].x} ${plotBottom} L ${points[0].x} ${plotBottom} Z`} fill="var(--moss)" opacity="0.08" />
               <path d={path} fill="none" stroke="var(--moss-deep)" strokeWidth={isMobile ? 2 : 1.5} />
               {points.map((p, i) => (
-                <g key={i} onClick={() => setSelectedIndex?.(i)} style={{ cursor: "pointer" }}>
+                <g key={i} {...instantPress(`trend-point-${i}`, () => setSelectedIndex?.(i))} style={{ cursor: "pointer", touchAction: "manipulation" }}>
                   <rect x={p.x - (isMobile ? 5 : 3)} y={p.y - (isMobile ? 5 : 3)} width={isMobile ? 10 : 6} height={isMobile ? 10 : 6} fill={selectedIndex === i ? "var(--warn)" : "var(--ink-1)"}>
                     <title>{p.w.rangeText}: {p.w.value} {axisLabel}</title>
                   </rect>
@@ -396,7 +396,7 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
             {ctlPoints.map((p, i) => {
               const active = selectedIndex === i || (selectedIndex == null && i === ctlPoints.length - 1);
               return (
-                <g key={i} onClick={() => setSelectedIndex(i)} style={{ cursor: "pointer" }}>
+                <g key={i} {...instantPress(`load-point-${i}`, () => setSelectedIndex(i))} style={{ cursor: "pointer", touchAction: "manipulation" }}>
                   <rect x={p.x - (isMobile ? 5 : 3)} y={Math.min(p.y, atlPoints[i].y) - (isMobile ? 8 : 5)}
                     width={isMobile ? 10 : 6}
                     height={Math.max(10, Math.abs(p.y - atlPoints[i].y) + (isMobile ? 16 : 10))}

@@ -1,6 +1,7 @@
 import { s } from "../styles";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Reusable step-by-step setup tutorial. Same centered + blurred-backdrop chrome
 // as WeatherApiSettingsModal, but at a higher z-index (10000) so it layers on
@@ -9,6 +10,7 @@ import { ModalRoot } from "./ModalRoot";
 export function TutorialModal({ tutorial, onClose }) {
   const t = useT();
   const { lang } = useLanguage();
+  const instantPress = useInstantPress();
   const pick = (s) => (s ? (lang === "en" ? s.en : s.zh) : "");
 
   if (!tutorial) return null;
@@ -38,7 +40,7 @@ export function TutorialModal({ tutorial, onClose }) {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{pick(tutorial.title)}</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("tutorial-close-x", onClose)} style={{ ...s.modalCloseBtn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
 
           {tutorial.warn && (
@@ -99,7 +101,7 @@ export function TutorialModal({ tutorial, onClose }) {
           )}
 
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-            <button onClick={onClose} style={s.btn}>{t("common.done")}</button>
+            <button {...instantPress("tutorial-done", onClose)} style={{ ...s.btn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.done")}</button>
           </div>
         </div>
       </div>

@@ -91,7 +91,7 @@ Output a JSON array only. Each item:
   "speed": number (km/h, cycling target, optional),
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
-  "timeOfDay": "am" | "pm" (optional),
+  "timeOfDay": "am" | "pm" (optional; "pm" means evening/晚上 around 18:00, not a generic afternoon slot),
   "notes": string (brief Chinese reason; explain how this balances missed-plan recovery with load protection)
 }
 
@@ -104,6 +104,8 @@ Rules:
 - Keep the proposal small: usually 1-3 items, never more than 5.
 - Do NOT diagnose injury or illness. Only adjust training stress and recovery.
 - Use action="update" only for a future planned session from tomorrow onward that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
+- Do NOT output action="update" if the replacement is materially identical to the existing plan. Notes-only changes are not calendar changes.
+- The runner normally trains in the morning or evening. Use "pm" for evening/晚上 sessions, not for generic afternoon training.
 - If no exact future plan should be changed, create a new dated item or a dated rest day instead.
 - Date all items after today and within the next 7 days unless a target race context clearly justifies a slightly later date.
 - Each TYPE has its OWN fields — emit only these, omit the rest:

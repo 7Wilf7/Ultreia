@@ -272,7 +272,7 @@ Output a JSON array only. Each item:
   "speed": number (km/h, cycling target, optional),
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
-  "timeOfDay": "am" | "pm" (optional),
+  "timeOfDay": "am" | "pm" (optional; "pm" means evening/晚上 around 18:00, not a generic afternoon slot),
   "notes": string (brief Chinese reason; explain this as recovery/load protection)
 }
 
@@ -284,6 +284,8 @@ Rules:
 - Do NOT update, replace, or rest out a key_session=true plan unless there is a clear reason such as injury/illness signs, severe recovery/load risk, severe weather, or target-race conflict. If you change one, notes must explicitly explain why the key session is being changed.
 - Prefer modifying an existing risky future plan to easier/shorter work, or replacing it with a planned rest day when justified.
 - Use action="update" only for a future planned session from tomorrow onward that has an exact plan_id in [Planned Sessions]. Output the FULL replacement plan, not a patch.
+- Do NOT output action="update" if the replacement is materially identical to the existing plan. Notes-only changes are not calendar changes.
+- The runner normally trains in the morning or evening. Use "pm" for evening/晚上 sessions, not for generic afternoon training.
 - If no exact future plan should be changed, create a new dated easy/recovery item or a dated rest day instead.
 - Date all items after today and within the next ${summary?.futureDays || 7} days.
 - Each TYPE has its OWN fields — emit only these, omit the rest:

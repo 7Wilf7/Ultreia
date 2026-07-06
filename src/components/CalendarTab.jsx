@@ -924,7 +924,7 @@ function LogPill({ log, t }) {
   const color = TYPE_COLOR[log.type] || "var(--ink-2)";
 
   // Metrics line: distance + ascent for runs; strength shows its area(s) so a
-  // planned "Strength" reads as "Core" not a bare label. AM/PM (when set) leads.
+  // planned "Strength" reads as "Core" not a bare label. Morning/evening (when set) leads.
   const metrics = [];
   const tod = startedAtToTimeOfDay(log.startedAt);
   if (tod) metrics.push(tod === "am" ? t("calendar.plan_tod_am") : t("calendar.plan_tod_pm"));

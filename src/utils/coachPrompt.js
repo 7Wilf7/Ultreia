@@ -639,7 +639,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
     .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
     .map(l => {
       const isTodayPlan = l.date === formatLocalDateTime(now).slice(0, 10);
-      const tod = l.startedAt ? new Date(l.startedAt).getHours() < 12 ? "AM" : "PM" : "";
+      const tod = l.startedAt ? new Date(l.startedAt).getHours() < 12 ? "Morning" : "Evening" : "";
       const planLocation = l.planDetail?.location && Number.isFinite(Number(l.planDetail.location.lat)) && Number.isFinite(Number(l.planDetail.location.lng))
         ? {
           id: String(l.planDetail.location.id || `${Number(l.planDetail.location.lat).toFixed(4)},${Number(l.planDetail.location.lng).toFixed(4)}`),
@@ -649,7 +649,7 @@ export function buildDataBlock({ logs, races, now, lang = "en", currentWeather =
         }
         : null;
       const status = isTodayPlan
-        ? (tod === "PM" && now.getHours() < 18
+        ? (tod === "Evening" && now.getHours() < 18
           ? "scheduled later today, NOT completed yet"
           : "scheduled today, NOT completed unless a completed workout also appears in Recent Activities")
         : "future planned, NOT completed";

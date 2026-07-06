@@ -57,13 +57,14 @@ Output a JSON array. Each item:
   "speed": number (km/h, cycling target, optional),
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional),
-  "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/afternoon/下午/晚上),
+  "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/晚上/tonight/今晚; map 下午 to "pm" only when the coach clearly means an evening session),
   "notes": string (brief Chinese reason — optional)
 }
 
 Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday). Resolve weekdays to the next upcoming occurrence from today.
 - Planned sessions may include key_session=true. If the coach clearly changes a key session, emit action="update" with its exact targetPlanId and preserve the coach's reason in notes. Do NOT turn a key-session change into a broad create/rest item that would replace the whole date.
+- Do NOT emit action="update" if the extracted replacement is materially identical to that existing planned session. Notes-only changes are not calendar changes.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
   - Road Run: "distance"; run type in "subTypes" (Easy/Aerobic/Tempo/Interval) when named. No "duration".
   - Trail Run / Hiking: "distance" + "ascent" (m). No "duration".

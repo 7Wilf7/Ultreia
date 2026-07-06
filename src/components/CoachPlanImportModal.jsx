@@ -6,6 +6,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { timeOfDayToStartedAt } from "../utils/format";
 import { buildCreatePlansAction, describeCreatePlansImpact, getCreatePlans, getPlanTargetId, isPlanUpdateItem, isRestPlanItem } from "../utils/agentActions";
 import { filterActionableProactivePlans } from "../utils/actionPlanFilters";
+import { filterNoopPlanUpdates } from "../utils/planUpdateDiff";
 import { planFields } from "../utils/planFields";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
@@ -273,7 +274,10 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const instantPress = useInstantPress();
   const instantTap = useInstantTap();
   const agentAction = action || buildCreatePlansAction(plans);
-  const actionPlans = filterActionableProactivePlans(getCreatePlans(agentAction), agentAction);
+  const actionPlans = filterNoopPlanUpdates(
+    filterActionableProactivePlans(getCreatePlans(agentAction), agentAction),
+    existingPlans,
+  );
   const [items, setItems] = useState(() => actionPlans.map(buildDraft));
   const [importing, setImporting] = useState(false);
   const [showMeta, setShowMeta] = useState(false);

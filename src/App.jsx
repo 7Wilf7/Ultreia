@@ -18,6 +18,7 @@ import {
   trainingAdjustmentSignature,
 } from "./utils/proactiveTrainingAdjustment";
 import { filterActionableProactivePlans } from "./utils/actionPlanFilters";
+import { filterNoopPlanUpdates } from "./utils/planUpdateDiff";
 import { buildRaceBriefingPrompt, summarizeRaceBriefingTarget } from "./utils/raceBriefing";
 import { formatDuration, formatDurationShort, formatPaceFromSec } from "./utils/format";
 import { LanguageProvider, useT } from "./i18n/LanguageContext";
@@ -3350,13 +3351,14 @@ Output a JSON array. Each item:
   "speed": number (km/h, cycling target, optional),
   "duration": number (MINUTES, optional),
   "subTypes": ["Easy Run" | "Aerobic Run" | "Tempo Run" | "Interval Run" | "Race" | "Upper Body" | "Lower Body" | "Core"] (optional, only when relevant),
-  "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/afternoon/下午/晚上),
+  "timeOfDay": "am" | "pm" (optional — ONLY if the coach explicitly says morning/上午 or evening/晚上/tonight/今晚; map 下午 to "pm" only when the coach clearly means an evening session),
   "notes": string (brief Chinese reason for this specific item — optional)
 }
 
 Rules:
 - Only extract suggestions that have a clear day (explicit date OR a weekday like "Wednesday" / "周三" / "tomorrow"). Resolve weekdays to the next upcoming occurrence from today.
 - If the reply changes an existing planned session shown in [Planned Sessions], emit action="update" and targetPlanId with the exact plan_id. Output the FULL replacement plan after the change, not just the changed field.
+- Do NOT emit action="update" if the extracted replacement is materially identical to that existing planned session. Notes-only changes are not calendar changes.
 - If you cannot confidently match the suggestion to exactly one existing plan_id, do NOT use update; emit a normal create item instead.
 - Planned sessions may include key_session=true. If the coach clearly changes a key session, emit action="update" with its exact targetPlanId and preserve the coach's reason in notes. Do NOT turn a key-session change into a broad create/rest item that would replace the whole date.
 - Each TYPE has its OWN fields — emit only these, omit the rest:
@@ -3386,13 +3388,14 @@ Rules:
       if (controller.signal.aborted || runId !== extractRunRef.current) return;
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
-      if (plans.length === 0) {
-        appDialog.alert(t("coach.import_no_plans"));
+      const materialPlans = filterNoopPlanUpdates(plans, logs.filter(l => l?.isPlanned));
+      if (materialPlans.length === 0) {
+        appDialog.alert(t(plans.length ? "coach.import_no_material_changes" : "coach.import_no_plans"));
         return;
       }
-      const action = buildCreatePlansAction(plans, { sourceMessageId: msgId });
+      const action = buildCreatePlansAction(materialPlans, { sourceMessageId: msgId });
       saveAgentAction(action);
-      if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans, action } }));
+      if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans: materialPlans, action } }));
       setPlanProposal({ msgId, assistantContent, action });
       setShowPlanProposalReview(true);
     } catch (err) {
@@ -3422,7 +3425,10 @@ Rules:
     const parsedPlans = plans || parsePlansFromLLM(
       data?.content?.filter(b => b.type === "text").map(b => b.text).join("") || "",
     );
-    const actionablePlans = filterActionableProactivePlans(parsedPlans, source, now || new Date());
+    const actionablePlans = filterNoopPlanUpdates(
+      filterActionableProactivePlans(parsedPlans, source, now || new Date()),
+      logs.filter(l => l?.isPlanned),
+    );
     if (actionablePlans.length === 0) return null;
     const baseAction = buildCreatePlansAction(actionablePlans, {
       id: `${source}-${Date.now()}`,

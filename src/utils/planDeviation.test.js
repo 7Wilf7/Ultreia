@@ -78,15 +78,17 @@ describe("plan deviation helpers", () => {
     const prompt = buildPlanDeviationRescuePrompt({
       summary,
       dataBlock: "[Planned Sessions]\nplan_id=p2 2026-06-25 Road Run 8km",
-      coachPreferenceBlock: "[Weekly Training Preferences]\nMonday AM: Rest\nMonday PM: Road Run",
+      coachPreferenceBlock: "[Weekly Training Preferences]\nMonday Morning: Rest\nMonday Evening: Road Run",
       now: new Date("2026-06-24T10:00:00+08:00"),
     });
 
     expect(prompt).toContain("plan_id=p1 2026-06-20 Road Run 10km -> missed");
     expect(prompt).toContain("[Weekly Training Preferences]");
-    expect(prompt).toContain("Monday PM: Road Run");
+    expect(prompt).toContain("Monday Evening: Road Run");
     expect(prompt).toContain("Plans marked key_session=true are protected anchor workouts");
     expect(prompt).toContain("targetPlanId");
+    expect(prompt).toContain("materially identical");
+    expect(prompt).toContain("evening/晚上");
     expect(prompt).toContain("Output the JSON array ONLY");
   });
 });

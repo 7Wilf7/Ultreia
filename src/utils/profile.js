@@ -93,7 +93,7 @@ const L = {
       5: "Friday",
       6: "Saturday",
     },
-    trainingPrefSlots: { am: "AM", pm: "PM" },
+    trainingPrefSlots: { am: "Morning", pm: "Evening" },
 
     memoryTitle: "[Long-term Memory]",
     memoryHint: "Durable facts about this user accumulated over time. Treat these as ground truth unless the user corrects them.",
@@ -132,7 +132,7 @@ const L = {
       5: "周五",
       6: "周六",
     },
-    trainingPrefSlots: { am: "上午", pm: "下午" },
+    trainingPrefSlots: { am: "上午", pm: "晚上" },
 
     memoryTitle: "[长期记忆]",
     memoryHint: "在多次对话中积累的、关于用户的稳定事实。视为基础真相，除非用户主动更正。",

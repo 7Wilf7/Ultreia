@@ -17,12 +17,14 @@ describe("proactive training adjustment helpers", () => {
         futurePlans: [{ line: "plan_id=p2 2026-06-26 Road Run 8km" }],
       },
       dataBlock: "[Planned Sessions]\nplan_id=p2 2026-06-26 Road Run 8km",
-      coachPreferenceBlock: "[Weekly Training Preferences]\nFriday AM: Rest\nFriday PM: Strength",
+      coachPreferenceBlock: "[Weekly Training Preferences]\nFriday Morning: Rest\nFriday Evening: Strength",
       now: new Date("2026-06-25T10:00:00+08:00"),
     });
 
     expect(prompt).toContain("[Weekly Training Preferences]");
-    expect(prompt).toContain("Friday PM: Strength");
+    expect(prompt).toContain("Friday Evening: Strength");
+    expect(prompt).toContain("materially identical");
+    expect(prompt).toContain("evening/晚上");
     expect(prompt).toContain("Generate ONE combined");
     expect(prompt).toContain("Output the JSON array ONLY");
   });

@@ -58,7 +58,7 @@ export function formatHeaderDate(yyyy_mm_dd, lang) {
   return `${wkEn}, ${monEn} ${d} ${y}`;
 }
 
-// Order workouts within a day: AM on top, PM at the bottom, untimed in between.
+// Order workouts within a day: morning on top, evening at the bottom, untimed in between.
 const TOD_RANK = { am: 0, pm: 2 };
 export function todRank(l) {
   const tod = startedAtToTimeOfDay(l.startedAt);
@@ -558,7 +558,7 @@ export function CalendarDayModal({
                       <div style={{ ...s.tag(l.type), fontSize: 11 }}>
                         {t(`enum.activity.${l.type}`)}
                       </div>
-                      {/* Strength area(s) + AM/PM so a plan reads "Strength · Core · AM". */}
+                      {/* Strength area(s) + time slot so a plan reads "Strength · Core · Evening". */}
                       {Array.isArray(l.subTypes) && l.subTypes.length > 0 && (
                         <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink-2)" }}>
                           {l.subTypes.map(st => t(`enum.subtype.${st}`)).join(" · ")}

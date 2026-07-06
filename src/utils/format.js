@@ -149,8 +149,8 @@ export function inferRaceCategory(race) {
 }
 
 // Planned-workout time-of-day helpers. We don't add a DB column — instead we
-// ride on `started_at`: "am" → 08:00 local, "pm" → 18:00 local on the plan's
-// date. Display derives the AM/PM badge back from that hour.
+// ride on `started_at`: "am" → 08:00 local, "pm" → 18:00 local evening on the
+// plan's date. Display derives the morning/evening badge back from that hour.
 export function timeOfDayToStartedAt(dateKey, tod) {
   if (!dateKey) return null;
   if (tod === "am") return `${dateKey}T08:00:00+08:00`;

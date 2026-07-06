@@ -846,6 +846,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
                   padding: "9px 12px 10px",
                   display: "flex", flexDirection: "column", gap: 5,
                   cursor: "pointer",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 {/* Row 1: date + weekday + type tag + sub-types + delete */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>

@@ -6,7 +6,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal, todRank } from "./CalendarDayModal";
 import { skyconMeta } from "../lib/weather";
 import { startedAtToTimeOfDay } from "../utils/format";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 const WEEKDAY_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_SHORT_ZH = ["日", "一", "二", "三", "四", "五", "六"];
@@ -672,6 +672,8 @@ function WeatherCard({ date, forecast, isToday, flash = false, lang, t, isMobile
 //   - Empty + past/today → "Rest" placeholder; empty + future → "+ plan" hint
 // ─────────────────────────────────────────────────────────────────────────
 function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRace, isSelected, colIdx, rowIdx, onTap, t, isMobile }) {
+  const instantTap = useInstantTap();
+  const key = dateKey(date);
   const dayTags = visibleDailyTags(note);
   const hasPlannedRest = dayTags.includes("planned_rest");
   const cellPast = !isToday && date.getTime() < new Date().setHours(0, 0, 0, 0);
@@ -711,7 +713,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   if (isMobile) {
     return (
       <div
-        onClick={onTap}
+        {...instantTap(`calendar-day-${key}`, onTap)}
         style={{
           position: "relative",
           minHeight: 48,
@@ -725,6 +727,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
           boxShadow: selectedRing,
           overflow: "hidden",
           display: "flex", flexDirection: "column", alignItems: "center",
+          touchAction: "pan-y",
+          WebkitTapHighlightColor: "transparent",
         }}
       >
         {/* Day number — centered on mobile, smaller box for "today". A trophy
@@ -820,7 +824,7 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
   // Desktop / tablet — full layout with type names and metrics.
   return (
     <div
-      onClick={onTap}
+      {...instantTap(`calendar-day-${key}`, onTap)}
       style={{
         position: "relative",
         minHeight: 132,
@@ -833,6 +837,8 @@ function DayCell({ date, inMonth, isToday, isFuture, isWeekend, logs, note, isRa
         transition: "background 120ms, box-shadow 120ms",
         boxShadow: selectedRing,
         overflow: "hidden",
+        touchAction: "pan-y",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       {/* Day number — weather moved out of the grid into the strip below.

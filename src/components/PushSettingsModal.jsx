@@ -4,6 +4,7 @@ import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { TimeWheelModal } from "./WheelPicker";
 import { Spinner } from "./Spinner";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 const MAX_TIMES = 3;
 
@@ -21,6 +22,8 @@ const HALF_HOUR_SLOTS = Array.from({ length: 48 }, (_, i) =>
 
 export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimezone, setPushSettings, onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [enabled, setEnabled] = useState(pushEnabled === true);
   const [showInfo, setShowInfo] = useState(false);
   // Working copy of "HH:MM" half-hour slots. Prefer the new push_times; fall
@@ -116,7 +119,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
           {/* Enable toggle */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
             <button
-              onClick={() => setEnabled(v => !v)}
+              {...instantPress("push-enabled-toggle", () => setEnabled(v => !v))}
               disabled={saving}
               role="switch"
               aria-checked={enabled}
@@ -126,6 +129,8 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
                 background: enabled ? "var(--accent)" : "var(--panel-3)",
                 position: "relative", cursor: "pointer", transition: "background 0.15s",
                 padding: 0,
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }}>
               <span style={{
                 position: "absolute", top: 2, left: enabled ? 20 : 2,
@@ -146,12 +151,13 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
               {times.map((tm, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <button
-                    onClick={() => setEditingIdx(i)}
+                    {...instantTap(`push-time-open-${i}`, () => setEditingIdx(i))}
                     disabled={saving}
                     style={{
                       ...s.input, maxWidth: 140, cursor: "pointer", textAlign: "left",
                       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
                       fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums", fontSize: 16,
+                      touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                     }}>
                     <span>{tm}</span>
                     <span style={{ fontSize: 11, color: "var(--ink-3)" }}>▾</span>
@@ -171,9 +177,9 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
             </div>
             {times.length < MAX_TIMES && (
               <button
-                onClick={addTime}
+                {...instantTap("push-add-time", addTime)}
                 disabled={saving}
-                style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10 }}>
+                style={{ ...s.btnGhost, fontSize: 12, padding: "6px 12px", marginTop: 10, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                 {t("push.add_time")}
               </button>
             )}
@@ -209,13 +215,14 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
 }
 
 function InfoHintButton({ label, open, onClick }) {
+  const instantPress = useInstantPress();
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       aria-expanded={open}
-      onClick={onClick}
+      {...instantPress("push-info-hint", onClick)}
       style={{
         width: 18,
         height: 18,
@@ -232,6 +239,8 @@ function InfoHintButton({ label, open, onClick }) {
         lineHeight: 1,
         flexShrink: 0,
         cursor: "pointer",
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       !

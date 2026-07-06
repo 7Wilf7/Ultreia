@@ -3,6 +3,7 @@ import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { SingleWheelModal, TimeWheelModal } from "./WheelPicker";
 import { Spinner } from "./Spinner";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 const WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
 
@@ -21,6 +22,7 @@ export function WeeklyReportSettingsModal({
   onClose,
 }) {
   const t = useT();
+  const instantTap = useInstantTap();
   const initial = weeklyReportSettings || {};
   const [enabled, setEnabled] = useState(initial.enabled === true);
   const [weekday, setWeekday] = useState(cleanWeekday(initial.weekday));
@@ -93,11 +95,11 @@ export function WeeklyReportSettingsModal({
           <div style={{ opacity: enabled ? 1 : 0.45, pointerEvents: enabled ? "auto" : "none" }}>
             <div style={{ ...s.label, marginTop: 16 }}>{t("weekly_settings.schedule")}</div>
             <div style={s.scheduleGrid}>
-              <button type="button" onClick={() => setWeekdayPickerOpen(true)} disabled={saving} style={s.scheduleButton}>
+              <button type="button" {...instantTap("weekly-settings-open-weekday", () => setWeekdayPickerOpen(true))} disabled={saving} style={s.scheduleButton}>
                 <span style={s.weekdayValue}>{t(`weekly_settings.day_${weekday}`)}</span>
                 <span style={s.scheduleChevron}>⌄</span>
               </button>
-              <button type="button" onClick={() => setTimePickerOpen(true)} disabled={saving} style={s.scheduleButton}>
+              <button type="button" {...instantTap("weekly-settings-open-time", () => setTimePickerOpen(true))} disabled={saving} style={s.scheduleButton}>
                 <span style={s.timeValue}>{time}</span>
                 <span style={s.scheduleChevron}>⌄</span>
               </button>
@@ -160,13 +162,14 @@ export function WeeklyReportSettingsModal({
 }
 
 function InfoHintButton({ label, open, onClick }) {
+  const instantPress = useInstantPress();
   return (
     <button
       type="button"
       title={label}
       aria-label={label}
       aria-expanded={open}
-      onClick={onClick}
+      {...instantPress("weekly-settings-info-hint", onClick)}
       style={s.infoButton(open)}
     >
       !
@@ -236,6 +239,8 @@ const s = {
     lineHeight: 1,
     flexShrink: 0,
     cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
   }),
   infoPanel: {
     whiteSpace: "pre-line",

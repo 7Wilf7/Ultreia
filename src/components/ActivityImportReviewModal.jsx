@@ -6,6 +6,7 @@ import { useT } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { weatherWindowEligible } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const DETAIL_LIMIT = 5;
 const COACH_LIMIT = 3;
@@ -40,6 +41,7 @@ function weatherEligibleForImport(w) {
 export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, onConfirm }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [page, setPage] = useState(initialPage);
   const initialFetchWeather = useMemo(
     () => workouts.some(weatherEligibleForImport),
@@ -158,10 +160,10 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                 </div>
                 {count > 1 && (
                   <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
-                      style={{ ...s.btnGhost, minHeight: 0, padding: "4px 8px", fontSize: 12, opacity: page === 0 ? 0.45 : 1 }}>‹</button>
-                    <button onClick={() => setPage(p => Math.min(count - 1, p + 1))} disabled={page >= count - 1}
-                      style={{ ...s.btnGhost, minHeight: 0, padding: "4px 8px", fontSize: 12, opacity: page >= count - 1 ? 0.45 : 1 }}>›</button>
+                    <button {...instantPress("import-review-prev", () => setPage(p => Math.max(0, p - 1)))} disabled={page === 0}
+                      style={{ ...s.btnGhost, minHeight: 0, padding: "4px 8px", fontSize: 12, opacity: page === 0 ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>‹</button>
+                    <button {...instantPress("import-review-next", () => setPage(p => Math.min(count - 1, p + 1)))} disabled={page >= count - 1}
+                      style={{ ...s.btnGhost, minHeight: 0, padding: "4px 8px", fontSize: 12, opacity: page >= count - 1 ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>›</button>
                   </div>
                 )}
               </div>
@@ -248,8 +250,8 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                     <button
                       key={sub}
                       type="button"
-                      onClick={() => toggleCurrentStrengthSub(sub)}
-                      style={{ ...s.chip(currentStrengthSubs.includes(sub)), minHeight: 0, padding: "6px 10px", fontSize: 12 }}
+                      {...instantPress(`import-review-current-strength-${sub}`, () => toggleCurrentStrengthSub(sub))}
+                      style={{ ...s.chip(currentStrengthSubs.includes(sub)), minHeight: 0, padding: "6px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
                     >
                       {t(`enum.subtype.${sub}`)}
                     </button>
@@ -267,8 +269,8 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                     <button
                       key={sub}
                       type="button"
-                      onClick={() => toggleBulkStrengthSub(sub)}
-                      style={{ ...s.chip(bulkStrengthSubs.includes(sub)), minHeight: 0, padding: "6px 10px", fontSize: 12 }}
+                      {...instantPress(`import-review-bulk-strength-${sub}`, () => toggleBulkStrengthSub(sub))}
+                      style={{ ...s.chip(bulkStrengthSubs.includes(sub)), minHeight: 0, padding: "6px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
                     >
                       {t(`enum.subtype.${sub}`)}
                     </button>

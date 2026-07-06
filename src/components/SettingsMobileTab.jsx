@@ -4,6 +4,7 @@ import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { WalletPanel } from "./WalletModal";
 import { productLogoUrl } from "../assets/logo";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 const GROUP_ORDER = { wallet: 0, admin: 1, other: 2 };
 
@@ -41,6 +42,7 @@ export function SettingsMobileTab({
   focusGroup,
 }) {
   const t = useT();
+  const instantTap = useInstantTap();
   const [accountOpen, setAccountOpen] = useState(false);
   const [group, setGroup] = useState("other");
   const [groupMotion, setGroupMotion] = useState({ dir: 0, seq: 0 });
@@ -124,6 +126,7 @@ export function SettingsMobileTab({
         <SubCell
           primary={t("settings.clear_cache")}
           secondary={clearing ? t("settings.clear_cache_working") : t("settings.clear_cache_desc")}
+          instant={false}
           onClick={clearCacheAndReload} />
       )}
       <UpdateChecker />
@@ -146,7 +149,7 @@ export function SettingsMobileTab({
   return (
     <div style={{ paddingTop: 8, paddingBottom: 8 }}>
       {/* Identity header — tap toggles the Account group. */}
-      <button type="button" onClick={toggleAccount} style={{
+      <button type="button" {...instantTap("settings-account-toggle", toggleAccount)} style={{
         display: "flex", alignItems: "center", gap: 14,
         width: "100%",
         textAlign: "left",
@@ -158,6 +161,7 @@ export function SettingsMobileTab({
         boxShadow: "inset 0 1px 0 oklch(1 0 0 / 0.05)",
         cursor: "pointer",
         color: "var(--ink-1)",
+        touchAction: "manipulation",
         WebkitTapHighlightColor: "transparent",
       }}>
         <img src={productLogoUrl} alt="" aria-hidden="true"
@@ -275,8 +279,9 @@ function GroupPanel({ motion, children }) {
 
 // Pill that toggles a settings group.
 function SectionChip({ active, onClick, children }) {
+  const instantPress = useInstantPress();
   return (
-    <button type="button" onClick={onClick} style={{
+    <button type="button" {...instantPress(`settings-section-${children}`, onClick)} style={{
       display: "inline-flex", alignItems: "center", gap: 6,
       padding: "8px 14px", minHeight: 0,
       border: `1px solid ${active ? "var(--accent)" : "var(--rule)"}`,
@@ -284,7 +289,7 @@ function SectionChip({ active, onClick, children }) {
       color: active ? "var(--accent-dark)" : "var(--ink-1)",
       borderRadius: 999,
       fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 600,
-      cursor: "pointer", WebkitTapHighlightColor: "transparent",
+      cursor: "pointer", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
     }}>
       {children}
     </button>
@@ -333,9 +338,13 @@ function LangSwitch({ lang, onToggle }) {
 // Rows inside an accordion group. Supports a secondary line, a right-hand
 // control (rightValue, e.g. the language switch — replaces the chevron), a
 // flash highlight (jump-to-setting), and a danger tone.
-function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, expanded, indent = 0, onClick }) {
+function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, expanded, indent = 0, instant = true, onClick }) {
+  const instantTap = useInstantTap();
+  const pressProps = danger || rightValue || !instant
+    ? { onClick }
+    : instantTap(`settings-cell-${String(primary)}`, onClick);
   return (
-    <button onClick={onClick}
+    <button {...pressProps}
       className={flash ? "ultreia-flash" : undefined}
       style={{
         display: "flex", alignItems: "center", width: "100%",
@@ -349,6 +358,7 @@ function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, ex
         color: danger ? "var(--danger)" : "var(--ink-1)",
         fontWeight: 500,
         cursor: "pointer", borderRadius: 0,
+        touchAction: "manipulation",
         WebkitTapHighlightColor: "transparent",
       }}>
       <span style={{ flex: 1, minWidth: 0 }}>

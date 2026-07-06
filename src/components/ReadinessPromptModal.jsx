@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const FIELDS = [
   ["sleep", "calendar.readiness_sleep"],
@@ -13,6 +14,7 @@ const FIELDS = [
 export function ReadinessPromptModal({ initial, onSave, onSkip }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [vals, setVals] = useState({
     sleep: initial?.sleep ?? null,
     legs: initial?.legs ?? null,
@@ -48,13 +50,15 @@ export function ReadinessPromptModal({ initial, onSave, onSkip }) {
                   {[1, 2, 3].map(v => (
                     <button
                       key={v}
-                      onClick={() => setField(field, v)}
+                      {...instantPress(`readiness-prompt-${field}-${v}`, () => setField(field, v))}
                       style={{
                         ...s.chip(vals[field] === v),
                         minHeight: 34,
                         padding: "7px 4px",
                         fontSize: 12,
                         whiteSpace: "nowrap",
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
                       }}
                     >
                       {t(`calendar.readiness_lvl_${v}`)}

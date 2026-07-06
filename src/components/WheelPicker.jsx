@@ -77,6 +77,7 @@ const MINUTES = ["00", "30"];
 
 export function SingleWheelModal({ value, options, onConfirm, onClose, title, ariaLabel }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const normalized = (options || []).map(opt => (
     typeof opt === "object" && opt !== null
       ? { value: opt.value, label: String(opt.label) }
@@ -107,11 +108,15 @@ export function SingleWheelModal({ value, options, onConfirm, onClose, title, ar
           boxSizing: "border-box", fontFamily: "var(--font-sans)",
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <button onClick={onClose} style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--ink-3)" }}>
+            <button
+              {...instantPress("single-close", onClose)}
+              style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--ink-3)" }}>
               {t("common.cancel")}
             </button>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{title}</span>
-            <button onClick={done} style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--moss-deep)", fontWeight: 600 }}>
+            <button
+              {...instantPress("single-done", done)}
+              style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--moss-deep)", fontWeight: 600 }}>
               {t("common.done")}
             </button>
           </div>

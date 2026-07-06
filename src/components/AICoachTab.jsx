@@ -165,6 +165,7 @@ function MobileTableCards({ headers, rows }) {
 }
 
 function PromptLangSwitch({ value, onChange }) {
+  const instantPress = useInstantPress();
   const isEn = value === "en";
   const nextValue = isEn ? "zh" : "en";
   return (
@@ -173,7 +174,7 @@ function PromptLangSwitch({ value, onChange }) {
       role="switch"
       aria-checked={isEn}
       aria-label="Prompt language"
-      onClick={() => onChange(nextValue)}
+      {...instantPress("prompt-lang-switch", () => onChange(nextValue))}
       style={{
         position: "relative",
         width: 76,
@@ -394,6 +395,7 @@ const CoachChatMessages = memo(function CoachChatMessages({
   onStopExtraction,
 }) {
   const [mobileRenderCount, setMobileRenderCount] = useState(MOBILE_CHAT_INITIAL_RENDER_COUNT);
+  const instantPress = useInstantPress();
 
   if (chatMessages.length === 0) {
     return (
@@ -422,7 +424,7 @@ const CoachChatMessages = memo(function CoachChatMessages({
       {hiddenCount > 0 && (
         <button
           type="button"
-          onClick={() => setMobileRenderCount(count => Math.min(chatMessages.length, count + MOBILE_CHAT_RENDER_BATCH))}
+          {...instantPress("coach-load-older", () => setMobileRenderCount(count => Math.min(chatMessages.length, count + MOBILE_CHAT_RENDER_BATCH)))}
           style={{
             alignSelf: "center",
             border: "1px solid var(--rule)",
@@ -1208,6 +1210,7 @@ export function AICoachTab({
   const [showJumpBottom, setShowJumpBottom] = useState(false);
   const hideJumpTimer = useRef(null);
   const scrollIdleTimer = useRef(null);
+  const recentJumpPressRef = useRef({});
   // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
   // events too — mute the button logic briefly so they don't flash the arrows.
   const suppressJumpUntil = useRef(0);
@@ -2394,7 +2397,7 @@ export function AICoachTab({
       {contextUsage.nearLimit && !showMemory && (
         longChatHintCollapsed ? (
           <button
-            onClick={() => setLongChatHintCollapsed(false)}
+            {...instantPress("long-chat-expand", () => setLongChatHintCollapsed(false))}
             style={{
               marginBottom: 10, padding: "4px 10px",
               border: "1px solid var(--rule)",
@@ -2419,7 +2422,8 @@ export function AICoachTab({
             <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.55, flex: 1, minWidth: 220 }}>
               {t("coach.long_chat_hint", { used: contextUsage.usedLabel, total: contextUsage.totalLabel, remaining: contextUsage.remainingLabel })}
             </div>
-            <button onClick={() => setShowMemory(true)}
+            <button
+              {...instantPress("long-chat-open-memory", () => setShowMemory(true))}
               style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0 }}>
               {t("coach.long_chat_action")}
             </button>
@@ -2429,7 +2433,8 @@ export function AICoachTab({
               style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0, color: "var(--danger)", borderColor: "var(--danger)" }}>
               {t("coach.clear_chat")}
             </button>
-            <button onClick={() => setLongChatHintCollapsed(true)}
+            <button
+              {...instantPress("long-chat-collapse", () => setLongChatHintCollapsed(true))}
               aria-label={t("coach.long_chat_dismiss")}
               style={{
                 background: "none", border: "none",
@@ -2656,12 +2661,44 @@ export function AICoachTab({
 
       {/* Jump to oldest — shows once the user scrolls down into history. */}
       {showJumpTop && chatMessages.length > 0 && (
-        <button onClick={scrollToTop} aria-label={lang === "zh" ? "回到顶部" : "Jump to top"}
+        <button
+          onPointerDown={(event) => {
+            if (event.pointerType === "mouse") return;
+            recentJumpPressRef.current.top = event.timeStamp || 0;
+            event.preventDefault?.();
+            scrollToTop();
+          }}
+          onClick={(event) => {
+            const recentAt = recentJumpPressRef.current.top || 0;
+            const at = event.timeStamp || 0;
+            if (recentAt && at - recentAt < 750) {
+              event.preventDefault?.();
+              return;
+            }
+            scrollToTop();
+          }}
+          aria-label={lang === "zh" ? "回到顶部" : "Jump to top"}
           style={jumpBtnStyle("top")}>↑</button>
       )}
       {/* Jump to latest — shows when scrolled up away from the newest message. */}
       {showJumpBottom && chatMessages.length > 0 && (
-        <button onClick={() => scrollToBottom("smooth")} aria-label={lang === "zh" ? "回到最新" : "Jump to latest"}
+        <button
+          onPointerDown={(event) => {
+            if (event.pointerType === "mouse") return;
+            recentJumpPressRef.current.bottom = event.timeStamp || 0;
+            event.preventDefault?.();
+            scrollToBottom("smooth");
+          }}
+          onClick={(event) => {
+            const recentAt = recentJumpPressRef.current.bottom || 0;
+            const at = event.timeStamp || 0;
+            if (recentAt && at - recentAt < 750) {
+              event.preventDefault?.();
+              return;
+            }
+            scrollToBottom("smooth");
+          }}
+          aria-label={lang === "zh" ? "回到最新" : "Jump to latest"}
           style={jumpBtnStyle("bottom")}>↓</button>
       )}
       </div>

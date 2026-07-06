@@ -132,23 +132,25 @@ jobs:
             --data-binary @"ultreia-${GITHUB_REF_NAME}.apk"
           echo "Mirror upload done."
 
-      - name: Build release notes from commits since last tag
+      - name: Build release notes from changelog
         # The in-app "Check for updates" dialog shows this body verbatim, so
-        # keep it to just THIS release's changes — no install boilerplate, no
-        # auto "Full Changelog" link. Uses the commit subjects since the
-        # previous tag.
+        # keep it to just THIS release's visible changes. The body intentionally
+        # omits the date heading because older app versions localize unknown
+        # markdown headings too aggressively.
         run: |
           release_day=$(TZ=Asia/Shanghai date +%F)
-          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
-          if [ -n "$prev" ]; then
-            notes=$(git log --no-merges --pretty='- %s' "$prev..${GITHUB_REF_NAME}")
-          else
-            notes=$(git log --no-merges --pretty='- %s' -n 20 "${GITHUB_REF_NAME}")
+          notes=$(awk -v day="$release_day" '
+            $0 == "## " day { in_section=1; next }
+            in_section && /^## / { exit }
+            in_section && /^- / { print }
+          ' docs/changelog.md)
+          if [ -z "$(printf "%s" "$notes" | tr -d "[:space:]")" ]; then
+            echo "::error::docs/changelog.md has no release notes for $release_day."
+            echo "::error::Add concrete user-visible bullets under ## $release_day before tagging."
+            exit 1
           fi
           {
             echo 'RELEASE_NOTES<<__TSEOF__'
-            echo "## $release_day"
-            echo
             echo "$notes"
             echo '__TSEOF__'
           } >> "$GITHUB_ENV"

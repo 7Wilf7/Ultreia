@@ -1050,21 +1050,23 @@ export function RacesTab({
               overflow: "hidden",
               touchAction: "manipulation",
             }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0, flexWrap: "wrap" }}>
-              {r.category ? renderCategoryTag(r.category) : (
-                <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block", maxWidth: 170 }}>
-                  <Dropdown
-                    placeholder={t("races.set_category")}
-                    ariaLabel={t("races.set_category")}
-                    options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
-                    value=""
-                    onChange={(v) => updateRaceCategory(r.id, v)}
-                  />
-                </span>
-              )}
-              {subtypeText && (
-                <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{subtypeText}</span>
-              )}
+            <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0, width: "100%" }}>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0, flex: "1 1 auto", flexWrap: "wrap" }}>
+                {r.category ? renderCategoryTag(r.category) : (
+                  <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block", maxWidth: 170 }}>
+                    <Dropdown
+                      placeholder={t("races.set_category")}
+                      ariaLabel={t("races.set_category")}
+                      options={RACE_CATEGORIES.map(c => ({ value: c, label: t(`enum.race_cat.${c}`) }))}
+                      value=""
+                      onChange={(v) => updateRaceCategory(r.id, v)}
+                    />
+                  </span>
+                )}
+                {subtypeText && (
+                  <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{subtypeText}</span>
+                )}
+              </div>
               {timeStr && (
                 <span style={{
                   ...s.dataNum,
@@ -1077,6 +1079,8 @@ export function RacesTab({
                   background: "var(--accent-soft)",
                   border: "1px solid var(--accent)",
                   flexShrink: 0,
+                  marginLeft: "auto",
+                  textAlign: "right",
                 }}>
                   {timeStr}
                 </span>

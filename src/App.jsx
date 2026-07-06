@@ -736,7 +736,7 @@ const BOOT_MOTION_CSS = `
 .ultreia-logo-route {
   transform-box: fill-box;
   transform-origin: center;
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
 }
 .ultreia-boot-word {
   position: relative;
@@ -827,7 +827,7 @@ const BOOT_MOTION_CSS = `
   }
   .ultreia-boot-logo-final {
     animation-name: ultreiaFinalLogo;
-    will-change: transform, opacity, filter;
+    will-change: opacity;
   }
   .ultreia-boot-ground {
     animation-name: ultreiaGroundReveal;
@@ -869,40 +869,33 @@ const BOOT_MOTION_CSS = `
 @keyframes ultreiaGroundReveal {
   0%, 7% { opacity: 0; transform: scale(0.985); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
   28% { opacity: 0.82; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  82% { opacity: 0.62; transform: scale(1); }
-  100% { opacity: 0; transform: scale(1); }
+  100% { opacity: 0.82; transform: scale(1); }
 }
 @keyframes ultreiaContoursEmerge {
-  0%, 11% { opacity: 0; filter: blur(6px) saturate(0.8) brightness(0.6); transform: scale(1.025); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  50% { opacity: 0.72; filter: blur(0) saturate(0.92) brightness(0.72); transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  82% { opacity: 0.48; filter: blur(0) saturate(0.9) brightness(0.68); transform: scale(1); }
-  100% { opacity: 0; filter: blur(0) saturate(0.9) brightness(0.68); transform: scale(1); }
+  0%, 11% { opacity: 0; transform: scale(1.025); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  50% { opacity: 0.56; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.56; transform: scale(1); }
 }
 @keyframes ultreiaRidgesEmerge {
-  0%, 28% { opacity: 0; filter: blur(5px) drop-shadow(0 0 0 oklch(0.55 0.08 138 / 0)); transform: translateY(9px) scale(0.982); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  58% { opacity: 0.92; filter: blur(0) drop-shadow(0 0 10px oklch(0.55 0.08 138 / 0.28)); transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  84% { opacity: 0.74; filter: blur(0) drop-shadow(0 0 8px oklch(0.55 0.08 138 / 0.18)); transform: translateY(0) scale(1); }
-  100% { opacity: 0; filter: blur(0) drop-shadow(0 0 8px oklch(0.55 0.08 138 / 0)); transform: translateY(0) scale(1); }
+  0%, 28% { opacity: 0; transform: translateY(9px) scale(0.982); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  58% { opacity: 0.78; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.78; transform: translateY(0) scale(1); }
 }
 @keyframes ultreiaRouteEmerge {
-  0%, 36% { opacity: 0; filter: blur(5px) drop-shadow(0 0 0 oklch(0.58 0.1 138 / 0)); transform: translateY(11px) scale(0.984); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  68% { opacity: 0.96; filter: blur(0) drop-shadow(0 0 14px oklch(0.58 0.1 138 / 0.34)); transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  86% { opacity: 0.82; filter: blur(0) drop-shadow(0 0 10px oklch(0.58 0.1 138 / 0.2)); transform: translateY(0) scale(1); }
-  100% { opacity: 0; filter: blur(0) drop-shadow(0 0 10px oklch(0.58 0.1 138 / 0)); transform: translateY(0) scale(1); }
+  0%, 36% { opacity: 0; transform: translateY(11px) scale(0.984); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  68% { opacity: 0.88; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.88; transform: translateY(0) scale(1); }
 }
 @keyframes ultreiaBuildLayer {
-  0%, 74% { opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 0; }
+  0%, 100% { opacity: 1; }
 }
 @keyframes ultreiaFinalLogo {
-  0%, 58% { opacity: 0; transform: scale(1); filter: none; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  82% { opacity: 0.62; transform: scale(1); filter: none; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 1; transform: scale(1); filter: none; }
+  0%, 100% { opacity: 0; }
 }
 @keyframes ultreiaWordReveal {
   0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
   24% { opacity: 1; clip-path: inset(0 80% 0 0); transform: translate3d(-4px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  86% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); animation-timing-function: linear; }
+  72% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); animation-timing-function: linear; }
   100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); }
 }
 `;

@@ -828,7 +828,13 @@ export function RacesTab({
                       {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
                       {raceSaving ? t("common.saving") : t("races.past_warn_move")}
                     </button>
-                    <button onClick={() => setPastRaceWarning(null)} disabled={raceSaving} style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+                    <button
+                      {...instantPress("past-race-warning-cancel-mobile", () => setPastRaceWarning(null))}
+                      disabled={raceSaving}
+                      style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                    >
+                      {t("common.cancel")}
+                    </button>
                   </div>
                 </div>
               )}
@@ -897,7 +903,13 @@ export function RacesTab({
               {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
               {raceSaving ? t("common.saving") : t("races.past_warn_move")}
             </button>
-            <button onClick={() => setPastRaceWarning(null)} disabled={raceSaving} style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button
+              {...instantPress("past-race-warning-cancel-desktop", () => setPastRaceWarning(null))}
+              disabled={raceSaving}
+              style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            >
+              {t("common.cancel")}
+            </button>
           </div>
         </div>
       )}

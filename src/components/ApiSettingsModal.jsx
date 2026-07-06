@@ -114,7 +114,7 @@ export function ApiSettingsModal({
               </div>
             )}
           </div>
-          <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+          <button {...instantPress("api-settings-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
         {/* Info block (provider blurb + pricing + model note) — collapses into
@@ -134,11 +134,13 @@ export function ApiSettingsModal({
           background: "var(--bg-elevated)",
           position: "relative",
         }}>
-          <button onClick={() => setPricingOpen(false)} aria-label="Close"
+          <button {...instantPress("api-pricing-close", () => setPricingOpen(false))} aria-label="Close"
             style={{
               position: "absolute", top: 6, right: 8,
               background: "none", border: "none", color: "var(--ink-3)",
               fontSize: 18, lineHeight: 1, cursor: "pointer", padding: 2,
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
             }}>×</button>
           <p style={{ ...s.muted, margin: "0 0 12px", lineHeight: 1.6, paddingRight: 18 }}>{t("api.desc_pick_provider")}</p>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("api.pricing_title")}</div>
@@ -239,7 +241,7 @@ export function ApiSettingsModal({
         </div>
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
-          <button onClick={onClose} style={s.btn}>{t("common.done")}</button>
+          <button {...instantPress("api-settings-done", onClose)} style={{ ...s.btn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.done")}</button>
         </div>
       </div>
     </div>

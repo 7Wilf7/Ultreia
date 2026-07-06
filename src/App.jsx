@@ -4260,7 +4260,7 @@ Rules:
           Tapping jumps to the AI Coach tab and opens the Memory modal. */}
       {memoryProposal && !showMemory && (
         <button
-          onClick={() => { setTab(TAB_COACH); setShowMemory(true); }}
+          {...instantPress("memory-ready-banner", () => { setTab(TAB_COACH); setShowMemory(true); })}
           className="ultreia-overlay-in"
           style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9998,
@@ -4271,6 +4271,8 @@ Rules:
             cursor: "pointer", textAlign: "center", width: "100%",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             boxShadow: "var(--shadow-soft), 0 0 30px oklch(0.40 0.060 138 / 0.22)",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
           }}>
           <span aria-hidden="true">🧠</span>
           <span>{t("coach.memory_ready_banner")}</span>
@@ -4278,7 +4280,7 @@ Rules:
       )}
       {planProposal?.deferredReview && !showPlanProposalReview && (
         <button
-          onClick={() => { setTab(TAB_COACH); setShowPlanProposalReview(true); }}
+          {...instantPress("plan-review-ready-banner", () => { setTab(TAB_COACH); setShowPlanProposalReview(true); })}
           className="ultreia-overlay-in"
           style={{
             position: "fixed", top: 0, left: 0, right: 0, zIndex: 9997,
@@ -4289,6 +4291,8 @@ Rules:
             cursor: "pointer", textAlign: "center", width: "100%",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             boxShadow: "var(--shadow-soft), 0 0 30px oklch(0.40 0.060 138 / 0.22)",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
           }}>
           <span aria-hidden="true">📅</span>
           <span>{t("coach.plan_suggestion_ready_banner")}</span>
@@ -4524,7 +4528,7 @@ Rules:
                     })}
                   </p>
                 </div>
-                <button onClick={() => setWeeklyImportPrompt(null)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("weekly-import-prompt-close", () => setWeeklyImportPrompt(null))} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={analyzeWeeklyReportFromPrompt} style={{ ...s.btn, flex: 1 }}>
@@ -4532,7 +4536,7 @@ Rules:
                     ? "weekly_report.import_prompt_refresh"
                     : "weekly_report.import_prompt_analyze")}
                 </button>
-                <button onClick={() => setWeeklyImportPrompt(null)} style={{ ...s.btnGhost, flex: 1 }}>
+                <button {...instantPress("weekly-import-prompt-later", () => setWeeklyImportPrompt(null))} style={{ ...s.btnGhost, flex: 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                   {t("weekly_report.import_prompt_later")}
                 </button>
               </div>
@@ -4557,7 +4561,7 @@ Rules:
                     })}
                   </p>
                 </div>
-                <button onClick={dismissCoachReviewPrompt} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("coach-review-prompt-close", dismissCoachReviewPrompt)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
               <div style={{
                 border: "1px solid var(--rule)",
@@ -4582,7 +4586,7 @@ Rules:
                 ))}
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button onClick={dismissCoachReviewPrompt} style={s.btnGhost}>
+                <button {...instantPress("coach-review-prompt-cancel", dismissCoachReviewPrompt)} style={{ ...s.btnGhost, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                   {t("common.cancel")}
                 </button>
                 <button

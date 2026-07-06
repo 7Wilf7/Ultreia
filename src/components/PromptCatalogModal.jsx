@@ -2,12 +2,14 @@ import { useState } from "react";
 import { s } from "../styles";
 import { ModalRoot } from "./ModalRoot";
 import { getPromptCatalog } from "../data/promptCatalog";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Admin-only viewer for every prompt the product uses. Entry is gated by
 // isAdmin (same as the invite-code modal); content comes from promptCatalog.js.
 // Read-only — copy buttons let the owner lift a prompt out to tweak it.
 export function PromptCatalogModal({ onClose }) {
   const entries = getPromptCatalog();
+  const instantPress = useInstantPress();
   const [copied, setCopied] = useState("");
 
   async function copy(id, text) {
@@ -41,7 +43,7 @@ export function PromptCatalogModal({ onClose }) {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, position: "sticky", top: -22, background: "var(--bg-elevated)", paddingTop: 2, zIndex: 1 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>提示词总览</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("prompt-catalog-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>
             产品里所有喂给大模型 / 预填给用户的提示词。仅管理员可见。改了源码里的提示词，记得同步 <code style={{ fontFamily: "var(--font-mono)" }}>src/data/promptCatalog.js</code>。

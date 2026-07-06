@@ -820,7 +820,7 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
             <div style={{ fontSize: 17, fontWeight: 650 }}>{t("location.map_fullscreen_title")}</div>
             <div style={{ ...s.muted, fontSize: 11, marginTop: 2 }}>{t("location.map_drag_hint")}</div>
           </div>
-          <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+          <button {...instantPress("map-picker-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
         <div style={{

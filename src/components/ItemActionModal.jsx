@@ -1,11 +1,13 @@
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Context actions for a training/race record: a small centered card over a
 // blurred backdrop (matches the change-password modal). Edit + Delete.
 // `title` is an optional one-line label of the item being acted on.
 export function ItemActionModal({ title, onEdit, onDelete, onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
   return (
     <ModalRoot onClose={onClose}>
       <div onClick={onClose} style={{
@@ -34,7 +36,7 @@ export function ItemActionModal({ title, onEdit, onDelete, onClose }) {
           <button onClick={onDelete} style={{ ...ACTION_BTN, color: "var(--danger)", borderTop: onEdit ? "1px solid var(--rule-soft)" : "none" }}>
             {t("common.delete")}
           </button>
-          <button onClick={onClose} style={{ ...ACTION_BTN, color: "var(--ink-3)", borderTop: "1px solid var(--rule-soft)" }}>
+          <button {...instantPress("item-action-cancel", onClose)} style={{ ...ACTION_BTN, color: "var(--ink-3)", borderTop: "1px solid var(--rule-soft)", touchAction: "manipulation" }}>
             {t("common.cancel")}
           </button>
         </div>

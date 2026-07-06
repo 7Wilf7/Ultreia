@@ -394,7 +394,7 @@ export function CalendarDayModal({
             position: "relative",
           }}
         >
-          <button onClick={onClose} style={{
+          <button {...instantPress("calendar-day-close", onClose)} style={{
             ...navBtn,
             position: "absolute",
             top: isMobile ? 9 : 12,

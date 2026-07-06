@@ -9,6 +9,7 @@ import {
   coachComposerSendButtonStyle,
 } from "./CoachComposerControls";
 import { normalizeComposerTextChange } from "../utils/composerInput";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const stripNode = ({ node, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
@@ -72,6 +73,7 @@ export function WeeklyReportPage({
   onStopImport,
 }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [discussionText, setDiscussionText] = useState("");
   const discussionTextRef = useRef("");
   const range = useMemo(() => {
@@ -171,7 +173,7 @@ export function WeeklyReportPage({
               {extracting ? t("common.stop") : t("weekly_report.import_plan_short")}
             </button>
           </div>
-          <button onClick={onClose} style={{ ...s.modalCloseBtn, position: "static", flexShrink: 0 }} aria-label="Close">×</button>
+          <button {...instantPress("weekly-report-close", onClose)} style={{ ...s.modalCloseBtn, position: "static", flexShrink: 0 }} aria-label="Close">×</button>
         </div>
       </div>
 

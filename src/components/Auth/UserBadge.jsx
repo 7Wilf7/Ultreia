@@ -97,7 +97,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
           }}>
             <button
               type="button"
-              onClick={() => { setMenuOpen(false); onChangePassword?.(); }}
+              {...instantPress("user-badge-change-password", () => { setMenuOpen(false); onChangePassword?.(); })}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 padding: "10px 14px", fontSize: 13, fontFamily: "var(--font-sans)",
@@ -105,6 +105,8 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
                 background: "transparent", border: "none",
                 borderBottom: "1px solid var(--rule-soft)",
                 borderRadius: 0, cursor: "pointer",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }}
             >
               {t("settings.change_password")}
@@ -112,7 +114,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
             {publicFeatures && isAdmin && (
               <button
                 type="button"
-                onClick={() => { setMenuOpen(false); onGenerateInvite?.(); }}
+                {...instantPress("user-badge-generate-invite", () => { setMenuOpen(false); onGenerateInvite?.(); })}
                 style={{
                   display: "block", width: "100%", textAlign: "left",
                   padding: "10px 14px", fontSize: 13, fontFamily: "var(--font-sans)",
@@ -120,6 +122,8 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
                   background: "transparent", border: "none",
                   borderBottom: "1px solid var(--rule-soft)",
                   borderRadius: 0, cursor: "pointer",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
                 {t("settings.generate_invite")}

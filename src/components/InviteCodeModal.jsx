@@ -3,12 +3,14 @@ import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
 import { invites } from "../lib/db";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Admin-only: mint + review one-time invite codes. Centered blurred modal, same
 // chrome as the other settings modals. List loads on mount; generating prepends
 // the new code. Unused codes get a copy button.
 export function InviteCodeModal({ onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [codes, setCodes] = useState(null); // null = loading
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -78,7 +80,7 @@ export function InviteCodeModal({ onClose }) {
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <h2 style={{ fontSize: 19, fontWeight: 500, margin: 0 }}>{t("invite.title")}</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("invite-code-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
           <p style={{ ...s.muted, marginBottom: 16, lineHeight: 1.6, fontSize: 12 }}>{t("invite.hint")}</p>
 

@@ -4,7 +4,7 @@ import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 import { ModalRoot } from "./ModalRoot";
 
 // Bundle the user manual straight into the app. Vite's `?raw` suffix inlines
@@ -207,6 +207,7 @@ export function GuideModal({ onClose, onReplayTour }) {
   const t = useT();
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [active, setActive] = useState(0);
   const [tocOpen, setTocOpen] = useState(false);
   const tocRef = useRef(null);
@@ -266,12 +267,13 @@ export function GuideModal({ onClose, onReplayTour }) {
               <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: "var(--ink-1)" }}>{t("settings.guide")}</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 {onReplayTour && (
-                  <button onClick={onReplayTour}
-                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", minHeight: 0, flexShrink: 0 }}>
+                  <button
+                    {...instantPress("guide-replay-tour", onReplayTour)}
+                    style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", minHeight: 0, flexShrink: 0, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                     {t("tour.replay")}
                   </button>
                 )}
-                <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button {...instantPress("guide-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
               </div>
             </div>
             {/* Inline TOC dropdown — opens a list right under the box instead
@@ -302,7 +304,9 @@ export function GuideModal({ onClose, onReplayTour }) {
                   WebkitOverflowScrolling: "touch",
                 }}>
                   {CHAPTERS.map((c, i) => (
-                    <button key={c.file} onClick={() => pickChapter(i)}
+                    <button
+                      key={c.file}
+                      {...instantTap(`guide-chapter-${c.file}`, () => pickChapter(i))}
                       style={{
                         display: "flex", alignItems: "center", justifyContent: "space-between",
                         width: "100%", textAlign: "left",
@@ -311,6 +315,7 @@ export function GuideModal({ onClose, onReplayTour }) {
                         fontFamily: "var(--font-sans)", fontSize: 14,
                         color: "var(--ink-1)", cursor: "pointer",
                         fontWeight: i === active ? 600 : 400, borderRadius: 0,
+                        touchAction: "pan-y", WebkitTapHighlightColor: "transparent",
                       }}>
                       <span>{c.title}</span>
                       {i === active && <span style={{ color: "var(--moss)", fontSize: 13 }}>●</span>}

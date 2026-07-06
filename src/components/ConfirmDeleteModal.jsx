@@ -1,9 +1,11 @@
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 export function ConfirmDeleteModal({ confirmDelete, setConfirmDelete, onConfirm }) {
   const t = useT();
+  const instantPress = useInstantPress();
   if (!confirmDelete) return null;
 
   let title = "";
@@ -26,8 +28,9 @@ export function ConfirmDeleteModal({ confirmDelete, setConfirmDelete, onConfirm 
         <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 10 }}>{title}</div>
         <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={() => setConfirmDelete(null)}
-            style={{ ...s.btnGhost, minHeight: 44, padding: "10px 18px" }}>
+          <button
+            {...instantPress("confirm-delete-cancel", () => setConfirmDelete(null))}
+            style={{ ...s.btnGhost, minHeight: 44, padding: "10px 18px", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
             {t("common.cancel")}
           </button>
           <button onClick={onConfirm}

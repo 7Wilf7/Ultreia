@@ -334,40 +334,16 @@ export function InboxModal({
     ) : (
       <div style={{ display: "flex", flexDirection: "column" }}>
         {list.map(item => (
-          <div
+          <InboxMessageRow
             key={item.id}
-            ref={el => registerRow(el, item.id)}
-            onClick={() => markReadById(item.id)}
-            style={styles.row}
-          >
-            <span style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              marginTop: 7,
-              flexShrink: 0,
-              background: item.read ? "transparent" : "var(--moss)",
-            }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {item.title && (
-                <div style={styles.rowTitle}>{item.title}</div>
-              )}
-              <div style={{
-                ...styles.rowBody,
-                fontWeight: item.read ? 400 : 500,
-              }}>
-                {item.body}
-              </div>
-              <div style={styles.rowDate}>{fmtDate(item.createdAt)}</div>
-            </div>
-            <button
-              onClick={(e) => handleDelete(item, e)}
-              aria-label={t("inbox.delete")}
-              style={styles.deleteButton}
-            >
-              ×
-            </button>
-          </div>
+            item={item}
+            t={t}
+            registerRow={registerRow}
+            markReadById={markReadById}
+            onDelete={handleDelete}
+            fmtDate={fmtDate}
+            tapKeyPrefix="inbox-message-row"
+          />
         ))}
       </div>
     )
@@ -390,40 +366,16 @@ export function InboxModal({
               }}
             />
           ) : (
-            <div
+            <InboxMessageRow
               key={entry.item.id}
-              ref={el => registerRow(el, entry.item.id)}
-              onClick={() => markReadById(entry.item.id)}
-              style={styles.row}
-            >
-              <span style={{
-                width: 7,
-                height: 7,
-                borderRadius: "50%",
-                marginTop: 7,
-                flexShrink: 0,
-                background: entry.item.read ? "transparent" : "var(--moss)",
-              }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {entry.item.title && (
-                  <div style={styles.rowTitle}>{entry.item.title}</div>
-                )}
-                <div style={{
-                  ...styles.rowBody,
-                  fontWeight: entry.item.read ? 400 : 500,
-                }}>
-                  {entry.item.body}
-                </div>
-                <div style={styles.rowDate}>{fmtDate(entry.item.createdAt)}</div>
-              </div>
-              <button
-                onClick={(e) => handleDelete(entry.item, e)}
-                aria-label={t("inbox.delete")}
-                style={styles.deleteButton}
-              >
-                ×
-              </button>
-            </div>
+              item={entry.item}
+              t={t}
+              registerRow={registerRow}
+              markReadById={markReadById}
+              onDelete={handleDelete}
+              fmtDate={fmtDate}
+              tapKeyPrefix="inbox-other-row"
+            />
           )
         ))}
       </div>
@@ -544,6 +496,46 @@ function tabButtonStyle(active, busy = false) {
     borderColor: active || busy ? "var(--accent)" : "var(--rule)",
     color: active || busy ? "var(--accent-dark)" : "var(--ink-2)",
   };
+}
+
+function InboxMessageRow({ item, t, registerRow, markReadById, onDelete, fmtDate, tapKeyPrefix }) {
+  const instantTap = useInstantTap();
+  return (
+    <div
+      ref={el => registerRow(el, item.id)}
+      {...instantTap(`${tapKeyPrefix}-${item.id}`, () => markReadById(item.id))}
+      style={{ ...styles.row, touchAction: "pan-y", WebkitTapHighlightColor: "transparent" }}
+    >
+      <span style={{
+        width: 7,
+        height: 7,
+        borderRadius: "50%",
+        marginTop: 7,
+        flexShrink: 0,
+        background: item.read ? "transparent" : "var(--moss)",
+      }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {item.title && (
+          <div style={styles.rowTitle}>{item.title}</div>
+        )}
+        <div style={{
+          ...styles.rowBody,
+          fontWeight: item.read ? 400 : 500,
+        }}>
+          {item.body}
+        </div>
+        <div style={styles.rowDate}>{fmtDate(item.createdAt)}</div>
+      </div>
+      <button
+        onClick={(e) => onDelete(item, e)}
+        onPointerDown={(e) => e.stopPropagation()}
+        aria-label={t("inbox.delete")}
+        style={styles.deleteButton}
+      >
+        ×
+      </button>
+    </div>
+  );
 }
 
 function AgentActionInboxRow({ action, t, onOpen }) {

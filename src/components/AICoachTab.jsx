@@ -4093,6 +4093,7 @@ function MemoryFactCategorySection({ group, expanded, onToggle, displayLang, onS
 }
 
 function MemoryFactRow({ fact, hasTopBorder, displayLang, onStatus, onDelete, t, appDialog }) {
+  const instantPress = useInstantPress();
   return (
     <div style={{ ...memoryFactRowStyle, borderTop: hasTopBorder ? "1px solid var(--rule-soft)" : "none" }}>
       <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-1)" }}>
@@ -4101,8 +4102,20 @@ function MemoryFactRow({ fact, hasTopBorder, displayLang, onStatus, onDelete, t,
       <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
         {fact.status === "proposed" && (
           <>
-            <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_accept")}</button>
-            <button type="button" onClick={() => onStatus?.(fact, "rejected")} style={memoryFactButtonStyle}>{t("coach.memory_fact_reject")}</button>
+            <button
+              type="button"
+              {...instantPress("memory-fact-accept", () => onStatus?.(fact, "active"))}
+              style={{ ...memoryFactButtonStyle, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            >
+              {t("coach.memory_fact_accept")}
+            </button>
+            <button
+              type="button"
+              {...instantPress("memory-fact-reject", () => onStatus?.(fact, "rejected"))}
+              style={{ ...memoryFactButtonStyle, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            >
+              {t("coach.memory_fact_reject")}
+            </button>
           </>
         )}
         {fact.status === "active" && (
@@ -4120,7 +4133,13 @@ function MemoryFactRow({ fact, hasTopBorder, displayLang, onStatus, onDelete, t,
         )}
         {fact.status === "archived" && (
           <>
-            <button type="button" onClick={() => onStatus?.(fact, "active")} style={memoryFactButtonStyle}>{t("coach.memory_fact_restore")}</button>
+            <button
+              type="button"
+              {...instantPress("memory-fact-restore", () => onStatus?.(fact, "active"))}
+              style={{ ...memoryFactButtonStyle, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            >
+              {t("coach.memory_fact_restore")}
+            </button>
             <button
               type="button"
               onClick={async () => {

@@ -155,8 +155,6 @@ button {
   cursor: pointer;
   touch-action: manipulation;
   transition:
-    transform 70ms var(--ease-out),
-    filter 70ms var(--ease-out),
     border-color 110ms var(--ease-out),
     background-color 110ms var(--ease-out),
     color 110ms var(--ease-out),
@@ -182,8 +180,8 @@ button[aria-busy="true"] {
 }
 
 button:not(:disabled):not([aria-busy="true"]):active {
-  transform: translateY(1px) scale(0.985);
-  filter: brightness(1.06);
+  transform: none;
+  filter: none;
 }
 
 /* Native-app feel: no long-press text selection or the Android WebView

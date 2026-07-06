@@ -299,17 +299,23 @@ function SectionChip({ active, onClick, children }) {
 // Oval 中/EN segmented switch — a knob slides to the active side on tap. Stops
 // propagation so tapping the switch toggles language exactly once.
 function LangSwitch({ lang, onToggle }) {
+  const instantPress = useInstantPress();
   const isEn = lang === "en";
+  const toggle = (event) => {
+    event?.stopPropagation?.();
+    onToggle();
+  };
   return (
     <div
       role="switch"
       aria-checked={isEn}
       aria-label="Language"
-      onClick={(e) => { e.stopPropagation(); onToggle(); }}
+      {...instantPress("settings-language-switch", toggle)}
       style={{
         position: "relative", width: 76, height: 30, borderRadius: 15,
         background: "var(--bg-sunken)", border: "1px solid var(--rule)",
         cursor: "pointer", flexShrink: 0, userSelect: "none",
+        touchAction: "manipulation",
         WebkitTapHighlightColor: "transparent",
       }}>
       {/* Sliding knob — left:2 for 中, left:38 for EN. */}

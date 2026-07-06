@@ -110,7 +110,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
                 onClick={() => setShowInfo(v => !v)}
               />
             </div>
-            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.modalCloseBtn, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
+            <button {...instantPress("push-settings-close", closeIfIdle)} disabled={saving} style={{ ...s.modalCloseBtn, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
           {showInfo && (
             <div style={infoPanelStyle}>{infoText}</div>
@@ -164,7 +164,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
                   </button>
                   {times.length > 1 && (
                     <button
-                      onClick={() => removeAt(i)}
+                      {...instantPress(`push-remove-time-${i}`, () => removeAt(i))}
                       disabled={saving}
                       aria-label={t("push.remove_time")}
                       style={{
@@ -189,7 +189,7 @@ export function PushSettingsModal({ pushEnabled, pushHours, pushTimes, pushTimez
           </div>
 
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.btnGhost, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button {...instantPress("push-settings-cancel", closeIfIdle)} disabled={saving} style={{ ...s.btnGhost, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
             <button
               onClick={save}
               disabled={saving}

@@ -39,7 +39,7 @@ export function ReadinessPromptModal({ initial, onSave, onSkip }) {
               <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0 }}>{t("readiness.prompt_title")}</h2>
               <p style={{ ...s.muted, margin: "6px 0 0", fontSize: 12.5, lineHeight: 1.55 }}>{t("readiness.prompt_body")}</p>
             </div>
-            <button onClick={onSkip} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("readiness-prompt-close", onSkip)} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 16 }}>
@@ -70,7 +70,7 @@ export function ReadinessPromptModal({ initial, onSave, onSkip }) {
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
-            <button onClick={onSkip} style={s.btnGhost}>{t("readiness.prompt_skip")}</button>
+            <button {...instantPress("readiness-prompt-skip", onSkip)} style={s.btnGhost}>{t("readiness.prompt_skip")}</button>
             <button
               onClick={() => onSave(vals)}
               disabled={!hasAny}

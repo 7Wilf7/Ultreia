@@ -22,6 +22,7 @@ export function WeeklyReportSettingsModal({
   onClose,
 }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const instantTap = useInstantTap();
   const initial = weeklyReportSettings || {};
   const [enabled, setEnabled] = useState(initial.enabled === true);
@@ -73,7 +74,7 @@ export function WeeklyReportSettingsModal({
                 onClick={() => setShowInfo(v => !v)}
               />
             </div>
-            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
+            <button {...instantPress("weekly-settings-close", closeIfIdle)} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1 }} aria-label="Close">×</button>
           </div>
           {showInfo && (
             <div style={s.infoPanel}>{infoText}</div>
@@ -120,7 +121,7 @@ export function WeeklyReportSettingsModal({
           </label>
 
           <div style={s.actions}>
-            <button onClick={closeIfIdle} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
+            <button {...instantPress("weekly-settings-cancel", closeIfIdle)} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
             <button
               onClick={save}
               disabled={saving}

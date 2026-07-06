@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES } from "../constants";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // ─────────────────────────────────────────────────────────────────────────
 // PersonalRecordsBar — the compact PR row that lives at the top of the
@@ -346,6 +347,7 @@ function ITRABadge({
   inputRef, commitItra, cancelItra, startItra,
   itraPI, t,
 }) {
+  const instantPress = useInstantPress();
   return (
     <div style={{ flexShrink: 0 }}>
       {itraEditing ? (
@@ -363,7 +365,9 @@ function ITRABadge({
           }}>{t("common.save")}</button>
         </div>
       ) : (
-        <button onClick={startItra} title={t("pr.itra_title")}
+        <button
+          {...instantPress("itra-start-edit", startItra)}
+          title={t("pr.itra_title")}
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10, fontWeight: 600,
@@ -373,6 +377,8 @@ function ITRABadge({
             // every other category's card.
             minHeight: 0, lineHeight: 1.5,
             border: "1px solid var(--moss)",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
             background: "var(--moss-bg)",
             color: "var(--moss-deep)",
             cursor: "pointer",

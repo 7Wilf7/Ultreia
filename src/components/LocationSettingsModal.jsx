@@ -142,7 +142,7 @@ export function LocationSettingsModal({
               {t("location.hint")}
             </p>
           </div>
-          <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+          <button {...instantPress("location-settings-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
         <div style={{
@@ -217,7 +217,12 @@ export function LocationSettingsModal({
                   />
                 </label>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
-                  <button type="button" onClick={() => { setDraft(null); setDraftName(""); }} disabled={saving} style={s.btnGhost}>
+                  <button
+                    type="button"
+                    {...instantPress("location-draft-cancel", () => { setDraft(null); setDraftName(""); })}
+                    disabled={saving}
+                    style={{ ...s.btnGhost, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                  >
                     {t("common.cancel")}
                   </button>
                   <button type="button" onClick={saveDraft} disabled={saving} style={{

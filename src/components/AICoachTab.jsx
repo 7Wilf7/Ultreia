@@ -3338,6 +3338,7 @@ function CoachConfigDropdowns({ coachConfig, onStyle, onOutputLength, onInterven
 }
 
 function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
+  const instantPress = useInstantPress();
   const prefs = normalizeTrainingPreferences(value);
   const template = prefs.weeklyTemplate || {};
   const slotLabels = {
@@ -3420,7 +3421,11 @@ function TrainingPreferenceEditor({ value, onChange, t, isMobile }) {
         })}
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <button type="button" onClick={clearAll} style={{ ...s.btnGhost, minHeight: 0, padding: "7px 11px", fontSize: 12 }}>
+        <button
+          type="button"
+          {...instantPress("training-preferences-clear", clearAll)}
+          style={{ ...s.btnGhost, minHeight: 0, padding: "7px 11px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+        >
           {t("coach.training_preferences_clear")}
         </button>
       </div>

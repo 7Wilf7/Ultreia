@@ -809,7 +809,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
           style={s.modalCard(true, { maxWidth: 480, bg: "var(--bg)", float: true })}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>{t("poster.preview_title")}</h2>
-            <button onClick={onClose} style={s.modalCloseBtn} aria-label="Close">×</button>
+            <button {...instantPress("poster-close", onClose)} style={s.modalCloseBtn} aria-label="Close">×</button>
           </div>
 
           {/* Row 1: poster type */}
@@ -918,7 +918,7 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
             {msg && <span style={{ ...s.muted, marginRight: "auto" }}>{msg}</span>}
-            <button onClick={onClose} style={s.btnGhost}>{t("common.cancel")}</button>
+            <button {...instantPress("poster-cancel", onClose)} style={{ ...s.btnGhost, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t("common.cancel")}</button>
             <button onClick={downloadPoster} disabled={busy || (mode === "single" && !selectedWorkout)}
               style={{ ...s.btn, opacity: busy || (mode === "single" && !selectedWorkout) ? 0.6 : 1 }}>
               {busy ? t("poster.saving") : t("poster.save_png")}

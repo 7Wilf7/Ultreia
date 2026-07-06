@@ -391,7 +391,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
               {t("coach.action_create_plans_title", { n: actionPlans.length })}
             </div>
           </div>
-          <button onClick={onCancel} style={s.modalCloseBtn} aria-label="Close">×</button>
+          <button {...instantPress("coach-plan-import-close", onCancel)} style={s.modalCloseBtn} aria-label="Close">×</button>
         </div>
 
         <div style={{ ...s.muted, marginTop: 10, lineHeight: 1.5, fontSize: 13 }}>
@@ -650,9 +650,10 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                       textTransform: "uppercase", letterSpacing: "0.06em", display: isMobile ? "none" : "block" }}>
                       {t("calendar.planned_badge")}
                     </div>
-                    <button onClick={() => remove(it._id)}
+                    <button
+                      {...instantPress(`coach-plan-remove-${it._id}`, () => remove(it._id))}
                       style={{ ...s.btnGhost, fontSize: 11, padding: "4px 9px",
-                        marginLeft: "auto", color: "var(--ink-3)" }}>
+                        marginLeft: "auto", color: "var(--ink-3)", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                       {t("common.delete")}
                     </button>
                   </div>

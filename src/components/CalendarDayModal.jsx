@@ -344,6 +344,11 @@ export function CalendarDayModal({
     onClose();
   }
 
+  function closePlanPanel() {
+    setPanel(null);
+    resetPlanForm();
+  }
+
   const headerDate = formatHeaderDate(dateKey, lang);
   const contentMaxWidth = isMobile ? "100%" : 720;
   const sheetHeight = getDaySheetHeight({ isMobile, isPast, isToday });
@@ -699,14 +704,14 @@ export function CalendarDayModal({
         {/* Plan add/edit form — a modal over the day modal (ModalRoot portals
             it to body, so it floats above this card). */}
         {panel === "plan" && (
-          <ModalRoot onClose={() => { setPanel(null); resetPlanForm(); }}>
-            <div style={s.modalOverlay(isMobile, { float: true })} onClick={() => { setPanel(null); resetPlanForm(); }}>
+          <ModalRoot onClose={closePlanPanel}>
+            <div style={s.modalOverlay(isMobile, { float: true })} onClick={closePlanPanel}>
               <div style={s.modalCard(isMobile, { maxWidth: 460, float: true })} onClick={e => e.stopPropagation()}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>
                     {editingId ? t("calendar.edit_plan_title") : t("calendar.add_plan_title")}
                   </h2>
-                  <button onClick={() => { setPanel(null); resetPlanForm(); }} style={s.modalCloseBtn} aria-label="Close">×</button>
+                  <button {...instantPress("calendar-plan-close", closePlanPanel)} style={s.modalCloseBtn} aria-label="Close">×</button>
                 </div>
                 {/* Type + time-of-day are shown for every activity; the metric
                     inputs below switch per type (see planFields). */}
@@ -842,7 +847,7 @@ export function CalendarDayModal({
                   </div>
                 )}
                 <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                  <button onClick={() => { setPanel(null); resetPlanForm(); }} disabled={planSaving} style={{ ...s.btnGhost, opacity: planSaving ? 0.55 : 1 }}>
+                  <button {...instantPress("calendar-plan-cancel", closePlanPanel)} disabled={planSaving} style={{ ...s.btnGhost, opacity: planSaving ? 0.55 : 1 }}>
                     {t("common.cancel")}
                   </button>
                   <button

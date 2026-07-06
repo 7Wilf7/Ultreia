@@ -33,6 +33,7 @@ import { ConfirmDeleteModal } from "./components/ConfirmDeleteModal";
 import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
+import { countInboxUnreadByTab, firstUnreadInboxTab } from "./utils/inboxTabs";
 import { RaceBriefingModal } from "./components/RaceBriefingModal";
 import { WeeklyReportPage } from "./components/WeeklyReportModal";
 import {
@@ -2204,7 +2205,8 @@ function AppShell({
   useEffect(() => {
     db.pushInbox.listMine().then(setInboxItems).catch(() => {});
   }, []);
-  const inboxUnread = inboxItems.filter(i => !i.read).length;
+  const inboxUnreadByTab = useMemo(() => countInboxUnreadByTab(inboxItems), [inboxItems]);
+  const inboxUnread = inboxUnreadByTab.total;
 
   useEffect(() => {
     if (!user?.id) return;
@@ -4245,7 +4247,7 @@ Rules:
           onOpenLocationSettings={() => setShowLocationSettings(true)}
           /* Inbox entry — top-right of the AI Coach header. */
           onOpenInbox={() => {
-            setInboxTab("daily");
+            setInboxTab(firstUnreadInboxTab(inboxUnreadByTab));
             setShowInbox(true);
           }}
           inboxUnread={inboxUnread}
@@ -4548,6 +4550,7 @@ Rules:
           agentActions={agentActions}
           activeTab={inboxTab}
           onTabChange={setInboxTab}
+          unreadByTab={inboxUnreadByTab}
           onClose={() => setShowInbox(false)}
           onOpenPushSettings={() => {
             setInboxTab("daily");

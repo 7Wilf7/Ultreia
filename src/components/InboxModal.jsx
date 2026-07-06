@@ -6,37 +6,8 @@ import * as db from "../lib/db";
 import { useAppDialog } from "./AppDialogContext";
 import { weekWindow } from "../utils/weeklyReport";
 import { isMemoryUpdateAction, isRaceBriefingAction } from "../utils/agentActions";
+import { countInboxUnreadByTab, getInboxItemTab } from "../utils/inboxTabs";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
-
-function inboxTextParts(item) {
-  return {
-    title: String(item?.title || "").toLowerCase(),
-    body: String(item?.body || "").toLowerCase(),
-    combined: `${item?.title || ""} ${item?.body || ""}`.toLowerCase(),
-  };
-}
-
-function isWeeklyInboxItem(item) {
-  const { combined } = inboxTextParts(item);
-  return combined.includes("周复盘") || combined.includes("weekly report") || combined.includes("weekly recap");
-}
-
-function isOtherInboxItem(item) {
-  const { title, combined } = inboxTextParts(item);
-  if (title.includes("记忆") || title.includes("memory") || title.includes("memory_update")) return true;
-  if (title.includes("简报") || title.includes("briefing") || title.includes("race_briefing")) return true;
-  if (title.includes("钱包") || title.includes("wallet") || title.includes("充值") || title.includes("payment")) return true;
-  return [
-    "记忆更新待审核",
-    "长期记忆建议",
-    "赛前简报",
-    "装备检查",
-    "race briefing",
-    "wallet_topup_done",
-    "wallet_payment_request",
-    "充值提醒",
-  ].some(keyword => combined.includes(keyword));
-}
 
 function shortRange(start, end) {
   const fmt = (value) => {
@@ -107,6 +78,7 @@ export function InboxModal({
   onClearWeeklyReports,
   activeTab = "daily",
   onTabChange,
+  unreadByTab,
   weeklyReportLoading = false,
   activeWeeklyReportRange = null,
 }) {
@@ -116,6 +88,7 @@ export function InboxModal({
   const ioRef = useRef(null);
   const rowEls = useRef(new Map());
   const itemsRef = useRef(items);
+  const weeklyAutoReadAttemptedRef = useRef(new Set());
   const recentPointerTabPressRef = useRef({});
   const parentTabRef = useRef(activeTab === "weekly" || activeTab === "other" ? activeTab : "daily");
   const deferredParentTabFrameRef = useRef(0);
@@ -200,16 +173,20 @@ export function InboxModal({
   }, []);
 
   const dailyItems = useMemo(
-    () => (items || []).filter(item => !isWeeklyInboxItem(item) && !isOtherInboxItem(item)),
+    () => (items || []).filter(item => getInboxItemTab(item) === "daily"),
     [items],
   );
   const weeklyItems = useMemo(
-    () => (items || []).filter(isWeeklyInboxItem),
+    () => (items || []).filter(item => getInboxItemTab(item) === "weekly"),
     [items],
   );
   const otherItems = useMemo(
-    () => (items || []).filter(item => !isWeeklyInboxItem(item) && isOtherInboxItem(item)),
+    () => (items || []).filter(item => getInboxItemTab(item) === "other"),
     [items],
+  );
+  const tabUnread = useMemo(
+    () => unreadByTab || countInboxUnreadByTab(items),
+    [items, unreadByTab],
   );
   const otherAgentActions = useMemo(
     () => (agentActions || [])
@@ -230,14 +207,23 @@ export function InboxModal({
   const hasWeeklyReports = weeklyRanges.some(range => range.latest);
   const hasWeeklyContent = hasWeeklyReports || weeklyItems.length > 0;
 
-  function markReadById(id) {
+  const markReadById = useCallback((id) => {
     const it = itemsRef.current.find(i => i.id === id);
     if (!it || it.read) return;
     setItems(prev => prev.map(i => (i.id === id ? { ...i, read: true } : i)));
     db.pushInbox.markRead(id).catch(() => {
       setItems(prev => prev.map(i => (i.id === id ? { ...i, read: false } : i)));
     });
-  }
+  }, [setItems]);
+
+  useEffect(() => {
+    if (tab !== "weekly") return;
+    for (const item of weeklyItems) {
+      if (item.read || !item.id || weeklyAutoReadAttemptedRef.current.has(item.id)) continue;
+      weeklyAutoReadAttemptedRef.current.add(item.id);
+      markReadById(item.id);
+    }
+  }, [markReadById, tab, weeklyItems]);
 
   useEffect(() => {
     const root = scrollRef.current;
@@ -429,16 +415,19 @@ export function InboxModal({
 
         <div style={styles.tabs}>
           <button onPointerDown={(event) => pressTab("daily", event)} onClick={(event) => clickTab("daily", event)} style={tabButtonStyle(tab === "daily")}>
-            {t("inbox.tab_daily")}
+            <span>{t("inbox.tab_daily")}</span>
+            {tabUnread.daily > 0 && <UnreadBadge count={tabUnread.daily} />}
           </button>
           <button onPointerDown={(event) => pressTab("weekly", event)} onClick={(event) => clickTab("weekly", event)} style={tabButtonStyle(tab === "weekly", weeklyReportLoading)}>
-            {t("inbox.tab_weekly")}
+            <span>{t("inbox.tab_weekly")}</span>
+            {tabUnread.weekly > 0 && <UnreadBadge count={tabUnread.weekly} />}
             {weeklyReportLoading && (
               <span className="ultreia-spinner" style={{ width: 10, height: 10, borderWidth: 1.5, marginLeft: 6 }} />
             )}
           </button>
           <button onPointerDown={(event) => pressTab("other", event)} onClick={(event) => clickTab("other", event)} style={tabButtonStyle(tab === "other")}>
-            {t("inbox.tab_other")}
+            <span>{t("inbox.tab_other")}</span>
+            {tabUnread.other > 0 && <UnreadBadge count={tabUnread.other} />}
           </button>
         </div>
 
@@ -488,6 +477,10 @@ export function InboxModal({
       </div>
     </ModalRoot>
   );
+}
+
+function UnreadBadge({ count }) {
+  return <span style={styles.tabUnreadBadge}>{count > 99 ? "99+" : count}</span>;
 }
 
 function tabButtonStyle(active, busy = false) {
@@ -652,7 +645,24 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     transition: "none",
+  },
+  tabUnreadBadge: {
+    minWidth: 16,
+    height: 16,
+    padding: "0 5px",
+    borderRadius: 999,
+    background: "var(--danger)",
+    color: "white",
+    fontFamily: "var(--font-mono)",
+    fontSize: 10,
+    fontWeight: 700,
+    lineHeight: "16px",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
   body: {
     flex: 1,

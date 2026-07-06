@@ -22,6 +22,8 @@ import {
   PlusIcon, UploadIcon, CheckSquareIcon,
 } from "./Icons";
 
+const CARD_TAP_MOVE_TOLERANCE_PX = 10;
+
 // Best-effort mapping from a Garmin "Activity Type" string to one of our top-level types.
 // Returns { type, unknown }. When unknown, type is a safe placeholder ("Road Run") so the row
 // stays renderable while the user is prompted to pick the real mapping.
@@ -156,6 +158,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   // suppresses the click that follows so a hold doesn't also expand the card.
   const pressTimer = useRef(null);
   const longPressFired = useRef(false);
+  const activeCardTap = useRef(null);
+  const recentTouchTap = useRef(new Map());
   function startPress(l) {
     if (selectMode || l.isOptimistic) return;
     longPressFired.current = false;
@@ -187,6 +191,50 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   }
   function clearSelection() {
     setSelectedIds(new Set());
+  }
+
+  function startCardTap(l, e) {
+    const touch = e.touches?.[0];
+    activeCardTap.current = touch ? { id: l.id, x: touch.clientX, y: touch.clientY, moved: false } : null;
+    startPress(l);
+  }
+  function moveCardTap(e) {
+    const active = activeCardTap.current;
+    const touch = e.touches?.[0];
+    if (active && touch) {
+      const dx = touch.clientX - active.x;
+      const dy = touch.clientY - active.y;
+      if (Math.hypot(dx, dy) > CARD_TAP_MOVE_TOLERANCE_PX) {
+        active.moved = true;
+      }
+    }
+    endPress();
+  }
+  function endCardTap(l, onTap) {
+    endPress();
+    const active = activeCardTap.current;
+    activeCardTap.current = null;
+    if (!active) return;
+    recentTouchTap.current.set(l.id, Date.now());
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (active?.moved) return;
+    onTap();
+  }
+  function clickCardTap(l, onTap, e) {
+    const recentAt = recentTouchTap.current.get(l.id) || 0;
+    const at = Date.now();
+    if (recentAt && at - recentAt < 750) {
+      e.preventDefault?.();
+      return;
+    }
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    onTap();
   }
 
   async function handleAddSubmit(logData) {
@@ -834,8 +882,11 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             // the shorthand/longhand interaction entirely.
             return (
               <div key={l.id}
-                onClick={() => { if (longPressFired.current) { longPressFired.current = false; return; } onMobileCardClick(); }}
-                onTouchStart={() => startPress(l)} onTouchEnd={endPress} onTouchMove={endPress} onTouchCancel={endPress}
+                onClick={(e) => clickCardTap(l, onMobileCardClick, e)}
+                onTouchStart={(e) => startCardTap(l, e)}
+                onTouchEnd={() => endCardTap(l, onMobileCardClick)}
+                onTouchMove={moveCardTap}
+                onTouchCancel={() => { activeCardTap.current = null; endPress(); }}
                 onMouseDown={() => startPress(l)} onMouseUp={endPress} onMouseLeave={endPress}
                 style={{
                   background: isSelected ? "var(--accent-soft)" : "var(--panel)",

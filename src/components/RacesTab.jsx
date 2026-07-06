@@ -24,6 +24,7 @@ import { useDeferredCommit } from "../hooks/useDeferredCommit";
 // position on every row.
 // Priority is empty for history rows; time/ITRA is empty for target rows.
 const RACE_ROW_GRID = "82px 46px 150px minmax(0, 1fr) 78px 84px 108px 22px";
+const RACE_CARD_TAP_MOVE_TOLERANCE_PX = 10;
 
 const EMPTY_RACE = (isTarget) => ({
   isTarget, priority: "A", name: "", date: "",
@@ -345,6 +346,8 @@ export function RacesTab({
   const [actionRace, setActionRace] = useState(null);
   const pressTimer = useRef(null);
   const longPressFired = useRef(false);
+  const activeRaceCardTap = useRef(null);
+  const recentRaceTouchTap = useRef(new Map());
   function outerPagerIsDragging() {
     return typeof document !== "undefined"
       && !!document.querySelector(".ultreia-mobile-shell[data-pager-touching='true']");
@@ -361,6 +364,56 @@ export function RacesTab({
   }
   function endPress() {
     if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; }
+  }
+  function isRaceCardInteractiveTarget(e) {
+    const target = e.target;
+    if (!target || target === e.currentTarget) return false;
+    return !!target.closest?.("button,input,select,textarea,[role='button']");
+  }
+  function startRaceCardTap(r, e) {
+    if (isRaceCardInteractiveTarget(e)) return;
+    const touch = e.touches?.[0];
+    activeRaceCardTap.current = touch ? { id: r.id, x: touch.clientX, y: touch.clientY, moved: false } : null;
+    startPress(r);
+  }
+  function moveRaceCardTap(e) {
+    const active = activeRaceCardTap.current;
+    const touch = e.touches?.[0];
+    if (active && touch) {
+      const dx = touch.clientX - active.x;
+      const dy = touch.clientY - active.y;
+      if (Math.hypot(dx, dy) > RACE_CARD_TAP_MOVE_TOLERANCE_PX) {
+        active.moved = true;
+      }
+    }
+    endPress();
+  }
+  function endRaceCardTap(r, onTap, e) {
+    endPress();
+    const active = activeRaceCardTap.current;
+    activeRaceCardTap.current = null;
+    if (!active || isRaceCardInteractiveTarget(e)) return;
+    recentRaceTouchTap.current.set(r.id, Date.now());
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (active.moved) return;
+    onTap();
+  }
+  function clickRaceCardTap(r, onTap, e) {
+    if (isRaceCardInteractiveTarget(e)) return;
+    const recentAt = recentRaceTouchTap.current.get(r.id) || 0;
+    const at = Date.now();
+    if (recentAt && at - recentAt < 750) {
+      e.preventDefault?.();
+      return;
+    }
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    onTap();
   }
 
   // The edit form now opens as a blurred modal (was inline). Closing warns if
@@ -964,18 +1017,19 @@ export function RacesTab({
         if (distStr) row3Parts.push(distStr);
         if (ascStr) row3Parts.push(ascStr);
       }
+      const onMobileRaceCardTap = () => {
+        if (raceWeather[r.id]) toggleWeather(r.id);
+      };
       return (
         <div key={r.id}
-          onClick={() => {
-            // Long-press (edit/delete) fires first and sets this flag — swallow
-            // the click that follows so a hold doesn't also toggle weather.
-            if (longPressFired.current) { longPressFired.current = false; return; }
-            // Tap reveals the race-day weather (no dedicated chip — kept low-key
-            // like indoor races that simply show nothing).
-            if (raceWeather[r.id]) toggleWeather(r.id);
-          }}
-          onTouchStart={() => startPress(r)} onTouchEnd={endPress} onTouchMove={endPress} onTouchCancel={endPress}
-          onMouseDown={() => startPress(r)} onMouseUp={endPress} onMouseLeave={endPress}
+          onClick={(e) => clickRaceCardTap(r, onMobileRaceCardTap, e)}
+          onTouchStart={(e) => startRaceCardTap(r, e)}
+          onTouchEnd={(e) => endRaceCardTap(r, onMobileRaceCardTap, e)}
+          onTouchMove={moveRaceCardTap}
+          onTouchCancel={() => { activeRaceCardTap.current = null; endPress(); }}
+          onMouseDown={(e) => { if (!isRaceCardInteractiveTarget(e)) startPress(r); }}
+          onMouseUp={endPress}
+          onMouseLeave={endPress}
           style={{
             ...s.card, cursor: "pointer",
             display: "flex", flexDirection: "column",

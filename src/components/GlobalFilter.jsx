@@ -201,6 +201,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
           display: "inline-flex", alignItems: "center", gap: 8,
           whiteSpace: "nowrap",
           touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+          transition: "none",
         }}>
         {filterToLabel(localFilter, t)}
         <span style={{ fontSize: 10, color: "var(--ink-3)" }}>▼</span>
@@ -229,6 +230,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
                 color: "var(--ink-1)", cursor: "pointer",
                 fontWeight: currentValue === "all" ? 600 : 400,
                 touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+                transition: "none",
               }}>
               {t("filter.all_activities")}
             </button>
@@ -246,6 +248,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
                     color: "var(--ink-1)", cursor: "pointer",
                     fontWeight: isSelected ? 600 : 400,
                     touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+                    transition: "none",
                   }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                   <span style={{ fontSize: 10, color: "var(--ink-3)", flexShrink: 0 }}>›</span>
@@ -266,6 +269,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
                   fontWeight: currentValue === c.value ? 600 : 400,
                   whiteSpace: "nowrap",
                   touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+                  transition: "none",
                 }}>
                 {c.label}
               </button>

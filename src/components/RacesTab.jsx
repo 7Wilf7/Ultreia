@@ -1524,6 +1524,7 @@ function RaceLocationField({ name, lat, lng, onPick, onText, onClear }) {
               flexShrink: 0,
               touchAction: "manipulation",
               WebkitTapHighlightColor: "transparent",
+              transition: "none",
             }}
           >
             {t("races.location_clear")}
@@ -1550,6 +1551,7 @@ function RaceLocationField({ name, lat, lng, onPick, onText, onClear }) {
                 padding: "9px 12px", fontSize: 13, color: "var(--ink-1)", cursor: "pointer",
                 touchAction: "pan-y",
                 WebkitTapHighlightColor: "transparent",
+                transition: "none",
               }}>
               {r.label}
             </button>

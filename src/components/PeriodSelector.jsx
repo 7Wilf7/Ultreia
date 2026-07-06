@@ -27,6 +27,7 @@ function Cell({ kind, active, label, pressProps, hasDropdown, isOpen, dropdownCo
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           cursor: "pointer", borderRadius: 0,
           touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+          transition: "none",
         }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
         {hasDropdown && <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>}
@@ -99,6 +100,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
           fontWeight: selected ? 600 : 400,
           cursor: "pointer", borderRadius: 0,
           touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+          transition: "none",
         }}>
         {label}
       </button>

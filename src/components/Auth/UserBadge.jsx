@@ -11,6 +11,7 @@ const cellBase = {
   color: "var(--ink-2)",
   fontFamily: "var(--font-sans)",
   borderRadius: 0,
+  transition: "none",
 };
 
 function emailPrefix(email) {
@@ -107,6 +108,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
                 borderRadius: 0, cursor: "pointer",
                 touchAction: "manipulation",
                 WebkitTapHighlightColor: "transparent",
+                transition: "none",
               }}
             >
               {t("settings.change_password")}
@@ -124,6 +126,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
                   borderRadius: 0, cursor: "pointer",
                   touchAction: "manipulation",
                   WebkitTapHighlightColor: "transparent",
+                  transition: "none",
                 }}
               >
                 {t("settings.generate_invite")}
@@ -140,6 +143,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
                 background: "transparent", border: "none",
                 borderRadius: 0,
                 cursor: signingOut ? "default" : "pointer",
+                transition: "none",
               }}
             >
               {signingOut
@@ -159,6 +163,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
                 background: "transparent", border: "none",
                 borderTop: "1px solid var(--rule-soft)",
                 borderRadius: 0, cursor: "pointer",
+                transition: "none",
               }}
             >
               {t("settings.delete_account")}

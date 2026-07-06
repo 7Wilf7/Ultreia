@@ -2,9 +2,32 @@ import { useCallback, useRef } from "react";
 
 const DUPLICATE_CLICK_WINDOW_MS = 750;
 const TAP_MOVE_TOLERANCE_PX = 10;
+const SYNTHETIC_CLICK_SUPPRESSION_MS = 450;
+
+let suppressSyntheticClickUntil = 0;
+let syntheticClickGuardInstalled = false;
 
 function interactionNow() {
   return Date.now();
+}
+
+function installSyntheticClickGuard() {
+  if (syntheticClickGuardInstalled || typeof document === "undefined") return;
+  syntheticClickGuardInstalled = true;
+  document.addEventListener("click", (event) => {
+    if (interactionNow() > suppressSyntheticClickUntil) return;
+    event.preventDefault?.();
+    event.stopPropagation?.();
+    event.stopImmediatePropagation?.();
+  }, true);
+}
+
+function suppressNextSyntheticClick() {
+  suppressSyntheticClickUntil = Math.max(
+    suppressSyntheticClickUntil,
+    interactionNow() + SYNTHETIC_CLICK_SUPPRESSION_MS,
+  );
+  installSyntheticClickGuard();
 }
 
 export function useInstantPress({ duplicateClickWindowMs = DUPLICATE_CLICK_WINDOW_MS } = {}) {
@@ -14,6 +37,7 @@ export function useInstantPress({ duplicateClickWindowMs = DUPLICATE_CLICK_WINDO
     onPointerDown: (event) => {
       if (event.pointerType === "mouse") return;
       recentPointerPressRef.current.set(key, interactionNow());
+      suppressNextSyntheticClick();
       event.preventDefault?.();
       onPress?.(event);
     },
@@ -72,6 +96,7 @@ export function useInstantTap({
       const dy = event.clientY - active.y;
       if (Math.hypot(dx, dy) > moveTolerancePx) return;
       recentTapRef.current.set(key, interactionNow());
+      if (event.pointerType !== "mouse") suppressNextSyntheticClick();
       event.preventDefault?.();
       onTap?.(event);
     },

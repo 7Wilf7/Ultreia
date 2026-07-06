@@ -286,6 +286,7 @@ export function GuideModal({ onClose, onReplayTour }) {
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   cursor: "pointer", textAlign: "left",
                   touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+                  transition: "none",
                 }}>
                 <span style={{ color: "var(--ink-1)", fontWeight: 500 }}>{chapter.title}</span>
                 <span style={{ fontSize: 10, color: "var(--ink-3)", marginLeft: 8 }}>
@@ -316,6 +317,7 @@ export function GuideModal({ onClose, onReplayTour }) {
                         color: "var(--ink-1)", cursor: "pointer",
                         fontWeight: i === active ? 600 : 400, borderRadius: 0,
                         touchAction: "pan-y", WebkitTapHighlightColor: "transparent",
+                        transition: "none",
                       }}>
                       <span>{c.title}</span>
                       {i === active && <span style={{ color: "var(--moss)", fontSize: 13 }}>●</span>}

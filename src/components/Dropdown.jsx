@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { s } from "../styles";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
@@ -35,38 +35,46 @@ export function Dropdown({
   const instantPress = useInstantPress();
   const instantTap = useInstantTap();
 
+  const computeMenuStyle = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const minWidth = Math.max(120, rect.width);
+    const menuWidth = variant === "field" ? minWidth : Math.max(minWidth, 160);
+    const left = align === "right"
+      ? Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth))
+      : Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.left));
+    const availableBelow = window.innerHeight - rect.bottom - 10;
+    const availableAbove = rect.top - 10;
+    const opensUp = availableBelow < 160 && availableAbove > availableBelow;
+    const maxHeight = Math.max(120, Math.min(320, opensUp ? availableAbove : availableBelow));
+    return {
+      position: "fixed",
+      left,
+      top: opensUp ? "auto" : rect.bottom + 2,
+      bottom: opensUp ? window.innerHeight - rect.top + 2 : "auto",
+      minWidth,
+      width: variant === "field" ? minWidth : "max-content",
+      maxWidth: `calc(100vw - 16px)`,
+      maxHeight,
+    };
+  }, [align, variant]);
+
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    setMenuStyle(null);
+  }, []);
+
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
     function placeMenu() {
-      const el = wrapRef.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const minWidth = Math.max(120, rect.width);
-      const menuWidth = variant === "field" ? minWidth : Math.max(minWidth, 160);
-      const left = align === "right"
-        ? Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.right - menuWidth))
-        : Math.max(8, Math.min(window.innerWidth - menuWidth - 8, rect.left));
-      const availableBelow = window.innerHeight - rect.bottom - 10;
-      const availableAbove = rect.top - 10;
-      const opensUp = availableBelow < 160 && availableAbove > availableBelow;
-      const maxHeight = Math.max(120, Math.min(320, opensUp ? availableAbove : availableBelow));
-      setMenuStyle({
-        position: "fixed",
-        left,
-        top: opensUp ? "auto" : rect.bottom + 2,
-        bottom: opensUp ? window.innerHeight - rect.top + 2 : "auto",
-        minWidth,
-        width: variant === "field" ? minWidth : "max-content",
-        maxWidth: `calc(100vw - 16px)`,
-        maxHeight,
-      });
+      setMenuStyle(computeMenuStyle());
     }
-    placeMenu();
     function onDocClick(e) {
       if (wrapRef.current?.contains(e.target) || menuRef.current?.contains(e.target)) return;
-      setOpen(false);
+      closeMenu();
     }
-    function onKey(e) { if (e.key === "Escape") setOpen(false); }
+    function onKey(e) { if (e.key === "Escape") closeMenu(); }
     document.addEventListener("mousedown", onDocClick);
     document.addEventListener("touchstart", onDocClick);
     document.addEventListener("keydown", onKey);
@@ -79,7 +87,7 @@ export function Dropdown({
       window.removeEventListener("resize", placeMenu);
       window.removeEventListener("scroll", placeMenu, true);
     };
-  }, [open, align, variant]);
+  }, [open, closeMenu, computeMenuStyle]);
 
   const selected = multi ? (Array.isArray(value) ? value : []) : value;
   const labelOf = (v) => options.find(o => o.value === v)?.label ?? v;
@@ -93,12 +101,17 @@ export function Dropdown({
       onChange(selected.includes(v) ? selected.filter(x => x !== v) : [...selected, v]);
     } else {
       onChange(v);
-      setOpen(false);
+      closeMenu();
     }
   }
 
   function toggleOpen() {
-    setOpen(o => !o);
+    if (open) {
+      closeMenu();
+      return;
+    }
+    setMenuStyle(computeMenuStyle());
+    setOpen(true);
   }
 
   const triggerStyleBase = variant === "inline"
@@ -110,12 +123,14 @@ export function Dropdown({
         color: "var(--ink-1)", letterSpacing: "-0.01em",
         display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
         opacity: disabled ? 0.5 : 1,
+        transition: "none",
       }
     : {
         ...s.input,
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
         cursor: disabled ? "default" : "pointer", textAlign: "left",
         opacity: disabled ? 0.5 : 1,
+        transition: "none",
       };
 
   return (
@@ -124,9 +139,14 @@ export function Dropdown({
       width: variant === "field" ? "100%" : undefined,
       display: variant === "field" ? "block" : "inline-block",
     }}>
-      <button type="button" disabled={disabled} aria-label={ariaLabel}
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        // eslint-disable-next-line react-hooks/refs
         {...instantPress("trigger", toggleOpen)}
-        style={{ ...triggerStyleBase, touchAction: "manipulation", WebkitTapHighlightColor: "transparent", ...triggerStyle }}>
+        style={{ ...triggerStyleBase, touchAction: "manipulation", WebkitTapHighlightColor: "transparent", ...triggerStyle }}
+      >
         <span style={{
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           color: isEmpty ? "var(--ink-3)" : "var(--ink-1)",
@@ -159,6 +179,7 @@ export function Dropdown({
                   color: "var(--ink-1)", cursor: "pointer",
                   fontWeight: isSel ? 600 : 400, borderRadius: 0,
                   touchAction: "pan-y", WebkitTapHighlightColor: "transparent",
+                  transition: "none",
                 }}>
                 {multi && (
                   <span style={{ width: 14, flexShrink: 0, color: "var(--moss)" }}>{isSel ? "✓" : ""}</span>

@@ -652,6 +652,7 @@ const styles = {
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    transition: "none",
   },
   body: {
     flex: 1,

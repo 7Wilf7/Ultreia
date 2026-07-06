@@ -77,7 +77,9 @@ git tag v0.2.0 && git push origin v0.2.0
 
 **bump 版本号** 同步改 `package.json` 的 `version`（APP 内"检查更新"按钮显示的本地版本号来自这里），保持跟 tag 一致。
 
-**Release 更新说明** 由 `.github/workflows/release.yml` 从 `docs/changelog.md` 的当天 `## YYYY-MM-DD` 分组抽取具体 bullet 写入 GitHub Release；不要再用 commit 标题生成更新内容。tag 前必须确认当天 changelog 已有用户能感知的具体条目，否则 release workflow 会失败。
+**Release 更新说明** 由 `.github/workflows/release.yml` 从 `docs/changelog.md` 抽取自上一个 tag 以来新增的具体 bullet 写入 GitHub Release，并同步写入 Supabase Storage 的 `releases/ultreia-latest.json` manifest；不要再用 commit 标题生成更新内容。tag 前必须确认 changelog 已有本次用户能感知的具体条目，否则 release workflow 会失败。
+
+**更新检查 / APK 镜像**：release workflow 会上传 `releases/ultreia-vX.Y.Z.apk`（版本号镜像，供新版 App 优先下载）、`releases/ultreia-latest.apk`（旧版兼容兜底）和 `releases/ultreia-latest.json`（新版 App 优先读取的轻量更新 manifest）。如果用户反馈检查更新失败或下载很慢，先测 manifest、versioned APK mirror、legacy latest APK mirror，再测 GitHub Releases API / asset。
 
 **用户 shorthand**：Wilf 说「推 apk」= 按本节标准流程发 Android APK；Wilf 说「推 0111」这类数字 = 版本号，按去掉点解析（例如 `0111` → `0.11.1`、`0110` → `0.11.0`），然后 bump 到该版本、提交、打对应 `v*` tag 并推送触发 GitHub Actions。若数字无法唯一切分版本号，再停下来确认。
 

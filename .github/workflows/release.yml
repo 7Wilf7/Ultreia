@@ -109,11 +109,40 @@ jobs:
           mv android/app/build/outputs/apk/release/app-release.apk \
              "ultreia-${GITHUB_REF_NAME}.apk"
 
-      - name: Mirror APK to Supabase Storage (fast download in CN)
-        # Uploads the signed APK to a PUBLIC bucket "releases" as a stable name
-        # so the app can fetch it without GitHub's CN-throttled asset CDN. The
-        # app falls back to the GitHub asset if this is missing, so a failure
-        # here must NOT block the release.
+      - name: Build release notes from changelog
+        # The in-app "Check for updates" dialog shows this body verbatim, so
+        # keep it to just THIS release's visible changes. Prefer changelog
+        # bullets added since the previous tag so multiple same-day releases do
+        # not repeat the whole day's notes. The body intentionally omits the date
+        # heading because older app versions localize unknown markdown headings
+        # too aggressively.
+        run: |
+          release_day=$(TZ=Asia/Shanghai date +%F)
+          prev=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          if [ -n "$prev" ]; then
+            notes=$(git diff --unified=0 "$prev" "${GITHUB_REF_NAME}" -- docs/changelog.md | awk '/^\+- / { sub(/^\+/, ""); print }')
+          else
+            notes=$(awk -v day="$release_day" '
+              $0 == "## " day { in_section=1; next }
+              in_section && /^## / { exit }
+              in_section && /^- / { print }
+            ' docs/changelog.md)
+          fi
+          if [ -z "$(printf "%s" "$notes" | tr -d "[:space:]")" ]; then
+            echo "::error::docs/changelog.md has no new release notes for ${GITHUB_REF_NAME}."
+            echo "::error::Add concrete user-visible bullets before tagging."
+            exit 1
+          fi
+          {
+            echo 'RELEASE_NOTES<<__TSEOF__'
+            echo "$notes"
+            echo '__TSEOF__'
+          } >> "$GITHUB_ENV"
+
+      - name: Mirror release metadata and APK to Supabase Storage
+        # Uploads a tiny public JSON manifest for update checks, plus both a
+        # versioned APK mirror and the legacy stable latest APK. The app falls
+        # back to GitHub if this step fails, so release creation should continue.
         continue-on-error: true
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -123,37 +152,54 @@ jobs:
             echo "Supabase secrets missing — skipping mirror upload."
             exit 0
           fi
-          curl -fSL -X POST \
-            "$SUPABASE_URL/storage/v1/object/releases/ultreia-latest.apk" \
-            -H "Authorization: Bearer $SERVICE_ROLE" \
-            -H "apikey: $SERVICE_ROLE" \
-            -H "x-upsert: true" \
-            -H "Content-Type: application/vnd.android.package-archive" \
-            --data-binary @"ultreia-${GITHUB_REF_NAME}.apk"
-          echo "Mirror upload done."
 
-      - name: Build release notes from changelog
-        # The in-app "Check for updates" dialog shows this body verbatim, so
-        # keep it to just THIS release's visible changes. The body intentionally
-        # omits the date heading because older app versions localize unknown
-        # markdown headings too aggressively.
-        run: |
-          release_day=$(TZ=Asia/Shanghai date +%F)
-          notes=$(awk -v day="$release_day" '
-            $0 == "## " day { in_section=1; next }
-            in_section && /^## / { exit }
-            in_section && /^- / { print }
-          ' docs/changelog.md)
-          if [ -z "$(printf "%s" "$notes" | tr -d "[:space:]")" ]; then
-            echo "::error::docs/changelog.md has no release notes for $release_day."
-            echo "::error::Add concrete user-visible bullets under ## $release_day before tagging."
-            exit 1
-          fi
-          {
-            echo 'RELEASE_NOTES<<__TSEOF__'
-            echo "$notes"
-            echo '__TSEOF__'
-          } >> "$GITHUB_ENV"
+          versioned_apk="ultreia-${GITHUB_REF_NAME}.apk"
+          versioned_object="releases/$versioned_apk"
+          latest_object="releases/ultreia-latest.apk"
+          manifest_object="releases/ultreia-latest.json"
+          public_base="${SUPABASE_URL%/}/storage/v1/object/public"
+
+          python3 - <<'PY'
+          import json
+          import os
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          version = tag[1:] if tag.startswith("v") else tag
+          supabase_url = os.environ["SUPABASE_URL"].rstrip("/")
+          manifest = {
+              "version": version,
+              "tagName": tag,
+              "htmlUrl": f"https://github.com/7Wilf7/Ultreia/releases/tag/{tag}",
+              "mirrorApkUrl": f"{supabase_url}/storage/v1/object/public/releases/ultreia-{tag}.apk",
+              "notes": os.environ.get("RELEASE_NOTES", ""),
+          }
+          with open("ultreia-latest.json", "w", encoding="utf-8") as f:
+              json.dump(manifest, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PY
+
+          upload_object() {
+            local object_path="$1"
+            local file_path="$2"
+            local content_type="$3"
+            local cache_control="$4"
+            curl -fSL -X POST \
+              "${SUPABASE_URL%/}/storage/v1/object/$object_path" \
+              -H "Authorization: Bearer $SERVICE_ROLE" \
+              -H "apikey: $SERVICE_ROLE" \
+              -H "x-upsert: true" \
+              -H "cache-control: $cache_control" \
+              -H "Content-Type: $content_type" \
+              --data-binary @"$file_path"
+          }
+
+          upload_object "$versioned_object" "$versioned_apk" "application/vnd.android.package-archive" "public, max-age=31536000, immutable"
+          upload_object "$latest_object" "$versioned_apk" "application/vnd.android.package-archive" "no-cache"
+          upload_object "$manifest_object" "ultreia-latest.json" "application/json; charset=utf-8" "no-cache"
+
+          echo "Mirror manifest: $public_base/$manifest_object"
+          echo "Versioned APK mirror: $public_base/$versioned_object"
+          echo "Legacy latest APK mirror: $public_base/$latest_object"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

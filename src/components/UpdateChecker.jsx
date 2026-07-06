@@ -15,13 +15,19 @@ const isNative = () => Capacitor.isNativePlatform?.() === true;
 const GITHUB_RELEASES_API =
   "https://api.github.com/repos/7Wilf7/ultreia/releases/latest";
 
-// China-friendly mirror of the latest APK on Supabase Storage (public bucket),
-// uploaded by the release workflow. GitHub's asset CDN is throttled in mainland
-// China; the Supabase object isn't, so we try it first.
+// China-friendlier release metadata and APK mirrors on Supabase Storage
+// (public bucket), uploaded by the release workflow. GitHub API/CDN can be slow
+// or unreachable in mainland China, so update checks try the small manifest
+// first and keep GitHub as a fallback.
 const SUPABASE_URL = (import.meta.env?.VITE_SUPABASE_URL || "").replace(/\/+$/, "");
+const MIRROR_RELEASE_MANIFEST_URL = SUPABASE_URL
+  ? `${SUPABASE_URL}/storage/v1/object/public/releases/ultreia-latest.json`
+  : null;
 const MIRROR_APK_URL = SUPABASE_URL
   ? `${SUPABASE_URL}/storage/v1/object/public/releases/ultreia-latest.apk`
   : null;
+const MIRROR_CHECK_TIMEOUT_MS = 5000;
+const GITHUB_CHECK_TIMEOUT_MS = 9000;
 const AUTO_CHECK_CACHE_MS = 30 * 60 * 1000;
 let releaseCheckCache = null; // { at, status, release }
 
@@ -84,6 +90,77 @@ function pickApkAsset(assets) {
   return assets.find((a) => /\.apk$/i.test(a?.name)) || null;
 }
 
+function uniqueUrls(urls) {
+  return [...new Set(urls.filter(Boolean))];
+}
+
+function releaseDownloadUrl(release) {
+  return release?.mirrorApkUrl || release?.apkUrl || "";
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = GITHUB_CHECK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function releaseFromMirrorManifest(data) {
+  const remote = stripV(data?.version || data?.tagName || data?.tag_name || "");
+  if (!remote) throw new Error("release manifest has no version");
+  return {
+    version: remote,
+    url: data.htmlUrl || data.html_url || `https://github.com/7Wilf7/Ultreia/releases/tag/v${remote}`,
+    apkUrl: data.githubApkUrl || data.github_apk_url || null,
+    mirrorApkUrl: data.mirrorApkUrl || data.mirror_apk_url || data.apkUrl || data.apk_url || null,
+    notes: data.notes || data.body || "",
+  };
+}
+
+function releaseFromGithub(data) {
+  const remote = stripV(data?.tag_name || "");
+  if (!remote) throw new Error("GitHub release has no version");
+  return {
+    version: remote,
+    url: data.html_url,
+    apkUrl: pickApkAsset(data.assets)?.browser_download_url || null,
+    mirrorApkUrl: null,
+    notes: data.body || "",
+  };
+}
+
+async function fetchLatestRelease() {
+  let mirrorError = null;
+  if (MIRROR_RELEASE_MANIFEST_URL) {
+    try {
+      const data = await fetchJsonWithTimeout(MIRROR_RELEASE_MANIFEST_URL, {}, MIRROR_CHECK_TIMEOUT_MS);
+      return releaseFromMirrorManifest(data);
+    } catch (err) {
+      mirrorError = err;
+      console.warn("[update] mirror release manifest failed:", err);
+    }
+  }
+
+  try {
+    const data = await fetchJsonWithTimeout(GITHUB_RELEASES_API, {
+      headers: { Accept: "application/vnd.github+json" },
+    }, GITHUB_CHECK_TIMEOUT_MS);
+    return releaseFromGithub(data);
+  } catch (err) {
+    console.warn("[update] GitHub release check failed:", err);
+    throw mirrorError || err;
+  }
+}
+
 function renderNotes(notes, maxChars) {
   const cleaned = cleanReleaseNotes(notes).slice(0, maxChars);
   if (!cleaned) return null;
@@ -141,19 +218,8 @@ export function UpdateChecker() {
     }
     setStatus("checking");
     try {
-      const res = await fetch(GITHUB_RELEASES_API, {
-        headers: { Accept: "application/vnd.github+json" },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const remote = stripV(data.tag_name || "");
-      const cmp = compareVersions(remote, currentVersion);
-      const nextRelease = {
-        version: remote,
-        url: data.html_url,
-        apkUrl: pickApkAsset(data.assets)?.browser_download_url || null,
-        notes: data.body || "",
-      };
+      const nextRelease = await fetchLatestRelease();
+      const cmp = compareVersions(nextRelease.version, currentVersion);
       const nextStatus = cmp > 0 ? "newer" : "latest";
       setRelease(nextRelease);
       setStatus(nextStatus);
@@ -168,17 +234,18 @@ export function UpdateChecker() {
 
   // Native path: download the APK via the system DownloadManager (survives
   // backgrounding / screen-off, shows a tray notification), then hand it to the
-  // system installer. Tries the Supabase mirror first (fast in CN), then the
-  // GitHub asset. If every native path fails, open the GitHub URL in the
-  // browser — the always-works fallback — so the button never dead-ends.
-  async function downloadAndInstall(githubUrl) {
+  // system installer. Tries the versioned Supabase mirror first, then the legacy
+  // "latest" mirror, then the GitHub asset. If every native path fails, open the
+  // best available URL in the browser so the button never dead-ends.
+  async function downloadAndInstall(targetRelease) {
+    const primaryUrl = releaseDownloadUrl(targetRelease);
     if (!isNative()) {
-      window.open(githubUrl, "_blank", "noreferrer");
+      window.open(primaryUrl || targetRelease?.url, "_blank", "noreferrer");
       return;
     }
     setInstallMsg("");
     setDownloadPct(null);
-    const candidates = [MIRROR_APK_URL, githubUrl].filter(Boolean);
+    const candidates = uniqueUrls([targetRelease?.mirrorApkUrl, MIRROR_APK_URL, targetRelease?.apkUrl]);
     let lastErr = null;
     for (const url of candidates) {
       let poll = null;
@@ -219,7 +286,7 @@ export function UpdateChecker() {
       `${copy.installFailed} (${reason})` +
       (isNetwork ? ` ${copy.networkHint}` : "")
     );
-    window.open(githubUrl, "_blank", "noreferrer");
+    window.open(primaryUrl || targetRelease?.url, "_blank", "noreferrer");
   }
 
   const recentActionEnabled = status === "latest" && release && showRecentAction;
@@ -286,11 +353,11 @@ export function UpdateChecker() {
           {/* Actions FIRST so the download CTA is always reachable without
               scrolling past the notes (which used to trap the touch scroll). */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {release.apkUrl && (
+            {releaseDownloadUrl(release) && (
               isNative() ? (
                 // Native: download + launch the installer in-app, no browser hop.
                 <button
-                  onClick={() => downloadAndInstall(release.apkUrl)}
+                  onClick={() => downloadAndInstall(release)}
                   disabled={installState !== "idle"}
                   style={{ ...downloadBtnStyle, border: "none", cursor: installState !== "idle" ? "default" : "pointer", opacity: installState !== "idle" ? 0.7 : 1 }}>
                   {installState === "downloading"
@@ -301,7 +368,7 @@ export function UpdateChecker() {
                 </button>
               ) : (
                 // Web: plain download link.
-                <a href={release.apkUrl} target="_blank" rel="noreferrer" style={downloadBtnStyle}>
+                <a href={releaseDownloadUrl(release)} target="_blank" rel="noreferrer" style={downloadBtnStyle}>
                   ↓ {copy.download}
                 </a>
               )

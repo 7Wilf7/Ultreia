@@ -433,7 +433,7 @@ export function InboxModal({
   const actionBar = tab === "daily" ? (
     <>
       <button
-        onClick={handleClearDaily}
+        {...instantPress("inbox-clear-daily", handleClearDaily)}
         disabled={!dailyItems.length}
         style={{ ...styles.bottomButton, color: "var(--danger)", borderColor: dailyItems.length ? "var(--danger)" : "var(--rule)", opacity: dailyItems.length ? 1 : 0.45 }}
       >
@@ -446,7 +446,7 @@ export function InboxModal({
   ) : tab === "weekly" ? (
     <>
       <button
-        onClick={handleClearWeekly}
+        {...instantPress("inbox-clear-weekly", handleClearWeekly)}
         disabled={!hasWeeklyContent}
         style={{ ...styles.bottomButton, color: "var(--danger)", borderColor: hasWeeklyContent ? "var(--danger)" : "var(--rule)", opacity: hasWeeklyContent ? 1 : 0.45 }}
       >
@@ -458,7 +458,7 @@ export function InboxModal({
     </>
   ) : (
     <button
-      onClick={handleClearOther}
+      {...instantPress("inbox-clear-other", handleClearOther)}
       disabled={!otherItems.length}
       style={{ ...styles.bottomButton, flex: 1, color: "var(--danger)", borderColor: otherItems.length ? "var(--danger)" : "var(--rule)", opacity: otherItems.length ? 1 : 0.45 }}
     >

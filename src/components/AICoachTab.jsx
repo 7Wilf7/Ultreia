@@ -1995,9 +1995,9 @@ export function AICoachTab({
                   <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
                     {!memoryProposal && (
-                      <button onClick={proposeMemoryUpdate}
+                      <button {...instantPress("coach-memory-update-mobile", proposeMemoryUpdate)}
                         disabled={memoryUpdating || chatMessages.length === 0}
-                        style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                         {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                         {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                       </button>
@@ -2091,7 +2091,7 @@ export function AICoachTab({
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={proactiveAdjustmentLoading ? handleStopProactiveAdjustment : handleConfirmManualAdjustment}
+                  {...instantPress("coach-manual-adjustment-confirm", proactiveAdjustmentLoading ? handleStopProactiveAdjustment : handleConfirmManualAdjustment)}
                   style={{
                     ...s.btn,
                     minWidth: 112,
@@ -2444,8 +2444,8 @@ export function AICoachTab({
             </button>
             {/* Clear chat right from the nudge. The confirm dialog reminds the
                 user to distill Memory first (see ConfirmDeleteModal chat body). */}
-            <button onClick={clearChat}
-              style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0, color: "var(--danger)", borderColor: "var(--danger)" }}>
+            <button {...instantPress("long-chat-clear-chat", clearChat)}
+              style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px", flexShrink: 0, color: "var(--danger)", borderColor: "var(--danger)", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
               {t("coach.clear_chat")}
             </button>
             <button
@@ -2525,7 +2525,7 @@ export function AICoachTab({
             ) : (
               <button
                 type="button"
-                onClick={handleManualAdjustmentShortcut}
+                {...instantPress("proactive-manual-adjustment-shortcut", handleManualAdjustmentShortcut)}
                 style={{
                   ...s.btn,
                   fontSize: 12,
@@ -2539,7 +2539,7 @@ export function AICoachTab({
             )}
             <button
               type="button"
-              onClick={handleProactiveAdjustmentDismiss}
+              {...instantPress("proactive-dismiss", handleProactiveAdjustmentDismiss)}
               disabled={proactiveAdjustmentLoading}
               style={{
                 ...s.btnGhost,
@@ -2601,7 +2601,7 @@ export function AICoachTab({
             ) : (
               <button
                 type="button"
-                onClick={() => handleRaceBriefingRequest()}
+                {...instantPress("race-briefing-generate-banner", () => handleRaceBriefingRequest())}
                 disabled={raceBriefingLoading}
                 style={{
                   ...s.btn,
@@ -2615,7 +2615,7 @@ export function AICoachTab({
             )}
             <button
               type="button"
-              onClick={handleRaceBriefingDismiss}
+              {...instantPress("race-briefing-dismiss", handleRaceBriefingDismiss)}
               disabled={raceBriefingLoading}
               style={{
                 ...s.btnGhost,
@@ -2925,7 +2925,7 @@ export function AICoachTab({
         // sits at a lower z-index, below). Closing the sub returns to the menu.
         const openSub = (fn) => { fn(); };
         const row = (label, onClick, { badge = false, danger = false, muted = false } = {}) => (
-          <button {...(danger ? { onClick } : instantPress(`coach-menu-${label}`, onClick))} style={{
+          <button {...instantPress(`coach-menu-${label}`, onClick)} style={{
             display: "flex", alignItems: "center", width: "100%", textAlign: "left",
             background: "transparent", border: "none",
             borderTop: "1px solid var(--rule-soft)",
@@ -3162,7 +3162,7 @@ export function AICoachTab({
                       </div>
                       <button
                         type="button"
-                        onClick={handleManualAdjustmentFromHub}
+                        {...instantPress("coach-hub-manual-adjustment", handleManualAdjustmentFromHub)}
                         disabled={!showManualAdjustmentShortcut}
                         style={{
                           ...s.btn,
@@ -3184,9 +3184,9 @@ export function AICoachTab({
                     <div>
                       <div style={{ marginBottom: 14 }}>
                         {!memoryProposal && (
-                          <button onClick={proposeMemoryUpdate}
+                          <button {...instantPress("coach-memory-update-desktop", proposeMemoryUpdate)}
                             disabled={memoryUpdating || chatMessages.length === 0}
-                            style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6 }}>
+                            style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                             {memoryUpdating && <Spinner size={11} thickness={1.4} />}
                             {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
                           </button>
@@ -3243,9 +3243,9 @@ export function AICoachTab({
                       <p style={{ ...s.muted, lineHeight: 1.6, marginTop: 0 }}>
                         {t("coach.clear_hub_hint")}
                       </p>
-                      <button onClick={() => { setShowCoachHub(false); clearChat(); }}
+                      <button {...instantPress("coach-hub-clear-chat-confirm", () => { setShowCoachHub(false); clearChat(); })}
                         disabled={chatMessages.length === 0}
-                        style={{ ...s.btn, background: "var(--danger)", borderColor: "var(--danger)", color: "var(--ink-inv)", opacity: chatMessages.length === 0 ? 0.4 : 1 }}>
+                        style={{ ...s.btn, background: "var(--danger)", borderColor: "var(--danger)", color: "var(--ink-inv)", opacity: chatMessages.length === 0 ? 0.4 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                         {t("coach.clear_chat")} ({chatMessages.length})
                       </button>
                     </div>
@@ -3567,7 +3567,7 @@ function CoachFocusPanel({
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <button
             type="button"
-            onClick={handleManualAdjustmentFromHub}
+            {...instantPress("focus-manual-adjustment", handleManualAdjustmentFromHub)}
             disabled={!showManualAdjustmentShortcut}
             style={{
               ...s.btn,
@@ -3595,7 +3595,7 @@ function CoachFocusPanel({
             ) : (
               <button
                 type="button"
-                onClick={() => onRaceBriefingRequest?.()}
+                {...instantPress("focus-race-briefing-generate", () => onRaceBriefingRequest?.())}
                 disabled={!canRequestBriefing || raceBriefingLoading}
                 style={{
                   ...s.btnGhost,

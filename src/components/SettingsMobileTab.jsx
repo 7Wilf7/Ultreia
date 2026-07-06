@@ -346,7 +346,7 @@ function LangSwitch({ lang, onToggle }) {
 // flash highlight (jump-to-setting), and a danger tone.
 function SubCell({ primary, secondary, warn, danger, rightValue, flash, busy, expanded, indent = 0, instant = true, onClick }) {
   const instantTap = useInstantTap();
-  const pressProps = danger || rightValue || !instant
+  const pressProps = !instant
     ? { onClick }
     : instantTap(`settings-cell-${String(primary)}`, onClick);
   return (

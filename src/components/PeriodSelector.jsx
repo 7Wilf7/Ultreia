@@ -1,7 +1,7 @@
 import { startTransition, useEffect, useState } from "react";
 import { getPeriodLabel, pastMonths, pastYears } from "../utils/period";
 import { useT } from "../i18n/LanguageContext";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 // Single segment of the strip. Hoisted to module scope (was an inner function
 // of PeriodSelector, which re-created the component type every render and reset
@@ -52,6 +52,7 @@ function Cell({ kind, active, label, pressProps, hasDropdown, isOpen, dropdownCo
 export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDropdown, compact = false, dense = false, style }) {
   const t = useT();
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [localPeriod, setLocalPeriod] = useState(period);
   const [localDropdown, setLocalDropdown] = useState(periodDropdown);
 
@@ -86,7 +87,7 @@ export function PeriodSelector({ period, setPeriod, periodDropdown, setPeriodDro
 
   function popupItem(key, label, selected, onClick) {
     return (
-      <button key={key} {...instantPress(key, onClick)}
+      <button key={key} {...instantTap(key, onClick)}
         style={{
           display: "block", width: "100%", textAlign: "left",
           background: selected ? "var(--bg-sunken)" : "transparent",

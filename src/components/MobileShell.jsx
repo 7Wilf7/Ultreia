@@ -550,15 +550,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }
     clearPagerTimers();
     finishPagerGesture();
-    const jumpWindow = getMobilePagerJumpWindow(current, next, tabCount);
-    commitNavTab(next);
+    const targetWindow = getMobilePagerRenderWindow(next, tabCount);
+    commitVisualTab(next, { renderedWindow: targetWindow });
     alignTrackToTab(next);
     tabPropRef.current = next;
-    startTransition(() => {
-      commitVisualTab(next, { renderedWindow: jumpWindow });
-      setTab(next);
-      scheduleRenderedWindowTrim(next);
-    });
+    setTab(next);
+    scheduleRenderedWindowTrim(next);
   }
 
   function activateTab(idx, at) {

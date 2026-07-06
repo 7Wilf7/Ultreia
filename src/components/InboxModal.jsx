@@ -6,6 +6,7 @@ import * as db from "../lib/db";
 import { useAppDialog } from "./AppDialogContext";
 import { weekWindow } from "../utils/weeklyReport";
 import { isMemoryUpdateAction, isRaceBriefingAction } from "../utils/agentActions";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 function inboxTextParts(item) {
   return {
@@ -116,6 +117,8 @@ export function InboxModal({
   const rowEls = useRef(new Map());
   const itemsRef = useRef(items);
   const recentPointerTabPressRef = useRef({});
+  const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const externalTab = activeTab === "weekly" || activeTab === "other" ? activeTab : "daily";
   const [localTab, setLocalTab] = useState(externalTab);
   const tab = localTab;
@@ -402,7 +405,7 @@ export function InboxModal({
       >
         {t("inbox.clear_all")}
       </button>
-      <button onClick={onOpenPushSettings} style={{ ...styles.bottomButton, flex: 1 }}>
+      <button {...instantPress("inbox-push-settings", onOpenPushSettings)} style={{ ...styles.bottomButton, flex: 1 }}>
         {t("inbox.go_push_settings")}
       </button>
     </>
@@ -415,7 +418,7 @@ export function InboxModal({
       >
         {t("inbox.clear_all")}
       </button>
-      <button onClick={onOpenWeeklyReportSettings} style={{ ...styles.bottomButton, flex: 1 }}>
+      <button {...instantPress("inbox-weekly-settings", onOpenWeeklyReportSettings)} style={{ ...styles.bottomButton, flex: 1 }}>
         {t("inbox.weekly_settings")}
       </button>
     </>
@@ -466,7 +469,7 @@ export function InboxModal({
                   return (
                     <button
                       key={`${range.start}:${range.end}`}
-                      onClick={() => onOpenWeeklyReport?.(range)}
+                      {...instantTap(`weekly-range-${range.start}:${range.end}`, () => onOpenWeeklyReport?.(range))}
                       style={{
                         ...styles.weekChip,
                         borderColor: running || active ? "var(--accent)" : "var(--rule-soft)",
@@ -510,11 +513,12 @@ function tabButtonStyle(active, busy = false) {
 }
 
 function AgentActionInboxRow({ action, t, onOpen }) {
+  const instantTap = useInstantTap();
   const summary = summarizeOtherAgentAction(action, t);
   return (
     <button
       type="button"
-      onClick={onOpen}
+      {...instantTap(`agent-row-${action?.id || action?.rowId || action?.createdAt}`, onOpen)}
       style={{
         ...styles.row,
         width: "100%",

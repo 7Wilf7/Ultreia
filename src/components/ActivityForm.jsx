@@ -9,7 +9,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { weatherWindowEligible } from "../lib/weather";
 import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -93,6 +93,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
   const [saving, setSaving] = useState(false);
   // Snapshot of the form's initial state — used to detect unsaved changes when
@@ -426,12 +427,29 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           Defaults on for outdoor types, off for indoor; user decides. Hidden
           when the session is older than Caiyun's 24h window (no data to fetch). */}
       {mode !== "edit" && weatherEligible && (
-        <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, cursor: "pointer" }}>
-          <input type="checkbox" checked={form.fetchWeather}
-            onChange={e => setForm({ ...form, fetchWeather: e.target.checked })}
-            style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
+        <button
+          type="button"
+          {...instantTap("activity-form-fetch-weather", () => setForm(current => ({ ...current, fetchWeather: !current.fetchWeather })))}
+          aria-pressed={form.fetchWeather}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 14,
+            border: "none",
+            background: "transparent",
+            color: "inherit",
+            padding: 0,
+            minHeight: 0,
+            cursor: "pointer",
+            textAlign: "left",
+            touchAction: "pan-y",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span aria-hidden="true" style={inlineCheckStyle(form.fetchWeather)} />
           <span style={{ fontSize: 12, color: "var(--ink-2)" }}>{t("form.fetch_weather")}</span>
-        </label>
+        </button>
       )}
 
       <div style={{ display: "flex", gap: 8 }}>
@@ -449,3 +467,15 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
     </div>
   );
 }
+
+const inlineCheckStyle = (checked) => ({
+  width: 16,
+  height: 16,
+  minWidth: 0,
+  minHeight: 0,
+  flexShrink: 0,
+  borderRadius: 4,
+  border: `1px solid ${checked ? "var(--moss)" : "var(--rule)"}`,
+  background: checked ? "var(--moss)" : "var(--bg-elevated)",
+  boxShadow: checked ? "inset 0 0 0 3px var(--bg)" : "none",
+});

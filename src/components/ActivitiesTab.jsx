@@ -3,7 +3,7 @@ import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, RUN_GROUP_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 import {
   recommendRunType, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace, formatDateShort, formatWeekdayShort, isDuplicate,
@@ -54,6 +54,24 @@ function importFingerprint(row) {
   return [date, startedAt, type, duration, distance, ascent].join("|");
 }
 
+function previewSelectStyle(selected) {
+  return {
+    width: 16,
+    height: 16,
+    minWidth: 0,
+    minHeight: 0,
+    flexShrink: 0,
+    padding: 0,
+    borderRadius: 4,
+    border: `1px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
+    background: selected ? "var(--moss)" : "var(--bg-elevated)",
+    boxShadow: selected ? "inset 0 0 0 3px var(--bg)" : "none",
+    cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  };
+}
+
 export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs, setConfirmDelete, profile, toolbarStickyTop = 0, stickyHeader = null, loadChip = null, onCoachReviewRequest, onWeeklyReportPromptRequest }) {
   // Personalized HR zones derived once per render from the user's profile
   // (Resting HR + Max HR + selected Karvonen method). Threaded down into
@@ -73,6 +91,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null); // log.id currently being edited (in a modal)
@@ -778,7 +797,15 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               <div key={r.id} style={{ background: "var(--panel-2)", border: "1px solid var(--rule)", borderRadius: 8, padding: "8px 10px", marginBottom: 6, display: "flex", flexDirection: "column", gap: 6 }}>
                 {/* Line 1 — select · date · type · (Road Run) subtype picker */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input type="checkbox" checked={r._selected} onChange={() => setParsedRows(parsedRows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x))} style={{ width: 16, height: 16, flexShrink: 0, minHeight: 0 }} />
+                  <button
+                    type="button"
+                    {...instantTap(`parsed-row-select-${r.id}`, () => {
+                      setParsedRows(rows => rows ? rows.map(x => x.id === r.id ? { ...x, _selected: !x._selected } : x) : rows);
+                    })}
+                    aria-pressed={r._selected}
+                    aria-label={r._selected ? "Selected" : "Not selected"}
+                    style={previewSelectStyle(r._selected)}
+                  />
                   <div style={{ fontSize: 11, color: "var(--ink-3)", flexShrink: 0 }}>{formatDateShort(r.date)}</div>
                   <div style={s.tag(r.type)}>{t(`enum.activity.${r.type}`)}</div>
                   {r.type === "Road Run" && (

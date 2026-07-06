@@ -6,6 +6,7 @@ import { translate } from "../../i18n/translations";
 import { productLogoUrl } from "../../assets/logo";
 import { PRODUCT_PUBLIC_FEATURES } from "../../constants";
 import { Spinner } from "../Spinner";
+import { useInstantTap } from "../../hooks/useInstantPress";
 
 const LANG_KEY = "ultreia.lang";
 const SAVED_LOGINS_KEY = "ultreia.savedLogins";
@@ -80,6 +81,43 @@ function textButtonStyle({ align = "left", tone = "moss" } = {}) {
     lineHeight: 1.25,
     textAlign: align,
     textDecoration: "underline",
+  };
+}
+
+function rememberToggleStyle(disabled) {
+  return {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 8,
+    margin: "-6px 0 14px",
+    border: "none",
+    background: "transparent",
+    padding: 0,
+    minHeight: 0,
+    fontFamily: "var(--font-sans)",
+    fontSize: 12.5,
+    lineHeight: 1.45,
+    color: "var(--ink-3)",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.65 : 1,
+    textAlign: "left",
+    touchAction: "pan-y",
+    WebkitTapHighlightColor: "transparent",
+  };
+}
+
+function rememberCheckStyle(active) {
+  return {
+    width: 14,
+    height: 14,
+    marginTop: 2,
+    minWidth: 0,
+    minHeight: 0,
+    flexShrink: 0,
+    borderRadius: 4,
+    border: `1px solid ${active ? "var(--moss)" : "var(--rule)"}`,
+    background: active ? "var(--moss)" : "var(--bg-elevated)",
+    boxShadow: active ? "inset 0 0 0 3px var(--bg)" : "none",
   };
 }
 
@@ -341,6 +379,7 @@ function ForgotPasswordModal({ initialEmail, sendPasswordReset, tt, isMobile, on
 
 export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
   const isMobile = useIsMobile();
+  const instantTap = useInstantTap();
   const [lang, setLang] = useState(initialLang);
   const tt = (k) => translate(k, lang);
 
@@ -530,26 +569,16 @@ export function LoginScreen({ onClose, signIn, register, sendPasswordReset }) {
           />
         </div>
 
-        <label style={{
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 8,
-          margin: "-6px 0 14px",
-          fontFamily: "var(--font-sans)",
-          fontSize: 12.5,
-          lineHeight: 1.45,
-          color: "var(--ink-3)",
-          cursor: submitting ? "default" : "pointer",
-        }}>
-          <input
-            type="checkbox"
-            checked={rememberLogin}
-            onChange={e => setRememberLogin(e.target.checked)}
-            disabled={submitting}
-            style={{ marginTop: 2, accentColor: "var(--moss)" }}
-          />
+        <button
+          type="button"
+          {...instantTap("login-remember-toggle", () => setRememberLogin(v => !v))}
+          disabled={submitting}
+          aria-pressed={rememberLogin}
+          style={rememberToggleStyle(submitting)}
+        >
+          <span aria-hidden="true" style={rememberCheckStyle(rememberLogin)} />
           <span>{tt("login.remember_password")}</span>
-        </label>
+        </button>
 
         <div style={{
           display: "flex",

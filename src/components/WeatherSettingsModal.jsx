@@ -37,19 +37,20 @@ export function WeatherSettingsModal({ weatherAutoUpdate, weatherIntervalHours, 
             <button {...instantPress("weather-settings-close", closeIfIdle)} disabled={saving} style={{ ...s.close, opacity: saving ? 0.45 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Close">×</button>
           </div>
 
-          <label style={s.switchRow}>
+          <button
+            type="button"
+            {...instantPress("weather-auto-update-toggle", () => setAutoUpdate(v => !v))}
+            disabled={saving}
+            role="switch"
+            aria-checked={autoUpdate}
+            style={s.switchRowButton(saving)}
+          >
             <span>
               <span style={s.primary}>{t("weather_settings.auto_update")}</span>
               <span style={s.secondary}>{t("weather_settings.auto_update_desc")}</span>
             </span>
-            <input
-              type="checkbox"
-              checked={autoUpdate}
-              disabled={saving}
-              onChange={e => setAutoUpdate(e.target.checked)}
-              style={{ width: 20, height: 20 }}
-            />
-          </label>
+            <span aria-hidden="true" style={s.checkBox(autoUpdate)} />
+          </button>
 
           <div style={{ opacity: autoUpdate ? 1 : 0.45, pointerEvents: autoUpdate ? "auto" : "none" }}>
             <div style={{ ...s.label, marginTop: 16 }}>{t("weather_settings.interval")}</div>
@@ -112,6 +113,34 @@ const s = {
     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16,
     padding: "12px 0", borderBottom: "1px solid var(--rule-soft)",
   },
+  switchRowButton: (disabled) => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    width: "100%",
+    padding: "12px 0",
+    border: "none",
+    borderBottom: "1px solid var(--rule-soft)",
+    background: "transparent",
+    color: "inherit",
+    textAlign: "left",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  }),
+  checkBox: (checked) => ({
+    width: 20,
+    height: 20,
+    minWidth: 0,
+    minHeight: 0,
+    flexShrink: 0,
+    borderRadius: 5,
+    border: `1px solid ${checked ? "var(--accent)" : "var(--rule)"}`,
+    background: checked ? "var(--accent)" : "var(--bg-elevated)",
+    boxShadow: checked ? "inset 0 0 0 4px var(--bg)" : "none",
+  }),
   primary: { display: "block", fontSize: 14, fontWeight: 600 },
   secondary: { display: "block", marginTop: 4, fontSize: 12, color: "var(--ink-3)", lineHeight: 1.45 },
   label: { fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 },

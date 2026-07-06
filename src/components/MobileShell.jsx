@@ -144,6 +144,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const tabPropRef = useRef(tab);
   const deferredAppTabFrameRef = useRef(0);
   const deferredAppTabRef = useRef(null);
+  const deferredVisualTabFrameRef = useRef(0);
+  const deferredVisualTabTimerRef = useRef(null);
+  const deferredVisualTabRef = useRef(null);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
   const recentPointerTabPressRef = useRef({});
@@ -329,6 +332,18 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     });
   }, [cancelDeferredAppTabCommit, setTab]);
 
+  const cancelDeferredVisualTabCommit = useCallback(() => {
+    if (deferredVisualTabFrameRef.current) {
+      cancelAnimationFrame(deferredVisualTabFrameRef.current);
+      deferredVisualTabFrameRef.current = 0;
+    }
+    if (deferredVisualTabTimerRef.current) {
+      clearTimeout(deferredVisualTabTimerRef.current);
+      deferredVisualTabTimerRef.current = null;
+    }
+    deferredVisualTabRef.current = null;
+  }, []);
+
   const clearPagerTimers = useCallback(() => {
     if (pagerSettleTimerRef.current) {
       clearTimeout(pagerSettleTimerRef.current);
@@ -348,8 +363,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
     }
+    cancelDeferredVisualTabCommit();
     cancelDeferredAppTabCommit();
-  }, [cancelDeferredAppTabCommit]);
+  }, [cancelDeferredAppTabCommit, cancelDeferredVisualTabCommit]);
 
   const scheduleRenderedWindowTrim = useCallback((next, delay = 220) => {
     if (preheatedAllTabsRef.current) return;
@@ -452,11 +468,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     if (pendingAppTab != null && tab !== tabPropRef.current && tab !== pendingAppTab) {
       cancelDeferredAppTabCommit();
     }
+    const pendingVisualTab = deferredVisualTabRef.current?.next;
+    if (pendingVisualTab != null && tab !== tabPropRef.current && tab !== pendingVisualTab) {
+      cancelDeferredVisualTabCommit();
+    }
     tabPropRef.current = tab;
     if (tab !== visualTabRef.current) commitVisualTab(tab);
     else if (tab !== navTabRef.current) commitNavTab(tab);
     alignTrackToTab(tab);
-  }, [tab, alignTrackToTab, cancelDeferredAppTabCommit, commitNavTab, commitVisualTab]);
+  }, [tab, alignTrackToTab, cancelDeferredAppTabCommit, cancelDeferredVisualTabCommit, commitNavTab, commitVisualTab]);
 
   useLayoutEffect(() => {
     alignTrackToTab(visualTabRef.current);
@@ -659,10 +679,44 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPagerTimers();
     finishPagerGesture();
     const targetWindow = getMobilePagerTapWindow(current, next, tabCount);
-    commitVisualTabImmediately(next, { renderedWindow: targetWindow });
-    alignTrackToTab(next);
-    scheduleAppTabCommit(next);
-    scheduleRenderedWindowTrim(next);
+    const targetReady = shouldRenderMobilePagerPane(
+      next,
+      renderedTabsRef.current,
+      visualTabRef.current,
+      tabPropRef.current,
+    );
+    if (targetReady) {
+      commitVisualTabImmediately(next, { renderedWindow: targetWindow });
+      alignTrackToTab(next);
+      scheduleAppTabCommit(next);
+      scheduleRenderedWindowTrim(next);
+      return;
+    }
+
+    // Cold tabs can mount a full page of work. Let the press feedback paint
+    // first, then mount/switch the page on the next frame.
+    flushSync(() => {
+      commitNavTab(next);
+    });
+    deferredVisualTabRef.current = { next, renderedWindow: targetWindow };
+    deferredVisualTabFrameRef.current = requestAnimationFrame(() => {
+      deferredVisualTabFrameRef.current = 0;
+      deferredVisualTabTimerRef.current = window.setTimeout(() => {
+        deferredVisualTabTimerRef.current = null;
+        const pending = deferredVisualTabRef.current;
+        deferredVisualTabRef.current = null;
+        if (!pending) return;
+        const target = clampTabIndex(pending.next, tabCount);
+        if (target !== visualTabRef.current) {
+          commitVisualTabImmediately(target, { renderedWindow: pending.renderedWindow });
+        } else if (target !== navTabRef.current) {
+          commitNavTab(target);
+        }
+        alignTrackToTab(target);
+        scheduleAppTabCommit(target);
+        scheduleRenderedWindowTrim(target);
+      }, 0);
+    });
   }
 
   function activateTab(idx, at) {

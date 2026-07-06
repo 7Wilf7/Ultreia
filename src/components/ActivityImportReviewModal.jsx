@@ -6,7 +6,7 @@ import { useT } from "../i18n/LanguageContext";
 import { formatDuration, formatPaceFromSec } from "../utils/format";
 import { weatherWindowEligible } from "../lib/weather";
 import { ModalRoot } from "./ModalRoot";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 const DETAIL_LIMIT = 5;
 const COACH_LIMIT = 3;
@@ -42,6 +42,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
   const t = useT();
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const [page, setPage] = useState(initialPage);
   const initialFetchWeather = useMemo(
     () => workouts.some(weatherEligibleForImport),
@@ -192,14 +193,23 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
           )}
 
           <div style={{ display: "grid", gap: 10 }}>
-            <label style={rowStyle(fetchWeather && weatherEligibleCount > 0)}>
-              <input
-                type="checkbox"
-                checked={fetchWeather && weatherEligibleCount > 0}
-                disabled={weatherEligibleCount === 0}
-                onChange={e => setFetchWeather(e.target.checked)}
-                style={checkStyle}
-              />
+            <button
+              type="button"
+              {...instantTap("import-review-weather-toggle", () => {
+                if (weatherEligibleCount > 0) setFetchWeather(value => !value);
+              })}
+              disabled={weatherEligibleCount === 0}
+              aria-pressed={fetchWeather && weatherEligibleCount > 0}
+              style={{
+                ...rowStyle(fetchWeather && weatherEligibleCount > 0),
+                opacity: weatherEligibleCount === 0 ? 0.55 : 1,
+                width: "100%",
+                textAlign: "left",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <span aria-hidden="true" style={checkMarkStyle(fetchWeather && weatherEligibleCount > 0)} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={labelStyle}>{t("activities.import_review_weather_title")}</span>
                 <span style={hintStyle}>
@@ -208,7 +218,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                     : t("activities.import_review_weather_none")}
                 </span>
               </span>
-            </label>
+            </button>
 
             {detailMode ? (
               <label style={fieldBlockStyle}>
@@ -281,13 +291,25 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
             )}
 
             <div style={fieldBlockStyle}>
-              <label style={{ display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={askCoach}
-                  onChange={e => setAskCoach(e.target.checked)}
-                  style={checkStyle}
-                />
+              <button
+                type="button"
+                {...instantTap("import-review-coach-toggle", () => setAskCoach(value => !value))}
+                aria-pressed={askCoach}
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 9,
+                  cursor: "pointer",
+                  width: "100%",
+                  border: "none",
+                  background: "transparent",
+                  padding: 0,
+                  textAlign: "left",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >
+                <span aria-hidden="true" style={checkMarkStyle(askCoach)} />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={labelStyle}>{t("activities.import_review_coach_title")}</span>
                   <span style={hintStyle}>
@@ -296,7 +318,7 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
                       : t("activities.import_review_coach_bulk", { n: coachCount })}
                   </span>
                 </span>
-              </label>
+              </button>
               {askCoach && (
                 <textarea
                   rows={3}
@@ -339,13 +361,17 @@ export function ActivityImportReviewModal({ workouts, initialPage = 0, onClose, 
   );
 }
 
-const checkStyle = {
+const checkMarkStyle = (active) => ({
   width: 16,
   height: 16,
   flexShrink: 0,
   minHeight: 0,
   marginTop: 1,
-};
+  borderRadius: 4,
+  border: `1px solid ${active ? "var(--moss)" : "var(--rule)"}`,
+  background: active ? "var(--moss)" : "var(--bg-elevated)",
+  boxShadow: active ? "inset 0 0 0 3px var(--bg)" : "none",
+});
 
 const rowStyle = (active) => ({
   display: "flex",

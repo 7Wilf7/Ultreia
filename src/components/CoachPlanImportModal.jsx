@@ -10,7 +10,7 @@ import { planFields } from "../utils/planFields";
 import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 // Each row in the modal is a draft proposal — user can toggle, edit, or
 // remove. Internal `_id` keeps React's key stable; `_selected` drives the
@@ -271,6 +271,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
   const agentAction = action || buildCreatePlansAction(plans);
   const actionPlans = filterActionableProactivePlans(getCreatePlans(agentAction), agentAction);
   const [items, setItems] = useState(() => actionPlans.map(buildDraft));
@@ -613,9 +614,13 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                 }}>
                   {/* Top row: checkbox + type chip + delete */}
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
-                    <input type="checkbox" checked={it._selected}
-                      onChange={() => patch(it._id, { _selected: !it._selected })}
-                      style={{ width: 16, height: 16, accentColor: "var(--ink-1)" }} />
+                    <button
+                      type="button"
+                      {...instantTap(`coach-plan-select-${it._id}`, () => patch(it._id, { _selected: !it._selected }))}
+                      aria-pressed={it._selected}
+                      aria-label={it._selected ? "Selected" : "Not selected"}
+                      style={selectButtonStyle(it._selected)}
+                    />
                     {isRest ? (
                       <div style={{
                         fontSize: 11,
@@ -838,4 +843,22 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
     </div>
     </ModalRoot>
   );
+}
+
+function selectButtonStyle(selected) {
+  return {
+    width: 18,
+    height: 18,
+    minWidth: 0,
+    minHeight: 0,
+    flexShrink: 0,
+    padding: 0,
+    borderRadius: 4,
+    border: `1px solid ${selected ? "var(--ink-1)" : "var(--rule)"}`,
+    background: selected ? "var(--ink-1)" : "var(--bg-elevated)",
+    boxShadow: selected ? "inset 0 0 0 4px var(--bg)" : "none",
+    cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  };
 }

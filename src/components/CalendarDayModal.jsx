@@ -155,6 +155,20 @@ const navBtn = {
   touchAction: "manipulation",
 };
 
+function planKeySessionToggleStyle(active) {
+  return {
+    width: 18,
+    height: 18,
+    minWidth: 0,
+    minHeight: 0,
+    flexShrink: 0,
+    borderRadius: 5,
+    border: `1px solid ${active ? "var(--moss)" : "var(--rule)"}`,
+    background: active ? "var(--moss)" : "var(--bg-elevated)",
+    boxShadow: active ? "inset 0 0 0 4px var(--bg)" : "none",
+  };
+}
+
 function getDaySheetHeight({ isMobile, isPast, isToday }) {
   if (isPast) return isMobile ? "min(70dvh, calc(100dvh - 72px))" : "min(70vh, 720px)";
   if (isToday) return isMobile ? "min(64dvh, calc(100dvh - 72px))" : "min(64vh, 680px)";
@@ -755,7 +769,11 @@ export function CalendarDayModal({
                       />
                     </div>
                   )}
-                  <label style={{
+                  <button
+                    type="button"
+                    {...instantTap("calendar-plan-key-session-toggle", () => setPlanKeySession(value => !value))}
+                    aria-pressed={planKeySession}
+                    style={{
                     gridColumn: "1 / -1",
                     display: "flex",
                     alignItems: "center",
@@ -765,6 +783,9 @@ export function CalendarDayModal({
                     background: planKeySession ? "var(--moss-bg)" : "var(--bg-elevated)",
                     padding: "9px 10px",
                     cursor: "pointer",
+                    textAlign: "left",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                   }}>
                     <span style={{ minWidth: 0 }}>
                       <span style={{ display: "block", fontSize: 13, fontWeight: 650, color: "var(--ink-1)" }}>
@@ -774,13 +795,8 @@ export function CalendarDayModal({
                         {t("calendar.plan_key_session_hint")}
                       </span>
                     </span>
-                    <input
-                      type="checkbox"
-                      checked={planKeySession}
-                      onChange={e => setPlanKeySession(e.target.checked)}
-                      style={{ width: 18, height: 18, accentColor: "var(--moss)" }}
-                    />
-                  </label>
+                    <span aria-hidden="true" style={planKeySessionToggleStyle(planKeySession)} />
+                  </button>
                   {planF.distance && (
                     <div>
                       <div style={{ ...s.muted, fontSize: 11, marginBottom: 4 }}>{t("form.distance")} (km)</div>

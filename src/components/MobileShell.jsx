@@ -1,4 +1,5 @@
 import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
@@ -277,6 +278,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     setNavTab(clamped);
   }, [tabCount]);
 
+  const commitVisualTabImmediately = useCallback((next, options) => {
+    flushSync(() => {
+      commitVisualTab(next, options);
+    });
+  }, [commitVisualTab]);
+
   const notifyPagerDragActive = useCallback((active) => {
     if (pagerDragActiveNotifiedRef.current === active) return;
     pagerDragActiveNotifiedRef.current = active;
@@ -359,7 +366,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     alignTrackToTab(clamped);
     if (clamped !== tabPropRef.current) {
       tabPropRef.current = clamped;
-      startTransition(() => setTab(clamped));
+      setTab(clamped);
     }
     finishPagerGesture();
     scheduleRenderedWindowTrim(clamped);
@@ -617,10 +624,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     clearPagerTimers();
     finishPagerGesture();
     const targetWindow = getMobilePagerRenderWindow(next, tabCount);
-    commitVisualTab(next, { renderedWindow: targetWindow });
+    commitVisualTabImmediately(next, { renderedWindow: targetWindow });
     alignTrackToTab(next);
     tabPropRef.current = next;
-    startTransition(() => setTab(next));
+    setTab(next);
     scheduleRenderedWindowTrim(next);
   }
 

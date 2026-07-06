@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
@@ -134,9 +134,7 @@ export function InboxModal({
   const selectTab = useCallback((next) => {
     setLocalTab(next);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    startTransition(() => {
-      onTabChange?.(next);
-    });
+    onTabChange?.(next);
   }, [onTabChange]);
 
   const pressTab = useCallback((next, event) => {

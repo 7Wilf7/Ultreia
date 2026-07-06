@@ -27,6 +27,13 @@ export function getMobilePagerJumpWindow(from, to, count) {
   );
 }
 
+export function getMobilePagerTapWindow(from, to, count) {
+  return mergeTabWindows([
+    clampTab(from, count),
+    clampTab(to, count),
+  ]);
+}
+
 export function shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, propTab) {
   return renderedTabs.includes(idx) || idx === visualTab || idx === propTab;
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
+  getMobilePagerTapWindow,
   resolveMobilePagerTouchStart,
   shouldOuterPagerHandleSwipe,
   shouldRenderMobilePagerPane,
@@ -22,9 +23,15 @@ describe("MobileShell pager render window", () => {
     expect(getMobilePagerRenderWindow(3, 5)).toEqual([2, 3, 4]);
   });
 
-  it("keeps crossed panes mounted for direct bottom-nav jumps", () => {
+  it("keeps crossed panes mounted while settling pager jumps", () => {
     expect(getMobilePagerJumpWindow(0, 4, 5)).toEqual([0, 1, 2, 3, 4]);
     expect(getMobilePagerJumpWindow(2, 3, 5)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("keeps bottom-nav tap mounts to current and target panes only", () => {
+    expect(getMobilePagerTapWindow(0, 4, 5)).toEqual([0, 4]);
+    expect(getMobilePagerTapWindow(2, 3, 5)).toEqual([2, 3]);
+    expect(getMobilePagerTapWindow(2, 2, 5)).toEqual([2]);
   });
 
   it("always renders the visible tab even if the render window is stale", () => {

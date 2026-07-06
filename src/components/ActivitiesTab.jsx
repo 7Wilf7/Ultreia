@@ -694,7 +694,12 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
               style={{ ...s.btn, opacity: unknownGroups.every(g => unknownChoices[g.orig]) ? 1 : 0.5 }}>
               {t("activities.unknown_type_apply")}
             </button>
-            <button onClick={() => { setUnknownTypeRows(null); setUnknownChoices({}); setUploadMsg(""); }} style={s.btnGhost}>{t("common.cancel")}</button>
+            <button
+              {...instantPress("unknown-type-cancel", () => { setUnknownTypeRows(null); setUnknownChoices({}); setUploadMsg(""); })}
+              style={{ ...s.btnGhost, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+            >
+              {t("common.cancel")}
+            </button>
           </div>
         </div>
       )}

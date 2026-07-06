@@ -6,6 +6,7 @@ import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./I
 import {
   getMobilePagerJumpWindow,
   getMobilePagerRenderWindow,
+  getMobilePagerTapWindow,
   mergeTabWindows,
   resolveMobilePagerTouchStart,
   shouldRenderMobilePagerPane,
@@ -623,7 +624,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     }
     clearPagerTimers();
     finishPagerGesture();
-    const targetWindow = getMobilePagerRenderWindow(next, tabCount);
+    const targetWindow = getMobilePagerTapWindow(current, next, tabCount);
     commitVisualTabImmediately(next, { renderedWindow: targetWindow });
     alignTrackToTab(next);
     tabPropRef.current = next;

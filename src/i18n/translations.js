@@ -1066,7 +1066,6 @@ const dict = {
   "races.weather_forecast":   { en: "Race-day forecast",     zh: "比赛日预报" },
   "races.weather_climate":    { en: "Typical for the date",  zh: "往年同期" },
   "races.weather_actual":     { en: "Actual on race day",    zh: "当天实况" },
-  "races.history_actual_badge": { en: "Actual",              zh: "实际" },
   "races.weather_toggle":     { en: "Weather",               zh: "天气" },
   "races.weather_feels":      { en: "feels ",               zh: "体感" },
   "races.weather_rain":       { en: "rain ",                zh: "降水" },

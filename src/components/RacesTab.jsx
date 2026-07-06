@@ -1003,9 +1003,9 @@ export function RacesTab({
     //   Target row 1 = priority · category tag · subtype · countdown.
     //   Target row 2 = date · race name (ellipsised) · time/ascent suffix.
     //   Target row 3 = distance + ascent for Trail.
-    //   History row 1 = category tag · Actual.
+    //   History row 1 = category tag · subtype · result time.
     //   History row 2 = race name only, allowed to wrap.
-    //   History row 3 = subtype / date / distance / ascent / time / ITRA when present.
+    //   History row 3 = date / distance / ascent / ITRA when present.
     if (isNarrow) {
       const isTrailLike = r.category === "Trail";
       // Row 2 suffix: time (always) + ascent (only when NOT trail, since
@@ -1028,11 +1028,9 @@ export function RacesTab({
           ? (r.category === "Hyrox" ? t(`enum.hyrox.${r.subtype}`) : r.subtype)
           : "";
         const historyDataParts = [
-          subtypeText,
           r.date || "",
           distStr,
           ascStr,
-          timeStr,
           r.itraScore ? `ITRA ${r.itraScore}` : "",
         ].filter(Boolean);
         return (
@@ -1064,15 +1062,25 @@ export function RacesTab({
                   />
                 </span>
               )}
-              <span style={{
-                ...s.subTag,
-                color: "var(--ink-2)",
-                borderColor: "var(--rule-soft)",
-                background: "oklch(0.18 0.010 145 / 0.70)",
-                flexShrink: 0,
-              }}>
-                {t("races.history_actual_badge")}
-              </span>
+              {subtypeText && (
+                <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{subtypeText}</span>
+              )}
+              {timeStr && (
+                <span style={{
+                  ...s.dataNum,
+                  fontSize: 12,
+                  fontWeight: 750,
+                  lineHeight: 1.35,
+                  padding: "2px 8px",
+                  borderRadius: 6,
+                  color: "var(--accent-dark)",
+                  background: "var(--accent-soft)",
+                  border: "1px solid var(--accent)",
+                  flexShrink: 0,
+                }}>
+                  {timeStr}
+                </span>
+              )}
             </div>
             <div
               title={r.name}

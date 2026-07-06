@@ -142,6 +142,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const preheatHandleRef = useRef(null);
   const preheatedAllTabsRef = useRef(false);
   const tabPropRef = useRef(tab);
+  const deferredAppTabFrameRef = useRef(0);
+  const deferredAppTabRef = useRef(null);
   const lastHapticAt = useRef(0);
   const lastTabTap = useRef({ idx: -1, at: 0 });
   const recentPointerTabPressRef = useRef({});
@@ -297,6 +299,36 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     setTrackOffset(clamped * width);
   }, [measurePagerWidth, setTrackOffset, tabCount]);
 
+  const cancelDeferredAppTabCommit = useCallback(() => {
+    if (deferredAppTabFrameRef.current) {
+      cancelAnimationFrame(deferredAppTabFrameRef.current);
+      deferredAppTabFrameRef.current = 0;
+    }
+    deferredAppTabRef.current = null;
+  }, []);
+
+  const commitAppTabNow = useCallback((next) => {
+    cancelDeferredAppTabCommit();
+    if (next === tabPropRef.current) return;
+    tabPropRef.current = next;
+    setTab(next);
+  }, [cancelDeferredAppTabCommit, setTab]);
+
+  const scheduleAppTabCommit = useCallback((next) => {
+    cancelDeferredAppTabCommit();
+    if (next === tabPropRef.current) return;
+    deferredAppTabRef.current = next;
+    // Let the locally committed pane and bottom-nav highlight paint first.
+    deferredAppTabFrameRef.current = requestAnimationFrame(() => {
+      deferredAppTabFrameRef.current = 0;
+      const pending = deferredAppTabRef.current;
+      deferredAppTabRef.current = null;
+      if (pending == null || pending === tabPropRef.current) return;
+      tabPropRef.current = pending;
+      setTab(pending);
+    });
+  }, [cancelDeferredAppTabCommit, setTab]);
+
   const clearPagerTimers = useCallback(() => {
     if (pagerSettleTimerRef.current) {
       clearTimeout(pagerSettleTimerRef.current);
@@ -316,7 +348,8 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       clearTimeout(renderTrimTimerRef.current);
       renderTrimTimerRef.current = null;
     }
-  }, []);
+    cancelDeferredAppTabCommit();
+  }, [cancelDeferredAppTabCommit]);
 
   const scheduleRenderedWindowTrim = useCallback((next, delay = 220) => {
     if (preheatedAllTabsRef.current) return;
@@ -365,13 +398,10 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const clamped = clampTabIndex(Math.round(left / Math.max(1, width)), tabCount);
     commitVisualTab(clamped);
     alignTrackToTab(clamped);
-    if (clamped !== tabPropRef.current) {
-      tabPropRef.current = clamped;
-      setTab(clamped);
-    }
+    commitAppTabNow(clamped);
     finishPagerGesture();
     scheduleRenderedWindowTrim(clamped);
-  }, [alignTrackToTab, commitVisualTab, finishPagerGesture, measurePagerWidth, scheduleRenderedWindowTrim, setTab, tabCount]);
+  }, [alignTrackToTab, commitAppTabNow, commitVisualTab, finishPagerGesture, measurePagerWidth, scheduleRenderedWindowTrim, tabCount]);
 
   const animatePagerToTab = useCallback((next) => {
     if (pagerSettleTimerRef.current) {
@@ -418,11 +448,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }, [commitVisualTab, completePagerFromOffset, measurePagerWidth, setTrackOffset, tabCount]);
 
   useLayoutEffect(() => {
+    const pendingAppTab = deferredAppTabRef.current;
+    if (pendingAppTab != null && tab !== tabPropRef.current && tab !== pendingAppTab) {
+      cancelDeferredAppTabCommit();
+    }
     tabPropRef.current = tab;
     if (tab !== visualTabRef.current) commitVisualTab(tab);
     else if (tab !== navTabRef.current) commitNavTab(tab);
     alignTrackToTab(tab);
-  }, [tab, alignTrackToTab, commitNavTab, commitVisualTab]);
+  }, [tab, alignTrackToTab, cancelDeferredAppTabCommit, commitNavTab, commitVisualTab]);
 
   useLayoutEffect(() => {
     alignTrackToTab(visualTabRef.current);
@@ -627,8 +661,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const targetWindow = getMobilePagerTapWindow(current, next, tabCount);
     commitVisualTabImmediately(next, { renderedWindow: targetWindow });
     alignTrackToTab(next);
-    tabPropRef.current = next;
-    setTab(next);
+    scheduleAppTabCommit(next);
     scheduleRenderedWindowTrim(next);
   }
 

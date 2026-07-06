@@ -153,6 +153,23 @@ function writeObjectCache(key, value) {
   } catch { /* cache is best-effort only */ }
 }
 
+function readArrayCache(key) {
+  if (!key) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeArrayCache(key, values) {
+  if (!key || !Array.isArray(values)) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(values));
+  } catch { /* cache is best-effort only */ }
+}
+
 function profileCacheKey(userId) {
   return `ultreia.profileCache.v1:${userId}`;
 }
@@ -183,24 +200,62 @@ function workoutCacheKey(userId) {
 
 function readWorkoutCache(userId) {
   if (!userId) return [];
-  try {
-    const parsed = JSON.parse(localStorage.getItem(workoutCacheKey(userId)) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return readArrayCache(workoutCacheKey(userId));
 }
 
 function writeWorkoutCache(userId, workouts) {
   if (!userId || !Array.isArray(workouts)) return;
-  try {
-    const lean = workouts.slice(0, WORKOUT_CACHE_LIMIT).map((workout) => {
-      const copy = { ...workout };
-      delete copy.gpsTrack;
-      return copy;
-    });
-    localStorage.setItem(workoutCacheKey(userId), JSON.stringify(lean));
-  } catch { /* cache is best-effort only */ }
+  const lean = workouts.slice(0, WORKOUT_CACHE_LIMIT).map((workout) => {
+    const copy = { ...workout };
+    delete copy.gpsTrack;
+    return copy;
+  });
+  writeArrayCache(workoutCacheKey(userId), lean);
+}
+
+function racesCacheKey(userId) {
+  return `ultreia.racesCache.v1:${userId}`;
+}
+
+function readRaceCache(userId) {
+  if (!userId) return [];
+  return readArrayCache(racesCacheKey(userId));
+}
+
+function writeRaceCache(userId, races) {
+  if (!userId || !Array.isArray(races)) return;
+  writeArrayCache(racesCacheKey(userId), races.filter(r => r && !r.isOptimistic));
+}
+
+function coachMessagesCacheKey(userId) {
+  return `ultreia.coachMessagesCache.v1:${userId}`;
+}
+
+function readCoachMessagesCache(userId) {
+  if (!userId) return [];
+  return readArrayCache(coachMessagesCacheKey(userId));
+}
+
+function writeCoachMessagesCache(userId, messages) {
+  if (!userId || !Array.isArray(messages)) return;
+  const persisted = messages
+    .filter(m => m && !m.isLocal && !m.isStreaming)
+    .slice(-COACH_MESSAGE_CACHE_LIMIT);
+  writeArrayCache(coachMessagesCacheKey(userId), persisted);
+}
+
+function dailyNotesCacheKey(userId) {
+  return `ultreia.dailyNotesCache.v1:${userId}`;
+}
+
+function readDailyNotesCache(userId) {
+  if (!userId) return [];
+  return readArrayCache(dailyNotesCacheKey(userId));
+}
+
+function writeDailyNotesCache(userId, notes) {
+  if (!userId || !Array.isArray(notes)) return;
+  writeArrayCache(dailyNotesCacheKey(userId), notes.filter(n => n && !n.isOptimistic));
 }
 
 function normalizeWeatherLocation(location) {
@@ -624,7 +679,8 @@ const BOOT_LOGO_RIDGE_PATHS = [
 const BOOT_LOGO_ROUTE_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512 Z";
 const BOOT_LOGO_MARK_PATH = [...BOOT_LOGO_RIDGE_PATHS, BOOT_LOGO_ROUTE_PATH].join(" ");
 const RUNNER_STATUS_POLL_MS = 2_000;
-const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts", "races", "messages", "notes"]);
+const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
+const COACH_MESSAGE_CACHE_LIMIT = 200;
 
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
@@ -942,13 +998,13 @@ function DataLoadErrorScreen({ onRetry, onSignOut }) {
   const copy = lang === "zh"
     ? {
         title: "核心数据没有加载成功",
-        body: "这通常是网络、登录态或数据库请求超时。为了避免误以为训练、赛事或教练记录被清空，Ultreia 不会带着缺失数据进入应用。",
+        body: "这通常是网络、登录态或数据库请求超时。为了避免误以为训练记录被清空，Ultreia 不会带着缺失的训练数据进入应用。",
         retry: "重新加载",
         signOut: "退出登录",
       }
     : {
         title: "Core data did not load",
-        body: "This is usually a network, session, or database timeout. To avoid showing empty training, race, or coach data by mistake, Ultreia will not enter the app with missing core data.",
+        body: "This is usually a network, session, or database timeout. To avoid showing empty training data by mistake, Ultreia will not enter the app with missing workout data.",
         retry: "Retry",
         signOut: "Sign out",
       };
@@ -1035,14 +1091,15 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const bootProfileCacheRef = useRef(readProfileCache(user.id));
   const bootSettingsCacheRef = useRef(readSettingsCache(user.id));
   const bootHadWorkoutCacheRef = useRef(readWorkoutCache(user.id).length > 0);
+  const bootDailyNotesCacheRef = useRef(readDailyNotesCache(user.id));
   // Per-workout write sequence — lets a background save ignore its own result
   // when a newer optimistic write has already landed (e.g. mark done then
   // immediately undo: the slower done response must not clobber pending).
   const logWriteSeqRef = useRef(new Map());
-  const [races, setRaces] = useState([]);
-  const [chatMessages, setChatMessages] = useState([]);
-  const [dailyNotes, setDailyNotes] = useState([]);
-  const [dailyNotesHydrated, setDailyNotesHydrated] = useState(false);
+  const [races, setRaces] = useState(() => readRaceCache(user.id));
+  const [chatMessages, setChatMessages] = useState(() => readCoachMessagesCache(user.id));
+  const [dailyNotes, setDailyNotes] = useState(() => bootDailyNotesCacheRef.current);
+  const [dailyNotesHydrated, setDailyNotesHydrated] = useState(() => bootDailyNotesCacheRef.current.length > 0);
   const [agentActions, setAgentActions] = useState([]);
   const [memoryFacts, setMemoryFacts] = useState([]);
 
@@ -1091,10 +1148,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const allowBootCache = criticalOnly && options.allowBootCache === true;
         const cachedProfile = allowBootCache ? bootProfileCacheRef.current : null;
         const cachedSettings = allowBootCache ? bootSettingsCacheRef.current : null;
-        const skipProfileFetch = !!cachedProfile;
-        const skipSettingsFetch = !!cachedSettings;
+        const skipProfileSettingsFetch = options.skipProfileSettings === true;
+        const skipProfileFetch = skipProfileSettingsFetch || !!cachedProfile;
+        const skipSettingsFetch = skipProfileSettingsFetch || !!cachedSettings;
         const skipWorkoutFetch = criticalOnly && options.allowWorkoutCache === true && bootHadWorkoutCacheRef.current;
-        const skipCoreDataFetch = options.skipCoreData === true;
+        const skipCoreDataFetch = options.skipCoreData === true || (criticalOnly && options.deferCoreData === true);
         const coreDataTasks = [
           ["races", () => db.races.listMyRaces()],
           ["messages", () => db.coachMessages.listMyMessages()],
@@ -1152,46 +1210,48 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
         // Settings — same defensive merge.
         const settingsData = result.settings?.error ? null : result.settings?.value;
-        if (settingsData) {
-          setCoachConfigState({
-            ...DEFAULT_COACH_CONFIG,
-            ...(settingsData.coachConfig || {}),
-          });
-          setDefaultLocationState({
-            lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
-            lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
-            name: settingsData.defaultLocationName || "",
-          });
-          setPushEnabledState(settingsData.pushEnabled === true);
-          setPushHoursState(Array.isArray(settingsData.pushHours) ? settingsData.pushHours : []);
-          setPushTimesState(Array.isArray(settingsData.pushTimes) ? settingsData.pushTimes : []);
-          setPushTimezoneState(settingsData.pushTimezone || "");
-          setWeeklyReportEnabledState(settingsData.weeklyReportEnabled === true);
-          setWeeklyReportWeekdayState(cleanWeeklyReportWeekday(settingsData.weeklyReportWeekday));
-          setWeeklyReportTimeState(cleanWeeklyReportTime(settingsData.weeklyReportTime));
-          setWeeklyReportAfterSundayImportState(settingsData.weeklyReportAfterSundayImport !== false);
-          setWeatherSettingsState({
-            autoUpdate: settingsData.weatherAutoUpdate !== false,
-            intervalHours: [3, 6, 12, 24].includes(Number(settingsData.weatherIntervalHours))
-              ? Number(settingsData.weatherIntervalHours)
-              : getStoredWeatherSettings().intervalHours,
-          });
-          if (!result.settings?.cached) writeSettingsCache(user.id, settingsData);
-        }
+        if (result.settings && !result.settings.error) {
+          if (settingsData) {
+            setCoachConfigState({
+              ...DEFAULT_COACH_CONFIG,
+              ...(settingsData.coachConfig || {}),
+            });
+            setDefaultLocationState({
+              lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
+              lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
+              name: settingsData.defaultLocationName || "",
+            });
+            setPushEnabledState(settingsData.pushEnabled === true);
+            setPushHoursState(Array.isArray(settingsData.pushHours) ? settingsData.pushHours : []);
+            setPushTimesState(Array.isArray(settingsData.pushTimes) ? settingsData.pushTimes : []);
+            setPushTimezoneState(settingsData.pushTimezone || "");
+            setWeeklyReportEnabledState(settingsData.weeklyReportEnabled === true);
+            setWeeklyReportWeekdayState(cleanWeeklyReportWeekday(settingsData.weeklyReportWeekday));
+            setWeeklyReportTimeState(cleanWeeklyReportTime(settingsData.weeklyReportTime));
+            setWeeklyReportAfterSundayImportState(settingsData.weeklyReportAfterSundayImport !== false);
+            setWeatherSettingsState({
+              autoUpdate: settingsData.weatherAutoUpdate !== false,
+              intervalHours: [3, 6, 12, 24].includes(Number(settingsData.weatherIntervalHours))
+                ? Number(settingsData.weatherIntervalHours)
+                : getStoredWeatherSettings().intervalHours,
+            });
+            if (!result.settings?.cached) writeSettingsCache(user.id, settingsData);
+          }
 
-        // Language: a saved setting wins; otherwise fall back to the choice the
-        // user made on the login screen (stored in localStorage). For a brand-new
-        // user with no saved lang, seed it into settings so it persists server-
-        // side and the onboarding tour opens in their chosen language.
-        let preLang = null;
-        try {
-          const v = localStorage.getItem("ultreia.lang");
-          if (v === "zh" || v === "en") preLang = v;
-        } catch { /* private mode */ }
-        const savedLang = settingsData?.lang;
-        setLangState(savedLang || preLang || DEFAULT_LANG);
-        if (!savedLang && preLang) {
-          db.userSettings.updateMySettings({ lang: preLang }).catch(() => {});
+          // Language: a saved setting wins; otherwise fall back to the choice the
+          // user made on the login screen (stored in localStorage). For a brand-new
+          // user with no saved lang, seed it into settings so it persists server-
+          // side and the onboarding tour opens in their chosen language.
+          let preLang = null;
+          try {
+            const v = localStorage.getItem("ultreia.lang");
+            if (v === "zh" || v === "en") preLang = v;
+          } catch { /* private mode */ }
+          const savedLang = settingsData?.lang;
+          setLangState(savedLang || preLang || DEFAULT_LANG);
+          if (!savedLang && preLang) {
+            db.userSettings.updateMySettings({ lang: preLang }).catch(() => {});
+          }
         }
 
         // Workouts are critical. Do not let a failed refresh look like the
@@ -1214,10 +1274,16 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
         // Races — DAL returns created_at desc; RacesTab re-sorts internally
         // (target by date asc, history by date desc).
-        if (result.races && !result.races.error) setRaces(result.races.value);
+        if (result.races && !result.races.error) {
+          setRaces(result.races.value);
+          writeRaceCache(user.id, result.races.value);
+        }
 
         // Coach messages — DAL returns created_at asc (oldest first).
-        if (result.messages && !result.messages.error) setChatMessages(result.messages.value);
+        if (result.messages && !result.messages.error) {
+          setChatMessages(result.messages.value);
+          writeCoachMessagesCache(user.id, result.messages.value);
+        }
 
         // Agent actions — cloud source of truth for Action Card lifecycle.
         if (result.agentActions && !result.agentActions.error) {
@@ -1232,9 +1298,16 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // order isn't critical; we keep the DAL ordering as-is.
         if (result.notes && !result.notes.error) {
           setDailyNotes(result.notes.value);
+          writeDailyNotesCache(user.id, result.notes.value);
           setDailyNotesHydrated(true);
         } else if (result.notes?.error) {
-          setDailyNotesHydrated(false);
+          const cached = readDailyNotesCache(user.id);
+          if (cached.length) {
+            setDailyNotes(cached);
+            setDailyNotesHydrated(true);
+          } else {
+            setDailyNotesHydrated(false);
+          }
         }
 
         if (result.trainingLocations && !result.trainingLocations.error) {
@@ -1263,10 +1336,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       try {
         setDataLoading(true);
         setDataLoadError(null);
-        await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: true });
+        await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: true, deferCoreData: true });
         if (cancelled) return;
         setDataLoading(false);
-        loadData({ skipCoreData: true }).catch((err) => {
+        loadData({ skipProfileSettings: true }).catch((err) => {
           if (cancelled) return;
           if (err?.critical) {
             console.error("[boot hydration] critical data load:", err);
@@ -1325,8 +1398,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     setDataLoading(true);
     setDataLoadError(null);
     try {
-      await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: false });
-      loadData({ skipCoreData: true }).catch((err) => {
+      await loadData({ criticalOnly: true, allowBootCache: true, allowWorkoutCache: true, deferCoreData: true });
+      loadData({ skipProfileSettings: true }).catch((err) => {
         if (err?.critical) {
           console.error("[retry hydration] critical data load:", err);
           setDataLoadError(err);
@@ -1781,7 +1854,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     (async () => {
       try {
         const created = await db.races.createRace(raceData);
-        setRaces(prev => prev.map(r => r.id === tempId ? created : r));
+        setRaces(prev => {
+          const next = prev.map(r => r.id === tempId ? created : r);
+          writeRaceCache(user.id, next);
+          return next;
+        });
       } catch (err) {
         console.error("[addRace] background save failed:", err);
         setRaces(prev => prev.filter(r => r.id !== tempId));
@@ -1802,7 +1879,11 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     (async () => {
       try {
         const updated = await db.races.updateRace(id, patch);
-        setRaces(prev => prev.map(r => r.id === id ? updated : r));
+        setRaces(prev => {
+          const next = prev.map(r => r.id === id ? updated : r);
+          writeRaceCache(user.id, next);
+          return next;
+        });
       } catch (err) {
         console.error("[updateRace] background save failed:", err);
         if (snapshot) setRaces(prev => prev.map(r => r.id === id ? snapshot : r));
@@ -1827,6 +1908,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     (async () => {
       try {
         await db.races.deleteRace(id);
+        setRaces(prev => {
+          writeRaceCache(user.id, prev);
+          return prev;
+        });
       } catch (err) {
         console.error("[deleteRace] background delete failed:", err);
         if (removed) setRaces(prev => [removed, ...prev]);
@@ -1847,6 +1932,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     (async () => {
       try {
         await db.coachMessages.clearAllMessages();
+        writeCoachMessagesCache(user.id, []);
       } catch (err) {
         console.error("[clearAllChatMessages] background failed:", err);
         setChatMessages(snapshot);
@@ -1882,7 +1968,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const updated = await db.dailyNotes.setDailyTags(date, tags, "");
         setDailyNotes(prev => {
           const without = prev.filter(n => n.date !== date);
-          return updated ? [updated, ...without] : without;
+          const next = updated ? [updated, ...without] : without;
+          writeDailyNotesCache(user.id, next);
+          return next;
         });
       } catch (err) {
         console.error("[setDailyTags] background save failed:", err);
@@ -1918,7 +2006,9 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const updated = await db.dailyNotes.setReadiness(date, vals);
         setDailyNotes(prev => {
           const without = prev.filter(n => n.date !== date);
-          return updated ? [updated, ...without] : without;
+          const next = updated ? [updated, ...without] : without;
+          writeDailyNotesCache(user.id, next);
+          return next;
         });
       } catch (err) {
         console.error("[setReadiness] background save failed:", err);
@@ -2963,6 +3053,7 @@ function AppShell({
         .filter(m => !removedIds.has(m.id))
         .sort((a, b) => String(a.createdAt || "").localeCompare(String(b.createdAt || "")));
       setChatMessages(nextMessages);
+      writeCoachMessagesCache(user.id, nextMessages);
       return nextMessages;
     } catch (err) {
       if (savedSummary?.id) {
@@ -3089,7 +3180,11 @@ function AppShell({
 
     try {
       const saved = await db.coachMessages.appendMessage("user", visibleUserMsg);
-      setChatMessages(prev => prev.map(m => m.id === optimisticId ? saved : m));
+      setChatMessages(prev => {
+        const next = prev.map(m => m.id === optimisticId ? saved : m);
+        writeCoachMessagesCache(user.id, next);
+        return next;
+      });
     } catch (err) {
       setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
       window.alert("Failed to save message: " + err.message);
@@ -3161,7 +3256,11 @@ function AppShell({
       try {
         const saved = await db.coachMessages.appendMessage("assistant", finalContent);
         if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
-        setChatMessages(prev => prev.map(m => m.id === streamingId ? saved : m));
+        setChatMessages(prev => {
+          const next = prev.map(m => m.id === streamingId ? saved : m);
+          writeCoachMessagesCache(user.id, next);
+          return next;
+        });
       } catch (err) {
         if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
         setChatMessages(prev => prev.map(m => (

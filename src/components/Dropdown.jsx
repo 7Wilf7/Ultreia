@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { s } from "../styles";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Reusable in-app dropdown — replaces native <select> for a consistent look
 // across the app + multi-select support. Modeled on the GlobalFilter ("All
@@ -31,6 +32,7 @@ export function Dropdown({
   const [menuStyle, setMenuStyle] = useState(null);
   const wrapRef = useRef(null);
   const menuRef = useRef(null);
+  const instantPress = useInstantPress();
 
   useEffect(() => {
     if (!open) return;
@@ -94,6 +96,10 @@ export function Dropdown({
     }
   }
 
+  function toggleOpen() {
+    setOpen(o => !o);
+  }
+
   const triggerStyleBase = variant === "inline"
     ? {
         background: "transparent", border: "none",
@@ -118,7 +124,8 @@ export function Dropdown({
       display: variant === "field" ? "block" : "inline-block",
     }}>
       <button type="button" disabled={disabled} aria-label={ariaLabel}
-        onClick={() => setOpen(o => !o)} style={{ ...triggerStyleBase, ...triggerStyle }}>
+        {...instantPress("trigger", toggleOpen)}
+        style={{ ...triggerStyleBase, touchAction: "manipulation", WebkitTapHighlightColor: "transparent", ...triggerStyle }}>
         <span style={{
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           color: isEmpty ? "var(--ink-3)" : "var(--ink-1)",

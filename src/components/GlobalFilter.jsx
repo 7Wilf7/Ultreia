@@ -4,12 +4,13 @@
 // Fast-Refresh rule — splitting these out would churn import sites for no
 // runtime benefit. Disabled deliberately.
 /* eslint-disable react-refresh/only-export-components */
-import { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { RUN_GROUP_TYPES } from "../constants";
 // Cycling/Swimming sit under the "Run / Endurance" group visually but are NOT
 // runs — "All Run / Endurance" stays running-only, while each is filterable on
 // its own. Listed here so the predicate can match the individual selection.
 import { useT } from "../i18n/LanguageContext";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 /**
  * Filter state shape (held in App):
@@ -109,7 +110,9 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
   // Which top-level group's children show in the right column of the two-level
   // menu. Derived from the current filter when the panel opens.
   const [activeGroup, setActiveGroup] = useState(null);
+  const [localFilter, setLocalFilter] = useState(filter);
   const wrapRef = useRef(null);
+  const instantPress = useInstantPress();
 
   // Close on outside click. Cheap implementation — listens to mousedown +
   // touchstart so it works on both pointer and touch devices.
@@ -126,11 +129,21 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
     };
   }, [open]);
 
-  const currentValue = filterToDropdownValue(filter);
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setLocalFilter(filter);
+    });
+    return () => { cancelled = true; };
+  }, [filter]);
+
+  const currentValue = filterToDropdownValue(localFilter);
 
   function pick(value) {
-    setFilter(dropdownValueToFilter(value));
+    const nextFilter = dropdownValueToFilter(value);
+    setLocalFilter(nextFilter);
     setOpen(false);
+    startTransition(() => setFilter(nextFilter));
   }
 
   // Two-level menu tree. Left column = "All Types" + 3 group headers; tapping a
@@ -176,7 +189,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
       {/* Borderless trigger. Plain text + ▼ — no chip frame. Tapping opens the
           dropdown panel below. Compact (single-row desktop header) left-aligns
           and trims the font so it sits inline with the toggle + period bar. */}
-      <button onClick={openPanel}
+      <button {...instantPress("global-filter-trigger", openPanel)}
         style={{
           background: "transparent", border: "none", cursor: "pointer",
           padding: compact ? "6px 8px 6px 0" : "8px 14px",
@@ -185,8 +198,9 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
           letterSpacing: "-0.01em",
           display: "inline-flex", alignItems: "center", gap: 8,
           whiteSpace: "nowrap",
+          touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
         }}>
-        {filterToLabel(filter, t)}
+        {filterToLabel(localFilter, t)}
         <span style={{ fontSize: 10, color: "var(--ink-3)" }}>▼</span>
       </button>
       {open && (
@@ -204,7 +218,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
           {/* Left column — All Types + the 3 top-level groups. Narrow so the
               two columns fit side by side on a phone. */}
           <div style={{ width: 116, flexShrink: 0, borderRight: "1px solid var(--rule-soft)", padding: "4px 0" }}>
-            <button onClick={() => pick("all")}
+            <button {...instantPress("global-filter-all", () => pick("all"))}
               style={{
                 display: "block", width: "100%", textAlign: "left",
                 background: currentValue === "all" ? "var(--bg-sunken)" : "transparent",
@@ -212,6 +226,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
                 fontFamily: "var(--font-sans)", fontSize: 13,
                 color: "var(--ink-1)", cursor: "pointer",
                 fontWeight: currentValue === "all" ? 600 : 400,
+                touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
               }}>
               {t("filter.all_activities")}
             </button>
@@ -219,7 +234,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
               const isActive = shownGroup && shownGroup.id === g.id;
               const isSelected = groupIdOf(currentValue) === g.id;
               return (
-                <button key={g.id} onClick={() => setActiveGroup(g.id)}
+                <button key={g.id} {...instantPress(`global-filter-group-${g.id}`, () => setActiveGroup(g.id))}
                   style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4,
                     width: "100%", textAlign: "left",
@@ -228,6 +243,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
                     fontFamily: "var(--font-sans)", fontSize: 13,
                     color: "var(--ink-1)", cursor: "pointer",
                     fontWeight: isSelected ? 600 : 400,
+                    touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                   }}>
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.label}</span>
                   <span style={{ fontSize: 10, color: "var(--ink-3)", flexShrink: 0 }}>›</span>
@@ -238,7 +254,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
           {/* Right column — children of the active group. */}
           <div style={{ minWidth: 150, padding: "4px 0" }}>
             {shownGroup && shownGroup.children.map(c => (
-              <button key={c.value} onClick={() => pick(c.value)}
+              <button key={c.value} {...instantPress(`global-filter-child-${c.value}`, () => pick(c.value))}
                 style={{
                   display: "block", width: "100%", textAlign: "left",
                   background: currentValue === c.value ? "var(--bg-sunken)" : "transparent",
@@ -247,6 +263,7 @@ export function GlobalFilter({ filter, setFilter, compact = false }) {
                   color: "var(--ink-1)", cursor: "pointer",
                   fontWeight: currentValue === c.value ? 600 : 400,
                   whiteSpace: "nowrap",
+                  touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                 }}>
                 {c.label}
               </button>

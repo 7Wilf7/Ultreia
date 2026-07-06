@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { startTransition, useState, useEffect, useRef } from "react";
 import { s } from "../styles";
 import { RACE_PRIORITY, RACE_CATEGORIES, RACE_CATEGORY_COLOR, SPARTAN_SUBTYPES, SPARTAN_TIER_COLOR, getHyroxSubtypesForGender } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -12,6 +12,7 @@ import { PersonalRecordsBar } from "./PersonalRecordsBar";
 import { Dropdown } from "./Dropdown";
 import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
 // the Target and History sections so every column lines up across both lists.
@@ -82,19 +83,40 @@ export function RacesTab({
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
   const topSwipe = useRef(null);
+  const instantPress = useInstantPress();
   const [topTabMotionDir, setTopTabMotionDir] = useState(0);
+  const [selectedMobileTopTab, setSelectedMobileTopTab] = useState(mobileTopTab || "races");
+  const [selectedMobileSubTab, setSelectedMobileSubTab] = useState(mobileSubTab || "target");
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setSelectedMobileTopTab(mobileTopTab || "races");
+    });
+    return () => { cancelled = true; };
+  }, [mobileTopTab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setSelectedMobileSubTab(mobileSubTab || "target");
+    });
+    return () => { cancelled = true; };
+  }, [mobileSubTab]);
 
   function changeMobileTopTab(nextTab) {
-    if (nextTab === mobileTopTab) return;
+    if (nextTab === selectedMobileTopTab) return;
     const order = { races: 0, pr: 1 };
-    setTopTabMotionDir((order[nextTab] ?? 0) > (order[mobileTopTab] ?? 0) ? 1 : -1);
-    setMobileTopTab(nextTab);
+    setTopTabMotionDir((order[nextTab] ?? 0) > (order[selectedMobileTopTab] ?? 0) ? 1 : -1);
+    setSelectedMobileTopTab(nextTab);
+    startTransition(() => setMobileTopTab(nextTab));
   }
 
   function changeMobileSubTab(nextTab) {
-    if (nextTab === mobileSubTab) return;
+    if (nextTab === selectedMobileSubTab) return;
     if (addingMode) cancelAdd();
-    setMobileSubTab(nextTab);
+    setSelectedMobileSubTab(nextTab);
+    startTransition(() => setMobileSubTab(nextTab));
   }
 
   function onTopSwipeStart(e) {
@@ -121,7 +143,7 @@ export function RacesTab({
     if (st.mode == null) {
       if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
         const dir = dx < 0 ? 1 : -1;
-        const canMove = (dir > 0 && mobileTopTab === "races") || (dir < 0 && mobileTopTab === "pr");
+        const canMove = (dir > 0 && selectedMobileTopTab === "races") || (dir < 0 && selectedMobileTopTab === "pr");
         st.mode = canMove ? "inner" : "pass";
       } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
         st.mode = "scroll";
@@ -153,10 +175,10 @@ export function RacesTab({
     if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
       return;
     }
-    if (dx < 0 && mobileTopTab === "races") {
+    if (dx < 0 && selectedMobileTopTab === "races") {
       e.stopPropagation();
       changeMobileTopTab("pr");
-    } else if (dx > 0 && mobileTopTab === "pr") {
+    } else if (dx > 0 && selectedMobileTopTab === "pr") {
       e.stopPropagation();
       changeMobileTopTab("races");
     } else {
@@ -463,13 +485,13 @@ export function RacesTab({
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10, alignItems: "center" }}>
         <span style={{ ...s.muted, fontSize: 11, marginRight: 2 }}>{t("races.filter_label")}</span>
-        <button onClick={() => setFilter([])}
-          style={{ ...s.chip(filter.length === 0), padding: "4px 10px", fontSize: 12 }}>
+        <button {...instantPress("race-filter-all", () => setFilter([]))}
+          style={{ ...s.chip(filter.length === 0), padding: "4px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
           {t("races.filter_all")}
         </button>
         {RACE_CATEGORIES.map(c => (
-          <button key={c} onClick={() => toggleFilter(filter, setFilter, c)}
-            style={{ ...s.chip(filter.includes(c)), padding: "4px 10px", fontSize: 12 }}>
+          <button key={c} {...instantPress(`race-filter-${c}`, () => toggleFilter(filter, setFilter, c))}
+            style={{ ...s.chip(filter.includes(c)), padding: "4px 10px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
             {t(`enum.race_cat.${c}`)}
           </button>
         ))}
@@ -693,8 +715,8 @@ export function RacesTab({
       <div
         className="ultreia-no-motion-surface"
         data-mobile-inner-swipe="true"
-        data-swipe-prev={mobileTopTab === "pr" ? "true" : "false"}
-        data-swipe-next={mobileTopTab === "races" ? "true" : "false"}
+        data-swipe-prev={selectedMobileTopTab === "pr" ? "true" : "false"}
+        data-swipe-next={selectedMobileTopTab === "races" ? "true" : "false"}
         onTouchStart={onTopSwipeStart}
         onTouchMove={onTopSwipeMove}
         onTouchEnd={onTopSwipeEnd}
@@ -721,9 +743,9 @@ export function RacesTab({
             { id: "races", label: t("races.tab_races") },
             { id: "pr",    label: t("races.tab_pr") },
           ].map(tab => {
-            const active = mobileTopTab === tab.id;
+            const active = selectedMobileTopTab === tab.id;
             return (
-              <button key={tab.id} onClick={() => changeMobileTopTab(tab.id)}
+              <button key={tab.id} {...instantPress(`races-top-${tab.id}`, () => changeMobileTopTab(tab.id))}
                 style={{
                   flex: 1, background: "transparent", border: "none",
                   padding: "12px 8px",
@@ -733,6 +755,8 @@ export function RacesTab({
                   marginBottom: -1,
                   borderRadius: 0,
                   transition: "none",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 {tab.label}
               </button>
@@ -742,7 +766,7 @@ export function RacesTab({
 
         {/* Sub-tab strip — sticks below the top tab strip when Races is active.
             Stays inside the sticky wrapper so both nav rows pin together. */}
-        {mobileTopTab === "races" && (
+        {selectedMobileTopTab === "races" && (
           <div style={{
             display: "flex",
             marginBottom: 12,
@@ -755,9 +779,9 @@ export function RacesTab({
               { id: "target",  label: t("races.section_target"),  count: targetRacesAll.length },
               { id: "history", label: t("races.section_history"), count: historyRacesAll.length },
             ].map((tab, i) => {
-              const active = mobileSubTab === tab.id;
+              const active = selectedMobileSubTab === tab.id;
               return (
-                <button key={tab.id} onClick={() => changeMobileSubTab(tab.id)}
+                <button key={tab.id} {...instantPress(`races-sub-${tab.id}`, () => changeMobileSubTab(tab.id))}
                   style={{
                     flex: 1, minHeight: 36, padding: "8px 10px",
                     background: active ? "var(--accent-soft)" : "transparent",
@@ -769,6 +793,8 @@ export function RacesTab({
                     textAlign: "center",
                     cursor: "pointer", borderRadius: 0,
                     transition: "none",
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                   }}>
                   {tab.label} ({tab.count})
                 </button>
@@ -778,12 +804,12 @@ export function RacesTab({
         )}
         </div> {/* /sticky header */}
 
-        <div key={mobileTopTab} className={topTabMotionClass}>
-          {mobileTopTab === "pr" && (
+        <div key={selectedMobileTopTab} className={topTabMotionClass}>
+          {selectedMobileTopTab === "pr" && (
             <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
           )}
 
-          {mobileTopTab === "races" && (
+          {selectedMobileTopTab === "races" && (
             <>
               {pastRaceWarning && (
                 <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
@@ -805,7 +831,7 @@ export function RacesTab({
               )}
 
               <div>
-                {mobileSubTab === "target" && renderMobileSection({
+                {selectedMobileSubTab === "target" && renderMobileSection({
                   kind: "target",
                   list: targetRacesList,
                   all: targetRacesAll,
@@ -813,7 +839,7 @@ export function RacesTab({
                   setFilter: setTargetFilter,
                   emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
                 })}
-                {mobileSubTab === "history" && renderMobileSection({
+                {selectedMobileSubTab === "history" && renderMobileSection({
                   kind: "history",
                   list: historyRacesList,
                   all: historyRacesAll,
@@ -1125,8 +1151,8 @@ export function RacesTab({
             <div style={{ ...s.label, marginBottom: 6 }}>{t("races.priority")}</div>
             <div style={{ display: "flex", gap: 6 }}>
               {RACE_PRIORITY.map(p => (
-                <button key={p} onClick={() => setNewRace({ ...newRace, priority: p })}
-                  style={s.chip(newRace.priority === p)}>{p}{t("races.priority_suffix")}</button>
+                <button key={p} {...instantPress(`race-priority-${p}`, () => setNewRace({ ...newRace, priority: p }))}
+                  style={{ ...s.chip(newRace.priority === p), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{p}{t("races.priority_suffix")}</button>
               ))}
             </div>
             <div style={{ ...s.muted, marginTop: 4, fontSize: 11 }}>{t("races.priority_hint")}</div>
@@ -1202,9 +1228,11 @@ export function RacesTab({
                 const tierColor = SPARTAN_TIER_COLOR[st];
                 return (
                   <button key={st} type="button"
-                    onClick={() => setNewRace({ ...newRace, subtype: st })}
+                    {...instantPress(`race-spartan-${st}`, () => setNewRace({ ...newRace, subtype: st }))}
                     style={{
                       ...s.chip(active),
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent",
                       ...(active && tierColor ? {
                         background: `${tierColor}26`,
                         borderColor: tierColor,

@@ -512,7 +512,22 @@ function tabButtonStyle(active, busy = false) {
 function AgentActionInboxRow({ action, t, onOpen }) {
   const summary = summarizeOtherAgentAction(action, t);
   return (
-    <button type="button" onClick={onOpen} style={{ ...styles.row, width: "100%", background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none", textAlign: "left", fontFamily: "var(--font-sans)" }}>
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{
+        ...styles.row,
+        width: "100%",
+        background: "transparent",
+        borderTop: "none",
+        borderLeft: "none",
+        borderRight: "none",
+        textAlign: "left",
+        fontFamily: "var(--font-sans)",
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
       <span style={{
         width: 7,
         height: 7,
@@ -674,6 +689,8 @@ const styles = {
     fontVariantNumeric: "tabular-nums",
     textAlign: "left",
     cursor: "pointer",
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
     marginBottom: 8,
     display: "flex",
     alignItems: "center",

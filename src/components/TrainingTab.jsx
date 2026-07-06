@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { s, CONTOUR_BG } from "../styles";
 import { getPeriodRange } from "../utils/period";
 import { RUN_GROUP_TYPES } from "../constants";
@@ -13,10 +13,12 @@ import { GlobalFilter, logMatchesFilter } from "./GlobalFilter";
 import { PeriodSelector } from "./PeriodSelector";
 import { ActivitiesTab } from "./ActivitiesTab";
 import { ChartsTab } from "./ChartsTab";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Activities ↔ Charts segmented toggle. Module-level (not defined inside
 // TrainingTab's render) so it keeps a stable identity across renders.
 function ViewToggle({ view, setView, t, style }) {
+  const instantPress = useInstantPress();
   return (
     <div style={{
       display: "flex",
@@ -32,7 +34,7 @@ function ViewToggle({ view, setView, t, style }) {
       ].map((tab, i) => {
         const active = view === tab.id;
         return (
-          <button key={tab.id} onClick={() => setView(tab.id)}
+          <button key={tab.id} {...instantPress(`training-view-${tab.id}`, () => setView(tab.id))}
             style={{
               flex: 1, minHeight: 36, padding: "0 14px",
               background: active ? "var(--accent-soft)" : "transparent",
@@ -42,6 +44,7 @@ function ViewToggle({ view, setView, t, style }) {
               fontFamily: "var(--font-sans)", fontSize: 13,
               fontWeight: active ? 600 : 500,
               cursor: "pointer", borderRadius: 0, whiteSpace: "nowrap",
+              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
             {tab.label}
           </button>
@@ -167,12 +170,22 @@ export function TrainingTab({
   const isMobile = useIsMobile();
   const sectionTouch = useRef(null);
   const [viewMotionDir, setViewMotionDir] = useState(0);
+  const [selectedView, setSelectedView] = useState(view);
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setSelectedView(view);
+    });
+    return () => { cancelled = true; };
+  }, [view]);
 
   function changeView(nextView) {
-    if (nextView === view) return;
+    if (nextView === selectedView) return;
     const order = { activities: 0, charts: 1 };
-    setViewMotionDir((order[nextView] ?? 0) > (order[view] ?? 0) ? 1 : -1);
-    setView(nextView);
+    setViewMotionDir((order[nextView] ?? 0) > (order[selectedView] ?? 0) ? 1 : -1);
+    setSelectedView(nextView);
+    startTransition(() => setView(nextView));
   }
 
   function onSectionTouchStart(e) {
@@ -199,7 +212,7 @@ export function TrainingTab({
     if (st.mode == null) {
       if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
         const dir = dx < 0 ? 1 : -1;
-        const canMove = (dir > 0 && view === "activities") || (dir < 0 && view === "charts");
+        const canMove = (dir > 0 && selectedView === "activities") || (dir < 0 && selectedView === "charts");
         st.mode = canMove ? "inner" : "pass";
       } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
         st.mode = "scroll";
@@ -231,10 +244,10 @@ export function TrainingTab({
     if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
       return;
     }
-    if (dx < 0 && view === "activities") {
+    if (dx < 0 && selectedView === "activities") {
       e.stopPropagation();
       changeView("charts");
-    } else if (dx > 0 && view === "charts") {
+    } else if (dx > 0 && selectedView === "charts") {
       e.stopPropagation();
       changeView("activities");
     }
@@ -347,7 +360,7 @@ export function TrainingTab({
               <GlobalFilter filter={filter} setFilter={setFilter} compact />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <ViewToggle view={view} setView={changeView} t={t} />
+              <ViewToggle view={selectedView} setView={changeView} t={t} />
             </div>
           </div>
           <PeriodSelector
@@ -360,7 +373,7 @@ export function TrainingTab({
       ) : (
         <>
           <GlobalFilter filter={filter} setFilter={setFilter} />
-          <ViewToggle view={view} setView={changeView} t={t} style={{ marginBottom: 14 }} />
+          <ViewToggle view={selectedView} setView={changeView} t={t} style={{ marginBottom: 14 }} />
           <PeriodSelector
             period={period} setPeriod={setPeriod}
             periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
@@ -403,13 +416,13 @@ export function TrainingTab({
   return (
     <div
       data-mobile-inner-swipe={isMobile ? "true" : undefined}
-      data-swipe-prev={isMobile && view === "charts" ? "true" : "false"}
-      data-swipe-next={isMobile && view === "activities" ? "true" : "false"}
+      data-swipe-prev={isMobile && selectedView === "charts" ? "true" : "false"}
+      data-swipe-next={isMobile && selectedView === "activities" ? "true" : "false"}
       onTouchStart={onSectionTouchStart}
       onTouchMove={onSectionTouchMove}
       onTouchEnd={onSectionTouchEnd}
     >
-      {view !== "activities" && (
+      {selectedView !== "activities" && (
       <div style={stickyHeaderStyle}>
         {isMobile ? (
           /* Mobile: compress to TWO rows (was three).
@@ -422,10 +435,10 @@ export function TrainingTab({
                 <GlobalFilter filter={filter} setFilter={setFilter} compact />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <ViewToggle view={view} setView={changeView} t={t} />
+                <ViewToggle view={selectedView} setView={changeView} t={t} />
               </div>
             </div>
-            {view === "activities" && (
+            {selectedView === "activities" && (
               <PeriodSelector
                 period={period} setPeriod={setPeriod}
                 periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
@@ -440,8 +453,8 @@ export function TrainingTab({
              cram onto one line. */
           <>
             <GlobalFilter filter={filter} setFilter={setFilter} />
-            <ViewToggle view={view} setView={changeView} t={t} style={{ marginBottom: 14 }} />
-            {view === "activities" && (
+            <ViewToggle view={selectedView} setView={changeView} t={t} style={{ marginBottom: 14 }} />
+            {selectedView === "activities" && (
               <PeriodSelector
                 period={period} setPeriod={setPeriod}
                 periodDropdown={periodDropdown} setPeriodDropdown={setPeriodDropdown}
@@ -452,8 +465,8 @@ export function TrainingTab({
       </div>
       )}
 
-      <div key={view} className={viewMotionClass}>
-        {view === "activities" && (
+      <div key={selectedView} className={viewMotionClass}>
+        {selectedView === "activities" && (
           <>
 
             <ActivitiesTab
@@ -473,7 +486,7 @@ export function TrainingTab({
           </>
         )}
 
-        {view === "charts" && (
+        {selectedView === "charts" && (
           <ChartsTab filteredAllLogs={filteredAllLogs} filter={filter} races={races} />
         )}
       </div>

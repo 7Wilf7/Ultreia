@@ -30,6 +30,7 @@ import { ItemActionModal } from "./ItemActionModal";
 import { RaceBriefingModal } from "./RaceBriefingModal";
 import { useAppDialog } from "./AppDialogContext";
 import { Dropdown } from "./Dropdown";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Custom renderers for the markdown nodes that actually show up in coach
 // replies. Keys to know:
@@ -748,6 +749,8 @@ export function AICoachTab({
   const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
+  const recentCalendarButtonPressRef = useRef(new Map());
   const [optimisticCoachConfig, setOptimisticCoachConfig] = useState(() => normalizeCoachConfig(incomingCoachConfig));
   const optimisticCoachConfigRef = useRef(optimisticCoachConfig);
   useEffect(() => {
@@ -1427,11 +1430,28 @@ export function AICoachTab({
   function setStyle(id)        { patchCoachConfig({ style: id }); }
   function setOutputLength(id) { patchCoachConfig({ outputLength: id }); }
   function setIntervention(id) { patchCoachConfig({ intervention: id }); }
-  function setShowCalendarButton(v) { patchCoachConfig({ showCalendarButton: v }); }
+  const setShowCalendarButton = useCallback((v) => {
+    patchCoachConfig({ showCalendarButton: v });
+  }, [patchCoachConfig]);
   function setNightlyMemoryReview(v) { patchCoachConfig({ nightlyMemoryReview: v }); }
   function setTrainingPreferences(next) {
     patchCoachConfig({ trainingPreferences: normalizeTrainingPreferences(next) });
   }
+  const pressCalendarButtonSetting = useCallback((key, enabled, event) => {
+    if (event.pointerType === "mouse") return;
+    recentCalendarButtonPressRef.current.set(key, event.timeStamp || 0);
+    event.preventDefault?.();
+    setShowCalendarButton(enabled);
+  }, [setShowCalendarButton]);
+  const clickCalendarButtonSetting = useCallback((key, enabled, event) => {
+    const at = event.timeStamp || 0;
+    const recentAt = recentCalendarButtonPressRef.current.get(key) || 0;
+    if (recentAt && at - recentAt < 750) {
+      event.preventDefault?.();
+      return;
+    }
+    setShowCalendarButton(enabled);
+  }, [setShowCalendarButton]);
 
   // Dynamic data block injected into the system prompt. Only the section titles
   // are localized; values (dates, race names, numbers) stay verbatim across
@@ -1876,12 +1896,18 @@ export function AICoachTab({
               </div>
               <div style={{ ...s.muted, marginBottom: 16, lineHeight: 1.5 }}>{t("coach.calendar_btn_hint")}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <button onClick={() => setShowCalendarButton(true)}
-                  style={{ ...s.chip(coachConfig.showCalendarButton !== false), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                <button
+                  onPointerDown={(event) => pressCalendarButtonSetting("coach-calendar-button-on-mobile", true, event)}
+                  onClick={(event) => clickCalendarButtonSetting("coach-calendar-button-on-mobile", true, event)}
+                  style={{ ...s.chip(coachConfig.showCalendarButton !== false), padding: "10px 14px", width: "100%", textAlign: "center", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                >
                   {t("coach.calendar_btn_on")}
                 </button>
-                <button onClick={() => setShowCalendarButton(false)}
-                  style={{ ...s.chip(coachConfig.showCalendarButton === false), padding: "10px 14px", width: "100%", textAlign: "center" }}>
+                <button
+                  onPointerDown={(event) => pressCalendarButtonSetting("coach-calendar-button-off-mobile", false, event)}
+                  onClick={(event) => clickCalendarButtonSetting("coach-calendar-button-off-mobile", false, event)}
+                  style={{ ...s.chip(coachConfig.showCalendarButton === false), padding: "10px 14px", width: "100%", textAlign: "center", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                >
                   {t("coach.calendar_btn_off")}
                 </button>
               </div>
@@ -2262,14 +2288,14 @@ export function AICoachTab({
           </button>
         )}
         {isMobile && (
-          <button onClick={() => setShowCoachMenu(true)} aria-label={t("coach.menu_open")}
+          <button {...instantPress("coach-mobile-menu-open", () => setShowCoachMenu(true))} aria-label={t("coach.menu_open")}
             style={{
               position: "relative",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               minHeight: 26, width: 34, padding: 0,
               border: "1px solid var(--rule)", borderRadius: 2,
               background: "var(--bg-elevated)", color: "var(--ink-2)",
-              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              cursor: "pointer", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
             <SettingsIcon size={15} />
             {memoryReady && (
@@ -2759,8 +2785,8 @@ export function AICoachTab({
           // ⚙ opens the unified hub modal (vertical tabs on left, content on right).
           <div style={{ display: "flex", flexDirection: "column", gap: 6, flexShrink: 0, width: 84 }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-              <button onClick={() => { setCoachHubTab("config"); setShowCoachHub(true); }} aria-label={t("coach.menu_open")}
-                style={{ ...s.btnGhost, padding: "8px 0", fontSize: 13, lineHeight: 1.2, minWidth: 0 }}>
+              <button {...instantPress("coach-desktop-hub-open", () => { setCoachHubTab("config"); setShowCoachHub(true); })} aria-label={t("coach.menu_open")}
+                style={{ ...s.btnGhost, padding: "8px 0", fontSize: 13, lineHeight: 1.2, minWidth: 0, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                 ⚙{memoryReady ? " ●" : ""}
               </button>
               <button
@@ -2842,14 +2868,15 @@ export function AICoachTab({
         // sits at a lower z-index, below). Closing the sub returns to the menu.
         const openSub = (fn) => { fn(); };
         const row = (label, onClick, { badge = false, danger = false, muted = false } = {}) => (
-          <button onClick={onClick} style={{
+          <button {...(danger ? { onClick } : instantPress(`coach-menu-${label}`, onClick))} style={{
             display: "flex", alignItems: "center", width: "100%", textAlign: "left",
             background: "transparent", border: "none",
             borderTop: "1px solid var(--rule-soft)",
             padding: "13px 16px", minHeight: 50,
             fontFamily: "var(--font-sans)", fontSize: 15,
             color: danger ? "var(--danger)" : muted ? "var(--ink-2)" : "var(--ink-1)",
-            cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
+            cursor: "pointer", borderRadius: 0,
+            touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
           }}>
             <span style={{ flex: 1 }}>{label}{badge ? <span style={{ color: "var(--moss)", marginLeft: 6 }}>●</span> : null}</span>
             <span style={{ color: "var(--ink-3)", fontSize: 15 }}>›</span>
@@ -2885,13 +2912,14 @@ export function AICoachTab({
 
                 <button
                   type="button"
-                  onClick={() => setCoachAdvancedOpen(open => !open)}
+                  {...instantPress("coach-menu-advanced", () => setCoachAdvancedOpen(open => !open))}
                   style={{
                     display: "flex", alignItems: "center", width: "100%", textAlign: "left",
                     background: "transparent", border: "none", borderTop: "1px solid var(--rule-soft)",
                     padding: "13px 16px", minHeight: 50,
                     fontFamily: "var(--font-sans)", fontSize: 15, color: "var(--ink-2)",
-                    cursor: "pointer", borderRadius: 0, WebkitTapHighlightColor: "transparent",
+                    cursor: "pointer", borderRadius: 0,
+                    touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                   }}>
                   <span style={{ flex: 1 }}>{t("coach.group_advanced")}</span>
                   <span style={{ color: "var(--ink-3)", fontSize: 15 }}>{coachAdvancedOpen ? "⌃" : "⌄"}</span>
@@ -2967,7 +2995,7 @@ export function AICoachTab({
                         const active = coachHubTab === tab.id;
                         return (
                           <button key={tab.id}
-                            onClick={() => setCoachHubTab(tab.id)}
+                            {...instantPress(`coach-hub-tab-${tab.id}`, () => setCoachHubTab(tab.id))}
                             style={{
                               textAlign: "left", width: "calc(100% - 16px)",
                               margin: "0 8px 3px",
@@ -2979,6 +3007,7 @@ export function AICoachTab({
                               fontWeight: active ? 600 : 500,
                               color: active ? "var(--ink-1)" : tab.danger ? "var(--danger)" : tab.muted ? "var(--ink-3)" : "var(--ink-2)",
                               cursor: "pointer", borderRadius: 6,
+                              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                             }}>
                             {tab.label}
                           </button>
@@ -3038,12 +3067,18 @@ export function AICoachTab({
                       <div style={{ ...s.muted, marginBottom: 14, lineHeight: 1.6 }}>{t("coach.calendar_btn_hint")}</div>
                       <div style={{ ...s.label, marginBottom: 6 }}>{t("coach.calendar_btn_label")}</div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button onClick={() => setShowCalendarButton(true)}
-                          style={s.chip(coachConfig.showCalendarButton !== false)}>
+                        <button
+                          onPointerDown={(event) => pressCalendarButtonSetting("coach-calendar-button-on-desktop", true, event)}
+                          onClick={(event) => clickCalendarButtonSetting("coach-calendar-button-on-desktop", true, event)}
+                          style={{ ...s.chip(coachConfig.showCalendarButton !== false), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                        >
                           {t("coach.calendar_btn_on")}
                         </button>
-                        <button onClick={() => setShowCalendarButton(false)}
-                          style={s.chip(coachConfig.showCalendarButton === false)}>
+                        <button
+                          onPointerDown={(event) => pressCalendarButtonSetting("coach-calendar-button-off-desktop", false, event)}
+                          onClick={(event) => clickCalendarButtonSetting("coach-calendar-button-off-desktop", false, event)}
+                          style={{ ...s.chip(coachConfig.showCalendarButton === false), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                        >
                           {t("coach.calendar_btn_off")}
                         </button>
                       </div>
@@ -3681,6 +3716,7 @@ function coachFocusDateMs(dateKey) {
 }
 
 function MemoryReviewSetting({ enabled, onToggle, t }) {
+  const instantPress = useInstantPress();
   return (
     <div style={{
       border: "1px solid var(--rule-soft)",
@@ -3703,7 +3739,7 @@ function MemoryReviewSetting({ enabled, onToggle, t }) {
       </span>
       <button
         type="button"
-        onClick={() => onToggle?.(!enabled)}
+        {...instantPress("memory-review-toggle", () => onToggle?.(!enabled))}
         role="switch"
         aria-checked={enabled}
         style={{
@@ -3717,6 +3753,8 @@ function MemoryReviewSetting({ enabled, onToggle, t }) {
           position: "relative",
           cursor: "pointer",
           transition: "background 0.15s ease, border-color 0.15s ease",
+          touchAction: "manipulation",
+          WebkitTapHighlightColor: "transparent",
           padding: 0,
         }}
       >
@@ -3738,6 +3776,7 @@ function MemoryReviewSetting({ enabled, onToggle, t }) {
 
 function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, t }) {
   const appDialog = useAppDialog();
+  const instantPress = useInstantPress();
   const [view, setView] = useState("current");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const renderedView = useDeferredValue(view);
@@ -3799,12 +3838,14 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
               <button
                 key={option}
                 type="button"
-                onClick={() => setView(option)}
+                {...instantPress(`memory-facts-view-${option}`, () => setView(option))}
                 style={{
                   ...memoryFactFilterButtonStyle,
                   background: selected ? "var(--ink-1)" : "transparent",
                   color: selected ? "var(--paper)" : "var(--ink-2)",
                   borderColor: selected ? "var(--ink-1)" : "var(--rule)",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
                 {t(`coach.memory_facts_filter_${option}`)}
@@ -3821,12 +3862,14 @@ function MemoryFactsPanel({ facts = [], displayLang = "en", onStatus, onDelete, 
               <button
                 key={category}
                 type="button"
-                onClick={() => setCategoryFilter(category)}
+                {...instantPress(`memory-facts-category-${category}`, () => setCategoryFilter(category))}
                 style={{
                   ...memoryFactCategoryChipStyle,
                   background: selected ? "var(--ink-1)" : "var(--bg-elevated)",
                   color: selected ? "var(--paper)" : "var(--ink-2)",
                   borderColor: selected ? "var(--ink-1)" : "var(--rule)",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
                 {t(`coach.memory_fact_category_${category}`)} · {count}

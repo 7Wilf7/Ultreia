@@ -2173,7 +2173,7 @@ export function AICoachTab({
             Clickable when status is 'no_location' so the user can jump
             straight to the default-location modal. */}
         {wStatus === 'no_location' && onOpenLocationSettings ? (
-          <button onClick={onOpenLocationSettings}
+          <button {...instantPress("coach-weather-location-missing", onOpenLocationSettings)}
             title={lang === 'zh' ? '点击设置默认位置' : 'Click to set a default location'}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -2182,12 +2182,13 @@ export function AICoachTab({
               background: "rgba(181,78,26,0.08)", color: "var(--warn)",
               fontSize: 11, fontFamily: "var(--font-sans)",
               cursor: "pointer", whiteSpace: "nowrap",
+              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
             <span>☁</span>
             <span style={{ fontWeight: 600 }}>{weatherLabel}</span>
           </button>
         ) : onGoToWeather ? (
-          <button type="button" onClick={onGoToWeather}
+          <button type="button" {...instantPress("coach-weather-pill", onGoToWeather)}
             title={lang === "zh" ? "查看日历天气" : "View weather on the calendar"}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6,
@@ -2196,7 +2197,7 @@ export function AICoachTab({
               background: weatherActive ? "var(--bg-elevated)" : "var(--bg)",
               color: weatherActive ? "var(--ink-2)" : "var(--ink-3)",
               fontSize: 11, fontFamily: "var(--font-sans)",
-              cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
+              cursor: "pointer", whiteSpace: "nowrap", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
             <span style={{ color: weatherActive ? "var(--moss)" : "var(--ink-3)" }}>☁</span>
             {!isMobile && <span style={{ color: "var(--ink-3)" }}>Weather</span>}
@@ -2205,7 +2206,7 @@ export function AICoachTab({
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
 
         {onOpenLocationSettings && (
-          <button type="button" onClick={onOpenLocationSettings}
+          <button type="button" {...instantPress("coach-location-settings", onOpenLocationSettings)}
             title={hasDefaultLocation
               ? (lang === "zh" ? `天气城市：${locationCity || defaultLocation?.name || ""}；点开查看具体地点` : `Weather city: ${locationCity || defaultLocation?.name || ""}; open for details`)
               : (lang === "zh" ? "设置天气默认地点" : "Set default weather location")}
@@ -2218,7 +2219,7 @@ export function AICoachTab({
               background: hasDefaultLocation ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)",
               color: hasDefaultLocation ? "var(--ink-2)" : "var(--warn)",
               fontSize: 11, fontFamily: "var(--font-sans)",
-              cursor: "pointer", whiteSpace: "nowrap", WebkitTapHighlightColor: "transparent",
+              cursor: "pointer", whiteSpace: "nowrap", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
               flex: "0 0 auto",
             }}>
             <span style={{ color: hasDefaultLocation ? "var(--moss)" : "var(--warn)", display: "inline-flex" }}>
@@ -2234,7 +2235,7 @@ export function AICoachTab({
         {!isMobile && showHeaderManualAdjustmentShortcut && (
           <button
             type="button"
-            onClick={handleManualAdjustmentShortcut}
+            {...instantPress("coach-manual-adjustment-shortcut", handleManualAdjustmentShortcut)}
             title={manualAdjustmentHint}
             style={{
               ...s.btnGhost,
@@ -2251,7 +2252,7 @@ export function AICoachTab({
           </button>
         )}
         {onOpenInbox && (
-          <button onClick={onOpenInbox} title={weeklyReportLoading ? t("weekly_report.thinking") : t("inbox.title")} aria-label={weeklyReportLoading ? t("weekly_report.thinking") : t("inbox.title")}
+          <button {...instantPress("coach-open-inbox", onOpenInbox)} title={weeklyReportLoading ? t("weekly_report.thinking") : t("inbox.title")} aria-label={weeklyReportLoading ? t("weekly_report.thinking") : t("inbox.title")}
             style={{
               position: "relative",
               display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -2261,7 +2262,7 @@ export function AICoachTab({
               background: weeklyReportLoading ? "var(--accent-soft)" : "var(--bg-elevated)",
               color: weeklyReportLoading ? "var(--accent-dark)" : "var(--ink-2)",
               boxShadow: weeklyReportLoading ? "0 0 0 1px oklch(0.54 0.055 138 / 0.12), 0 0 18px oklch(0.38 0.060 138 / 0.18)" : "none",
-              cursor: "pointer", WebkitTapHighlightColor: "transparent",
+              cursor: "pointer", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
             <MailIcon size={15} />
             {weeklyReportLoading && (

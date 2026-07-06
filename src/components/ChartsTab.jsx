@@ -8,6 +8,7 @@ import { formatDuration } from "../utils/format";
 import { getPeriodLabel } from "../utils/period";
 import { computeLoadTrend } from "../utils/trainingLoad";
 import { MonthlyPosterModal } from "./MonthlyPosterModal";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Compact week-bucket label like "5-18~24" (same month) or "5-30~6-5" (cross-month).
 // Uses LOCAL date components — going through toISOString() would shift the date
@@ -51,6 +52,7 @@ function getChartConfig(filter) {
 export function ChartsTab({ filteredAllLogs, filter, races }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [showMonthlyPoster, setShowMonthlyPoster] = useState(false);
   const [selectedTrendIndex, setSelectedTrendIndex] = useState(null);
   const [selectedLoadIndex, setSelectedLoadIndex] = useState(null);
@@ -445,8 +447,8 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
           {presets.map(opt => {
             const active = chartPeriod.type === opt.type && chartPeriod.count === opt.count;
             return (
-              <button key={`${opt.type}-${opt.count}`} onClick={() => setChartPeriod({ type: opt.type, count: opt.count })}
-                style={s.chip(active)}>{opt.label}</button>
+              <button key={`${opt.type}-${opt.count}`} {...instantPress(`chart-period-${opt.type}-${opt.count}`, () => setChartPeriod({ type: opt.type, count: opt.count }))}
+                style={{ ...s.chip(active), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{opt.label}</button>
             );
           })}
           <button onClick={() => setShowMonthlyPoster(true)}

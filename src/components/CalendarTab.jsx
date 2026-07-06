@@ -6,6 +6,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { CalendarDayModal, todRank } from "./CalendarDayModal";
 import { skyconMeta } from "../lib/weather";
 import { startedAtToTimeOfDay } from "../utils/format";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const WEEKDAY_SHORT_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_SHORT_ZH = ["日", "一", "二", "三", "四", "五", "六"];
@@ -57,6 +58,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
   const t = useT();
   const { lang } = useLanguage();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const today = new Date();
   const todayKey = dateKey(today);
 
@@ -259,7 +261,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
         display: "flex", alignItems: "center", gap: 10,
         marginBottom: 16, flexWrap: "wrap",
       }}>
-        <button onClick={gotoPrev} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 14 }} aria-label="Previous month">‹</button>
+        <button {...instantPress("calendar-prev-month", gotoPrev)} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 14, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Previous month">‹</button>
         <div style={{
           fontFamily: "var(--font-sans)", fontSize: 18, fontWeight: 500,
           color: "var(--ink-1)",
@@ -267,8 +269,8 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
           textAlign: "center",
           letterSpacing: "-0.01em",
         }}>{monthLabel}</div>
-        <button onClick={gotoNext} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 14 }} aria-label="Next month">›</button>
-        <button onClick={gotoToday} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 12, marginLeft: 4 }}>
+        <button {...instantPress("calendar-next-month", gotoNext)} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 14, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }} aria-label="Next month">›</button>
+        <button {...instantPress("calendar-today", gotoToday)} style={{ ...s.btnGhost, padding: "6px 12px", fontSize: 12, marginLeft: 4, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
           {t("calendar.today")}
         </button>
         {/* Legend hint is verbose — hidden on mobile to save the nav bar from

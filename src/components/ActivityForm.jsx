@@ -9,6 +9,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { weatherWindowEligible } from "../lib/weather";
 import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // Decompose seconds into {h,m,s} strings for the duration inputs
 function splitDuration(totalSec) {
@@ -91,6 +92,7 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
   const t = useT();
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [form, setForm] = useState(() => initial ? fromLog(initial) : buildEmpty());
   const [saving, setSaving] = useState(false);
   // Snapshot of the form's initial state — used to detect unsaved changes when
@@ -305,10 +307,12 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
                 const label = isMobile ? t(`enum.subtype.${sub}_short`) : t(`enum.subtype.${sub}`);
                 return (
                   <button key={sub} type="button"
-                    onClick={() => setPace(pickedPace === sub ? "" : sub)}
+                    {...instantPress(`activity-pace-${sub}`, () => setPace(pickedPace === sub ? "" : sub))}
                     title={isSuggested ? t("form.run_type_suggested_hint") : undefined}
                     style={{
                       ...s.chip(pickedPace === sub),
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent",
                       ...(isSuggested ? { boxShadow: "0 0 0 1px var(--moss)", color: "var(--moss-deep)" } : {}),
                     }}>
                     {label}{isSuggested ? ` · ${t("form.run_type_suggested")}` : ""}
@@ -330,8 +334,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {RUN_FLAGS.map(flag => (
               <button key={flag} type="button"
-                onClick={() => toggleFlag(flag)}
-                style={s.chip(pickedFlags.includes(flag))}>🏆 {t(`enum.subtype.${flag}`)}</button>
+                {...instantPress(`activity-flag-${flag}`, () => toggleFlag(flag))}
+                style={{ ...s.chip(pickedFlags.includes(flag)), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>🏆 {t(`enum.subtype.${flag}`)}</button>
             ))}
           </div>
         </div>
@@ -343,8 +347,8 @@ export function ActivityForm({ mode, initial, onSave, onCancel, hrZones }) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {STRENGTH_SUBS.map(sub => (
               <button key={sub} type="button"
-                onClick={() => toggleStrengthSub(sub)}
-                style={s.chip(form.subTypes.includes(sub))}>{t(`enum.subtype.${sub}`)}</button>
+                {...instantPress(`activity-strength-${sub}`, () => toggleStrengthSub(sub))}
+                style={{ ...s.chip(form.subTypes.includes(sub)), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{t(`enum.subtype.${sub}`)}</button>
             ))}
           </div>
         </div>

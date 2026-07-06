@@ -80,18 +80,21 @@ export function WeeklyReportSettingsModal({
             <div style={s.infoPanel}>{infoText}</div>
           )}
 
-          <label style={s.switchRow}>
+          <div style={s.switchRow}>
             <span>
               <span style={s.primary}>{t("weekly_settings.auto_generate")}</span>
             </span>
-            <input
-              type="checkbox"
-              checked={enabled}
+            <button
+              type="button"
+              {...instantPress("weekly-settings-enabled-toggle", () => setEnabled(v => !v))}
               disabled={saving}
-              onChange={e => setEnabled(e.target.checked)}
-              style={{ width: 20, height: 20 }}
-            />
-          </label>
+              role="switch"
+              aria-checked={enabled}
+              style={s.switchButton(enabled, saving)}
+            >
+              <span style={s.switchKnob(enabled)} />
+            </button>
+          </div>
 
           <div style={{ opacity: enabled ? 1 : 0.45, pointerEvents: enabled ? "auto" : "none" }}>
             <div style={{ ...s.label, marginTop: 16 }}>{t("weekly_settings.schedule")}</div>
@@ -107,18 +110,21 @@ export function WeeklyReportSettingsModal({
             </div>
           </div>
 
-          <label style={s.switchRow}>
+          <div style={s.switchRow}>
             <span>
               <span style={s.primary}>{t("weekly_settings.after_sunday_import")}</span>
             </span>
-            <input
-              type="checkbox"
-              checked={afterSundayImport}
+            <button
+              type="button"
+              {...instantPress("weekly-settings-after-import-toggle", () => setAfterSundayImport(v => !v))}
               disabled={saving}
-              onChange={e => setAfterSundayImport(e.target.checked)}
-              style={{ width: 20, height: 20 }}
-            />
-          </label>
+              role="switch"
+              aria-checked={afterSundayImport}
+              style={s.switchButton(afterSundayImport, saving)}
+            >
+              <span style={s.switchKnob(afterSundayImport)} />
+            </button>
+          </div>
 
           <div style={s.actions}>
             <button {...instantPress("weekly-settings-cancel", closeIfIdle)} disabled={saving} style={{ ...s.secondaryBtn, opacity: saving ? 0.55 : 1 }}>{t("common.cancel")}</button>
@@ -203,6 +209,31 @@ const s = {
     padding: "12px 0", borderBottom: "1px solid var(--rule-soft)",
   },
   primary: { display: "block", fontSize: 14, fontWeight: 600 },
+  switchButton: (checked, disabled) => ({
+    width: 40,
+    height: 22,
+    minHeight: 22,
+    flexShrink: 0,
+    borderRadius: 999,
+    border: "1px solid var(--rule)",
+    background: checked ? "var(--accent)" : "var(--bg-elevated)",
+    position: "relative",
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+    padding: 0,
+    touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent",
+  }),
+  switchKnob: (checked) => ({
+    position: "absolute",
+    top: 2,
+    left: checked ? 20 : 2,
+    width: 16,
+    height: 16,
+    borderRadius: "50%",
+    background: checked ? "var(--accent-ink)" : "var(--ink-3)",
+    boxShadow: "0 1px 2px oklch(0 0 0 / 0.22)",
+  }),
   label: { fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8 },
   scheduleGrid: { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8 },
   scheduleButton: {

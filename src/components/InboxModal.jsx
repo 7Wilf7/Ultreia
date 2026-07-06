@@ -119,6 +119,7 @@ export function InboxModal({
   const recentPointerTabPressRef = useRef({});
   const parentTabRef = useRef(activeTab === "weekly" || activeTab === "other" ? activeTab : "daily");
   const deferredParentTabFrameRef = useRef(0);
+  const deferredParentTabTimerRef = useRef(null);
   const deferredParentTabRef = useRef(null);
   const instantPress = useInstantPress();
   const instantTap = useInstantTap();
@@ -132,6 +133,10 @@ export function InboxModal({
       cancelAnimationFrame(deferredParentTabFrameRef.current);
       deferredParentTabFrameRef.current = 0;
     }
+    if (deferredParentTabTimerRef.current) {
+      clearTimeout(deferredParentTabTimerRef.current);
+      deferredParentTabTimerRef.current = null;
+    }
     deferredParentTabRef.current = null;
   }, []);
 
@@ -142,11 +147,14 @@ export function InboxModal({
     // Keep the full-screen inbox tab switch visible before AppShell rerenders.
     deferredParentTabFrameRef.current = requestAnimationFrame(() => {
       deferredParentTabFrameRef.current = 0;
-      const pending = deferredParentTabRef.current;
-      deferredParentTabRef.current = null;
-      if (pending == null || pending === parentTabRef.current) return;
-      parentTabRef.current = pending;
-      onTabChange?.(pending);
+      deferredParentTabTimerRef.current = window.setTimeout(() => {
+        deferredParentTabTimerRef.current = null;
+        const pending = deferredParentTabRef.current;
+        deferredParentTabRef.current = null;
+        if (pending == null || pending === parentTabRef.current) return;
+        parentTabRef.current = pending;
+        onTabChange?.(pending);
+      }, 0);
     });
   }, [cancelDeferredParentTabChange, onTabChange]);
 

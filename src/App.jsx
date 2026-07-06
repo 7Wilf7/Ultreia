@@ -67,6 +67,7 @@ import {
 } from "./components/Icons";
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
+import { useInstantPress } from "./hooks/useInstantPress";
 import * as db from "./lib/db";
 import {
   getCurrentLocation,
@@ -2015,6 +2016,7 @@ function AppShell({
   const appDialog = useAppDialog();
   const isMobile = useIsMobile();
   const isNarrow = useIsNarrow();
+  const instantPress = useInstantPress();
   const [tab, setTab] = useState(0);
   const [period, setPeriod] = useState({ type: "all" });
   const [periodDropdown, setPeriodDropdown] = useState(null);
@@ -4692,25 +4694,32 @@ Rules:
           gap: 10,
         }}>
           <div style={{ display: "flex", gap: 0 }}>
-            <button onClick={() => setShowGuide(true)}
+            <button
+              {...instantPress("desktop-guide", () => setShowGuide(true))}
               title={t("header.guide_tooltip")}
               style={headerCell}>
               <BookIcon size={13} />
               {t("header.guide")}
             </button>
-            <button onClick={toggleLang} title={t("header.lang_tooltip")}
+            <button
+              {...instantPress("desktop-lang", toggleLang)}
+              title={t("header.lang_tooltip")}
               style={headerCell}>
               <GlobeIcon size={13} />
               {lang === "en" ? "中" : "EN"}
             </button>
             {PRODUCT_PUBLIC_FEATURES && (
-              <button onClick={openWalletSurface} title={t("wallet.title")}
+              <button
+                {...instantPress("desktop-wallet", openWalletSurface)}
+                title={t("wallet.title")}
                 style={headerCell}>
                 <WalletIcon size={13} />
                 {formatWalletAmount(wallet.balanceCents, wallet.currency)}
               </button>
             )}
-            <button onClick={() => setProfileEditorMode("preview")} title={t("header.profile")}
+            <button
+              {...instantPress("desktop-profile", () => setProfileEditorMode("preview"))}
+              title={t("header.profile")}
               style={{ ...headerCell, width: 38, padding: 0 }}>
               <SettingsIcon size={14} />
             </button>
@@ -4740,7 +4749,7 @@ Rules:
           const active = tab === i;
           const showSpinner = i === TAB_COACH && coachBusy;
           return (
-            <button key={key} onClick={() => setTab(i)} style={{
+            <button key={key} {...instantPress(`desktop-tab-${i}`, () => setTab(i))} style={{
               flex: 1, textAlign: "center",
               background: active ? "linear-gradient(180deg, oklch(0.27 0.045 138 / 0.92), var(--accent-soft))" : "transparent",
               border: active ? "1px solid var(--accent)" : "1px solid transparent",

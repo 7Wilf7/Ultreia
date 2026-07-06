@@ -3,6 +3,7 @@ import { s } from "../styles";
 import { RUN_SUBTYPES, RUN_FLAGS, RUN_PACE_TYPES, RUN_GROUP_TYPES, SORT_OPTIONS, ACTIVITY_TYPES, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsNarrow, useIsMobile } from "../hooks/useMediaQuery";
+import { useInstantPress } from "../hooks/useInstantPress";
 import {
   recommendRunType, parseTimeToSeconds,
   formatDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace, formatDateShort, formatWeekdayShort, isDuplicate,
@@ -69,6 +70,7 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
   // layout where the metric pills wrap naturally.
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [sortBy, setSortBy] = useState("date_desc");
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState(null); // log.id currently being edited (in a modal)
@@ -564,11 +566,15 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
             handleFileSelect instead, so any picked non-.fit/.csv/.zip is rejected
             there with a message. */}
         <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileSelect} />
-        <button onClick={() => { setShowAdd(!showAdd); setEditingId(null); }} title={t("activities.add_short")}
+        <button
+          {...instantPress("show-add", () => { setShowAdd(v => !v); setEditingId(null); })}
+          title={t("activities.add_short")}
           aria-label={t("activities.add_short")} style={{ ...s.btnGhost, ...iconBtnStyle }}>
           <PlusIcon size={15} />
         </button>
-        <button onClick={toggleSelectMode} title={t("activities.select_short")}
+        <button
+          {...instantPress("select-mode", toggleSelectMode)}
+          title={t("activities.select_short")}
           aria-label={t("activities.select_short")} style={{ ...(selectMode ? s.btn : s.btnGhost), ...iconBtnStyle }}>
           <CheckSquareIcon size={15} />
           {selectMode && selectedCount > 0 && (
@@ -600,11 +606,13 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
         // was dropped — the Select button itself shows ✓N, already conveys
         // the count.
         <div style={{ ...s.cardDark, marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-          <button onClick={selectAll}
+          <button
+            {...instantPress("select-all", selectAll)}
             style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>
             {t("activities.select_all")}
           </button>
-          <button onClick={clearSelection}
+          <button
+            {...instantPress("clear-selection", clearSelection)}
             style={{ ...s.btnGhost, fontSize: 12, padding: "5px 10px" }}>
             {t("activities.clear_sel")}
           </button>
@@ -1121,7 +1129,8 @@ export function ActivitiesTab({ logs, addLog, updateLog, bulkAddLogs, periodLogs
           );
         })}
         {displayedLogs.length > shown && (
-          <button onClick={() => setShown(n => n + PAGE)}
+          <button
+            {...instantPress("load-more", () => setShown(n => n + PAGE))}
             style={{ ...s.btnGhost, alignSelf: "center", marginTop: 4, fontSize: 13, padding: "8px 18px" }}>
             {t("activities.load_more", { n: displayedLogs.length - shown })}
           </button>

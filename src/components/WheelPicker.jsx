@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const ITEM_H = 38;     // px height of one row
 const VISIBLE = 5;     // rows shown (center one is "selected")
@@ -131,6 +132,7 @@ export function SingleWheelModal({ value, options, onConfirm, onClose, title, ar
 
 export function TimeWheelModal({ value = "08:00", onConfirm, onClose, title }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [h0, m0] = String(value).split(":");
   const [hh, setHh] = useState(HOURS.includes(h0) ? h0 : "08");
   const [mm, setMm] = useState(MINUTES.includes(m0) ? m0 : "00");
@@ -151,11 +153,15 @@ export function TimeWheelModal({ value = "08:00", onConfirm, onClose, title }) {
           boxSizing: "border-box", fontFamily: "var(--font-sans)",
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <button onClick={onClose} style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--ink-3)" }}>
+            <button
+              {...instantPress("close", onClose)}
+              style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--ink-3)" }}>
               {t("common.cancel")}
             </button>
             <span style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-1)" }}>{title || t("push.pick_time")}</span>
-            <button onClick={done} style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--moss-deep)", fontWeight: 600 }}>
+            <button
+              {...instantPress("done", done)}
+              style={{ ...s.btnGhost, border: "none", padding: "4px 6px", color: "var(--moss-deep)", fontWeight: 600 }}>
               {t("common.done")}
             </button>
           </div>

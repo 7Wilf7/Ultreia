@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { s } from "../styles";
-import { useInstantPress } from "../hooks/useInstantPress";
+import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 // Reusable in-app dropdown — replaces native <select> for a consistent look
 // across the app + multi-select support. Modeled on the GlobalFilter ("All
@@ -33,6 +33,7 @@ export function Dropdown({
   const wrapRef = useRef(null);
   const menuRef = useRef(null);
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
 
   useEffect(() => {
     if (!open) return;
@@ -145,7 +146,10 @@ export function Dropdown({
           {options.map(o => {
             const isSel = multi ? selected.includes(o.value) : value === o.value;
             return (
-              <button key={String(o.value)} type="button" onClick={() => pick(o.value)}
+              <button
+                key={String(o.value)}
+                type="button"
+                {...instantTap(`option-${String(o.value)}`, () => pick(o.value))}
                 style={{
                   display: "flex", alignItems: "center", gap: 8,
                   width: "100%", textAlign: "left",
@@ -154,6 +158,7 @@ export function Dropdown({
                   fontFamily: "var(--font-sans)", fontSize: 14,
                   color: "var(--ink-1)", cursor: "pointer",
                   fontWeight: isSel ? 600 : 400, borderRadius: 0,
+                  touchAction: "pan-y", WebkitTapHighlightColor: "transparent",
                 }}>
                 {multi && (
                   <span style={{ width: 14, flexShrink: 0, color: "var(--moss)" }}>{isSel ? "✓" : ""}</span>

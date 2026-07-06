@@ -396,6 +396,7 @@ const CoachChatMessages = memo(function CoachChatMessages({
 }) {
   const [mobileRenderCount, setMobileRenderCount] = useState(MOBILE_CHAT_INITIAL_RENDER_COUNT);
   const instantPress = useInstantPress();
+  const instantTap = useInstantTap();
 
   if (chatMessages.length === 0) {
     return (
@@ -548,7 +549,8 @@ const CoachChatMessages = memo(function CoachChatMessages({
                 Shows on persistent assistant replies only. */}
             {canImport && (
               <button
-                onClick={() => extracting ? onStopExtraction?.(m.id) : importToCalendar(displayContent, m.id)}
+                type="button"
+                {...instantTap(`coach-message-calendar-import-${m.id || i}`, () => extracting ? onStopExtraction?.(m.id) : importToCalendar(displayContent, m.id))}
                 style={{
                   background: actionButtonBg,
                   border: `1px solid ${actionButtonBorder}`,
@@ -559,6 +561,8 @@ const CoachChatMessages = memo(function CoachChatMessages({
                   fontFamily: "var(--font-sans)",
                   cursor: "pointer",
                   display: "inline-flex", alignItems: "center", gap: 6,
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 {actionButtonIcon}
                 {actionButtonLabel}
@@ -571,7 +575,8 @@ const CoachChatMessages = memo(function CoachChatMessages({
                 without having to copy/paste their text. */}
             {canResend && (
               <button
-                onClick={() => sendChat(messageContentForCoach(m.content))}
+                type="button"
+                {...instantTap(`coach-message-resend-${m.id || i}`, () => sendChat(messageContentForCoach(m.content)))}
                 style={{
                   background: "var(--bg-elevated)",
                   border: "1px solid var(--rule)",
@@ -582,6 +587,8 @@ const CoachChatMessages = memo(function CoachChatMessages({
                   fontFamily: "var(--font-sans)",
                   cursor: "pointer",
                   display: "inline-flex", alignItems: "center", gap: 5,
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 ↻ {t("coach.resend")}
               </button>
@@ -1210,6 +1217,7 @@ export function AICoachTab({
   const hideJumpTimer = useRef(null);
   const scrollIdleTimer = useRef(null);
   const recentJumpPressRef = useRef({});
+  const recentImagePickerPressRef = useRef(0);
   // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
   // events too — mute the button logic briefly so they don't flash the arrows.
   const suppressJumpUntil = useRef(0);
@@ -1342,6 +1350,27 @@ export function AICoachTab({
         ? t("coach.image_too_large")
         : t("coach.image_unsupported"));
     }
+  }
+
+  function openImagePicker() {
+    imageInputRef.current?.click();
+  }
+
+  function pressImagePicker(event) {
+    if (event?.pointerType === "mouse") return;
+    recentImagePickerPressRef.current = Date.now();
+    event?.preventDefault?.();
+    openImagePicker();
+  }
+
+  function clickImagePicker(event) {
+    const recentAt = recentImagePickerPressRef.current || 0;
+    const at = Date.now();
+    if (recentAt && at - recentAt < 750) {
+      event?.preventDefault?.();
+      return;
+    }
+    openImagePicker();
   }
 
   function removeCoachImage(index) {
@@ -2842,7 +2871,8 @@ export function AICoachTab({
           <>
             <button
               type="button"
-              onClick={() => imageInputRef.current?.click()}
+              onPointerDown={pressImagePicker}
+              onClick={clickImagePicker}
               disabled={chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT}
               aria-label={t("coach.attach_image")}
               title={t("coach.attach_image")}
@@ -2866,7 +2896,8 @@ export function AICoachTab({
               </button>
               <button
                 type="button"
-                onClick={() => imageInputRef.current?.click()}
+                onPointerDown={pressImagePicker}
+                onClick={clickImagePicker}
                 disabled={chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT}
                 aria-label={t("coach.attach_image")}
                 title={t("coach.attach_image")}
@@ -2878,6 +2909,8 @@ export function AICoachTab({
                   alignItems: "center",
                   justifyContent: "center",
                   opacity: (chatLoading || contextCompressing || coachImages.length >= COACH_IMAGE_LIMIT) ? 0.45 : 1,
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}>
                 <ImageIcon size={14} />
               </button>

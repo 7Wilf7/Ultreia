@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useT } from "../../i18n/LanguageContext";
+import { useInstantPress } from "../../hooks/useInstantPress";
 
 const cellBase = {
   border: "1px solid var(--rule)",
@@ -24,6 +25,7 @@ function emailPrefix(email) {
 // email → menu" pattern.
 export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, isAdmin, publicFeatures = false, onGenerateInvite }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [signingOut, setSigningOut] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -57,7 +59,7 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
       <span ref={wrapRef} style={{ position: "relative", display: "inline-flex" }}>
         <button
           type="button"
-          onClick={() => setMenuOpen(o => !o)}
+          {...instantPress("user-badge-menu", () => setMenuOpen(o => !o))}
           title={user.email}
           style={{
             ...cellBase,
@@ -69,6 +71,8 @@ export function UserBadge({ user, signOut, onChangePassword, onDeleteAccount, is
             overflow: "hidden",
             whiteSpace: "nowrap",
             cursor: "pointer",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
           }}
         >
           <span style={{ width: 6, height: 6, background: "var(--moss)", borderRadius: 0, flexShrink: 0 }} />

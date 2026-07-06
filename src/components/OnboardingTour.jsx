@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { s } from "../styles";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { ModalRoot } from "./ModalRoot";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // First-run guided tour. Shown once (localStorage-gated) right after a new user
 // finishes profile setup. Walks through each tab: it drives the real `tab` state
@@ -99,6 +100,7 @@ export const TOUR_FLAG = "ultreia.tourDone.v1";
 export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
   const t = useT();
   const { lang } = useLanguage();
+  const instantPress = useInstantPress();
   const pick = (o) => (lang === "en" ? o.en : o.zh);
 
   const steps = STEPS.filter((st) => !st.mobileOnly || isMobile);
@@ -185,16 +187,16 @@ export function OnboardingTour({ isMobile, onChangeTab, onClose }) {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <button onClick={finish} style={{ ...s.btnGhost, fontSize: 13 }}>
+            <button {...instantPress("tour-skip", finish)} style={{ ...s.btnGhost, fontSize: 13, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
               {t("tour.skip")}
             </button>
             <div style={{ flex: 1 }} />
             {i > 0 && (
-              <button onClick={() => setI(i - 1)} style={{ ...s.btnGhost, fontSize: 13 }}>
+              <button {...instantPress("tour-back", () => setI(i - 1))} style={{ ...s.btnGhost, fontSize: 13, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
                 {t("tour.back")}
               </button>
             )}
-            <button onClick={() => (last ? finish() : setI(i + 1))} style={{ ...s.btn, fontSize: 13 }}>
+            <button {...instantPress("tour-next", () => (last ? finish() : setI(i + 1)))} style={{ ...s.btn, fontSize: 13, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
               {last ? t("common.done") : t("tour.next")}
             </button>
           </div>

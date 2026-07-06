@@ -7,6 +7,7 @@ import { Spinner } from "./Spinner";
 import { CheckSquareIcon, PinIcon, PlusIcon } from "./Icons";
 import { LocationMapPreview, MapPickerModal } from "./MapPickerModal";
 import { useAppDialog } from "./AppDialogContext";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 function fmtCoord(value) {
   const n = Number(value);
@@ -37,6 +38,7 @@ export function LocationSettingsModal({
 }) {
   const t = useT();
   const appDialog = useAppDialog();
+  const instantPress = useInstantPress();
   const sortedLocations = sortLocations(locations);
   const defaultSaved = sortedLocations.find(l => l.isDefaultWeather) || null;
   const previewLocation = defaultSaved || (hasValidCoords(defaultLocation) ? defaultLocation : null) || sortedLocations[0] || null;
@@ -159,13 +161,15 @@ export function LocationSettingsModal({
               onOpen={() => setMapOpen(true)}
             />
 
-            <button type="button" onClick={() => setMapOpen(true)} style={{
+            <button type="button" {...instantPress("location-open-map", () => setMapOpen(true))} style={{
               ...s.btn,
               minHeight: 40,
               display: "inline-flex",
               alignItems: "center",
               justifyContent: "center",
               gap: 7,
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
             }}>
               <PlusIcon size={14} />
               {t("location.add_from_map")}

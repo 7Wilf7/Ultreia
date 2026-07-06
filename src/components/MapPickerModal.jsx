@@ -618,13 +618,14 @@ function CenterPin({ compact = false }) {
 
 export function LocationMapPreview({ location, onOpen }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const point = validCoord(location);
   const center = toMapCoord(point || FALLBACK_WGS);
   const title = String(location?.name || location?.address || "").trim();
   return (
     <button
       type="button"
-      onClick={onOpen}
+      {...instantPress("location-map-preview-open", onOpen)}
       style={{
         width: "100%",
         border: "1px solid var(--rule)",
@@ -636,6 +637,8 @@ export function LocationMapPreview({ location, onOpen }) {
         textAlign: "left",
         cursor: "pointer",
         minHeight: 0,
+        touchAction: "manipulation",
+        WebkitTapHighlightColor: "transparent",
       }}
     >
       <StreetMapView center={center} zoom={point ? 15 : 12} style={{ height: 174 }}>

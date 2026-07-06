@@ -882,6 +882,7 @@ export function AICoachTab({
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
   const contextUsageButtonRef = useRef(null);
+  const contextUsagePointerAtRef = useRef(0);
   const [showContextUsage, setShowContextUsage] = useState(false);
   const [contextUsagePopoverPosition, setContextUsagePopoverPosition] = useState(null);
   const [preciseTextTokenCounter, setPreciseTextTokenCounter] = useState(null);
@@ -1740,6 +1741,20 @@ export function AICoachTab({
     if (!showContextUsage) updateContextUsagePopoverPosition();
     setShowContextUsage(v => !v);
   }, [showContextUsage, updateContextUsagePopoverPosition]);
+  const pressContextUsagePopover = useCallback((event) => {
+    if (event.pointerType === "mouse") return;
+    contextUsagePointerAtRef.current = event.timeStamp || 0;
+    event.preventDefault?.();
+    toggleContextUsagePopover();
+  }, [toggleContextUsagePopover]);
+  const clickContextUsagePopover = useCallback((event) => {
+    const at = event.timeStamp || 0;
+    if (contextUsagePointerAtRef.current && at - contextUsagePointerAtRef.current < 750) {
+      event.preventDefault?.();
+      return;
+    }
+    toggleContextUsagePopover();
+  }, [toggleContextUsagePopover]);
   useLayoutEffect(() => {
     if (!showContextUsage) return undefined;
     updateContextUsagePopoverPosition();
@@ -2132,7 +2147,8 @@ export function AICoachTab({
         <button
           ref={contextUsageButtonRef}
           type="button"
-          onClick={toggleContextUsagePopover}
+          onPointerDown={pressContextUsagePopover}
+          onClick={clickContextUsagePopover}
           title={providerTitle}
           aria-expanded={showContextUsage}
           aria-controls="coach-context-usage-popover"
@@ -2144,6 +2160,8 @@ export function AICoachTab({
             fontSize: 11, fontFamily: "var(--font-sans)",
             whiteSpace: "nowrap", cursor: "pointer",
             flex: "0 0 auto",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent",
           }}>
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
           {!isMobile && <span style={{ color: "var(--ink-3)" }}>Model</span>}

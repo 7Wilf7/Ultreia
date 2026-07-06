@@ -6,6 +6,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
 import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const LEGACY_FREE_DEEPSEEK_LIMIT = 10;
 
@@ -36,6 +37,7 @@ export function ApiSettingsModal({
 }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [keyDraft, setKeyDraft] = useState("");
   const [tutId, setTutId] = useState(null);
   // The info block (provider blurb + pricing + model note) auto-expands ONLY the
@@ -82,7 +84,7 @@ export function ApiSettingsModal({
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, position: "relative" }}>
             <h2 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{t("api.title")}</h2>
             <button
-              onClick={() => { setShowHint(false); setPricingOpen(o => !o); }}
+              {...instantPress("api-pricing-toggle", () => { setShowHint(false); setPricingOpen(o => !o); })}
               title={t("api.pricing_title")} aria-label={t("api.pricing_title")}
               style={{
                 width: 20, height: 20, minHeight: 0, minWidth: 0,
@@ -94,6 +96,8 @@ export function ApiSettingsModal({
                 cursor: "pointer", lineHeight: 1, padding: 0, flexShrink: 0,
                 display: "flex", alignItems: "center", justifyContent: "center",
                 transition: "background 160ms, color 160ms, border-color 160ms",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }}>!</button>
             {/* One-shot hint on the very first open: tell the user the "!" both
                 collapses this info and reopens it later. Auto-hides after a few
@@ -192,7 +196,7 @@ export function ApiSettingsModal({
         )}
 
         {TUTORIALS[providerId] && (
-          <button type="button" onClick={() => setTutId(providerId)} style={{ ...s.btnGhost, marginBottom: 18 }}>
+          <button type="button" {...instantPress(`api-tutorial-${providerId}`, () => setTutId(providerId))} style={{ ...s.btnGhost, marginBottom: 18, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
             {t("tutorial.view")}
           </button>
         )}

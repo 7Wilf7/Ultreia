@@ -10,6 +10,7 @@ import { ModalRoot } from "./ModalRoot";
 import { Dropdown } from "./Dropdown";
 import { POSTER_FONT_CSS } from "../data/posterFonts";
 import { productLogoUrl } from "../assets/logo";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 // url → Promise<dataUrl>, module-scoped so the fetch + base64 encode happens
 // once per session even across modal remounts. SVG <image> hrefs MUST be data
@@ -650,6 +651,7 @@ function Poster({ stats, theme, ratio, svgRef, logoSrc }) {
 export function MonthlyPosterModal({ logs, races = [], onClose }) {
   const t = useT();
   const { lang } = useLanguage();
+  const instantPress = useInstantPress();
   const svgRef = useRef(null);
   const [mode, setMode] = useState("month");
   const [rangeOffset, setRangeOffset] = useState(0);
@@ -846,13 +848,15 @@ export function MonthlyPosterModal({ logs, races = [], onClose }) {
                   const on = !!singleFields[k] && !disabled;
                   return (
                     <button key={k} type="button" disabled={disabled}
-                      onClick={() => setSingleFields(prev => ({ ...prev, [k]: !prev[k] }))}
+                      {...instantPress(`poster-field-${k}`, () => setSingleFields(prev => ({ ...prev, [k]: !prev[k] })))}
                       style={{
                         minHeight: 0, padding: "5px 11px", fontSize: 12, borderRadius: 2, cursor: disabled ? "default" : "pointer",
                         border: "1px solid " + (on ? "var(--moss)" : "var(--rule)"),
                         background: on ? "var(--moss-bg)" : "var(--bg-elevated)",
                         color: disabled ? "var(--ink-3)" : on ? "var(--ink-1)" : "var(--ink-2)",
                         opacity: disabled ? 0.5 : 1,
+                        touchAction: "manipulation",
+                        WebkitTapHighlightColor: "transparent",
                       }}>
                       {SINGLE_FIELD_LABELS[lang === "zh" ? "zh" : "en"][k]}
                     </button>

@@ -436,8 +436,8 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
               }}
             />
           </div>
-          <button onClick={() => setShowMonthlyPoster(true)}
-            style={{ ...s.btnGhost, padding: "0 10px", minHeight: 36, fontSize: 12, flexShrink: 0 }}>
+          <button {...instantPress("charts-open-poster-mobile", () => setShowMonthlyPoster(true))}
+            style={{ ...s.btnGhost, padding: "0 10px", minHeight: 36, fontSize: 12, flexShrink: 0, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
             {t("poster.share_short")}
           </button>
         </div>
@@ -451,8 +451,8 @@ export function ChartsTab({ filteredAllLogs, filter, races }) {
                 style={{ ...s.chip(active), touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>{opt.label}</button>
             );
           })}
-          <button onClick={() => setShowMonthlyPoster(true)}
-            style={{ ...s.btnGhost, marginLeft: "auto", padding: "7px 12px", fontSize: 12 }}>
+          <button {...instantPress("charts-open-poster-desktop", () => setShowMonthlyPoster(true))}
+            style={{ ...s.btnGhost, marginLeft: "auto", padding: "7px 12px", fontSize: 12, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
             {t("poster.share_monthly")}
           </button>
         </div>

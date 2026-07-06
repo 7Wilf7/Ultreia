@@ -5,6 +5,7 @@ import { ModalRoot } from "./ModalRoot";
 import { TutorialModal } from "./TutorialModal";
 import { TUTORIALS } from "../data/tutorials";
 import { Spinner } from "./Spinner";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const LEGACY_FREE_WEATHER_LIMIT = 30;
 
@@ -23,6 +24,7 @@ function maskedKey(k) {
 // to the same DAL writer the rest of user_settings uses.
 export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWeatherLeft, onClose }) {
   const t = useT();
+  const instantPress = useInstantPress();
   // Mask the existing key on first render so it doesn't leak when the user
   // hands their phone over; "draft" tracks the new value being typed.
   const [draft, setDraft] = useState("");
@@ -107,7 +109,7 @@ export function WeatherApiSettingsModal({ caiyunApiKey, setCaiyunApiKey, freeWea
                 : t("quota.weather_used")}
             </div>
           )}
-          <button type="button" onClick={() => setShowTut(true)} style={{ ...s.btnGhost, marginBottom: 18 }}>
+          <button type="button" {...instantPress("weather-api-tutorial", () => setShowTut(true))} style={{ ...s.btnGhost, marginBottom: 18, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
             {t("tutorial.view")}
           </button>
 

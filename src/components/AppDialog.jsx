@@ -8,6 +8,7 @@ export function AppDialogProvider({ children }) {
   const t = useT();
   const [dialog, setDialog] = useState(null);
   const resolverRef = useRef(null);
+  const recentPressRef = useRef(new Map());
 
   const close = useCallback((result) => {
     const resolve = resolverRef.current;
@@ -59,6 +60,21 @@ export function AppDialogProvider({ children }) {
   }, [alert, confirm]);
 
   const value = { alert, confirm };
+  const pressResult = useCallback((key, result, event) => {
+    if (event.pointerType === "mouse") return;
+    recentPressRef.current.set(key, event.timeStamp || 0);
+    event.preventDefault?.();
+    close(result);
+  }, [close]);
+  const clickResult = useCallback((key, result, event) => {
+    const recentAt = recentPressRef.current.get(key) || 0;
+    const at = event.timeStamp || 0;
+    if (recentAt && at - recentAt < 750) {
+      event.preventDefault?.();
+      return;
+    }
+    close(result);
+  }, [close]);
 
   return (
     <AppDialogContext.Provider value={value}>
@@ -82,19 +98,34 @@ export function AppDialogProvider({ children }) {
                     {dialog.message}
                   </div>
                 </div>
-                <button onClick={() => close(false)} style={s.modalCloseBtn} aria-label="Close">×</button>
+                <button
+                  onPointerDown={(event) => pressResult("close", false, event)}
+                  onClick={(event) => clickResult("close", false, event)}
+                  style={{ ...s.modalCloseBtn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                  aria-label="Close"
+                >
+                  ×
+                </button>
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                 {dialog.type === "confirm" && (
-                  <button type="button" onClick={() => close(false)} style={s.btnGhost}>
+                  <button
+                    type="button"
+                    onPointerDown={(event) => pressResult("cancel", false, event)}
+                    onClick={(event) => clickResult("cancel", false, event)}
+                    style={{ ...s.btnGhost, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                  >
                     {dialog.cancelLabel}
                   </button>
                 )}
                 <button
                   type="button"
-                  onClick={() => close(true)}
+                  onPointerDown={(event) => pressResult("confirm", true, event)}
+                  onClick={(event) => clickResult("confirm", true, event)}
                   style={{
                     ...s.btn,
+                    touchAction: "manipulation",
+                    WebkitTapHighlightColor: "transparent",
                     ...(dialog.danger ? {
                       background: "var(--danger)",
                       borderColor: "var(--danger)",

@@ -753,6 +753,7 @@ export function AICoachTab({
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
   const recentCalendarButtonPressRef = useRef(new Map());
+  const recentCoachHintsProceedPressRef = useRef(0);
   const [optimisticCoachConfig, setOptimisticCoachConfig] = useState(() => normalizeCoachConfig(incomingCoachConfig));
   const optimisticCoachConfigRef = useRef(optimisticCoachConfig);
   useEffect(() => {
@@ -1542,6 +1543,21 @@ export function AICoachTab({
     syncComposerInput("");
     sendChat(message);
   }, [coachHints, sendChat, setCoachHintsPending, syncComposerInput]);
+  const pressCoachHintsProceed = useCallback((event) => {
+    if (event.pointerType === "mouse") return;
+    recentCoachHintsProceedPressRef.current = event.timeStamp || 0;
+    event.preventDefault?.();
+    proceedCoachHints();
+  }, [proceedCoachHints]);
+  const clickCoachHintsProceed = useCallback((event) => {
+    const recentAt = recentCoachHintsProceedPressRef.current || 0;
+    const at = event.timeStamp || 0;
+    if (recentAt && at - recentAt < 750) {
+      event.preventDefault?.();
+      return;
+    }
+    proceedCoachHints();
+  }, [proceedCoachHints]);
   const jumpFromCoachHints = useCallback((action) => {
     if (!coachHints) return;
     setCoachHintsPending?.(coachHints.msg);
@@ -2078,8 +2094,8 @@ export function AICoachTab({
                 <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.proactive_confirm_title")}</h2>
                 <button
                   type="button"
-                  onClick={closeManualAdjustmentConfirm}
-                  style={s.modalCloseBtn}
+                  {...instantPress("coach-manual-adjustment-close", closeManualAdjustmentConfirm)}
+                  style={{ ...s.modalCloseBtn, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
                   aria-label="Close"
                 >
                   ×
@@ -2768,7 +2784,7 @@ export function AICoachTab({
                   />
                   <button
                     type="button"
-                    onClick={() => removeCoachImage(idx)}
+                    {...instantPress(`coach-image-remove-${idx}`, () => removeCoachImage(idx))}
                     aria-label={t("coach.image_remove")}
                     title={t("coach.image_remove")}
                     style={{
@@ -2789,6 +2805,8 @@ export function AICoachTab({
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
+                      touchAction: "manipulation",
+                      WebkitTapHighlightColor: "transparent",
                     }}
                   >
                     ×
@@ -2909,7 +2927,11 @@ export function AICoachTab({
                     </div>
                   ))}
                 </div>
-                <button onClick={proceedCoachHints} style={{ ...s.btn, width: "100%" }}>
+                <button
+                  onPointerDown={pressCoachHintsProceed}
+                  onClick={clickCoachHintsProceed}
+                  style={{ ...s.btn, width: "100%", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
+                >
                   {t("coach.hints_proceed")}
                 </button>
               </div>

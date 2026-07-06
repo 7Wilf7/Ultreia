@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import { s } from "../styles";
 import { useT } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
+import { useInstantPress } from "../hooks/useInstantPress";
 import { ModalRoot } from "./ModalRoot";
 
 // Bundle the user manual straight into the app. Vite's `?raw` suffix inlines
@@ -205,6 +206,7 @@ function makeGuideComponents(onNavigate, isMobile) {
 export function GuideModal({ onClose, onReplayTour }) {
   const t = useT();
   const isMobile = useIsMobile();
+  const instantPress = useInstantPress();
   const [active, setActive] = useState(0);
   const [tocOpen, setTocOpen] = useState(false);
   const tocRef = useRef(null);
@@ -276,11 +278,12 @@ export function GuideModal({ onClose, onReplayTour }) {
                 of the OS's full-screen native <select> picker. */}
             <div ref={tocRef} style={{ position: "relative" }}>
               <button
-                onClick={() => setTocOpen(o => !o)}
+                {...instantPress("guide-toc-toggle", () => setTocOpen(o => !o))}
                 style={{
                   ...s.input, height: 40, fontSize: 14, padding: "0 12px",
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   cursor: "pointer", textAlign: "left",
+                  touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                 }}>
                 <span style={{ color: "var(--ink-1)", fontWeight: 500 }}>{chapter.title}</span>
                 <span style={{ fontSize: 10, color: "var(--ink-3)", marginLeft: 8 }}>

@@ -6,6 +6,7 @@ import { useIsMobile } from "../hooks/useMediaQuery";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { s } from "../styles";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const WALLET_INFO_SEEN_KEY = "ultreia.wallet.pricingInfoSeen";
 const PAYMENT_QR_URL = "/ultreia-payment.jpg";
@@ -315,6 +316,7 @@ function TopUpModal({ userEmail, onClose }) {
 
 export function WalletPanel({ wallet, onRefresh, userEmail }) {
   const t = useT();
+  const instantPress = useInstantPress();
   const [refreshing, setRefreshing] = useState(false);
   const [period, setPeriod] = useState("all");
   const [showInfo, setShowInfo] = useState(() => {
@@ -362,7 +364,7 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
           <div style={{ ...s.muted, fontSize: 12 }}>{t("wallet.balance")}</div>
           <button
             type="button"
-            onClick={() => setShowInfo(v => !v)}
+            {...instantPress("wallet-info-toggle", () => setShowInfo(v => !v))}
             aria-label={t("wallet.info_toggle")}
             title={t("wallet.info_toggle")}
             style={{
@@ -377,6 +379,8 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
               fontSize: 13,
               fontWeight: 700,
               lineHeight: 1,
+              touchAction: "manipulation",
+              WebkitTapHighlightColor: "transparent",
             }}
           >
             !
@@ -420,7 +424,7 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setPeriod(p.id)}
+                {...instantPress(`wallet-period-${p.id}`, () => setPeriod(p.id))}
                 style={{
                   ...s.btnGhost,
                   minHeight: 0,
@@ -429,6 +433,8 @@ export function WalletPanel({ wallet, onRefresh, userEmail }) {
                   borderColor: active ? "var(--ink-1)" : "var(--rule)",
                   color: active ? "var(--ink-1)" : "var(--ink-3)",
                   background: active ? "var(--bg-sunken)" : "transparent",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }}
               >
                 {t(p.labelKey)}

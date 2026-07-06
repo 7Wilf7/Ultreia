@@ -5,6 +5,7 @@ import { getCurrentLocation, hasValidCoords, reverseGeocode } from "../lib/weath
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { PinIcon } from "./Icons";
+import { useInstantPress } from "../hooks/useInstantPress";
 
 const TILE_SIZE = 256;
 const PRELOAD_TILE_BUFFER = 2;
@@ -693,6 +694,7 @@ export function LocationMapPreview({ location, onOpen }) {
 export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
   const t = useT();
   const { lang } = useLanguage();
+  const instantPress = useInstantPress();
   const initial = validCoord(initialLocation) || FALLBACK_WGS;
   const [center, setCenter] = useState(() => toMapCoord(initial));
   const [zoom, setZoom] = useState(16);
@@ -707,6 +709,11 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
   const mapInteractingRef = useRef(false);
   const centerWgsRef = useRef(centerWgs);
   const useAmapSdk = hasAmapSdkConfig() && !sdkUnavailable;
+
+  function zoomBy(delta, event) {
+    event?.stopPropagation?.();
+    setZoom(z => clamp(z + delta, MIN_ZOOM, MAX_ZOOM));
+  }
 
   useEffect(() => {
     centerWgsRef.current = centerWgs;
@@ -858,7 +865,7 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 }} aria-label={t("location.detect_button")} title={t("location.detect_button")}>
                   {locating ? <Spinner size={14} thickness={1.5} /> : <PinIcon size={17} />}
                 </button>
-                <button type="button" onClick={() => setZoom(z => clamp(z + 1, MIN_ZOOM, MAX_ZOOM))} style={{
+                <button type="button" {...instantPress("map-picker-sdk-zoom-in", (event) => zoomBy(1, event))} style={{
                   ...s.btnGhost,
                   width: 42,
                   height: 42,
@@ -867,8 +874,10 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                   fontSize: 20,
                   background: "#151b18",
                   boxShadow: "none",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }} aria-label={t("location.zoom_in")}>+</button>
-                <button type="button" onClick={() => setZoom(z => clamp(z - 1, MIN_ZOOM, MAX_ZOOM))} style={{
+                <button type="button" {...instantPress("map-picker-sdk-zoom-out", (event) => zoomBy(-1, event))} style={{
                   ...s.btnGhost,
                   width: 42,
                   height: 42,
@@ -877,6 +886,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                   fontSize: 22,
                   background: "#151b18",
                   boxShadow: "none",
+                  touchAction: "manipulation",
+                  WebkitTapHighlightColor: "transparent",
                 }} aria-label={t("location.zoom_out")}>-</button>
               </div>
             </AmapSdkMapView>
@@ -914,7 +925,7 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
               }} aria-label={t("location.detect_button")} title={t("location.detect_button")}>
                 {locating ? <Spinner size={14} thickness={1.5} /> : <PinIcon size={17} />}
               </button>
-              <button type="button" onClick={() => setZoom(z => clamp(z + 1, MIN_ZOOM, MAX_ZOOM))} style={{
+              <button type="button" {...instantPress("map-picker-fallback-zoom-in", (event) => zoomBy(1, event))} style={{
                 ...s.btnGhost,
                 width: 42,
                 height: 42,
@@ -923,8 +934,10 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 fontSize: 20,
                 background: "#151b18",
                 boxShadow: "none",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }} aria-label={t("location.zoom_in")}>+</button>
-              <button type="button" onClick={() => setZoom(z => clamp(z - 1, MIN_ZOOM, MAX_ZOOM))} style={{
+              <button type="button" {...instantPress("map-picker-fallback-zoom-out", (event) => zoomBy(-1, event))} style={{
                 ...s.btnGhost,
                 width: 42,
                 height: 42,
@@ -933,6 +946,8 @@ export function MapPickerModal({ initialLocation, onConfirm, onClose }) {
                 fontSize: 22,
                 background: "#151b18",
                 boxShadow: "none",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }} aria-label={t("location.zoom_out")}>-</button>
             </div>
             </StreetMapView>

@@ -425,7 +425,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
             </div>
             <button
               type="button"
-              onClick={() => setShowMeta(v => !v)}
+              {...instantPress("coach-plan-meta-toggle", () => setShowMeta(v => !v))}
               aria-label={actionMetaTitle}
               title={actionMetaTitle}
               aria-expanded={showMeta}
@@ -447,6 +447,8 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
                 cursor: "pointer",
                 padding: 0,
                 flex: "0 0 auto",
+                touchAction: "manipulation",
+                WebkitTapHighlightColor: "transparent",
               }}
             >
               !

@@ -5257,6 +5257,7 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
           <span style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10,
+            lineHeight: 1.25,
             border: "1px solid var(--rule)",
             borderRadius: 4,
             padding: "1px 5px",
@@ -5279,6 +5280,8 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
             color: "var(--ink-3)",
             textDecoration: "line-through",
             marginBottom: 3,
+            overflowWrap: "anywhere",
+            wordBreak: "break-word",
           }}>
             {oldText}
           </span>
@@ -5289,6 +5292,8 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
           lineHeight: 1.5,
           color: selected || entry.kind === "unchanged" ? "var(--ink-1)" : "var(--ink-3)",
           textDecoration: selected || entry.kind === "unchanged" ? "none" : "line-through",
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
         }}>
           {text || t("coach.memory_review_empty_fact")}
         </span>
@@ -5300,7 +5305,7 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
 const memoryReviewListStyle = {
   display: "flex",
   flexDirection: "column",
-  gap: 6,
+  gap: 8,
   maxHeight: 360,
   overflowY: "auto",
   border: "1px solid var(--moss)",
@@ -5314,8 +5319,12 @@ const memoryReviewEntryStyle = {
   gap: 8,
   alignItems: "flex-start",
   padding: "8px 9px",
+  minHeight: 0,
+  height: "auto",
+  boxSizing: "border-box",
   border: "1px solid var(--rule)",
   borderRadius: 6,
+  overflow: "hidden",
 };
 
 const memoryReviewCheckStyle = (selected) => ({

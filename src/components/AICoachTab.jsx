@@ -5231,14 +5231,21 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
   const removable = entry.kind === "removed";
   const label = t(`coach.memory_review_kind_${entry.kind}`);
   const locked = disabled || entry.kind === "unchanged";
+  const handleToggle = () => {
+    if (!locked) onToggle?.();
+  };
   return (
-    <button
-      type="button"
-      {...instantTap(`memory-review-entry-${entry.key}`, () => {
-        if (!locked) onToggle?.();
-      })}
-      disabled={locked}
+    <div
+      role="button"
+      tabIndex={locked ? -1 : 0}
+      {...instantTap(`memory-review-entry-${entry.key}`, handleToggle)}
+      onKeyDown={(event) => {
+        if (locked || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        onToggle?.();
+      }}
       aria-pressed={selected}
+      aria-disabled={locked}
       style={{
       ...memoryReviewEntryStyle,
       width: "100%",
@@ -5298,7 +5305,7 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
           {text || t("coach.memory_review_empty_fact")}
         </span>
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -5324,7 +5331,7 @@ const memoryReviewEntryStyle = {
   boxSizing: "border-box",
   border: "1px solid var(--rule)",
   borderRadius: 6,
-  overflow: "hidden",
+  whiteSpace: "normal",
 };
 
 const memoryReviewCheckStyle = (selected) => ({

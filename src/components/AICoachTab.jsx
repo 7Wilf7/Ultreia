@@ -5221,7 +5221,6 @@ function MemoryProposalReview({ proposal, displayLang, oldFacts = [], onAccept, 
 }
 
 function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t }) {
-  const instantTap = useInstantTap();
   const fact = entry.fact || entry.oldFact || {};
   const oldFact = entry.oldFact || null;
   const text = displayLang === "zh" ? (fact.contentZh || fact.contentEn || "") : (fact.contentEn || fact.contentZh || "");
@@ -5235,31 +5234,26 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
     if (!locked) onToggle?.();
   };
   return (
-    <div
-      role="button"
-      tabIndex={locked ? -1 : 0}
-      {...instantTap(`memory-review-entry-${entry.key}`, handleToggle)}
-      onKeyDown={(event) => {
-        if (locked || (event.key !== "Enter" && event.key !== " ")) return;
-        event.preventDefault();
-        onToggle?.();
-      }}
-      aria-pressed={selected}
-      aria-disabled={locked}
-      style={{
+    <div style={{
       ...memoryReviewEntryStyle,
-      width: "100%",
       borderColor: selected ? "var(--moss)" : "var(--rule)",
       background: selected ? "var(--moss-bg)" : "var(--panel-2)",
       opacity: disabled && entry.kind !== "unchanged" ? 0.72 : 1,
-      cursor: locked ? "default" : "pointer",
-      textAlign: "left",
-      fontFamily: "var(--font-sans)",
-      touchAction: "pan-y",
-      WebkitTapHighlightColor: "transparent",
     }}>
       <div style={memoryReviewHeaderStyle}>
-        <span aria-hidden="true" style={memoryReviewCheckStyle(selected)} />
+        <button
+          type="button"
+          onClick={handleToggle}
+          onKeyDown={(event) => {
+            if (locked || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            onToggle?.();
+          }}
+          aria-pressed={selected}
+          aria-disabled={locked}
+          disabled={locked}
+          style={memoryReviewCheckStyle(selected)}
+        />
         <div style={memoryReviewMetaStyle}>
           <span style={{
             fontFamily: "var(--font-mono)",
@@ -5282,14 +5276,16 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
       </div>
       <div style={memoryReviewContentStyle}>
         {oldText && oldText !== text && (
-          <div style={{
-            ...memoryReviewTextStyle,
-            fontSize: 12,
-            color: "var(--ink-3)",
-            textDecoration: "line-through",
-            marginBottom: 3,
-          }}>
-            {oldText}
+          <div style={memoryReviewPreviousFactStyle}>
+            <div style={memoryReviewPreviousLabelStyle}>{displayLang === "zh" ? "原记录" : "Previous"}</div>
+            <div style={{
+              ...memoryReviewTextStyle,
+              fontSize: 12,
+              color: "var(--ink-3)",
+              textDecoration: "line-through",
+            }}>
+              {oldText}
+            </div>
           </div>
         )}
         <div style={{
@@ -5318,14 +5314,19 @@ const memoryReviewListStyle = {
 };
 
 const memoryReviewEntryStyle = {
-  display: "block",
-  padding: "8px 9px",
-  minHeight: 0,
-  height: "auto",
+  display: "flex",
+  flexDirection: "column",
+  gap: 7,
+  width: "100%",
+  padding: "9px 10px",
+  minHeight: "auto",
+  height: "max-content",
   boxSizing: "border-box",
   border: "1px solid var(--rule)",
   borderRadius: 6,
   whiteSpace: "normal",
+  textAlign: "left",
+  fontFamily: "var(--font-sans)",
 };
 
 const memoryReviewHeaderStyle = {
@@ -5333,7 +5334,7 @@ const memoryReviewHeaderStyle = {
   alignItems: "center",
   gap: 8,
   minWidth: 0,
-  marginBottom: 5,
+  width: "100%",
 };
 
 const memoryReviewMetaStyle = {
@@ -5346,13 +5347,16 @@ const memoryReviewMetaStyle = {
 };
 
 const memoryReviewContentStyle = {
-  display: "block",
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
   minWidth: 0,
-  paddingLeft: 24,
+  paddingLeft: 26,
 };
 
 const memoryReviewTextStyle = {
   display: "block",
+  margin: 0,
   lineHeight: 1.5,
   maxWidth: "100%",
   whiteSpace: "normal",
@@ -5360,17 +5364,35 @@ const memoryReviewTextStyle = {
   wordBreak: "break-word",
 };
 
+const memoryReviewPreviousFactStyle = {
+  display: "block",
+  padding: "6px 7px",
+  border: "1px solid var(--rule)",
+  borderRadius: 5,
+  background: "var(--panel-2)",
+};
+
+const memoryReviewPreviousLabelStyle = {
+  fontSize: 10,
+  lineHeight: 1.2,
+  color: "var(--ink-3)",
+  marginBottom: 3,
+};
+
 const memoryReviewCheckStyle = (selected) => ({
   width: 16,
   height: 16,
   minWidth: 0,
   minHeight: 0,
+  padding: 0,
   flexShrink: 0,
-  marginTop: 3,
   borderRadius: 4,
   border: `1px solid ${selected ? "var(--moss)" : "var(--rule)"}`,
   background: selected ? "var(--moss)" : "var(--bg-elevated)",
   boxShadow: selected ? "inset 0 0 0 3px var(--bg)" : "none",
+  cursor: "pointer",
+  touchAction: "manipulation",
+  WebkitTapHighlightColor: "transparent",
 });
 
 const memoryReviewEmptyStyle = {

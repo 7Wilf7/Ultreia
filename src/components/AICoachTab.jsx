@@ -5258,9 +5258,9 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
       touchAction: "pan-y",
       WebkitTapHighlightColor: "transparent",
     }}>
-      <span aria-hidden="true" style={memoryReviewCheckStyle(selected)} />
-      <div style={memoryReviewBodyStyle}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+      <div style={memoryReviewHeaderStyle}>
+        <span aria-hidden="true" style={memoryReviewCheckStyle(selected)} />
+        <div style={memoryReviewMetaStyle}>
           <span style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10,
@@ -5279,6 +5279,8 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
             </span>
           )}
         </div>
+      </div>
+      <div style={memoryReviewContentStyle}>
         {oldText && oldText !== text && (
           <div style={{
             ...memoryReviewTextStyle,
@@ -5316,10 +5318,7 @@ const memoryReviewListStyle = {
 };
 
 const memoryReviewEntryStyle = {
-  display: "grid",
-  gridTemplateColumns: "16px minmax(0, 1fr)",
-  columnGap: 8,
-  alignItems: "start",
+  display: "block",
   padding: "8px 9px",
   minHeight: 0,
   height: "auto",
@@ -5329,9 +5328,27 @@ const memoryReviewEntryStyle = {
   whiteSpace: "normal",
 };
 
-const memoryReviewBodyStyle = {
+const memoryReviewHeaderStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 8,
   minWidth: 0,
+  marginBottom: 5,
+};
+
+const memoryReviewMetaStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  flex: 1,
+  flexWrap: "wrap",
+  minWidth: 0,
+};
+
+const memoryReviewContentStyle = {
   display: "block",
+  minWidth: 0,
+  paddingLeft: 24,
 };
 
 const memoryReviewTextStyle = {

@@ -5259,8 +5259,8 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
       WebkitTapHighlightColor: "transparent",
     }}>
       <span aria-hidden="true" style={memoryReviewCheckStyle(selected)} />
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+      <div style={memoryReviewBodyStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
           <span style={{
             fontFamily: "var(--font-mono)",
             fontSize: 10,
@@ -5278,33 +5278,27 @@ function MemoryReviewEntry({ entry, selected, disabled, displayLang, onToggle, t
               {t(`coach.memory_fact_category_${fact.category}`)}
             </span>
           )}
-        </span>
+        </div>
         {oldText && oldText !== text && (
-          <span style={{
-            display: "block",
+          <div style={{
+            ...memoryReviewTextStyle,
             fontSize: 12,
-            lineHeight: 1.45,
             color: "var(--ink-3)",
             textDecoration: "line-through",
             marginBottom: 3,
-            overflowWrap: "anywhere",
-            wordBreak: "break-word",
           }}>
             {oldText}
-          </span>
+          </div>
         )}
-        <span style={{
-          display: "block",
+        <div style={{
+          ...memoryReviewTextStyle,
           fontSize: 13,
-          lineHeight: 1.5,
           color: selected || entry.kind === "unchanged" ? "var(--ink-1)" : "var(--ink-3)",
           textDecoration: selected || entry.kind === "unchanged" ? "none" : "line-through",
-          overflowWrap: "anywhere",
-          wordBreak: "break-word",
         }}>
           {text || t("coach.memory_review_empty_fact")}
-        </span>
-      </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -5322,9 +5316,10 @@ const memoryReviewListStyle = {
 };
 
 const memoryReviewEntryStyle = {
-  display: "flex",
-  gap: 8,
-  alignItems: "flex-start",
+  display: "grid",
+  gridTemplateColumns: "16px minmax(0, 1fr)",
+  columnGap: 8,
+  alignItems: "start",
   padding: "8px 9px",
   minHeight: 0,
   height: "auto",
@@ -5332,6 +5327,20 @@ const memoryReviewEntryStyle = {
   border: "1px solid var(--rule)",
   borderRadius: 6,
   whiteSpace: "normal",
+};
+
+const memoryReviewBodyStyle = {
+  minWidth: 0,
+  display: "block",
+};
+
+const memoryReviewTextStyle = {
+  display: "block",
+  lineHeight: 1.5,
+  maxWidth: "100%",
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
 };
 
 const memoryReviewCheckStyle = (selected) => ({

@@ -1,6 +1,6 @@
 # Ultreia
 
-Ultreia 是一个面向耐力跑者的个人教练操作台：训练记录、日历计划、赛事管理、AI Coach、天气和钱包扣费集中在同一个 React/Vite 单页应用里。
+Ultreia 是一个面向耐力跑者的个人教练操作台：训练记录、日历计划、赛事管理、AI Coach、天气和账号设置集中在同一个 React/Vite 单页应用里。
 
 正式 Web 入口：<https://ultreia.run/>
 

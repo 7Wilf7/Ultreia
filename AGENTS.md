@@ -87,6 +87,8 @@ git tag v0.2.0 && git push origin v0.2.0
 
 **tag 前 Android 原生检查**：推 APK / tag 前除了常规 `npm run test`、`npm run lint`、`npm run build`，还要跑一次 Android release 配置检查，至少覆盖 manifest 合并：`cd android && bash ./gradlew :app:processReleaseMainManifest --no-daemon`。如果本机缺 Java / Android SDK 跑不了，要在交付里明确说明未本地验证，并在推 tag 后用 `gh run view --log-failed` 跟进失败原因，不能只说 bump 成功。
 
+**GitHub Actions 查询兜底**：如果本机 `gh run list/view` 报 TLS / x509 证书错误，这只说明本机 GitHub CLI 证书链不可用，不代表 APK workflow 没触发；先用 `git ls-remote --tags origin vX.Y.Z` 确认 tag 已在远端，再通过 GitHub 网页或公开 API 核对 `Release Android APK`，并在交付里明示本机无法用 `gh` 跟进。
+
 **版本号规则（pre-1.0，`0.MINOR.PATCH`，只增不跳号）**：每个 tag = 一次发版，判据只有一条——这次 tag 里**有没有用户能感知的新功能**。
 
 - **PATCH +1**（`0.7.0 → 0.7.1`）：bug 修复、样式 / 文案微调、性能优化、随代码改的文档——**不含**新的用户可感知功能。

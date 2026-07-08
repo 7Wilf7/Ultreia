@@ -46,13 +46,20 @@ describe("import review note helpers", () => {
       .toBe("换了新鞋\nSelf review: 腿很沉\nCoach review: 控制得不错");
   });
 
-  it("splits display note parts for the activity detail two-column layout", () => {
+  it("splits display note parts for the activity detail review lines", () => {
     expect(formatWorkoutReviewNoteParts("换了新鞋\nselfreview: 腿很沉\ncoachreview: 控制得不错", "zh"))
       .toEqual({
         other: "换了新鞋",
         selfReview: "腿很沉",
         coachReview: "控制得不错",
       });
+  });
+
+  it("caps stored review snippets for two-line mobile display", () => {
+    const raw = "今天前半段腿很沉第三公里以后才慢慢打开最后一公里心率稳定但不想再加速";
+    const body = buildImportSelfReviewNote(raw, "", "zh").replace("selfreview: ", "");
+    expect(body.length).toBeLessThanOrEqual(28);
+    expect(body.endsWith("...")).toBe(true);
   });
 
   it("merges without duplicating review notes", () => {

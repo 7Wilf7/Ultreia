@@ -45,6 +45,21 @@ export function countInboxUnreadByTab(items) {
   return counts;
 }
 
+export function mergeInboxRefreshRows(currentItems, refreshedItems) {
+  const currentById = new Map();
+  for (const item of currentItems || []) {
+    if (item?.id) currentById.set(item.id, item);
+  }
+  return (refreshedItems || []).map(item => {
+    const current = item?.id ? currentById.get(item.id) : null;
+    if (!current) return item;
+    return {
+      ...item,
+      read: item?.read === true || current.read === true,
+    };
+  });
+}
+
 export function firstUnreadInboxTab(unreadByTab) {
   if (unreadByTab?.daily > 0) return "daily";
   if (unreadByTab?.weekly > 0) return "weekly";

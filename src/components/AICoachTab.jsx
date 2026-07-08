@@ -494,7 +494,7 @@ const CoachChatMessages = memo(function CoachChatMessages({
             ? "var(--ink-3)"
             : "var(--ink-2)";
         return (
-          <div key={m.id || i} className="ultreia-msg-in" style={{
+          <div key={m.id || i} className="ultreia-msg-in" data-coach-message-index={i} style={{
             alignSelf: isUser ? "flex-end" : "flex-start",
             // Mobile bubbles get wider so long messages don't squeeze into
             // a narrow column the user has to keep scrolling to read.
@@ -1221,6 +1221,7 @@ export function AICoachTab({
   // Programmatic scrolls (mount / new message / jump-button taps) fire scroll
   // events too — mute the button logic briefly so they don't flash the arrows.
   const suppressJumpUntil = useRef(0);
+  const lastAssistantTopScrollTurnRef = useRef(null);
 
   // Jump buttons appear only WHILE the user is actively scrolling, then fade
   // out 2s after scrolling stops — so they never sit on top of the text while
@@ -1288,6 +1289,46 @@ export function AICoachTab({
     const id = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(id);
   }, [chatMessages.length, muteAndHideJumps]);
+
+  useLayoutEffect(() => {
+    if (!chatLoading) return;
+    const el = chatScrollRef.current;
+    if (!el) return;
+
+    let assistant = null;
+    let assistantIndex = -1;
+    for (let i = chatMessages.length - 1; i >= 0; i -= 1) {
+      const message = chatMessages[i];
+      const text = parseCoachMessageMeta(message?.content).text;
+      if (message?.role === "assistant" && message.isStreaming && String(text || "").trim()) {
+        assistant = message;
+        assistantIndex = i;
+        break;
+      }
+    }
+    if (!assistant || assistantIndex < 0) return;
+
+    let userKey = "";
+    for (let i = assistantIndex - 1; i >= 0; i -= 1) {
+      const message = chatMessages[i];
+      if (message?.role === "user") {
+        userKey = String(message.id || message.createdAt || message.content || i);
+        break;
+      }
+    }
+    const turnKey = userKey || String(assistant.createdAt || assistant.id || assistantIndex);
+    if (lastAssistantTopScrollTurnRef.current === turnKey) return;
+
+    const node = el.querySelector(`[data-coach-message-index="${assistantIndex}"]`);
+    if (!node) return;
+    lastAssistantTopScrollTurnRef.current = turnKey;
+    muteAndHideJumps();
+    const rootRect = el.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    const top = Math.max(0, el.scrollTop + nodeRect.top - rootRect.top - 10);
+    el.scrollTo({ top, behavior: "smooth" });
+  }, [chatLoading, chatMessages, muteAndHideJumps]);
+
   // Drop the pending hide timer if the tab unmounts mid-countdown.
   useEffect(() => () => {
     clearTimeout(hideJumpTimer.current);

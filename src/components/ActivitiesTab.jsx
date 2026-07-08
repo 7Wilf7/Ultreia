@@ -1597,36 +1597,31 @@ function WorkoutReviewGrid({ parts, lang }) {
   if (!items.length) return null;
   return (
     <div style={{
-      display: "grid",
-      gridTemplateColumns: items.length > 1 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)",
-      gap: 8,
+      display: "flex",
+      flexDirection: "column",
+      gap: 3,
+      borderTop: "1px solid var(--rule-soft)",
+      paddingTop: 7,
     }}>
       {items.map(item => (
         <div key={item.key} title={item.text} style={{
-          minWidth: 0,
-          borderTop: "1px solid var(--rule-soft)",
-          paddingTop: 7,
+          color: "var(--ink-2)",
+          display: "-webkit-box",
+          fontSize: 12,
+          lineHeight: 1.45,
+          overflow: "hidden",
+          overflowWrap: "anywhere",
+          WebkitBoxOrient: "vertical",
+          WebkitLineClamp: 2,
         }}>
-          <div style={{
+          <span style={{
             fontFamily: "var(--font-mono)",
-            fontSize: 10.5,
             color: "var(--ink-3)",
-            marginBottom: 3,
+            fontWeight: 650,
           }}>
-            {item.label}
-          </div>
-          <div style={{
-            color: "var(--ink-2)",
-            display: "-webkit-box",
-            fontSize: 12,
-            lineHeight: 1.45,
-            overflow: "hidden",
-            overflowWrap: "anywhere",
-            WebkitBoxOrient: "vertical",
-            WebkitLineClamp: 2,
-          }}>
+            {item.label}{lang === "zh" ? "：" : ": "}
+          </span>
             {item.text}
-          </div>
         </div>
       ))}
     </div>

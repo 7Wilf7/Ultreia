@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countInboxUnreadByTab, firstUnreadInboxTab, getInboxItemTab } from "../utils/inboxTabs";
+import { countInboxUnreadByTab, firstUnreadInboxTab, getInboxItemTab, mergeInboxRefreshRows } from "../utils/inboxTabs";
 
 describe("InboxModal unread tab helpers", () => {
   it("classifies push inbox items with the same buckets used by the inbox tabs", () => {
@@ -23,5 +23,16 @@ describe("InboxModal unread tab helpers", () => {
     expect(firstUnreadInboxTab({ daily: 0, weekly: 1, other: 1 })).toBe("weekly");
     expect(firstUnreadInboxTab({ daily: 0, weekly: 0, other: 1 })).toBe("other");
     expect(firstUnreadInboxTab({ daily: 0, weekly: 0, other: 0 })).toBe("daily");
+  });
+
+  it("keeps locally-read rows read when an open refresh returns stale data", () => {
+    const merged = mergeInboxRefreshRows(
+      [{ id: "daily-1", title: "Daily check-in", read: true }],
+      [{ id: "daily-1", title: "Daily check-in", body: "Still unread on DB replica", read: false }],
+    );
+
+    expect(merged).toEqual([
+      { id: "daily-1", title: "Daily check-in", body: "Still unread on DB replica", read: true },
+    ]);
   });
 });

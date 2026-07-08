@@ -6,7 +6,7 @@ import * as db from "../lib/db";
 import { useAppDialog } from "./AppDialogContext";
 import { weekWindow } from "../utils/weeklyReport";
 import { isMemoryUpdateAction, isRaceBriefingAction } from "../utils/agentActions";
-import { countInboxUnreadByTab, getInboxItemTab } from "../utils/inboxTabs";
+import { countInboxUnreadByTab, getInboxItemTab, mergeInboxRefreshRows } from "../utils/inboxTabs";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 function shortRange(start, end) {
@@ -167,7 +167,9 @@ export function InboxModal({
 
   useEffect(() => {
     let cancelled = false;
-    db.pushInbox.listMine().then(rows => { if (!cancelled) setItems(rows); }).catch(() => {});
+    db.pushInbox.listMine().then(rows => {
+      if (!cancelled) setItems(prev => mergeInboxRefreshRows(prev, rows));
+    }).catch(() => {});
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

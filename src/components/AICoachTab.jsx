@@ -1683,11 +1683,12 @@ export function AICoachTab({
   const hasDefaultLocation = hasValidCoords(defaultLocation);
   const locationCity = cityFromLocation(defaultLocation);
   const locationLabel = cityAbbreviationFromLocation(defaultLocation, lang);
-  const runnerLastSeenIso = codexRunnerStatus?.last_seen_at || null;
+  const runnerOptimistic = codexRunnerStatus?.optimistic === true;
+  const runnerLastSeenIso = runnerOptimistic ? null : (codexRunnerStatus?.last_seen_at || null);
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
   const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 12_000;
   const runnerStaleMs = Number(codexRunnerStatus?.stale_ms) || 8_000;
-  const serverRunnerState = codexRunnerStatus?.state || "loading";
+  const serverRunnerState = codexRunnerStatus?.state || "online";
   const runnerState = (serverRunnerState === "online" || serverRunnerState === "stale") && runnerAge !== null
     ? runnerAge > runnerFreshMs + runnerStaleMs
       ? "offline"
@@ -1719,7 +1720,9 @@ export function AICoachTab({
   const runnerDetailParts = [
     runnerModel,
     runnerEffort,
-    runnerLastSeen ? (lang === "zh" ? `${runnerLastSeen} 在线` : `seen ${runnerLastSeen}`) : null,
+    runnerOptimistic
+      ? (lang === "zh" ? "正在确认连接" : "confirming connection")
+      : runnerLastSeen ? (lang === "zh" ? `${runnerLastSeen} 在线` : `seen ${runnerLastSeen}`) : null,
   ].filter(Boolean);
   const runnerDetail = runnerDetailParts.join(" · ");
   const runnerFallbackText = runnerHealthy

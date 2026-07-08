@@ -681,8 +681,34 @@ const BOOT_LOGO_RIDGE_PATHS = [
 const BOOT_LOGO_ROUTE_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512 Z";
 const BOOT_LOGO_MARK_PATH = [...BOOT_LOGO_RIDGE_PATHS, BOOT_LOGO_ROUTE_PATH].join(" ");
 const RUNNER_STATUS_POLL_MS = 2_000;
+const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
 const COACH_MESSAGE_CACHE_LIMIT = 200;
+
+function createOptimisticRunnerStatus(source = {}) {
+  return {
+    ...source,
+    provider: "desktop_codex",
+    state: "online",
+    runner_state: "online",
+    codex_status: source.codex_status === "ok" ? "ok" : "unknown",
+    expected_provider: source.preference === "deepseek_only" ? "deepseek" : "desktop_codex",
+    optimistic: true,
+    pending_state: source.state || null,
+    checked_at: source.checked_at || new Date().toISOString(),
+  };
+}
+
+function isRunnerHardFailure(status) {
+  return status?.codex_status === "auth_error"
+    || status?.codex_status === "error"
+    || status?.reason === "desktop_codex_auth_error";
+}
+
+function shouldConfirmRunnerDisconnect(status) {
+  const state = status?.state || "unknown";
+  return state === "unknown" || state === "offline" || state === "error";
+}
 
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
@@ -2345,7 +2371,7 @@ function AppShell({
   const [coachChatDraft, setCoachChatDraft] = useState("");
   const [contextCompressing, setContextCompressing] = useState(false);
   const [lastCoachProvider, setLastCoachProvider] = useState({ id: "deepseek", label: "DeepSeek", fallback: null });
-  const [codexRunnerStatus, setCodexRunnerStatus] = useState({ state: "loading", provider: "desktop_codex" });
+  const [codexRunnerStatus, setCodexRunnerStatus] = useState(() => createOptimisticRunnerStatus({ state: "initial" }));
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [recoveryGuardLoading, setRecoveryGuardLoading] = useState(false);
@@ -2366,12 +2392,28 @@ function AppShell({
   const chatAbortRef = useRef(null);
   const chatRunRef = useRef(0);
   const runnerStatusAbortRef = useRef(null);
+  const runnerDisconnectSinceRef = useRef(null);
   const extractAbortRef = useRef(null);
   const extractRunRef = useRef(0);
   const weeklyReportAbortRef = useRef(null);
   const weeklyReportRunRef = useRef(0);
   const proactiveAdjustmentAbortRef = useRef(null);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
+  const prepareRunnerStatusForDisplay = useCallback((status) => {
+    const next = status || { state: "unknown", provider: "desktop_codex" };
+    if (!shouldConfirmRunnerDisconnect(next) || isRunnerHardFailure(next)) {
+      if (!shouldConfirmRunnerDisconnect(next)) runnerDisconnectSinceRef.current = null;
+      return next;
+    }
+
+    const now = Date.now();
+    const disconnectSince = runnerDisconnectSinceRef.current || now;
+    runnerDisconnectSinceRef.current = disconnectSince;
+    if (now - disconnectSince < RUNNER_STATUS_DISCONNECT_CONFIRM_MS) {
+      return createOptimisticRunnerStatus(next);
+    }
+    return next;
+  }, []);
   const refreshCodexRunnerStatus = useCallback(async (options = {}) => {
     const force = options.force === true;
     if (mobilePagerDraggingRef.current && !force) return null;
@@ -2384,13 +2426,13 @@ function AppShell({
     try {
       const data = await db.usage.getRunnerStatus({ signal: controller.signal });
       if (!mobilePagerDraggingRef.current) {
-        setCodexRunnerStatus(data || { state: "unknown", provider: "desktop_codex" });
+        setCodexRunnerStatus(prepareRunnerStatusForDisplay(data));
       }
       return data;
     } catch (err) {
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted) return null;
       if (!mobilePagerDraggingRef.current) {
-        setCodexRunnerStatus(prev => ({
+        setCodexRunnerStatus(prev => prepareRunnerStatusForDisplay({
           ...prev,
           provider: "desktop_codex",
           state: "error",
@@ -2404,7 +2446,7 @@ function AppShell({
     } finally {
       if (runnerStatusAbortRef.current === controller) runnerStatusAbortRef.current = null;
     }
-  }, []);
+  }, [prepareRunnerStatusForDisplay]);
   useEffect(() => {
     refreshCodexRunnerStatus({ force: true });
     const timer = setInterval(refreshCodexRunnerStatus, RUNNER_STATUS_POLL_MS);

@@ -1003,9 +1003,9 @@ export function RacesTab({
     //   Target row 1 = priority · category tag · subtype · countdown.
     //   Target row 2 = date · race name (ellipsised) · time/ascent suffix.
     //   Target row 3 = distance + ascent for Trail.
-    //   History row 1 = category tag · subtype · result time.
+    //   History row 1 = date · category tag · subtype/ITRA · result time.
     //   History row 2 = race name only, allowed to wrap.
-    //   History row 3 = date / distance / ascent / ITRA when present.
+    //   History row 3 = Trail course data only: distance / ascent.
     if (isNarrow) {
       const isTrailLike = r.category === "Trail";
       // Row 2 suffix: time (always) + ascent (only when NOT trail, since
@@ -1027,12 +1027,7 @@ export function RacesTab({
         const subtypeText = r.subtype
           ? (r.category === "Hyrox" ? t(`enum.hyrox.${r.subtype}`) : r.subtype)
           : "";
-        const historyDataParts = [
-          r.date || "",
-          distStr,
-          ascStr,
-          r.itraScore ? `ITRA ${r.itraScore}` : "",
-        ].filter(Boolean);
+        const trailCourseParts = isTrailLike ? [distStr, ascStr].filter(Boolean) : [];
         return (
           <div key={r.id}
             onClick={(e) => clickRaceCardTap(r, onMobileRaceCardTap, e)}
@@ -1052,6 +1047,16 @@ export function RacesTab({
             }}>
             <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0, width: "100%" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0, flex: "1 1 auto", flexWrap: "wrap" }}>
+                <span style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  lineHeight: 1.3,
+                  color: "var(--ink-3)",
+                  fontVariantNumeric: "tabular-nums",
+                  flexShrink: 0,
+                }}>
+                  {r.date || "—"}
+                </span>
                 {r.category ? renderCategoryTag(r.category) : (
                   <span onClick={(e) => e.stopPropagation()} style={{ display: "inline-block", maxWidth: 170 }}>
                     <Dropdown
@@ -1065,6 +1070,9 @@ export function RacesTab({
                 )}
                 {subtypeText && (
                   <span style={{ ...spartanTierStyle(r.subtype), flexShrink: 0 }}>{subtypeText}</span>
+                )}
+                {r.itraScore && (
+                  <span style={{ ...s.subTag, fontSize: 10, flexShrink: 0 }}>ITRA {r.itraScore}</span>
                 )}
               </div>
               {timeStr && (
@@ -1098,7 +1106,7 @@ export function RacesTab({
               }}>
               {r.name}
             </div>
-            {historyDataParts.length > 0 && (
+            {trailCourseParts.length > 0 && (
               <div style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: 12,
@@ -1107,7 +1115,7 @@ export function RacesTab({
                 fontVariantNumeric: "tabular-nums",
                 overflowWrap: "anywhere",
               }}>
-                {historyDataParts.join(" · ")}
+                {trailCourseParts.join(" · ")}
               </div>
             )}
             {weatherOpen[r.id] && renderRaceWeather(r)}

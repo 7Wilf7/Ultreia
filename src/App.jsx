@@ -1000,7 +1000,7 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
                 <rect x="0" y="0" width="512" height="512" rx="113" ry="113" />
               </clipPath>
               <mask id="ultreiaBootRevealMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
-                <rect x="0" y="0" width="512" height="512" fill="#000" />
+                <rect x="0" y="0" width="512" height="512" fill="#fff" fillOpacity="0" />
                 <g transform={`translate(0 ${terrainTranslateY})`} fill="#fff">
                   <path d="M-70 620 L-70 -90 C38 -64 89 -88 166 -58 C244 -27 299 -98 383 -63 C451 -35 505 -71 582 -46 L582 620 Z" />
                 </g>

@@ -679,6 +679,18 @@ const BOOT_LOGO_RIDGE_PATHS = [
   "M279.1 166.5 L310.1 185 L305.8 206.8 L280.8 226.3 L265.5 216.6 L282.9 193.2 Z",
 ];
 const BOOT_LOGO_ROUTE_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512 Z";
+const BOOT_LOGO_CONTOUR_PATHS = [
+  "M0 209 C56 181 78 140 127 133 C176 126 170 74 213 48 C249 27 292 38 318 66",
+  "M0 279 C42 254 70 236 109 245 C147 255 160 289 149 323 C136 363 90 384 42 372",
+  "M15 347 C59 330 94 326 126 353 C159 381 170 428 218 433 C270 439 298 398 343 378 C395 354 452 372 512 414",
+  "M71 512 C109 468 137 428 188 417 C238 406 259 360 306 347 C352 335 395 353 435 389 C463 414 487 420 512 416",
+  "M158 0 C186 35 179 73 206 92 C239 116 290 99 325 130 C358 159 343 205 389 220 C426 233 464 215 512 199",
+  "M231 0 C213 44 214 78 248 91 C283 104 328 77 365 98 C400 118 390 157 423 174 C450 188 476 175 512 154",
+  "M322 0 C350 24 387 44 421 38 C458 31 475 28 512 40",
+  "M376 257 C420 241 468 260 512 292",
+  "M295 461 C329 430 377 426 409 452 C431 470 460 480 512 470",
+  "M178 207 C212 180 258 180 289 211 C314 235 344 239 382 224",
+];
 const RUNNER_STATUS_POLL_MS = 2_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
@@ -753,13 +765,43 @@ const BOOT_MOTION_CSS = `
 .ultreia-boot-logo-build {
   overflow: visible;
 }
-.ultreia-logo-shell,
-.ultreia-logo-ridge,
-.ultreia-logo-route {
+.ultreia-logo-wash,
+.ultreia-logo-mountain-wash,
+.ultreia-logo-frame-line,
+.ultreia-logo-contour-line,
+.ultreia-logo-mountain-line {
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
   will-change: opacity, transform;
+}
+.ultreia-logo-frame-line,
+.ultreia-logo-contour-line,
+.ultreia-logo-mountain-line {
+  fill: none;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  vector-effect: non-scaling-stroke;
+}
+.ultreia-logo-frame-line {
+  stroke: oklch(0.84 0.03 128);
+  stroke-linecap: round;
+  stroke-width: 2.2;
+}
+.ultreia-logo-frame-line-inner {
+  stroke-width: 1.1;
+}
+.ultreia-logo-contour-line {
+  stroke: oklch(0.66 0.055 132);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+.ultreia-logo-mountain-line {
+  stroke: oklch(0.86 0.055 126);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3.4;
 }
 .ultreia-boot-word {
   position: relative;
@@ -830,10 +872,11 @@ const BOOT_MOTION_CSS = `
 @media (prefers-reduced-motion: no-preference) {
   .ultreia-boot-logo-stage,
   .ultreia-boot-logo-build,
-  .ultreia-boot-logo-final,
-  .ultreia-logo-shell,
-  .ultreia-logo-ridge,
-  .ultreia-logo-route,
+  .ultreia-logo-wash,
+  .ultreia-logo-mountain-wash,
+  .ultreia-logo-frame-line,
+  .ultreia-logo-contour-line,
+  .ultreia-logo-mountain-line,
   .ultreia-word-final {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
@@ -847,26 +890,19 @@ const BOOT_MOTION_CSS = `
   .ultreia-boot-logo-build {
     animation-name: ultreiaBuildLayer;
   }
-  .ultreia-logo-shell {
-    animation-name: ultreiaShellEmerge;
-  }
-  .ultreia-logo-ridge-1 {
-    animation-name: ultreiaRidgeOneEmerge;
-  }
-  .ultreia-logo-ridge-2 {
-    animation-name: ultreiaRidgeTwoEmerge;
-  }
-  .ultreia-logo-ridge-3 {
-    animation-name: ultreiaRidgeThreeEmerge;
-  }
-  .ultreia-logo-ridge-4 {
-    animation-name: ultreiaRidgeFourEmerge;
-  }
-  .ultreia-logo-route {
-    animation-name: ultreiaRouteEmerge;
-  }
   .ultreia-boot-logo-final {
-    animation-name: ultreiaFinalLogo;
+    display: none;
+  }
+  .ultreia-logo-wash {
+    animation-name: ultreiaLogoDevelop;
+  }
+  .ultreia-logo-mountain-wash {
+    animation-name: ultreiaMountainDevelop;
+  }
+  .ultreia-logo-frame-line,
+  .ultreia-logo-contour-line,
+  .ultreia-logo-mountain-line {
+    animation-name: ultreiaTraceDraw;
   }
   .ultreia-word-final {
     animation-name: ultreiaWordReveal;
@@ -890,42 +926,26 @@ const BOOT_MOTION_CSS = `
 @keyframes ultreiaLogoStage {
   0%, 100% { opacity: 1; transform: none; }
 }
-@keyframes ultreiaShellEmerge {
-  0%, 10% { opacity: 0; transform: none; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  42% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 1; transform: none; }
-}
-@keyframes ultreiaRidgeOneEmerge {
-  0%, 42% { opacity: 0; transform: translateY(8px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  68% { opacity: 0.88; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.88; transform: translateY(0); }
-}
-@keyframes ultreiaRidgeTwoEmerge {
-  0%, 48% { opacity: 0; transform: translateY(7px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  74% { opacity: 0.92; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.92; transform: translateY(0); }
-}
-@keyframes ultreiaRidgeThreeEmerge {
-  0%, 54% { opacity: 0; transform: translateY(6px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  80% { opacity: 0.86; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.86; transform: translateY(0); }
-}
-@keyframes ultreiaRidgeFourEmerge {
-  0%, 58% { opacity: 0; transform: translateY(5px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  84% { opacity: 0.84; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.84; transform: translateY(0); }
-}
-@keyframes ultreiaRouteEmerge {
-  0%, 62% { opacity: 0; transform: translateY(8px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  90% { opacity: 0.9; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.9; transform: translateY(0); }
-}
 @keyframes ultreiaBuildLayer {
   0%, 100% { opacity: 1; }
 }
-@keyframes ultreiaFinalLogo {
-  0%, 82% { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 1; }
+@keyframes ultreiaLogoDevelop {
+  0% { opacity: 0; filter: brightness(0.42) saturate(0.7) blur(7px); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  18% { opacity: 0.16; filter: brightness(0.5) saturate(0.75) blur(5px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  72% { opacity: 0.62; filter: brightness(0.84) saturate(0.92) blur(1.6px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  100% { opacity: 1; filter: brightness(1) saturate(1) blur(0); }
+}
+@keyframes ultreiaMountainDevelop {
+  0% { opacity: 0; filter: brightness(0.65) saturate(0.75) blur(8px); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  20% { opacity: 0.10; filter: brightness(0.72) saturate(0.82) blur(6px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  78% { opacity: 0.34; filter: brightness(1.06) saturate(1.08) blur(1px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  100% { opacity: 0.02; filter: brightness(1) saturate(1) blur(0); }
+}
+@keyframes ultreiaTraceDraw {
+  0% { opacity: 0; stroke-dashoffset: 1; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  12% { opacity: 0.22; stroke-dashoffset: 0.88; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  72% { opacity: 0.78; stroke-dashoffset: 0.16; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  100% { opacity: 0.08; stroke-dashoffset: 0; }
 }
 @keyframes ultreiaWordReveal {
   0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
@@ -962,8 +982,8 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
   return (
     <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
-      {/* The original double-line frame belongs to the static logo background and
-          never gets redrawn. The shell fades in first; the mountain layers follow. */}
+      {/* The logo develops from the dark as one image. Frame, contours, and the
+          mountain outline draw on the same clock instead of filling cut-out holes. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
           <svg className="ultreia-boot-logo-build" viewBox="0 0 512 512" aria-hidden="true">
@@ -971,29 +991,27 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
               <clipPath id="ultreiaBootTileClip">
                 <rect x="0" y="0" width="512" height="512" rx="113" />
               </clipPath>
-              <mask id="ultreiaBootShellMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
-                <rect x="0" y="0" width="512" height="512" rx="113" fill="#fff" />
-                <g fill="#000" stroke="#000" strokeWidth="22" strokeLinecap="round" strokeLinejoin="round">
+              <mask id="ultreiaBootMountainGlowMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
+                <rect x="0" y="0" width="512" height="512" fill="#000" />
+                <g fill="#fff" stroke="#fff" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round">
                   {BOOT_LOGO_RIDGE_PATHS.map((path) => <path key={path} d={path} />)}
                   <path d={BOOT_LOGO_ROUTE_PATH} />
                 </g>
               </mask>
-              {BOOT_LOGO_RIDGE_PATHS.map((path, index) => (
-                <mask key={path} id={`ultreiaBootRidgeMask${index}`} x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
-                  <rect x="0" y="0" width="512" height="512" fill="#000" />
-                  <path d={path} fill="#fff" stroke="#fff" strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" />
-                </mask>
-              ))}
-              <mask id="ultreiaBootRouteMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
-                <rect x="0" y="0" width="512" height="512" fill="#000" />
-                <path d={BOOT_LOGO_ROUTE_PATH} fill="#fff" stroke="#fff" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
-              </mask>
             </defs>
-            <image className="ultreia-logo-shell" href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootShellMask)" />
-            {BOOT_LOGO_RIDGE_PATHS.map((path, index) => (
-              <image key={path} className={`ultreia-logo-ridge ultreia-logo-ridge-${index + 1}`} href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask={`url(#ultreiaBootRidgeMask${index})`} />
-            ))}
-            <image className="ultreia-logo-route" href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootRouteMask)" />
+            <image className="ultreia-logo-wash" href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" />
+            <image className="ultreia-logo-mountain-wash" href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootMountainGlowMask)" />
+            <g clipPath="url(#ultreiaBootTileClip)">
+              <rect className="ultreia-logo-frame-line" x="13" y="13" width="486" height="486" rx="106" pathLength={1} />
+              <rect className="ultreia-logo-frame-line ultreia-logo-frame-line-inner" x="18" y="18" width="476" height="476" rx="101" pathLength={1} />
+              {BOOT_LOGO_CONTOUR_PATHS.map((path) => (
+                <path key={path} className="ultreia-logo-contour-line" d={path} pathLength={1} />
+              ))}
+              {BOOT_LOGO_RIDGE_PATHS.map((path) => (
+                <path key={path} className="ultreia-logo-mountain-line" d={path} pathLength={1} />
+              ))}
+              <path className="ultreia-logo-mountain-line" d={BOOT_LOGO_ROUTE_PATH} pathLength={1} />
+            </g>
           </svg>
           <img
             className="ultreia-boot-logo-final"

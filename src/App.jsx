@@ -82,12 +82,7 @@ import {
   setStoredWeatherSettings,
 } from "./lib/weather";
 import { initPushNotifications, notifyTaskDone, setPushKeepAliveEnabled } from "./lib/push";
-import {
-  productBootLinesUrl,
-  productBootLogoUrl,
-  productBootMountainsUrl,
-  productLogoUrl,
-} from "./assets/logo";
+import { productBootLogoUrl, productLogoUrl } from "./assets/logo";
 import {
   appendCoachMessageMeta,
   estimateTextTokens,
@@ -677,6 +672,26 @@ function throwIfAborted(signal) {
 
 const BOOT_REVEAL_MS = 3600;
 const APP_BOOT_STARTED_AT = Date.now();
+const BOOT_MASK_CONTOUR_PATHS = [
+  "M0 209 C56 181 78 140 127 133 C176 126 170 74 213 48 C249 27 292 38 318 66",
+  "M0 279 C42 254 70 236 109 245 C147 255 160 289 149 323 C136 363 90 384 42 372",
+  "M158 0 C186 35 179 73 206 92 C239 116 290 99 325 130 C358 159 343 205 389 220 C426 233 464 215 512 199",
+  "M231 0 C213 44 214 78 248 91 C283 104 328 77 365 98 C400 118 390 157 423 174 C450 188 476 175 512 154",
+  "M322 0 C350 24 387 44 421 38 C458 31 475 28 512 40",
+  "M178 207 C212 180 258 180 289 211 C314 235 344 239 382 224",
+];
+const BOOT_MASK_CONTOUR_LATE_PATHS = [
+  "M15 347 C59 330 94 326 126 353 C159 381 170 428 218 433 C270 439 298 398 343 378 C395 354 452 372 512 414",
+  "M71 512 C109 468 137 428 188 417 C238 406 259 360 306 347 C352 335 395 353 435 389 C463 414 487 420 512 416",
+  "M376 257 C420 241 468 260 512 292",
+  "M295 461 C329 430 377 426 409 452 C431 470 460 480 512 470",
+];
+const BOOT_MASK_MOUNTAIN_PATHS = [
+  "M57.7 370 L97.9 318.3 L146.9 262.3 L197.5 201.3 L224.7 182.8 L223.1 227.4 L189.3 261.2 L164.3 298.2 L117.5 316.7 L83.2 349.3",
+  "M223.1 201.3 L279.1 128.4 L314.5 101.2 L314.5 161.1 L269.9 220.9 L248.1 217.6",
+  "M304.7 144.7 L439.6 288.4 L331.9 251.4 L311.8 187.2",
+];
+const BOOT_MASK_ROAD_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512";
 const RUNNER_STATUS_POLL_MS = 2_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
@@ -705,6 +720,77 @@ function isRunnerHardFailure(status) {
 function shouldConfirmRunnerDisconnect(status) {
   const state = status?.state || "unknown";
   return state === "unknown" || state === "offline" || state === "error";
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function easeOutCubic(value) {
+  const t = clamp01(value);
+  return 1 - ((1 - t) ** 3);
+}
+
+function easeInOutCubic(value) {
+  const t = clamp01(value);
+  return t < 0.5 ? 4 * t * t * t : 1 - (((-2 * t) + 2) ** 3) / 2;
+}
+
+function bootPhase(ms, start, end, easing = easeOutCubic) {
+  if (ms <= start) return 0;
+  if (ms >= end) return 1;
+  return easing((ms - start) / (end - start));
+}
+
+function getBootRevealMaskState(ms) {
+  const elapsed = Math.max(0, Math.min(BOOT_REVEAL_MS, ms));
+  return {
+    frame: bootPhase(elapsed, 0, 900),
+    contours: bootPhase(elapsed, 360, 1900, easeInOutCubic),
+    contoursLate: bootPhase(elapsed, 560, 2150, easeInOutCubic),
+    mountains: bootPhase(elapsed, 1260, 2760, easeInOutCubic),
+    road: bootPhase(elapsed, 1460, 2920, easeInOutCubic),
+    terrain: bootPhase(elapsed, 2350, BOOT_REVEAL_MS, easeInOutCubic),
+  };
+}
+
+function maskStrokeProps(progress) {
+  const p = clamp01(progress);
+  return {
+    opacity: p > 0.01 ? 1 : 0,
+    strokeDashoffset: 1 - p,
+  };
+}
+
+function useBootRevealElapsed(initialElapsedMs) {
+  const [elapsedMs, setElapsedMs] = useState(() => {
+    if (typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      return BOOT_REVEAL_MS;
+    }
+    return initialElapsedMs;
+  });
+
+  useEffect(() => {
+    if (typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+      return undefined;
+    }
+
+    let frameId = 0;
+    const tick = () => {
+      const next = Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT));
+      setElapsedMs((prev) => (Math.abs(prev - next) > 12 ? next : prev));
+      if (next < BOOT_REVEAL_MS) {
+        frameId = window.requestAnimationFrame(tick);
+      }
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  return elapsedMs;
 }
 
 const BOOT_MOTION_CSS = `
@@ -736,7 +822,7 @@ const BOOT_MOTION_CSS = `
   height: min(31vmin, 152px);
 }
 .ultreia-boot-logo-static,
-.ultreia-boot-logo-build {
+.ultreia-boot-logo-reveal {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -748,19 +834,14 @@ const BOOT_MOTION_CSS = `
   opacity: 0;
   pointer-events: none;
 }
-.ultreia-boot-logo-build {
-  overflow: hidden;
-}
-.ultreia-logo-layer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  opacity: 0;
-  transform-origin: center;
+.ultreia-boot-logo-reveal {
+  display: block;
+  overflow: visible;
   pointer-events: none;
-  will-change: opacity, filter, transform;
+  transform-origin: center;
+}
+.ultreia-boot-logo-image {
+  pointer-events: none;
 }
 .ultreia-boot-word {
   position: relative;
@@ -830,8 +911,6 @@ const BOOT_MOTION_CSS = `
 }
 @media (prefers-reduced-motion: no-preference) {
   .ultreia-boot-logo-stage,
-  .ultreia-boot-logo-build,
-  .ultreia-logo-layer,
   .ultreia-word-final {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
@@ -842,20 +921,8 @@ const BOOT_MOTION_CSS = `
     animation-name: ultreiaLogoStage;
     will-change: transform, opacity;
   }
-  .ultreia-boot-logo-build {
-    animation-name: ultreiaBuildLayer;
-  }
   .ultreia-boot-logo-static {
     display: none;
-  }
-  .ultreia-logo-base-layer {
-    animation-name: ultreiaExactLogoDevelop;
-  }
-  .ultreia-logo-line-layer {
-    animation-name: ultreiaExactLinesDevelop;
-  }
-  .ultreia-logo-mountain-layer {
-    animation-name: ultreiaExactMountainsDevelop;
   }
   .ultreia-word-final {
     animation-name: ultreiaWordReveal;
@@ -872,36 +939,12 @@ const BOOT_MOTION_CSS = `
     filter: none;
     clip-path: none;
   }
-  .ultreia-boot-logo-build {
+  .ultreia-boot-logo-reveal {
     display: none;
   }
 }
 @keyframes ultreiaLogoStage {
   0%, 100% { opacity: 1; transform: none; }
-}
-@keyframes ultreiaBuildLayer {
-  0%, 100% { opacity: 1; }
-}
-@keyframes ultreiaExactLogoDevelop {
-  0% { opacity: 0; filter: brightness(0.35) saturate(0.68) blur(8px); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  18% { opacity: 0.05; filter: brightness(0.42) saturate(0.72) blur(6px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  58% { opacity: 0.36; filter: brightness(0.7) saturate(0.85) blur(3px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  86% { opacity: 0.72; filter: brightness(0.9) saturate(0.95) blur(1px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 1; filter: brightness(1) saturate(1) blur(0); }
-}
-@keyframes ultreiaExactLinesDevelop {
-  0% { opacity: 0; filter: brightness(0.8) saturate(0.85) blur(5px); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  12% { opacity: 0.28; filter: brightness(0.92) saturate(0.92) blur(3px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  68% { opacity: 0.88; filter: brightness(1.04) saturate(1) blur(0.7px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  90% { opacity: 0.42; filter: brightness(1) saturate(1) blur(0.2px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 0; filter: brightness(1) saturate(1) blur(0); }
-}
-@keyframes ultreiaExactMountainsDevelop {
-  0% { opacity: 0; transform: scale(0.997); filter: brightness(0.82) saturate(0.85) blur(6px); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  20% { opacity: 0.07; transform: scale(0.998); filter: brightness(0.9) saturate(0.9) blur(4px); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  70% { opacity: 0.66; transform: scale(1); filter: brightness(1.06) saturate(1.04) blur(0.9px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  90% { opacity: 0.30; transform: scale(1); filter: brightness(1) saturate(1) blur(0.2px); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 0; transform: scale(1); filter: brightness(1) saturate(1) blur(0); }
 }
 @keyframes ultreiaWordReveal {
   0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
@@ -934,19 +977,61 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
   const [bootElapsedMs] = useState(() => (
     Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT))
   ));
+  const revealElapsedMs = useBootRevealElapsed(bootElapsedMs);
+  const reveal = getBootRevealMaskState(revealElapsedMs);
+  const frameStroke = maskStrokeProps(reveal.frame);
+  const contourStroke = maskStrokeProps(reveal.contours);
+  const contourLateStroke = maskStrokeProps(reveal.contoursLate);
+  const mountainStroke = maskStrokeProps(reveal.mountains);
+  const roadStroke = maskStrokeProps(reveal.road);
+  const terrainTranslateY = Math.round(620 * (1 - reveal.terrain));
 
   return (
     <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
-      {/* All boot layers are cut from the final logo bitmap, so every intermediate
-          frame stays visually anchored to the same artwork. */}
+      {/* The boot mark uses one final bitmap and a reveal mask. Mask strokes only
+          decide which original pixels are visible; they are never painted as
+          replacement logo lines. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
-          <div className="ultreia-boot-logo-build" aria-hidden="true">
-            <img className="ultreia-logo-layer ultreia-logo-base-layer" src={productBootLogoUrl} alt="" />
-            <img className="ultreia-logo-layer ultreia-logo-line-layer" src={productBootLinesUrl} alt="" />
-            <img className="ultreia-logo-layer ultreia-logo-mountain-layer" src={productBootMountainsUrl} alt="" />
-          </div>
+          <svg className="ultreia-boot-logo-reveal" viewBox="0 0 512 512" aria-hidden="true">
+            <defs>
+              <clipPath id="ultreiaBootTileClip">
+                <rect x="0" y="0" width="512" height="512" rx="113" ry="113" />
+              </clipPath>
+              <mask id="ultreiaBootRevealMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
+                <rect x="0" y="0" width="512" height="512" fill="#000" />
+                <g transform={`translate(0 ${terrainTranslateY})`} fill="#fff">
+                  <path d="M-70 620 L-70 -90 C38 -64 89 -88 166 -58 C244 -27 299 -98 383 -63 C451 -35 505 -71 582 -46 L582 620 Z" />
+                </g>
+                <g fill="none" stroke="#fff" strokeLinecap="butt" strokeLinejoin="round">
+                  <rect x="8" y="8" width="496" height="496" rx="110" ry="110" pathLength={1} strokeWidth="8" strokeDasharray="1 1" {...frameStroke} />
+                  <rect x="15" y="15" width="482" height="482" rx="103" ry="103" pathLength={1} strokeWidth="3" strokeDasharray="1 1" {...frameStroke} />
+                  {BOOT_MASK_CONTOUR_PATHS.map((path) => (
+                    <path key={path} d={path} pathLength={1} strokeWidth="11" strokeDasharray="1 1" {...contourStroke} />
+                  ))}
+                  {BOOT_MASK_CONTOUR_LATE_PATHS.map((path) => (
+                    <path key={path} d={path} pathLength={1} strokeWidth="11" strokeDasharray="1 1" {...contourLateStroke} />
+                  ))}
+                  {BOOT_MASK_MOUNTAIN_PATHS.map((path) => (
+                    <path key={path} d={path} pathLength={1} strokeWidth="72" strokeDasharray="1 1" {...mountainStroke} />
+                  ))}
+                  <path d={BOOT_MASK_ROAD_PATH} pathLength={1} strokeWidth="62" strokeDasharray="1 1" {...roadStroke} />
+                </g>
+              </mask>
+            </defs>
+            <image
+              className="ultreia-boot-logo-image"
+              href={productBootLogoUrl}
+              x="0"
+              y="0"
+              width="512"
+              height="512"
+              preserveAspectRatio="xMidYMid slice"
+              clipPath="url(#ultreiaBootTileClip)"
+              mask="url(#ultreiaBootRevealMask)"
+            />
+          </svg>
           <img
             className="ultreia-boot-logo-static"
             src={productBootLogoUrl}

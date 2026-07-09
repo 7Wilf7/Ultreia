@@ -8,7 +8,5 @@
 // the native-splash → web-view handoff shows two different logos.
 import productLogoUrl from "../../resources/ultreia-logo.webp";
 import productBootLogoUrl from "../../resources/splash-logo.png";
-import productBootLinesUrl from "../../resources/ultreia-boot-lines.png";
-import productBootMountainsUrl from "../../resources/ultreia-boot-mountains.png";
 
-export { productBootLinesUrl, productBootLogoUrl, productBootMountainsUrl, productLogoUrl };
+export { productBootLogoUrl, productLogoUrl };

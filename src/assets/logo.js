@@ -7,6 +7,6 @@
 // product logo, update both runtime assets plus the native splash source, or
 // the native-splash → web-view handoff shows two different logos.
 import productLogoUrl from "../../resources/ultreia-logo.webp";
-import productLogoFinalUrl from "../../resources/ultreia-logo-final.png";
+import productBootLogoUrl from "../../resources/splash-logo.png";
 
-export { productLogoFinalUrl, productLogoUrl };
+export { productBootLogoUrl, productLogoUrl };

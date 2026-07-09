@@ -82,7 +82,7 @@ import {
   setStoredWeatherSettings,
 } from "./lib/weather";
 import { initPushNotifications, notifyTaskDone, setPushKeepAliveEnabled } from "./lib/push";
-import { productLogoFinalUrl, productLogoUrl } from "./assets/logo";
+import { productBootLogoUrl, productLogoUrl } from "./assets/logo";
 import {
   appendCoachMessageMeta,
   estimateTextTokens,
@@ -891,40 +891,40 @@ const BOOT_MOTION_CSS = `
   0%, 100% { opacity: 1; transform: none; }
 }
 @keyframes ultreiaShellEmerge {
-  0%, 8% { opacity: 0; transform: none; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  36% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 10% { opacity: 0; transform: none; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  42% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 1; transform: none; }
 }
 @keyframes ultreiaRidgeOneEmerge {
-  0%, 34% { opacity: 0; transform: translateY(10px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  62% { opacity: 0.88; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 42% { opacity: 0; transform: translateY(8px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  68% { opacity: 0.88; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 0.88; transform: translateY(0); }
 }
 @keyframes ultreiaRidgeTwoEmerge {
-  0%, 40% { opacity: 0; transform: translateY(9px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  68% { opacity: 0.92; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 48% { opacity: 0; transform: translateY(7px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  74% { opacity: 0.92; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 0.92; transform: translateY(0); }
 }
 @keyframes ultreiaRidgeThreeEmerge {
-  0%, 46% { opacity: 0; transform: translateY(8px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  74% { opacity: 0.86; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 54% { opacity: 0; transform: translateY(6px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  80% { opacity: 0.86; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 0.86; transform: translateY(0); }
 }
 @keyframes ultreiaRidgeFourEmerge {
-  0%, 52% { opacity: 0; transform: translateY(7px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  78% { opacity: 0.84; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 58% { opacity: 0; transform: translateY(5px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  84% { opacity: 0.84; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 0.84; transform: translateY(0); }
 }
 @keyframes ultreiaRouteEmerge {
-  0%, 56% { opacity: 0; transform: translateY(12px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  86% { opacity: 0.9; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  0%, 62% { opacity: 0; transform: translateY(8px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  90% { opacity: 0.9; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
   100% { opacity: 0.9; transform: translateY(0); }
 }
 @keyframes ultreiaBuildLayer {
   0%, 100% { opacity: 1; }
 }
 @keyframes ultreiaFinalLogo {
-  0%, 90% { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  0%, 82% { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
   100% { opacity: 1; }
 }
 @keyframes ultreiaWordReveal {
@@ -989,15 +989,15 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
                 <path d={BOOT_LOGO_ROUTE_PATH} fill="#fff" stroke="#fff" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
               </mask>
             </defs>
-            <image className="ultreia-logo-shell" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootShellMask)" />
+            <image className="ultreia-logo-shell" href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootShellMask)" />
             {BOOT_LOGO_RIDGE_PATHS.map((path, index) => (
-              <image key={path} className={`ultreia-logo-ridge ultreia-logo-ridge-${index + 1}`} href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask={`url(#ultreiaBootRidgeMask${index})`} />
+              <image key={path} className={`ultreia-logo-ridge ultreia-logo-ridge-${index + 1}`} href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask={`url(#ultreiaBootRidgeMask${index})`} />
             ))}
-            <image className="ultreia-logo-route" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootRouteMask)" />
+            <image className="ultreia-logo-route" href={productBootLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootRouteMask)" />
           </svg>
           <img
             className="ultreia-boot-logo-final"
-            src={productLogoFinalUrl}
+            src={productBootLogoUrl}
             alt="Ultreia"
           />
         </div>

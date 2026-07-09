@@ -47,9 +47,9 @@ Wilf 在 Windows 和 Mac mini 两台设备上工作。涉及 Aevum、Viatica、O
 
 ## Aevum 账号体系与删除账号
 
-账号统一叫 **Aevum 账号 / Aevum account**。Ultreia、Viatica、Aevum 都是同一个 Aevum 账号下的产品模块；登录、注册、Settings、账号页、删除账号、充值备注等面向用户的文案不要写成 “Ultreia 账号 / Ultreia account”。
+账号统一叫 **Aevum 账号 / Aevum account**。Aevum、Ultreia、Viatica、Sidera 都是同一个 Aevum 账号下的产品模块；登录、注册、Settings、账号页、删除账号、充值备注等面向用户的文案不要写成 “Ultreia 账号 / Ultreia account”。
 
-“删除账号”在 Ultreia 内的含义必须始终是：**删除整个 Aevum 账号**。UI 文案必须明确说明这会删除 Aevum / Ultreia / Viatica 下的所有个人数据，不能让用户误解成只是退出 Ultreia、只删除 Ultreia 数据，或只清空训练记录。
+“删除账号”在 Ultreia 内的含义必须始终是：**删除整个 Aevum 账号**。UI 文案必须明确说明这会删除 Aevum / Ultreia / Viatica / Sidera 下的所有个人数据，不能让用户误解成只是退出 Ultreia、只删除 Ultreia 数据，或只清空训练记录。
 
 不要把“只删除 Ultreia 数据但保留 Viatica 数据”的逻辑塞进“删除账号”。如果未来需要单产品清空能力，应单独命名为“清空 Ultreia 数据”或“重置训练数据”，并放在训练数据管理语义下，不要混用账号删除。
 
@@ -133,7 +133,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
   - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
   - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
-  - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica 个人数据）
+  - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica / Sidera 个人数据）
   - `push-test`（早期冒烟测试，可退役）
 
 **Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
@@ -287,5 +287,6 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `app_admins` — 管理员账号白名单（旧钱包充值、邀请码等）
 - `usage_quota` — 旧免费额度表，仅保留删除账号兼容；新扣费逻辑不要继续依赖它
 - `viatica_accounts` / `viatica_budgets` / `viatica_preferences` / `viatica_transactions` — 同一 Aevum Supabase project 下的 Viatica 表；账号删除时通过 `user_id → auth.users(id) ON DELETE CASCADE` 清理
+- `sidera_entries` / `sidera_nodes` / `sidera_links` / `sidera_reviews` / `sidera_messages` / `sidera_agent_actions` / `sidera_preferences` — 同一 Aevum Supabase project 下的 Sidera 表；AI 建议先落为待确认 action，不静默写入长期知识库
 
 公共字段约定：`id uuid PK`、用户归属表用 `user_id uuid → auth.users(id) ON DELETE CASCADE`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤；非用户归属的系统表需单独说明边界。

@@ -6,54 +6,90 @@ product
 
 ## Users
 
-Ultreia is used by Chinese runners who track completed training, review progress, prepare for races, and share selected achievements with friends or social platforms.
+Ultreia is used by Chinese endurance runners who track completed training,
+review progress, prepare for races, receive AI Coach guidance, and share
+selected achievements with friends or social platforms.
 
 ## Product Purpose
 
-The product turns training records, races, charts, and coaching context into a compact personal training hub. Success means users can quickly understand their recent workload, keep their log organized, and export credible visual summaries without manual design work.
+Ultreia turns training records, races, charts, weather context, recovery notes,
+and coaching context into a compact personal training hub. Success means users
+can understand recent workload, keep their log organized, prepare for target
+races, and receive explainable coaching suggestions without managing a complex
+spreadsheet.
 
-Ultreia is also one product inside Wilf's broader personal product ecosystem,
-now called Aevum. Aevum is the mobile-first operating surface and shared event
-center for separate products including Ultreia, Viatica, Sidera, and
-Obsidian-based archives. Ultreia should stay focused on training, racing,
-recovery, and AI Coach decisions while Aevum handles the global launcher,
-cross-product memory review, and product-to-product context boundaries. For the
-current ecosystem source of truth, read Aevum's `docs/ecosystem/` folder.
+## Product Boundary
 
-Future cross-product context should flow through reviewed events rather than
-direct database sharing. For example, Viatica may record sport gear purchases,
-race registrations, health expenses, or training-related subscriptions;
-Sidera may capture sleep, fatigue, soreness, stress, reflection, and learning
-signals.
-Those events should only influence Ultreia after Wilf reviews and approves
-them. Once approved, Ultreia can use them as explainable context for coaching,
-risk reminders, and training suggestions without becoming a finance app,
-journal app, or general operating system itself.
+- Ultreia owns training records, calendar planning, races, PRs, recovery,
+  weather-to-training interpretation, AI Coach, reports, training memory, and
+  training-specific Agent actions.
+- Aevum owns global entry points, reviewed events, memory inbox, permissions,
+  and future cross-domain Agent routing.
+- Viatica owns private ledger data. Sidera owns learning, capture/reflection,
+  knowledge graph, and deep research.
+- Ultreia may use approved Aevum context as explainable coaching input, but it
+  must not read private Viatica or Sidera data directly.
+
+For ecosystem-level source of truth, read Aevum's `docs/ecosystem/` folder.
 
 ## Brand Personality
 
-Focused, athletic, mature. The product should feel like a serious training tool with enough visual character for personal sharing.
+Focused, athletic, mature. Ultreia should feel like a serious training tool
+with enough visual character for personal sharing.
+
+## Family Alignment
+
+Ultreia is the most mature mobile implementation in the Aevum family, so other
+products may reference its navigation, settings discipline, guide/changelog
+structure, splash treatment, update flow, and restrained dark product UI.
+References must stop at reusable interaction patterns; training logic stays
+inside Ultreia.
 
 ## App UI Direction
 
-The live app UI follows the same Linear-inspired dark product system as Aevum: near-black backgrounds, translucent panels, precision hairlines, deep moss / olive focus states, subtle blurred light flow, micro-noise texture, low outer glow, and quiet micro-interactions. Ultreia should still feel more athletic and data-forward than Aevum, with dense mobile-first training surfaces instead of decorative landing-page composition.
+The live app UI follows the family dark product system: near-black graphite
+backgrounds, translucent panels, precision hairlines, low outer glow, subtle
+blur, micro-noise texture, and quiet stateful motion. Ultreia's own accent is
+deep moss / olive with a small amount of cyan-green trail energy. It should read
+as athletic and data-forward, never bright fitness green.
 
-Ultreia's ambient light should read as deep moss / olive with a small amount of cyan-green trail energy: more athletic and data-forward than Aevum's silver-white system glow, but never bright fitness green or neon.
-
-Do not drift back toward the previous beige / paper / light moss-first app shell, and do not let the app become bright green. Moss is now a darker, lower-saturation brand accent inside a dark product system; it should support the black logo with controlled glow and fine edge states instead of turning the whole app into a green theme. The old moss token names may remain as implementation aliases, but visually the app chrome should read as dark, precise, futuristic, and professional. Exported posters may keep separate day / night palettes because they are shareable artifacts rather than the core app shell.
+Exported posters may use separate day/night palettes because they are shareable
+artifacts, not the core app shell.
 
 ## Anti-references
 
-Avoid childish sports graphics, generic SaaS cards, flat unfinished poster layouts, decorative gradients without data meaning, and template-like visuals that look detached from the user's actual training.
+Avoid childish sports graphics, generic SaaS cards, flat unfinished poster
+layouts, decorative gradients without data meaning, template-like visuals, and
+anything that makes training judgment feel gamified or unserious.
 
 ## Design Principles
 
-- Training data should become visual material, not just text placed on a background.
-- Sharing assets should feel adult and intentional, closer to race media or analytical training reports than casual stickers.
+- Training data should become visual material, not just text on a background.
 - Mobile readability wins over decorative density.
+- Coaching advice must explain which data or approved context it used.
+- Training plans and health-risk decisions should stay confirmable, not black
+  box automatic changes.
 - Brand presence should be visible but restrained.
 - Exported images should work as standalone artifacts outside the app.
+- Family consistency means shared app-shell discipline, not turning Ultreia into
+  the global Aevum OS.
+
+## Data And AI Principles
+
+- Use the shared Aevum account, but keep Ultreia data in training-owned tables.
+- Cross-product facts must arrive through reviewed Aevum events or memory.
+- AI Coach can propose plans, rescues, reports, memories, and action cards, but
+  risky or durable actions need user confirmation.
+- Desktop Codex Runner is preferred for richer coach tasks; fallback providers
+  must preserve clear error and provenance behavior.
+
+## Current Milestone
+
+Keep Ultreia stable as the mature training product while gradually turning AI
+Coach from copilot into a confirmable Agent. Do not expand it into ledger,
+knowledge-base, or global launcher responsibilities.
 
 ## Accessibility & Inclusion
 
-Keep text readable on mobile screens, preserve strong contrast on exported images, and avoid motion-dependent information.
+Keep text readable on mobile screens, preserve strong contrast on exported
+images, support reduced motion, and avoid motion-dependent information.

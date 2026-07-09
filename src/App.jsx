@@ -82,7 +82,7 @@ import {
   setStoredWeatherSettings,
 } from "./lib/weather";
 import { initPushNotifications, notifyTaskDone, setPushKeepAliveEnabled } from "./lib/push";
-import { productLogoUrl } from "./assets/logo";
+import { productLogoFinalUrl, productLogoUrl } from "./assets/logo";
 import {
   appendCoachMessageMeta,
   estimateTextTokens,
@@ -748,6 +748,7 @@ const BOOT_MOTION_CSS = `
 .ultreia-boot-logo-final {
   object-fit: contain;
   transform-origin: center;
+  opacity: 0;
 }
 .ultreia-boot-logo-build {
   overflow: visible;
@@ -913,10 +914,12 @@ const BOOT_MOTION_CSS = `
   100% { opacity: 0.88; transform: translateY(0) scale(1); }
 }
 @keyframes ultreiaBuildLayer {
-  0%, 100% { opacity: 1; }
+  0%, 86% { opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  96%, 100% { opacity: 0; }
 }
 @keyframes ultreiaFinalLogo {
-  0%, 100% { opacity: 0; }
+  0%, 86% { opacity: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  96%, 100% { opacity: 1; }
 }
 @keyframes ultreiaWordReveal {
   0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
@@ -953,11 +956,9 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
   return (
     <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
-      {/* Lightweight (384px) display version of the product logo. The native
-          Android splash renders the SAME artwork from a separate hi-res source
-          (resources/splash-logo.png via scripts/make-splash.mjs) so the
-          native-splash → web-view handoff still reads as one logo screen —
-          when swapping the logo, update both assets (see src/assets/logo.js). */}
+      {/* Build layer stays lightweight for the animated ridges/contours. The
+          final still frame uses a full original-logo downscale so the chrome
+          border and outer breathing room match the desktop icon. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
           <svg className="ultreia-boot-logo-build" viewBox="0 0 512 512" aria-hidden="true">
@@ -983,7 +984,7 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
           </svg>
           <img
             className="ultreia-boot-logo-final"
-            src={productLogoUrl}
+            src={productLogoFinalUrl}
             alt="Ultreia"
           />
         </div>

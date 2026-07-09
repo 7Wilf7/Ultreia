@@ -4,8 +4,9 @@
 //
 // NOTE: the native Android splash is generated separately from
 // resources/splash-logo.png by scripts/make-splash.mjs. When changing the
-// product logo, update BOTH assets (same artwork) or the native-splash →
-// web-view handoff shows two different logos.
+// product logo, update both runtime assets plus the native splash source, or
+// the native-splash → web-view handoff shows two different logos.
 import productLogoUrl from "../../resources/ultreia-logo.webp";
+import productLogoFinalUrl from "../../resources/ultreia-logo-final.png";
 
-export { productLogoUrl };
+export { productLogoFinalUrl, productLogoUrl };

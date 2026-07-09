@@ -6,6 +6,7 @@
 // Outputs:
 //   resources/ultreia-logo.png   — 384px transparent-corner app display logo
 //   resources/ultreia-logo.webp  — same, lightweight runtime import
+//   resources/ultreia-logo-final.png — 512px full original scaled down for the boot final frame
 //   resources/splash-logo.png    — 512px transparent-corner native splash logo
 //   public/favicon.jpg           — 512px full-square PWA / favicon / launcher base
 //
@@ -93,6 +94,11 @@ await sharp(displayPng)
   .webp({ quality: 90, alphaQuality: 100 })
   .toFile('resources/ultreia-logo.webp');
 
+await sharp(SRC)
+  .resize(512, 512, { fit: 'contain' })
+  .png({ compressionLevel: 9, adaptiveFiltering: true })
+  .toFile('resources/ultreia-logo-final.png');
+
 const splashPng = await roundedLogo(512);
 await sharp(splashPng).toFile('resources/splash-logo.png');
 
@@ -103,6 +109,7 @@ await sharp(splashPng)
 
 console.log('✓ resources/ultreia-logo.png 384x384');
 console.log('✓ resources/ultreia-logo.webp 384x384');
+console.log('✓ resources/ultreia-logo-final.png 512x512');
 console.log('✓ resources/splash-logo.png 512x512');
 console.log('✓ public/favicon.jpg 512x512');
 console.log(`  source crop: ${logoCrop.left},${logoCrop.top} ${logoCrop.width}x${logoCrop.height}`);

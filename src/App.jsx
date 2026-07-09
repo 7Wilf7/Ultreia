@@ -679,7 +679,6 @@ const BOOT_LOGO_RIDGE_PATHS = [
   "M279.1 166.5 L310.1 185 L305.8 206.8 L280.8 226.3 L265.5 216.6 L282.9 193.2 Z",
 ];
 const BOOT_LOGO_ROUTE_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512 Z";
-const BOOT_LOGO_MARK_PATH = [...BOOT_LOGO_RIDGE_PATHS, BOOT_LOGO_ROUTE_PATH].join(" ");
 const RUNNER_STATUS_POLL_MS = 2_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
@@ -738,34 +737,29 @@ const BOOT_MOTION_CSS = `
   width: min(31vmin, 152px);
   height: min(31vmin, 152px);
 }
-.ultreia-boot-logo-reduced,
+.ultreia-boot-logo-final,
 .ultreia-boot-logo-build {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
 }
-.ultreia-boot-logo-reduced {
+.ultreia-boot-logo-final {
   object-fit: contain;
   transform-origin: center;
   opacity: 0;
+  pointer-events: none;
 }
 .ultreia-boot-logo-build {
   overflow: visible;
 }
-.ultreia-logo-contours,
-.ultreia-logo-ridges,
-.ultreia-logo-route,
-.ultreia-logo-final-mark {
+.ultreia-logo-shell,
+.ultreia-logo-ridge,
+.ultreia-logo-route {
+  opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
   will-change: opacity, transform;
-}
-.ultreia-logo-contours {
-  opacity: 1;
-}
-.ultreia-logo-final-mark {
-  opacity: 0;
 }
 .ultreia-boot-word {
   position: relative;
@@ -836,8 +830,9 @@ const BOOT_MOTION_CSS = `
 @media (prefers-reduced-motion: no-preference) {
   .ultreia-boot-logo-stage,
   .ultreia-boot-logo-build,
-  .ultreia-logo-final-mark,
-  .ultreia-logo-ridges,
+  .ultreia-boot-logo-final,
+  .ultreia-logo-shell,
+  .ultreia-logo-ridge,
   .ultreia-logo-route,
   .ultreia-word-final {
     animation-duration: var(--boot-duration);
@@ -852,17 +847,26 @@ const BOOT_MOTION_CSS = `
   .ultreia-boot-logo-build {
     animation-name: ultreiaBuildLayer;
   }
-  .ultreia-boot-logo-reduced {
-    display: none;
+  .ultreia-logo-shell {
+    animation-name: ultreiaShellEmerge;
   }
-  .ultreia-logo-ridges {
-    animation-name: ultreiaRidgesEmerge;
+  .ultreia-logo-ridge-1 {
+    animation-name: ultreiaRidgeOneEmerge;
+  }
+  .ultreia-logo-ridge-2 {
+    animation-name: ultreiaRidgeTwoEmerge;
+  }
+  .ultreia-logo-ridge-3 {
+    animation-name: ultreiaRidgeThreeEmerge;
+  }
+  .ultreia-logo-ridge-4 {
+    animation-name: ultreiaRidgeFourEmerge;
   }
   .ultreia-logo-route {
     animation-name: ultreiaRouteEmerge;
   }
-  .ultreia-logo-final-mark {
-    animation-name: ultreiaFinalMark;
+  .ultreia-boot-logo-final {
+    animation-name: ultreiaFinalLogo;
   }
   .ultreia-word-final {
     animation-name: ultreiaWordReveal;
@@ -870,7 +874,7 @@ const BOOT_MOTION_CSS = `
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ultreia-boot-logo-reduced,
+  .ultreia-boot-logo-final,
   .ultreia-word-final,
   .ultreia-boot-greeting,
   .ultreia-boot-built {
@@ -884,28 +888,43 @@ const BOOT_MOTION_CSS = `
   }
 }
 @keyframes ultreiaLogoStage {
-  0% { opacity: 0; transform: translateY(14px) scale(0.88); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  8% { opacity: 1; transform: translateY(12px) scale(0.88); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  56% { opacity: 1; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
+  0%, 100% { opacity: 1; transform: none; }
 }
-@keyframes ultreiaRidgesEmerge {
-  0%, 28% { opacity: 0; transform: translateY(9px) scale(0.982); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  58% { opacity: 0.78; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  76% { opacity: 0.78; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 0; transform: translateY(0) scale(1); }
+@keyframes ultreiaShellEmerge {
+  0%, 8% { opacity: 0; transform: none; animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
+  36% { opacity: 1; transform: none; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes ultreiaRidgeOneEmerge {
+  0%, 34% { opacity: 0; transform: translateY(10px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  62% { opacity: 0.88; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.88; transform: translateY(0); }
+}
+@keyframes ultreiaRidgeTwoEmerge {
+  0%, 40% { opacity: 0; transform: translateY(9px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  68% { opacity: 0.92; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.92; transform: translateY(0); }
+}
+@keyframes ultreiaRidgeThreeEmerge {
+  0%, 46% { opacity: 0; transform: translateY(8px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  74% { opacity: 0.86; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.86; transform: translateY(0); }
+}
+@keyframes ultreiaRidgeFourEmerge {
+  0%, 52% { opacity: 0; transform: translateY(7px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  78% { opacity: 0.84; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.84; transform: translateY(0); }
 }
 @keyframes ultreiaRouteEmerge {
-  0%, 36% { opacity: 0; transform: translateY(11px) scale(0.984); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
-  68% { opacity: 0.88; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  82% { opacity: 0.88; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  100% { opacity: 0; transform: translateY(0) scale(1); }
+  0%, 56% { opacity: 0; transform: translateY(12px); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
+  86% { opacity: 0.9; transform: translateY(0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 0.9; transform: translateY(0); }
 }
 @keyframes ultreiaBuildLayer {
   0%, 100% { opacity: 1; }
 }
-@keyframes ultreiaFinalMark {
-  0%, 62% { opacity: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes ultreiaFinalLogo {
+  0%, 90% { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
   100% { opacity: 1; }
 }
 @keyframes ultreiaWordReveal {
@@ -944,7 +963,7 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
     <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
       {/* The original double-line frame belongs to the static logo background and
-          never animates away. Only the inside mark layers animate. */}
+          never gets redrawn. The shell fades in first; the mountain layers follow. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
           <svg className="ultreia-boot-logo-build" viewBox="0 0 512 512" aria-hidden="true">
@@ -952,28 +971,32 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
               <clipPath id="ultreiaBootTileClip">
                 <rect x="0" y="0" width="512" height="512" rx="113" />
               </clipPath>
-              <clipPath id="ultreiaBootRidgeClip">
-                {BOOT_LOGO_RIDGE_PATHS.map((path) => <path key={path} d={path} />)}
-              </clipPath>
-              <clipPath id="ultreiaBootRouteClip">
-                <path d={BOOT_LOGO_ROUTE_PATH} />
-              </clipPath>
-              <clipPath id="ultreiaBootMarkClip">
-                {BOOT_LOGO_RIDGE_PATHS.map((path) => <path key={path} d={path} />)}
-                <path d={BOOT_LOGO_ROUTE_PATH} />
-              </clipPath>
-              <mask id="ultreiaBootBackgroundMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
+              <mask id="ultreiaBootShellMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
                 <rect x="0" y="0" width="512" height="512" rx="113" fill="#fff" />
-                <path fill="#000" d={BOOT_LOGO_MARK_PATH} />
+                <g fill="#000" stroke="#000" strokeWidth="22" strokeLinecap="round" strokeLinejoin="round">
+                  {BOOT_LOGO_RIDGE_PATHS.map((path) => <path key={path} d={path} />)}
+                  <path d={BOOT_LOGO_ROUTE_PATH} />
+                </g>
+              </mask>
+              {BOOT_LOGO_RIDGE_PATHS.map((path, index) => (
+                <mask key={path} id={`ultreiaBootRidgeMask${index}`} x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
+                  <rect x="0" y="0" width="512" height="512" fill="#000" />
+                  <path d={path} fill="#fff" stroke="#fff" strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" />
+                </mask>
+              ))}
+              <mask id="ultreiaBootRouteMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse">
+                <rect x="0" y="0" width="512" height="512" fill="#000" />
+                <path d={BOOT_LOGO_ROUTE_PATH} fill="#fff" stroke="#fff" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" />
               </mask>
             </defs>
-            <image className="ultreia-logo-contours" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootBackgroundMask)" />
-            <image className="ultreia-logo-ridges" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootRidgeClip)" />
-            <image className="ultreia-logo-route" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootRouteClip)" />
-            <image className="ultreia-logo-final-mark" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootMarkClip)" />
+            <image className="ultreia-logo-shell" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootShellMask)" />
+            {BOOT_LOGO_RIDGE_PATHS.map((path, index) => (
+              <image key={path} className={`ultreia-logo-ridge ultreia-logo-ridge-${index + 1}`} href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask={`url(#ultreiaBootRidgeMask${index})`} />
+            ))}
+            <image className="ultreia-logo-route" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootRouteMask)" />
           </svg>
           <img
-            className="ultreia-boot-logo-reduced"
+            className="ultreia-boot-logo-final"
             src={productLogoFinalUrl}
             alt="Ultreia"
           />

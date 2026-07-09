@@ -901,25 +901,25 @@ const BOOT_MOTION_CSS = `
 @keyframes ultreiaContoursEmerge {
   0%, 11% { opacity: 0; transform: scale(1.025); animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
   50% { opacity: 0.56; transform: scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.56; transform: scale(1); }
+  82%, 100% { opacity: 0.34; transform: scale(1); }
 }
 @keyframes ultreiaRidgesEmerge {
   0%, 28% { opacity: 0; transform: translateY(9px) scale(0.982); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
   58% { opacity: 0.78; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.78; transform: translateY(0) scale(1); }
+  82%, 100% { opacity: 0.44; transform: translateY(0) scale(1); }
 }
 @keyframes ultreiaRouteEmerge {
   0%, 36% { opacity: 0; transform: translateY(11px) scale(0.984); animation-timing-function: cubic-bezier(0.34, 0, 0.14, 1); }
   68% { opacity: 0.88; transform: translateY(0) scale(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  100% { opacity: 0.88; transform: translateY(0) scale(1); }
+  82%, 100% { opacity: 0.50; transform: translateY(0) scale(1); }
 }
 @keyframes ultreiaBuildLayer {
-  0%, 86% { opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
-  96%, 100% { opacity: 0; }
+  0%, 68% { opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  100% { opacity: 0; }
 }
 @keyframes ultreiaFinalLogo {
-  0%, 86% { opacity: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  96%, 100% { opacity: 1; }
+  0%, 54% { opacity: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  100% { opacity: 1; }
 }
 @keyframes ultreiaWordReveal {
   0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
@@ -956,9 +956,9 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
   return (
     <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
-      {/* Build layer stays lightweight for the animated ridges/contours. The
-          final still frame uses a full original-logo downscale so the chrome
-          border and outer breathing room match the desktop icon. */}
+      {/* Every visual layer below uses the same final-logo downscale. That keeps
+          the chrome border and outer breathing room in one coordinate system, so
+          the final frame fades in instead of popping to a smaller icon. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
           <svg className="ultreia-boot-logo-build" viewBox="0 0 512 512" aria-hidden="true">
@@ -978,9 +978,9 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
               </mask>
             </defs>
             <rect className="ultreia-boot-ground" x="0" y="0" width="512" height="512" rx="113" />
-            <image className="ultreia-logo-contours" href={productLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootBackgroundMask)" />
-            <image className="ultreia-logo-ridges" href={productLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootRidgeClip)" />
-            <image className="ultreia-logo-route" href={productLogoUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootRouteClip)" />
+            <image className="ultreia-logo-contours" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootTileClip)" mask="url(#ultreiaBootBackgroundMask)" />
+            <image className="ultreia-logo-ridges" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootRidgeClip)" />
+            <image className="ultreia-logo-route" href={productLogoFinalUrl} x="0" y="0" width="512" height="512" preserveAspectRatio="xMidYMid slice" clipPath="url(#ultreiaBootRouteClip)" />
           </svg>
           <img
             className="ultreia-boot-logo-final"

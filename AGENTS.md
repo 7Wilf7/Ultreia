@@ -40,7 +40,7 @@ Wilf 在 Windows 和 Mac mini 两台设备上工作。涉及 Aevum、Viatica、O
 处理任何新需求前，先判断归属：
 
 - **放在 Ultreia**：训练记录、活动导入、日历训练计划、赛事、PR、天气与训练关系、AI Coach、周复盘、Action Card、运动相关长期记忆、训练海报、Ultreia 内设置和 Android / PWA 发版。
-- **放在 Aevum**：全局 Today、Quick Add、Products 入口、跨产品事件中心 `wilf_events`、Memory Inbox、账号 / 全局设置、Viatica / Sidera / Vestigia 等非训练产品、跨产品审核与分发。
+- **放在 Aevum**：全局 Today、Quick Add、Products 入口、跨产品事件中心 `wilf_events`、Memory Inbox、账号 / 全局设置、Viatica / Sidera 等非训练产品、跨产品审核与分发。
 - **交界需求**：Aevum 负责收集和审核会影响训练判断的事件；Ultreia 只读取已确认且训练相关的事件，并在 AI Coach 中解释使用。
 - **不要把 Ultreia 扩成超级 App**：全局入口、跨产品编排、统一记忆审核优先放 Aevum；Ultreia 只做训练域内最小接入。
 - 如果归属不确定，先按“是否直接改变训练体验”判断：直接改变训练记录、计划、教练建议或赛事准备 = Ultreia；只是让多个产品协同或统一入口 = Aevum。

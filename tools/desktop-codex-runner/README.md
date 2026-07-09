@@ -1,10 +1,13 @@
-# Ultreia Desktop Codex Runner
+# Aevum Desktop Codex Runner
 
-Local-only worker for the `desktop_codex` AI provider POC.
+Local-only worker for the `desktop_codex` AI provider POC. It currently serves
+Ultreia AI Coach jobs and can also serve Sidera jobs after the shared `ai_jobs`
+schema has been upgraded with `product` and `target_runner_id`.
 
-It polls `public.ai_jobs`, claims one queued job, calls the local Codex CLI with
-the current machine's normal Codex provider/auth configuration, then writes the
-result back to Supabase. It does **not** open a public port.
+It polls `public.ai_jobs`, claims one queued job compatible with this runner,
+calls the local Codex CLI with the current machine's normal Codex provider/auth
+configuration, then writes the result back to Supabase. It does **not** open a
+public port.
 
 ## Setup
 
@@ -28,7 +31,8 @@ npm install --no-package-lock
 npm run start
 ```
 
-For a company Mac mini, prefer a stable runner id and explicit reasoning effort:
+For a company Mac mini, prefer a stable runner id and explicit reasoning effort.
+Sidera's first implementation targets this runner id explicitly:
 
 ```bash
 export SUPABASE_URL="https://ihibmkfgfznqwzavaeiq.supabase.co"
@@ -113,8 +117,7 @@ Multiple desktop runners can be online at the same time. They do not process the
 same job twice: Supabase claims jobs with a lease and row lock, so the first
 runner that successfully claims a queued job owns it.
 
-The current POC does not target a specific runner. If both a home PC runner and
-a company Mac runner are online, whichever one polls and claims first will run
-that queued AI job. To make usage predictable, keep only the runner you want
-active. For company-account usage, stop the home runner before starting the
-company Mac runner.
+Untargeted jobs can still be claimed by any compatible online runner. Jobs with
+`target_runner_id = company-mac-mini-codex` are only claimed by that runner after
+the upgraded `claim_ai_job` SQL is installed. Use targeted jobs for Sidera so the
+company Codex account is predictable even if another runner is online.

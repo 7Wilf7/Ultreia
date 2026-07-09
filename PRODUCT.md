@@ -14,7 +14,7 @@ The product turns training records, races, charts, and coaching context into a c
 
 Ultreia is also one product inside Wilf's broader personal product ecosystem,
 now called Aevum. Aevum is the mobile-first operating surface and shared event
-center for separate products including Ultreia, Viatica, Vestigia, Sidera, and
+center for separate products including Ultreia, Viatica, Sidera, and
 Obsidian-based archives. Ultreia should stay focused on training, racing,
 recovery, and AI Coach decisions while Aevum handles the global launcher,
 cross-product memory review, and product-to-product context boundaries. For the
@@ -23,7 +23,8 @@ current ecosystem source of truth, read Aevum's `docs/ecosystem/` folder.
 Future cross-product context should flow through reviewed events rather than
 direct database sharing. For example, Viatica may record sport gear purchases,
 race registrations, health expenses, or training-related subscriptions;
-Vestigia may record sleep, fatigue, soreness, stress, and recovery signals.
+Sidera may capture sleep, fatigue, soreness, stress, reflection, and learning
+signals.
 Those events should only influence Ultreia after Wilf reviews and approves
 them. Once approved, Ultreia can use them as explainable context for coaching,
 risk reminders, and training suggestions without becoming a finance app,

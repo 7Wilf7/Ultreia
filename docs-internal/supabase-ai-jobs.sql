@@ -22,8 +22,16 @@ create table if not exists public.ai_jobs (
       'memory_update',
       'plan_extract',
       'plan_deviation_rescue',
-      'daily_checkin'
+      'daily_checkin',
+      'sidera_chat',
+      'sidera_promote_entry',
+      'sidera_review_plan',
+      'sidera_graph_suggest'
     )
+  ),
+
+  product text not null default 'ultreia' check (
+    product in ('ultreia', 'sidera', 'aevum')
   ),
 
   status text not null default 'queued' check (
@@ -48,6 +56,7 @@ create table if not exists public.ai_jobs (
   error text,
 
   runner_id text,
+  target_runner_id text,
   lease_expires_at timestamptz,
   heartbeat_at timestamptz,
 
@@ -69,6 +78,9 @@ create index if not exists ai_jobs_user_created_idx
 
 create index if not exists ai_jobs_queue_idx
   on public.ai_jobs (status, provider_requested, expires_at, created_at);
+
+create index if not exists ai_jobs_product_queue_idx
+  on public.ai_jobs (product, status, provider_requested, target_runner_id, expires_at, created_at);
 
 create index if not exists ai_jobs_runner_lease_idx
   on public.ai_jobs (runner_id, lease_expires_at)
@@ -162,7 +174,10 @@ begin
   where status = 'queued'
     and provider_requested = 'desktop_codex'
     and expires_at > now()
-  order by created_at asc
+    and (target_runner_id is null or target_runner_id = p_runner_id)
+  order by
+    case when target_runner_id = p_runner_id then 0 else 1 end,
+    created_at asc
   for update skip locked
   limit 1;
 

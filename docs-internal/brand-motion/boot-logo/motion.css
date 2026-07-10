@@ -1,0 +1,58 @@
+:root {
+  --p2m-duration: 2600ms;
+  --p2m-ease-establish: cubic-bezier(0.33, 0, 0.2, 1);
+  --p2m-ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#field,
+#left-ridge-cover,
+#summit-cover,
+#right-ridge-cover,
+#route-cover,
+#route-mask-wipe {
+  animation-duration: var(--p2m-duration);
+  animation-fill-mode: both;
+  animation-timing-function: linear;
+}
+
+#field { animation-name: p2m-field-reveal; }
+#left-ridge-cover { animation-name: p2m-left-ridge-reveal; }
+#summit-cover { animation-name: p2m-summit-reveal; }
+#right-ridge-cover { animation-name: p2m-right-ridge-reveal; }
+#route-cover { animation-name: p2m-route-cover-finish; }
+#route-mask-wipe {
+  animation-name: p2m-route-reveal;
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
+}
+
+@keyframes p2m-field-reveal {
+  0%, 4% { opacity: 0; animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1); }
+  36% { opacity: 1; animation-timing-function: linear; }
+  100% { opacity: 1; }
+}
+
+@keyframes p2m-left-ridge-reveal {
+  0%, 20% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  55%, 100% { opacity: 0; visibility: hidden; }
+}
+
+@keyframes p2m-summit-reveal {
+  0%, 24% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  58%, 100% { opacity: 0; visibility: hidden; }
+}
+
+@keyframes p2m-right-ridge-reveal {
+  0%, 28% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  62%, 100% { opacity: 0; visibility: hidden; }
+}
+
+@keyframes p2m-route-reveal {
+  0%, 34% { transform: scaleY(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  68%, 100% { transform: scaleY(0); }
+}
+
+@keyframes p2m-route-cover-finish {
+  0%, 67.9% { opacity: 1; visibility: visible; }
+  68%, 100% { opacity: 0; visibility: hidden; }
+}

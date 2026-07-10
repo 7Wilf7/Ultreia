@@ -1,0 +1,9 @@
+{
+  "svg": "docs-internal/brand-motion/boot-logo/logo.svg",
+  "source": "resources\\splash-logo.png",
+  "overlay": "docs-internal\\brand-motion\\boot-logo\\outputs\\fit_iterations\\01_exact_overlay.png",
+  "iou": 0.9593,
+  "src_only_px": 10651,
+  "render_only_px": 0,
+  "render_note": "QA used a temporary data-URI copy of the same external bitmap so headless Chrome could render the local SVG."
+}

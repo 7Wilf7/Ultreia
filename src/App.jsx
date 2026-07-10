@@ -670,28 +670,12 @@ function throwIfAborted(signal) {
   throw err;
 }
 
-const BOOT_REVEAL_MS = 3600;
+const BOOT_REVEAL_MS = 2600;
 const APP_BOOT_STARTED_AT = Date.now();
-const BOOT_MASK_CONTOUR_PATHS = [
-  "M0 209 C56 181 78 140 127 133 C176 126 170 74 213 48 C249 27 292 38 318 66",
-  "M0 279 C42 254 70 236 109 245 C147 255 160 289 149 323 C136 363 90 384 42 372",
-  "M158 0 C186 35 179 73 206 92 C239 116 290 99 325 130 C358 159 343 205 389 220 C426 233 464 215 512 199",
-  "M231 0 C213 44 214 78 248 91 C283 104 328 77 365 98 C400 118 390 157 423 174 C450 188 476 175 512 154",
-  "M322 0 C350 24 387 44 421 38 C458 31 475 28 512 40",
-  "M178 207 C212 180 258 180 289 211 C314 235 344 239 382 224",
-];
-const BOOT_MASK_CONTOUR_LATE_PATHS = [
-  "M15 347 C59 330 94 326 126 353 C159 381 170 428 218 433 C270 439 298 398 343 378 C395 354 452 372 512 414",
-  "M71 512 C109 468 137 428 188 417 C238 406 259 360 306 347 C352 335 395 353 435 389 C463 414 487 420 512 416",
-  "M376 257 C420 241 468 260 512 292",
-  "M295 461 C329 430 377 426 409 452 C431 470 460 480 512 470",
-];
-const BOOT_MASK_MOUNTAIN_PATHS = [
-  "M57.7 370 L97.9 318.3 L146.9 262.3 L197.5 201.3 L224.7 182.8 L223.1 227.4 L189.3 261.2 L164.3 298.2 L117.5 316.7 L83.2 349.3",
-  "M223.1 201.3 L279.1 128.4 L314.5 101.2 L314.5 161.1 L269.9 220.9 L248.1 217.6",
-  "M304.7 144.7 L439.6 288.4 L331.9 251.4 L311.8 187.2",
-];
-const BOOT_MASK_ROAD_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512";
+const BOOT_LOGO_LEFT_RIDGE_PATH = "M57.7 370 L97.9 318.3 L146.9 262.3 L197.5 201.3 L224.7 182.8 L223.1 227.4 L189.3 261.2 L164.3 298.2 L117.5 316.7 L83.2 349.3 Z";
+const BOOT_LOGO_SUMMIT_PATH = "M223.1 201.3 L279.1 128.4 L314.5 101.2 L314.5 161.1 L269.9 220.9 L248.1 217.6 Z M279.1 166.5 L310.1 185 L305.8 206.8 L280.8 226.3 L265.5 216.6 L282.9 193.2 Z";
+const BOOT_LOGO_RIGHT_RIDGE_PATH = "M304.7 144.7 L439.6 288.4 L331.9 251.4 L311.8 187.2 Z";
+const BOOT_LOGO_ROUTE_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512 Z";
 const RUNNER_STATUS_POLL_MS = 2_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
@@ -722,77 +706,6 @@ function shouldConfirmRunnerDisconnect(status) {
   return state === "unknown" || state === "offline" || state === "error";
 }
 
-function clamp01(value) {
-  return Math.max(0, Math.min(1, value));
-}
-
-function easeOutCubic(value) {
-  const t = clamp01(value);
-  return 1 - ((1 - t) ** 3);
-}
-
-function easeInOutCubic(value) {
-  const t = clamp01(value);
-  return t < 0.5 ? 4 * t * t * t : 1 - (((-2 * t) + 2) ** 3) / 2;
-}
-
-function bootPhase(ms, start, end, easing = easeOutCubic) {
-  if (ms <= start) return 0;
-  if (ms >= end) return 1;
-  return easing((ms - start) / (end - start));
-}
-
-function getBootRevealMaskState(ms) {
-  const elapsed = Math.max(0, Math.min(BOOT_REVEAL_MS, ms));
-  return {
-    frame: bootPhase(elapsed, 0, 900),
-    contours: bootPhase(elapsed, 360, 1900, easeInOutCubic),
-    contoursLate: bootPhase(elapsed, 560, 2150, easeInOutCubic),
-    mountains: bootPhase(elapsed, 1260, 2760, easeInOutCubic),
-    road: bootPhase(elapsed, 1460, 2920, easeInOutCubic),
-    terrain: bootPhase(elapsed, 2350, BOOT_REVEAL_MS, easeInOutCubic),
-  };
-}
-
-function maskStrokeProps(progress) {
-  const p = clamp01(progress);
-  return {
-    opacity: p > 0.01 ? 1 : 0,
-    strokeDashoffset: 1 - p,
-  };
-}
-
-function useBootRevealElapsed(initialElapsedMs) {
-  const [elapsedMs, setElapsedMs] = useState(() => {
-    if (typeof window !== "undefined"
-      && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
-      return BOOT_REVEAL_MS;
-    }
-    return initialElapsedMs;
-  });
-
-  useEffect(() => {
-    if (typeof window !== "undefined"
-      && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
-      return undefined;
-    }
-
-    let frameId = 0;
-    const tick = () => {
-      const next = Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT));
-      setElapsedMs((prev) => (Math.abs(prev - next) > 12 ? next : prev));
-      if (next < BOOT_REVEAL_MS) {
-        frameId = window.requestAnimationFrame(tick);
-      }
-    };
-
-    frameId = window.requestAnimationFrame(tick);
-    return () => window.cancelAnimationFrame(frameId);
-  }, []);
-
-  return elapsedMs;
-}
-
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
   position: fixed;
@@ -804,7 +717,7 @@ const BOOT_MOTION_CSS = `
   padding: 0 24px;
   overflow: hidden;
   isolation: isolate;
-  --boot-duration: 3600ms;
+  --boot-duration: 2600ms;
   --boot-delay: calc(-1 * var(--boot-elapsed, 0ms));
 }
 .ultreia-boot-stack {
@@ -822,7 +735,7 @@ const BOOT_MOTION_CSS = `
   height: min(31vmin, 152px);
 }
 .ultreia-boot-logo-static,
-.ultreia-boot-logo-reveal {
+.ultreia-boot-logo-motion {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -834,14 +747,26 @@ const BOOT_MOTION_CSS = `
   opacity: 0;
   pointer-events: none;
 }
-.ultreia-boot-logo-reveal {
+.ultreia-boot-logo-motion {
   display: block;
-  overflow: visible;
+  overflow: hidden;
   pointer-events: none;
-  transform-origin: center;
 }
 .ultreia-boot-logo-image {
   pointer-events: none;
+}
+.ultreia-logo-cover {
+  fill: #0b0f0e;
+  stroke: #0b0f0e;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ultreia-ridge-cover {
+  opacity: 1;
+}
+.ultreia-boot-cover-mask {
+  transform-box: fill-box;
+  transform-origin: 50% 0%;
 }
 .ultreia-boot-word {
   position: relative;
@@ -910,23 +835,55 @@ const BOOT_MOTION_CSS = `
   letter-spacing: 0.04em;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ultreia-boot-logo-stage,
-  .ultreia-word-final {
+  .ultreia-logo-field,
+  .ultreia-ridge-cover,
+  .ultreia-route-cover,
+  .ultreia-boot-cover-mask,
+  .ultreia-word-final,
+  .ultreia-boot-greeting,
+  .ultreia-boot-built {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
     animation-fill-mode: both;
     animation-timing-function: linear;
-  }
-  .ultreia-boot-logo-stage {
-    animation-name: ultreiaLogoStage;
-    will-change: transform, opacity;
+    animation-play-state: var(--boot-play-state, running);
   }
   .ultreia-boot-logo-static {
     display: none;
   }
+  .ultreia-logo-field {
+    animation-name: ultreiaFieldReveal;
+    will-change: opacity;
+  }
+  .ultreia-boot-left-cover {
+    animation-name: ultreiaLeftRidgeReveal;
+    will-change: opacity;
+  }
+  .ultreia-boot-summit-cover {
+    animation-name: ultreiaSummitReveal;
+    will-change: opacity;
+  }
+  .ultreia-boot-right-cover {
+    animation-name: ultreiaRightRidgeReveal;
+    will-change: opacity;
+  }
+  .ultreia-boot-route-mask {
+    animation-name: ultreiaRouteReveal;
+  }
+  .ultreia-route-cover {
+    animation-name: ultreiaRouteCoverFinish;
+  }
   .ultreia-word-final {
     animation-name: ultreiaWordReveal;
     will-change: clip-path, opacity, transform;
+  }
+  .ultreia-boot-greeting {
+    animation-name: ultreiaGreetingReveal;
+    will-change: opacity, transform;
+  }
+  .ultreia-boot-built {
+    animation-name: ultreiaCreditReveal;
+    will-change: opacity;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -939,25 +896,61 @@ const BOOT_MOTION_CSS = `
     filter: none;
     clip-path: none;
   }
-  .ultreia-boot-logo-reveal {
+  .ultreia-boot-logo-motion {
     display: none;
   }
 }
-@keyframes ultreiaLogoStage {
-  0%, 100% { opacity: 1; transform: none; }
+@keyframes ultreiaFieldReveal {
+  0%, 4% { opacity: 0; animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1); }
+  36% { opacity: 1; animation-timing-function: linear; }
+  100% { opacity: 1; }
+}
+@keyframes ultreiaLeftRidgeReveal {
+  0%, 20% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  55%, 100% { opacity: 0; visibility: hidden; }
+}
+@keyframes ultreiaSummitReveal {
+  0%, 24% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  58%, 100% { opacity: 0; visibility: hidden; }
+}
+@keyframes ultreiaRightRidgeReveal {
+  0%, 28% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  62%, 100% { opacity: 0; visibility: hidden; }
+}
+@keyframes ultreiaRouteReveal {
+  0%, 34% { transform: scaleY(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  68%, 100% { transform: scaleY(0); }
+}
+@keyframes ultreiaRouteCoverFinish {
+  0%, 67.9% { opacity: 1; visibility: visible; }
+  68%, 100% { opacity: 0; visibility: hidden; }
 }
 @keyframes ultreiaWordReveal {
-  0%, 14% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-8px, 0, 0); animation-timing-function: cubic-bezier(0.33, 0, 0.24, 1); }
-  24% { opacity: 1; clip-path: inset(0 80% 0 0); transform: translate3d(-4px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  72% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); animation-timing-function: linear; }
+  0%, 44% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-5px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  54% { opacity: 1; clip-path: inset(0 72% 0 0); transform: translate3d(-2px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  78% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); animation-timing-function: linear; }
   100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); }
+}
+@keyframes ultreiaGreetingReveal {
+  0%, 66% { opacity: 0; transform: translate3d(0, 4px, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  90%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes ultreiaCreditReveal {
+  0%, 72% { opacity: 0; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  94%, 100% { opacity: 1; }
 }
 `;
 
 // React boot and post-login data loading now share one branded loading scene:
 // logo, wordmark, greeting, and build credit. That removes the old in-app
 // handoff from a wordmark-only screen to a separate greeting screen.
-function LoadingScreen({ userId = null, phase = "boot" }) {
+function LoadingScreen({
+  userId = null,
+  phase = "boot",
+  previewElapsedMs = null,
+  previewStatic = false,
+  previewMode = false,
+}) {
   // Read directly from localStorage — this renders before LanguageProvider /
   // profile are available (during auth + first data load). Name is cached when
   // the profile loads. Cache is per auth user so switching accounts cannot leak
@@ -968,69 +961,60 @@ function LoadingScreen({ userId = null, phase = "boot" }) {
     if (l === "zh" || l === "en") lang = l;
     name = userId ? (localStorage.getItem(`ultreia.displayName:${userId}`) || "") : "";
   } catch { /* private mode */ }
-  const hello = timeGreeting(lang) + (name ? `，${name}` : "");
-  const greeting = useMemo(() => pickGreeting(new Date(), userId), [userId]);
-  const line = greeting[lang === "zh" ? "zh" : "en"];
+  const hello = previewMode
+    ? (lang === "zh" ? "早上好" : "Good morning")
+    : timeGreeting(lang) + (name ? `，${name}` : "");
+  const greeting = useMemo(
+    () => (previewMode ? null : pickGreeting(new Date(), userId)),
+    [previewMode, userId],
+  );
+  const line = previewMode
+    ? (lang === "zh" ? "一步一步，继续向前。" : "One step at a time.")
+    : greeting[lang === "zh" ? "zh" : "en"];
   const statusText = phase === "data"
     ? (lang === "zh" ? "核心数据加载中" : "Loading core data")
     : "";
   const [bootElapsedMs] = useState(() => (
-    Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT))
+    Number.isFinite(previewElapsedMs)
+      ? Math.min(BOOT_REVEAL_MS, Math.max(0, previewElapsedMs))
+      : Math.min(BOOT_REVEAL_MS, Math.max(0, Date.now() - APP_BOOT_STARTED_AT))
   ));
-  const revealElapsedMs = useBootRevealElapsed(bootElapsedMs);
-  const reveal = getBootRevealMaskState(revealElapsedMs);
-  const frameStroke = maskStrokeProps(reveal.frame);
-  const contourStroke = maskStrokeProps(reveal.contours);
-  const contourLateStroke = maskStrokeProps(reveal.contoursLate);
-  const mountainStroke = maskStrokeProps(reveal.mountains);
-  const roadStroke = maskStrokeProps(reveal.road);
-  const terrainTranslateY = Math.round(620 * (1 - reveal.terrain));
 
   return (
-    <div className="ultreia-boot-screen" style={{ "--boot-elapsed": `${bootElapsedMs}ms` }}>
+    <div className="ultreia-boot-screen" style={{
+      "--boot-elapsed": `${bootElapsedMs}ms`,
+      "--boot-play-state": Number.isFinite(previewElapsedMs) ? "paused" : "running",
+    }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
-      {/* The boot mark uses one final bitmap and a reveal mask. Mask strokes only
-          decide which original pixels are visible; they are never painted as
-          replacement logo lines. */}
+      {/* The exact final bitmap is present throughout. Dark covers only hide the
+          ridge and route during the build, then withdraw completely. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
-          <svg className="ultreia-boot-logo-reveal" viewBox="0 0 512 512" aria-hidden="true">
+          <svg className="ultreia-boot-logo-motion" viewBox="0 0 512 512" aria-hidden="true">
             <defs>
-              <clipPath id="ultreiaBootTileClip">
-                <rect x="0" y="0" width="512" height="512" rx="113" ry="113" />
-              </clipPath>
-              <mask id="ultreiaBootRevealMask" x="0" y="0" width="512" height="512" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
-                <rect x="0" y="0" width="512" height="512" fill="#fff" fillOpacity="0" />
-                <g transform={`translate(0 ${terrainTranslateY})`} fill="#fff">
-                  <path d="M-70 620 L-70 -90 C38 -64 89 -88 166 -58 C244 -27 299 -98 383 -63 C451 -35 505 -71 582 -46 L582 620 Z" />
-                </g>
-                <g fill="none" stroke="#fff" strokeLinecap="butt" strokeLinejoin="round">
-                  <rect x="8" y="8" width="496" height="496" rx="110" ry="110" pathLength={1} strokeWidth="8" strokeDasharray="1 1" {...frameStroke} />
-                  <rect x="15" y="15" width="482" height="482" rx="103" ry="103" pathLength={1} strokeWidth="3" strokeDasharray="1 1" {...frameStroke} />
-                  {BOOT_MASK_CONTOUR_PATHS.map((path) => (
-                    <path key={path} d={path} pathLength={1} strokeWidth="11" strokeDasharray="1 1" {...contourStroke} />
-                  ))}
-                  {BOOT_MASK_CONTOUR_LATE_PATHS.map((path) => (
-                    <path key={path} d={path} pathLength={1} strokeWidth="11" strokeDasharray="1 1" {...contourLateStroke} />
-                  ))}
-                  {BOOT_MASK_MOUNTAIN_PATHS.map((path) => (
-                    <path key={path} d={path} pathLength={1} strokeWidth="72" strokeDasharray="1 1" {...mountainStroke} />
-                  ))}
-                  <path d={BOOT_MASK_ROAD_PATH} pathLength={1} strokeWidth="62" strokeDasharray="1 1" {...roadStroke} />
-                </g>
+              <mask id="ultreiaBootRouteWipe" x="-96" y="-96" width="704" height="704" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
+                <rect className="ultreia-boot-cover-mask ultreia-boot-route-mask" x="-96" y="-96" width="704" height="704" fill="#fff" />
               </mask>
             </defs>
-            <image
-              className="ultreia-boot-logo-image"
-              href={productBootLogoUrl}
-              x="0"
-              y="0"
-              width="512"
-              height="512"
-              preserveAspectRatio="xMidYMid slice"
-              clipPath="url(#ultreiaBootTileClip)"
-              mask="url(#ultreiaBootRevealMask)"
-            />
+            <g className="ultreia-logo-field">
+              <image
+                className="ultreia-boot-logo-image"
+                href={productBootLogoUrl}
+                x="0"
+                y="0"
+                width="512"
+                height="512"
+                preserveAspectRatio="xMidYMid slice"
+              />
+              {!previewStatic && (
+                <>
+                  <path className="ultreia-logo-cover ultreia-ridge-cover ultreia-boot-left-cover" d={BOOT_LOGO_LEFT_RIDGE_PATH} strokeWidth="54" />
+                  <path className="ultreia-logo-cover ultreia-ridge-cover ultreia-boot-summit-cover" d={BOOT_LOGO_SUMMIT_PATH} strokeWidth="48" />
+                  <path className="ultreia-logo-cover ultreia-ridge-cover ultreia-boot-right-cover" d={BOOT_LOGO_RIGHT_RIDGE_PATH} strokeWidth="56" />
+                  <path className="ultreia-logo-cover ultreia-route-cover" d={BOOT_LOGO_ROUTE_PATH} strokeWidth="62" mask="url(#ultreiaBootRouteWipe)" />
+                </>
+              )}
+            </g>
           </svg>
           <img
             className="ultreia-boot-logo-static"
@@ -1134,6 +1118,29 @@ export default function App() {
     return () => clearTimeout(t);
   }, [loading]);
 
+  const bootPreview = (() => {
+    if (!import.meta.env.DEV || typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("bootPreview") !== "1") return null;
+    const playback = params.get("bootPlay") === "1";
+    const value = Number(params.get("bootT"));
+    return {
+      elapsedMs: playback
+        ? null
+        : (Number.isFinite(value) ? Math.min(BOOT_REVEAL_MS, Math.max(0, value)) : 0),
+      staticFrame: params.get("bootStatic") === "1",
+    };
+  })();
+
+  if (bootPreview) {
+    return (
+      <LoadingScreen
+        previewElapsedMs={bootPreview.elapsedMs}
+        previewStatic={bootPreview.staticFrame}
+        previewMode
+      />
+    );
+  }
   if (loading) return <LoadingScreen userId={user?.id} />;
   if (recoveryMode) {
     return (

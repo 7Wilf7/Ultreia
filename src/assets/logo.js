@@ -2,11 +2,9 @@
 // the URL from here — never from resources/ directly — so the next logo swap
 // touches exactly one file.
 //
-// NOTE: the native Android splash is generated separately from
-// resources/splash-logo.png by scripts/make-splash.mjs. When changing the
-// product logo, update both runtime assets plus the native splash source, or
-// the native-splash → web-view handoff shows two different logos.
+// The web boot splash uses the exact 1024px desktop source artwork. Native
+// Android splash assets are generated separately by scripts/make-splash.mjs.
 import productLogoUrl from "../../resources/ultreia-logo.webp";
-import productBootLogoUrl from "../../resources/splash-logo.png";
+import productBootLogoUrl from "../../resources/brand/ultreia-original.png";
 
 export { productBootLogoUrl, productLogoUrl };

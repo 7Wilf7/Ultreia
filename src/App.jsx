@@ -670,12 +670,8 @@ function throwIfAborted(signal) {
   throw err;
 }
 
-const BOOT_REVEAL_MS = 2600;
+const BOOT_REVEAL_MS = 1800;
 const APP_BOOT_STARTED_AT = Date.now();
-const BOOT_LOGO_LEFT_RIDGE_PATH = "M57.7 370 L97.9 318.3 L146.9 262.3 L197.5 201.3 L224.7 182.8 L223.1 227.4 L189.3 261.2 L164.3 298.2 L117.5 316.7 L83.2 349.3 Z";
-const BOOT_LOGO_SUMMIT_PATH = "M223.1 201.3 L279.1 128.4 L314.5 101.2 L314.5 161.1 L269.9 220.9 L248.1 217.6 Z M279.1 166.5 L310.1 185 L305.8 206.8 L280.8 226.3 L265.5 216.6 L282.9 193.2 Z";
-const BOOT_LOGO_RIGHT_RIDGE_PATH = "M304.7 144.7 L439.6 288.4 L331.9 251.4 L311.8 187.2 Z";
-const BOOT_LOGO_ROUTE_PATH = "M99.6 512 L130.6 487 L167.6 438 L211.1 390.7 L251.9 350.9 L277.5 318.8 L265.5 296.5 L230.2 265.5 L211.1 243.8 L222 223.1 L254.6 206.8 L281.8 187.2 L298.2 163.2 L317.2 174.1 L310.7 209.5 L275.3 231.8 L249.2 244.8 L277.5 262.3 L321 282.9 L352.6 311.2 L328.1 340.1 L287.3 378.2 L246.5 424.4 L205.7 473.4 L176.3 512 Z";
 const RUNNER_STATUS_POLL_MS = 2_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
@@ -717,7 +713,7 @@ const BOOT_MOTION_CSS = `
   padding: 0 24px;
   overflow: hidden;
   isolation: isolate;
-  --boot-duration: 2600ms;
+  --boot-duration: 1800ms;
   --boot-delay: calc(-1 * var(--boot-elapsed, 0ms));
 }
 .ultreia-boot-stack {
@@ -730,43 +726,16 @@ const BOOT_MOTION_CSS = `
   text-align: center;
 }
 .ultreia-boot-logo-stage {
-  position: relative;
   width: min(31vmin, 152px);
   height: min(31vmin, 152px);
 }
-.ultreia-boot-logo-static,
-.ultreia-boot-logo-motion {
-  position: absolute;
-  inset: 0;
+.ultreia-boot-logo-static {
+  display: block;
   width: 100%;
   height: 100%;
-}
-.ultreia-boot-logo-static {
   object-fit: contain;
-  transform-origin: center;
-  opacity: 0;
-  pointer-events: none;
-}
-.ultreia-boot-logo-motion {
-  display: block;
-  overflow: hidden;
-  pointer-events: none;
-}
-.ultreia-boot-logo-image {
-  pointer-events: none;
-}
-.ultreia-logo-cover {
-  fill: #0b0f0e;
-  stroke: #0b0f0e;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.ultreia-ridge-cover {
   opacity: 1;
-}
-.ultreia-boot-cover-mask {
-  transform-box: fill-box;
-  transform-origin: 50% 0%;
+  pointer-events: none;
 }
 .ultreia-boot-word {
   position: relative;
@@ -835,10 +804,6 @@ const BOOT_MOTION_CSS = `
   letter-spacing: 0.04em;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ultreia-logo-field,
-  .ultreia-ridge-cover,
-  .ultreia-route-cover,
-  .ultreia-boot-cover-mask,
   .ultreia-word-final,
   .ultreia-boot-greeting,
   .ultreia-boot-built {
@@ -848,34 +813,11 @@ const BOOT_MOTION_CSS = `
     animation-timing-function: linear;
     animation-play-state: var(--boot-play-state, running);
   }
-  .ultreia-boot-logo-static {
-    display: none;
-  }
-  .ultreia-logo-field {
-    animation-name: ultreiaFieldReveal;
-    will-change: opacity;
-  }
-  .ultreia-boot-left-cover {
-    animation-name: ultreiaLeftRidgeReveal;
-    will-change: opacity;
-  }
-  .ultreia-boot-summit-cover {
-    animation-name: ultreiaSummitReveal;
-    will-change: opacity;
-  }
-  .ultreia-boot-right-cover {
-    animation-name: ultreiaRightRidgeReveal;
-    will-change: opacity;
-  }
-  .ultreia-boot-route-mask {
-    animation-name: ultreiaRouteReveal;
-  }
-  .ultreia-route-cover {
-    animation-name: ultreiaRouteCoverFinish;
-  }
   .ultreia-word-final {
     animation-name: ultreiaWordReveal;
-    will-change: clip-path, opacity, transform;
+    animation-duration: 1200ms;
+    animation-timing-function: linear;
+    will-change: clip-path;
   }
   .ultreia-boot-greeting {
     animation-name: ultreiaGreetingReveal;
@@ -887,7 +829,6 @@ const BOOT_MOTION_CSS = `
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ultreia-boot-logo-static,
   .ultreia-word-final,
   .ultreia-boot-greeting,
   .ultreia-boot-built {
@@ -896,40 +837,10 @@ const BOOT_MOTION_CSS = `
     filter: none;
     clip-path: none;
   }
-  .ultreia-boot-logo-motion {
-    display: none;
-  }
-}
-@keyframes ultreiaFieldReveal {
-  0%, 4% { opacity: 0; animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1); }
-  36% { opacity: 1; animation-timing-function: linear; }
-  100% { opacity: 1; }
-}
-@keyframes ultreiaLeftRidgeReveal {
-  0%, 20% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  55%, 100% { opacity: 0; visibility: hidden; }
-}
-@keyframes ultreiaSummitReveal {
-  0%, 24% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  58%, 100% { opacity: 0; visibility: hidden; }
-}
-@keyframes ultreiaRightRidgeReveal {
-  0%, 28% { opacity: 1; visibility: visible; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  62%, 100% { opacity: 0; visibility: hidden; }
-}
-@keyframes ultreiaRouteReveal {
-  0%, 34% { transform: scaleY(1); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
-  68%, 100% { transform: scaleY(0); }
-}
-@keyframes ultreiaRouteCoverFinish {
-  0%, 67.9% { opacity: 1; visibility: visible; }
-  68%, 100% { opacity: 0; visibility: hidden; }
 }
 @keyframes ultreiaWordReveal {
-  0%, 44% { opacity: 0; clip-path: inset(0 100% 0 0); transform: translate3d(-5px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  54% { opacity: 1; clip-path: inset(0 72% 0 0); transform: translate3d(-2px, 0, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  78% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); animation-timing-function: linear; }
-  100% { opacity: 1; clip-path: inset(0 0 0 0); transform: translate3d(0, 0, 0); }
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 0 0 0); }
 }
 @keyframes ultreiaGreetingReveal {
   0%, 66% { opacity: 0; transform: translate3d(0, 4px, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
@@ -948,7 +859,6 @@ function LoadingScreen({
   userId = null,
   phase = "boot",
   previewElapsedMs = null,
-  previewStatic = false,
   previewMode = false,
 }) {
   // Read directly from localStorage — this renders before LanguageProvider /
@@ -986,36 +896,9 @@ function LoadingScreen({
       "--boot-play-state": Number.isFinite(previewElapsedMs) ? "paused" : "running",
     }}>
       <style>{POSTER_FONT_CSS}{BOOT_MOTION_CSS}</style>
-      {/* The exact final bitmap is present throughout. Dark covers only hide the
-          ridge and route during the build, then withdraw completely. */}
+      {/* The desktop source logo is visible from the first frame. */}
       <div className="ultreia-boot-stack" aria-busy="true" aria-live="polite">
         <div className="ultreia-boot-logo-stage">
-          <svg className="ultreia-boot-logo-motion" viewBox="0 0 512 512" aria-hidden="true">
-            <defs>
-              <mask id="ultreiaBootRouteWipe" x="-96" y="-96" width="704" height="704" maskUnits="userSpaceOnUse" style={{ maskType: "alpha" }}>
-                <rect className="ultreia-boot-cover-mask ultreia-boot-route-mask" x="-96" y="-96" width="704" height="704" fill="#fff" />
-              </mask>
-            </defs>
-            <g className="ultreia-logo-field">
-              <image
-                className="ultreia-boot-logo-image"
-                href={productBootLogoUrl}
-                x="0"
-                y="0"
-                width="512"
-                height="512"
-                preserveAspectRatio="xMidYMid slice"
-              />
-              {!previewStatic && (
-                <>
-                  <path className="ultreia-logo-cover ultreia-ridge-cover ultreia-boot-left-cover" d={BOOT_LOGO_LEFT_RIDGE_PATH} strokeWidth="54" />
-                  <path className="ultreia-logo-cover ultreia-ridge-cover ultreia-boot-summit-cover" d={BOOT_LOGO_SUMMIT_PATH} strokeWidth="48" />
-                  <path className="ultreia-logo-cover ultreia-ridge-cover ultreia-boot-right-cover" d={BOOT_LOGO_RIGHT_RIDGE_PATH} strokeWidth="56" />
-                  <path className="ultreia-logo-cover ultreia-route-cover" d={BOOT_LOGO_ROUTE_PATH} strokeWidth="62" mask="url(#ultreiaBootRouteWipe)" />
-                </>
-              )}
-            </g>
-          </svg>
           <img
             className="ultreia-boot-logo-static"
             src={productBootLogoUrl}
@@ -1128,7 +1011,6 @@ export default function App() {
       elapsedMs: playback
         ? null
         : (Number.isFinite(value) ? Math.min(BOOT_REVEAL_MS, Math.max(0, value)) : 0),
-      staticFrame: params.get("bootStatic") === "1",
     };
   })();
 
@@ -1136,7 +1018,6 @@ export default function App() {
     return (
       <LoadingScreen
         previewElapsedMs={bootPreview.elapsedMs}
-        previewStatic={bootPreview.staticFrame}
         previewMode
       />
     );

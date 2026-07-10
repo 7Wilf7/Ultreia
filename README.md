@@ -31,6 +31,7 @@ npm run preview
 - `docs/`：应用内中文使用手册，会被打包进使用指南。
 - `docs/changelog.md`：用户可感知更新日志。
 - `docs-internal/`：内部产品、迁移、Agent 化和品牌记录。
+- `docs-internal/development-runbook.md`：Android 发版、Edge Function、Secrets、工程红线和 Supabase 操作细节。
 
 ## 发版提示
 

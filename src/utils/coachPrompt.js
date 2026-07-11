@@ -531,6 +531,12 @@ function formatAgentActionLine(action) {
     } else if (Array.isArray(action.result.savedLanguages) && action.result.savedLanguages.length) {
       parts.push(`saved_memory=${action.result.savedLanguages.join("+")}`);
     }
+    const outcome = action.result.outcome;
+    if (outcome?.counts && typeof outcome.counts === "object") {
+      const counts = outcome.counts;
+      parts.push(`observed_outcome=completed:${Number(counts.completed || 0)},partial:${Number(counts.partial || 0)},missed:${Number(counts.missed || 0)},modified:${Number(counts.modified || 0)},deleted:${Number(counts.deleted || 0)},high_rpe:${Number(outcome.highRpeCount || 0)}`);
+      parts.push("outcome_note=observational only; do not claim the suggestion caused the result");
+    }
   }
   if (action.error) parts.push(`error=${String(action.error).replace(/\s+/g, " ").slice(0, 120)}`);
   return `- ${parts.join(" · ")}`;

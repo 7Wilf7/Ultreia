@@ -92,6 +92,7 @@ import {
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, findPersistedAgentPlans, getCreatePlans, isAgentPlanBatchPersisted, markAgentActionStatus, tagAgentPlanWorkouts } from "./utils/agentActions";
+import { evaluateExecutedCalendarActions } from "./utils/agentActionOutcome";
 import {
   buildImportCoachReviewNote,
   buildImportSelfReviewNote,
@@ -1380,6 +1381,22 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       )));
       const result = Object.fromEntries(pieces.map(piece => [piece.key, piece]));
       const failures = pieces.filter(piece => piece.error);
+
+      if (!result.workouts.error && !result.agentActions.error) {
+        const originalActions = result.agentActions.value || [];
+        const evaluatedActions = evaluateExecutedCalendarActions(originalActions, result.workouts.value || [], new Date());
+        const changed = evaluatedActions.filter((action, index) => action !== originalActions[index]);
+        if (changed.length) {
+          const saved = await Promise.allSettled(changed.map(action => db.agentActions.upsertAction(action)));
+          const savedById = new Map(saved
+            .filter(entry => entry.status === "fulfilled" && entry.value)
+            .map(entry => [entry.value.id, entry.value]));
+          result.agentActions.value = evaluatedActions.map(action => savedById.get(action.id) || action);
+          saved.filter(entry => entry.status === "rejected").forEach(entry => {
+            console.warn("[agent outcome] save failed:", entry.reason);
+          });
+        }
+      }
 
       if (!result.workouts.error) {
         setLogs(result.workouts.value || []);
@@ -4002,6 +4019,7 @@ Rules:
           calendarSaved: true,
           createdWorkoutIds: (created || []).map(w => w.id).filter(Boolean),
           createdWorkoutCount: (created || []).length,
+          createdWorkoutSnapshots: (created || []).map(compactPlanSnapshot).filter(Boolean),
           updatedPlanIds: targetedPlanIds,
           updatedPlanCount: targetedPlanIds.length,
           planChanges,

@@ -83,7 +83,11 @@ describe("buildAgentActionsBlock", () => {
         status: "executed",
         updatedAt: "2026-06-23T10:00:00Z",
         payload: { plans: [{ date: "2026-06-24" }, { date: "2026-06-25" }] },
-        result: { createdWorkoutCount: 2, plannedRestDates: ["2026-06-25"] },
+        result: {
+          createdWorkoutCount: 2,
+          plannedRestDates: ["2026-06-25"],
+          outcome: { counts: { completed: 1, partial: 1, missed: 0, modified: 1, deleted: 0 }, highRpeCount: 1 },
+        },
       },
       {
         type: "memory_update",
@@ -99,6 +103,8 @@ describe("buildAgentActionsBlock", () => {
     expect(block).toContain("dates=2026-06-24,2026-06-25");
     expect(block).toContain("created=2");
     expect(block).toContain("rest=2026-06-25");
+    expect(block).toContain("observed_outcome=completed:1,partial:1,missed:0,modified:1,deleted:0,high_rpe:1");
+    expect(block).toContain("observational only");
     expect(block).toContain("memory update");
     expect(block).toContain("status=rejected");
     expect(block).toContain("quality_signal=runner_skipped");

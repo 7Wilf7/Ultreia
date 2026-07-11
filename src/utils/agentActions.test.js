@@ -4,6 +4,7 @@ import {
   buildCreatePlansAction,
   buildMemoryUpdateAction,
   buildRaceBriefingAction,
+  completeAgentAction,
   describeCreatePlansImpact,
   getCreatePlans,
   getMemoryUpdate,
@@ -16,6 +17,7 @@ import {
   isPlanUpdateItem,
   tagAgentPlanWorkouts,
   findPersistedAgentPlans,
+  failAgentAction,
   isAgentPlanBatchPersisted,
   isRestPlanItem,
   markAgentActionStatus,
@@ -289,5 +291,18 @@ describe("agent action helpers", () => {
     expect(findPersistedAgentPlans(tagged, "action-1")).toHaveLength(2);
     expect(isAgentPlanBatchPersisted(tagged, "action-1", 2)).toBe(true);
     expect(isAgentPlanBatchPersisted(tagged.slice(0, 1), "action-1", 2)).toBe(false);
+  });
+
+  it("keeps partial or failed execution out of the executed state", () => {
+    const accepted = markAgentActionStatus(
+      buildCreatePlansAction([{ date: "2026-06-20", type: "Road Run" }], { id: "a2" }),
+      AGENT_ACTION_STATUS.EXECUTING,
+    );
+    const failed = failAgentAction(accepted, new Error("network unavailable"), "2026-06-19T08:00:00.000Z");
+    expect(failed).toMatchObject({ status: "failed", error: "network unavailable" });
+    expect(failed.executedAt).toBeNull();
+
+    const completed = completeAgentAction(accepted, { calendarSaved: true, actionLogSaved: true }, "2026-06-19T08:05:00.000Z");
+    expect(completed).toMatchObject({ status: "executed", result: { calendarSaved: true, actionLogSaved: true } });
   });
 });

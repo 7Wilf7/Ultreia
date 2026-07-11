@@ -14,7 +14,7 @@ import {
 } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { hasValidCoords } from "../lib/weather";
+import { cityAbbreviationFromLocation, hasValidCoords } from "../lib/weather";
 import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTextTokenCounter, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { buildSystemPrompt } from "../utils/profile";
 import { buildMemoryFactReview, buildMemoryFactSnapshotFromReview, extractMemoryFacts, MEMORY_SECTIONS } from "../utils/memory";
@@ -1683,6 +1683,8 @@ export function AICoachTab({
       : '—');
   const weatherActive = wStatus === 'ready';
   const hasDefaultLocation = hasValidCoords(defaultLocation);
+  const weatherLocationLabel = hasDefaultLocation ? cityAbbreviationFromLocation(defaultLocation, lang) : "";
+  const weatherDisplayLabel = weatherLocationLabel && weatherActive ? `${weatherLocationLabel} ${weatherLabel}` : weatherLabel;
   const runnerOptimistic = codexRunnerStatus?.optimistic === true;
   const runnerLastSeenIso = runnerOptimistic ? null : (codexRunnerStatus?.last_seen_at || null);
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
@@ -1815,6 +1817,22 @@ export function AICoachTab({
     compactFocusRace?.daysToRace != null ? t("coach.focus_days_to_race", { days: compactFocusRace.daysToRace }) : "",
     compactFocusWatchCount > 0 ? t("coach.focus_watch_count", { count: compactFocusWatchCount }) : t("coach.focus_stable"),
   ].filter(Boolean).join(" · ");
+  const compactFocusDeemphasized = !!(
+    proactiveAdjustment?.action
+    || proactiveAdjustment?.loading
+    || raceBriefing?.existingAction
+    || raceBriefingLoading
+  );
+  const contextSyncTime = agentContextSync?.lastSyncedAt
+    ? new Date(agentContextSync.lastSyncedAt).toLocaleTimeString(lang === "zh" ? "zh-CN" : "en", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  const contextSyncLabel = agentContextSync?.status === "synced"
+    ? t("coach.context_synced", { time: contextSyncTime || "—" })
+    : agentContextSync?.status === "partial"
+      ? t("coach.context_sync_partial")
+      : agentContextSync?.status === "syncing"
+        ? t("coach.context_syncing")
+        : t("coach.context_cached");
   const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
@@ -2240,9 +2258,9 @@ export function AICoachTab({
             }}>
             <span style={{ color: weatherActive ? "var(--moss)" : "var(--ink-3)" }}>☁</span>
             {!isMobile && <span style={{ color: "var(--ink-3)" }}>Weather</span>}
-            <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherLabel}</span>
+            <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherDisplayLabel}</span>
           </button>
-        ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
+        ) : statusPill(<span>☁</span>, "Weather", weatherDisplayLabel, weatherActive, isMobile)}
 
         <span style={{ flex: 1, minWidth: 6 }} />
         {!isMobile && showHeaderManualAdjustmentShortcut && (
@@ -2354,10 +2372,10 @@ export function AICoachTab({
         style={{
           width: "100%",
           margin: "-2px 0 10px",
-          padding: "9px 11px",
+          padding: compactFocusDeemphasized ? "6px 9px" : "9px 11px",
           border: "1px solid var(--rule-soft)",
           borderRadius: 7,
-          background: "var(--bg-elevated)",
+          background: compactFocusDeemphasized ? "transparent" : "var(--bg-elevated)",
           color: "var(--ink-1)",
           display: "grid",
           gridTemplateColumns: "auto minmax(0, 1fr) auto",
@@ -2365,12 +2383,13 @@ export function AICoachTab({
           gap: 9,
           textAlign: "left",
           cursor: "pointer",
+          opacity: compactFocusDeemphasized ? 0.72 : 1,
         }}
       >
         <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "var(--ink-3)", textTransform: "uppercase" }}>{t("coach.current_focus")}</span>
         <span style={{ minWidth: 0 }}>
           <span style={{ display: "block", fontSize: 12.5, fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactFocusTitle}</span>
-          <span style={{ display: "block", marginTop: 2, fontSize: 10.5, color: compactFocusWatchCount ? "var(--warn)" : "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactFocusMeta}</span>
+          {!compactFocusDeemphasized && <span style={{ display: "block", marginTop: 2, fontSize: 10.5, color: compactFocusWatchCount ? "var(--warn)" : "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactFocusMeta}</span>}
         </span>
         <span style={{ color: "var(--ink-3)" }}>›</span>
       </button>
@@ -3203,6 +3222,14 @@ export function AICoachTab({
                   {coachHubTab === "prompt" && (
                     <div>
                       <div style={{ ...coachFocusBlockStyle, marginBottom: 14 }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, fontSize: 12 }}>
+                          <span style={{ color: agentContextSync?.status === "partial" ? "var(--warn)" : "var(--ink-2)" }}>{contextSyncLabel}</span>
+                          {onRetryAgentContext && (
+                            <button type="button" {...instantPress("coach-context-retry-advanced", onRetryAgentContext)} style={{ ...s.btnGhost, minHeight: 0, padding: "4px 8px", fontSize: 11 }}>
+                              {t("common.retry")}
+                            </button>
+                          )}
+                        </div>
                         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 7, fontSize: 12 }}>
                           <span style={{ color: "var(--ink-3)" }}>{t("coach.context_used")}</span>
                           <span style={{ color: "var(--ink-1)", fontFamily: "var(--font-mono)" }}>≈ {contextUsage.usedLabel} / {contextUsage.totalLabel}</span>
@@ -4521,6 +4548,8 @@ function PlanActionDetails({ action, t }) {
   const createdCount = Number(action.result?.createdWorkoutCount || action.result?.createdCount || 0);
   const updatedCount = Number(action.result?.updatedPlanCount || changes.length || 0);
   const restDates = Array.isArray(action.result?.plannedRestDates) ? action.result.plannedRestDates : [];
+  const outcome = action.result?.outcome;
+  const outcomeCounts = outcome?.counts || null;
 
   return (
     <>
@@ -4575,6 +4604,22 @@ function PlanActionDetails({ action, t }) {
               <div>{t("coach.agent_action_empty_detail")}</div>
             )}
           </div>
+        </ActionDetailSection>
+      )}
+      {outcomeCounts && (
+        <ActionDetailSection title={t("coach.agent_action_outcome_title") }>
+          <div style={detailResultWrapStyle}>
+            <span style={detailResultPillStyle}>{t("coach.agent_action_outcome_completed", { count: Number(outcomeCounts.completed || 0) })}</span>
+            <span style={detailResultPillStyle}>{t("coach.agent_action_outcome_partial", { count: Number(outcomeCounts.partial || 0) })}</span>
+            <span style={detailResultPillStyle}>{t("coach.agent_action_outcome_missed", { count: Number(outcomeCounts.missed || 0) })}</span>
+            {(Number(outcomeCounts.modified || 0) + Number(outcomeCounts.deleted || 0)) > 0 && (
+              <span style={detailResultPillStyle}>{t("coach.agent_action_outcome_changed", { modified: Number(outcomeCounts.modified || 0), deleted: Number(outcomeCounts.deleted || 0) })}</span>
+            )}
+            {Number(outcome.highRpeCount || 0) > 0 && (
+              <span style={{ ...detailResultPillStyle, color: "var(--warn)" }}>{t("coach.agent_action_outcome_high_rpe", { count: Number(outcome.highRpeCount || 0) })}</span>
+            )}
+          </div>
+          <div style={{ ...detailEmptyStyle, marginTop: 7 }}>{t("coach.agent_action_outcome_hint")}</div>
         </ActionDetailSection>
       )}
       {!plans.length && !changes.length && !hasResult && (

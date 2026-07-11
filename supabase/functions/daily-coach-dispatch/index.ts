@@ -431,6 +431,11 @@ function buildWeeklyRecapPrompt(opts: {
     if (Number.isFinite(Number(action.result?.createdWorkoutCount))) {
       parts.push(`created=${Number(action.result.createdWorkoutCount)}`);
     }
+    const outcome = action.result?.outcome;
+    if (outcome?.counts) {
+      parts.push(`observed_outcome=completed:${Number(outcome.counts.completed || 0)},partial:${Number(outcome.counts.partial || 0)},missed:${Number(outcome.counts.missed || 0)},modified:${Number(outcome.counts.modified || 0)},deleted:${Number(outcome.counts.deleted || 0)},high_rpe:${Number(outcome.highRpeCount || 0)}`);
+      parts.push("outcome_note=observational only; no causal claim");
+    }
     if (action.error) parts.push(`error=${String(action.error).replace(/\s+/g, " ").slice(0, 120)}`);
     return parts.length ? `- ${parts.join(" · ")}` : "";
   }).filter(Boolean);

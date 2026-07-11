@@ -53,6 +53,7 @@
 
 - 第一版仍保留本地 `planImportCache` 做离线/即时缓存，云端 `agent_actions` 是跨设备恢复和审计来源。
 - 周报提炼计划复用 `create_plans`，来源通过 `source_ref_type/source_ref_id` 区分。
+- Calendar 建议的日期后执行观察复用现有 `result` JSON 的 `outcome` 子对象，不需要新增列；写入时保留原执行审计字段。
 
 建议字段见 `docs-internal/agentization-roadmap.md` Phase 3。
 

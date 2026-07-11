@@ -154,6 +154,14 @@ export function failAgentAction(action, error, now = new Date()) {
 export function getAgentActionQualitySignal(action) {
   const status = String(action?.status || "").toLowerCase();
   const type = String(action?.type || "").toLowerCase();
+  const guardState = String(action?.result?.executionGuard?.state || "").toLowerCase();
+  if (guardState === "stale" || guardState === "superseded") {
+    return {
+      label: "stale",
+      score: 0,
+      coachHint: "calendar changed after review; this action was safely blocked and is not preference feedback",
+    };
+  }
   if (status === AGENT_ACTION_STATUS.EXECUTED) {
     if (type === AGENT_ACTION_TYPES.CREATE_PLANS) {
       return {
@@ -229,14 +237,18 @@ export function getCreatePlans(action) {
 
 export function tagAgentPlanWorkouts(workouts = [], actionId = "") {
   if (!actionId) return workouts.map(workout => ({ ...workout }));
-  return workouts.map((workout, index) => ({
-    ...workout,
-    planDetail: {
-      ...(workout?.planDetail || {}),
-      agentActionId: actionId,
-      agentActionItemKey: `${index}:${workout?.date || ""}:${workout?.type || ""}`,
-    },
-  }));
+  return workouts.map((workout, index) => {
+    const targetPlanId = getPlanTargetId(workout) || String(workout?._targetPlanId || "").trim();
+    return {
+      ...workout,
+      planDetail: {
+        ...(workout?.planDetail || {}),
+        agentActionId: actionId,
+        agentActionItemKey: `${index}:${workout?.date || ""}:${workout?.type || ""}`,
+        ...(targetPlanId ? { agentActionTargetPlanId: targetPlanId } : {}),
+      },
+    };
+  });
 }
 
 export function findPersistedAgentPlans(logs = [], actionId = "") {

@@ -266,7 +266,19 @@ function dateImpactText(row, t, lang) {
   return t("coach.action_date_add_plan", { date, n: row.createCount || row.itemCount });
 }
 
-export function CoachPlanImportModal({ plans = [], action = null, assistantContent = "", existingPlans = [], onConfirm, onCancel, onReject, onReExtract }) {
+export function CoachPlanImportModal({
+  plans = [],
+  action = null,
+  assistantContent = "",
+  existingPlans = [],
+  calendarGuard = null,
+  reviewingLatest = false,
+  onConfirm,
+  onCancel,
+  onReject,
+  onReExtract,
+  onReviewLatest,
+}) {
   const t = useT();
   const { lang } = useLanguage();
   const appDialog = useAppDialog();
@@ -309,6 +321,7 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
   const actionMetaTitle = t("coach.action_meta_toggle");
 
   async function doImport() {
+    if (calendarGuard) return;
     // Validate: every selected row needs a date + type.
     const selected = items.filter(it => it._selected);
     for (const it of selected) {
@@ -402,7 +415,52 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
         <div style={{ ...s.muted, marginTop: 10, lineHeight: 1.5, fontSize: 13 }}>
           {t("coach.action_create_plans_hint")}
         </div>
-        {onReExtract && (
+        {calendarGuard && (
+          <div style={{
+            marginTop: 12,
+            border: "1px solid var(--warn)",
+            background: "rgba(182, 119, 45, 0.12)",
+            color: "var(--ink-1)",
+            padding: "11px 12px",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>
+              {t("coach.calendar_guard_stale_title")}
+            </div>
+            <div>
+              {t("coach.calendar_guard_stale_body", {
+                items: [
+                  ...(calendarGuard.affectedDates || []),
+                  ...(calendarGuard.planIds || []).map(id => `ID ${id}`),
+                ].join(lang === "zh" ? "、" : ", ") || t("coach.calendar_guard_scope_unknown"),
+              })}
+            </div>
+            {(calendarGuard.conflicts || []).length > 0 && (
+              <ul style={{ margin: "7px 0 0", paddingLeft: 18 }}>
+                {calendarGuard.conflicts.slice(0, 6).map((item, index) => (
+                  <li key={`${item.code}-${item.date || item.planId || index}`}>
+                    {t(`coach.calendar_guard_conflict_${item.code}`, {
+                      date: item.date || "—",
+                      plan: item.planId || "—",
+                    })}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {onReviewLatest && (
+              <button
+                type="button"
+                onClick={onReviewLatest}
+                disabled={reviewingLatest}
+                style={{ ...s.btn, marginTop: 9, minHeight: 0, padding: "7px 10px", fontSize: 12, opacity: reviewingLatest ? 0.5 : 1 }}
+              >
+                {reviewingLatest ? t("coach.calendar_guard_reviewing") : t("coach.calendar_guard_review_latest")}
+              </button>
+            )}
+          </div>
+        )}
+        {onReExtract && !calendarGuard && (
           <button onClick={onReExtract} disabled={importing}
             style={{ ...s.btnGhost, marginTop: 10, minHeight: 0, padding: "6px 10px", fontSize: 12, opacity: importing ? 0.5 : 1 }}>
             {t("coach.import_reextract")}
@@ -832,8 +890,8 @@ export function CoachPlanImportModal({ plans = [], action = null, assistantConte
           paddingTop: 14, borderTop: "1px solid var(--rule)",
         }}>
           <button onClick={doImport}
-            disabled={importing || selectedCount === 0}
-            style={{ ...s.btn, opacity: (importing || selectedCount === 0) ? 0.5 : 1 }}>
+            disabled={importing || selectedCount === 0 || !!calendarGuard}
+            style={{ ...s.btn, opacity: (importing || selectedCount === 0 || calendarGuard) ? 0.5 : 1 }}>
             {importing
               ? t("coach.importing")
               : t("coach.import_confirm", { n: selectedCount })}

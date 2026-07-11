@@ -91,7 +91,20 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
-import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, findPersistedAgentPlans, getCreatePlans, isAgentPlanBatchPersisted, markAgentActionStatus, tagAgentPlanWorkouts } from "./utils/agentActions";
+import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, findPersistedAgentPlans, getCreatePlans, markAgentActionStatus, tagAgentPlanWorkouts } from "./utils/agentActions";
+import {
+  CalendarBaselineError,
+  buildCalendarExecutionRequest,
+  compareCalendarExecutionGuard,
+  createCalendarActionSuccessor,
+  hasCalendarBaseline,
+  isCalendarActionStale,
+  markCalendarActionAttempt,
+  markCalendarActionStale,
+  markCalendarActionSuperseded,
+  persistCalendarBaseline,
+  runCalendarMutationIfSafe,
+} from "./utils/calendarExecutionGuard";
 import { evaluateExecutedCalendarActions } from "./utils/agentActionOutcome";
 import {
   buildImportCoachReviewNote,
@@ -2396,6 +2409,11 @@ function AppShell({
     if (!createPlanActions.length) return cache;
     const next = { ...cache };
     for (const action of createPlanActions) {
+      const currentAction = next[action.sourceMessageId]?.action;
+      if (
+        currentAction?.id !== action.id
+        && String(currentAction?.createdAt || "") > String(action.createdAt || "")
+      ) continue;
       const plans = Array.isArray(action.payload?.plans) ? action.payload.plans : [];
       next[action.sourceMessageId] = {
         ...(next[action.sourceMessageId] || {}),
@@ -2413,6 +2431,7 @@ function AppShell({
   const [extractingForMsgId, setExtractingForMsgId] = useState(null);
   const [planRescueLoading, setPlanRescueLoading] = useState(false);
   const [recoveryGuardLoading, setRecoveryGuardLoading] = useState(false);
+  const [planReReviewLoading, setPlanReReviewLoading] = useState(false);
   const [raceBriefingLoading, setRaceBriefingLoading] = useState(false);
   const proactiveAdjustmentLoading = planRescueLoading || recoveryGuardLoading;
   const [planProposal, setPlanProposal] = useState(null);
@@ -2521,6 +2540,148 @@ function AppShell({
         if (throwOnError) throw err;
         return null;
       });
+  }
+
+  function syncPlanActionLocal(action) {
+    if (!action?.id) return action;
+    setAgentActions?.(prev => mergeAgentActionList(prev, action));
+    if (action.sourceMessageId) {
+      setPlanImportCache(prev => {
+        const current = prev[action.sourceMessageId] || {};
+        if (
+          current.action?.id !== action.id
+          && String(current.action?.createdAt || "") > String(action.createdAt || "")
+        ) return prev;
+        return {
+          ...prev,
+          [action.sourceMessageId]: {
+            ...current,
+            plans: getCreatePlans(action),
+            action,
+          },
+        };
+      });
+    }
+    setPlanProposal(prev => (
+      prev?.action?.id === action.id ? { ...prev, action } : prev
+    ));
+    return action;
+  }
+
+  // A Calendar action is reviewable only after its baseline has reached
+  // agent_actions. Unlike the generic optimistic saver, this path updates
+  // local state only after the authoritative write succeeds.
+  async function persistReviewablePlanAction(action) {
+    const saved = await db.agentActions.upsertAction(action);
+    return syncPlanActionLocal(saved || action);
+  }
+
+  function calendarGuardFromAction(action) {
+    const guard = action?.result?.executionGuard;
+    if ([AGENT_ACTION_STATUS.EXECUTED, AGENT_ACTION_STATUS.REJECTED, AGENT_ACTION_STATUS.CANCELLED].includes(action?.status)) {
+      return {
+        state: "closed",
+        conflicts: [{ code: "action_not_executable", status: action.status }],
+        reasonCodes: ["action_not_executable"],
+        affectedDates: action?.payload?.affectedDates || [],
+        planIds: action?.payload?.updatedPlanIds || [],
+      };
+    }
+    if (!guard || !isCalendarActionStale(action)) return null;
+    return {
+      state: guard.state,
+      conflicts: Array.isArray(guard.conflicts) ? guard.conflicts : [],
+      reasonCodes: Array.isArray(guard.reasonCodes) ? guard.reasonCodes : [],
+      affectedDates: Array.isArray(guard.affectedDates) ? guard.affectedDates : [],
+      planIds: Array.isArray(guard.planIds) ? guard.planIds : [],
+    };
+  }
+
+  function guardResultFromBaselineError(err) {
+    const conflicts = Array.isArray(err?.conflicts) ? err.conflicts : [];
+    return {
+      ok: false,
+      state: "stale",
+      baselineVersion: null,
+      requestSignature: "",
+      conflicts,
+      reasonCodes: [...new Set(conflicts.map(item => item?.code).filter(Boolean))].sort(),
+      affectedDates: [...new Set(conflicts.map(item => item?.date).filter(Boolean))].sort(),
+      planIds: [...new Set(conflicts.map(item => item?.planId).filter(Boolean))].sort(),
+    };
+  }
+
+  async function preparePlanActionForReview(action, { context = null, preferCandidate = false } = {}) {
+    if (!action?.id) return null;
+    const freshContext = context || await getFreshAgentContext();
+    if (!freshContext) return null;
+    const authoritativeAction = preferCandidate
+      ? action
+      : (freshContext.agentActions.find(item => item?.id === action.id) || action);
+    if ([AGENT_ACTION_STATUS.EXECUTED, AGENT_ACTION_STATUS.REJECTED, AGENT_ACTION_STATUS.CANCELLED].includes(authoritativeAction.status)) {
+      syncPlanActionLocal(authoritativeAction);
+      return { action: authoritativeAction, context: freshContext };
+    }
+    if (hasCalendarBaseline(authoritativeAction)) {
+      if (freshContext.agentActions.some(item => item?.id === authoritativeAction.id)) {
+        syncPlanActionLocal(authoritativeAction);
+        return { action: authoritativeAction, context: freshContext };
+      }
+      try {
+        const saved = await persistReviewablePlanAction(authoritativeAction);
+        return { action: saved, context: freshContext };
+      } catch (err) {
+        console.warn("[calendar guard] baseline verification save failed:", err);
+        appDialog.alert(t("coach.calendar_guard_baseline_save_failed"));
+        return null;
+      }
+    }
+
+    try {
+      const saved = await persistCalendarBaseline({
+        action: authoritativeAction,
+        logs: freshContext.logs,
+        dailyNotes: freshContext.dailyNotes,
+        persist: persistReviewablePlanAction,
+      });
+      return { action: saved, context: freshContext, baselineEstablished: true };
+    } catch (err) {
+      if (err instanceof CalendarBaselineError) {
+        const staleAction = markCalendarActionStale(authoritativeAction, guardResultFromBaselineError(err));
+        try {
+          await persistReviewablePlanAction(staleAction);
+        } catch (saveErr) {
+          console.warn("[calendar guard] stale action save failed:", saveErr);
+          syncPlanActionLocal(staleAction);
+        }
+        return { action: staleAction, context: freshContext, baselineEstablished: false };
+      }
+      console.warn("[calendar guard] baseline save failed:", err);
+      appDialog.alert(t("coach.calendar_guard_baseline_save_failed"));
+      return null;
+    }
+  }
+
+  async function openPlanActionReview({
+    action,
+    msgId = null,
+    assistantContent = "",
+    deferredReview = false,
+    context = null,
+    preferCandidate = false,
+  }) {
+    const prepared = await preparePlanActionForReview(action, { context, preferCandidate });
+    if (!prepared) return null;
+    const proposal = {
+      msgId,
+      assistantContent,
+      action: prepared.action,
+      deferredReview,
+      calendarGuard: calendarGuardFromAction(prepared.action),
+    };
+    setPlanProposal(proposal);
+    setShowPlanProposalReview(!deferredReview);
+    return prepared.action;
   }
   async function saveMemoryFacts(facts = [], { replaceActiveSnapshot = false, returnSummary = false } = {}) {
     const freshContext = await getFreshAgentContext();
@@ -3437,13 +3598,11 @@ function AppShell({
   //    JSON array, then open the review modal. Tagged by message id (not
   //    index, since indices shift across re-renders) so AICoachTab can
   //    show per-message extraction state.
-  async function importToCalendar(assistantContent, msgId, { force = false } = {}) {
+  async function importToCalendar(assistantContent, msgId, { force = false, supersedesActionId = null } = {}) {
     if (!force && msgId && planImportCache[msgId]?.plans?.length) {
       const cached = planImportCache[msgId];
       const action = cached.action || buildCreatePlansAction(cached.plans, { sourceMessageId: msgId });
-      setPlanProposal({ msgId, assistantContent, action });
-      setShowPlanProposalReview(true);
-      return;
+      return openPlanActionReview({ action, msgId, assistantContent });
     }
     const freshContext = await getFreshAgentContext();
     if (!freshContext) return;
@@ -3532,11 +3691,16 @@ Rules:
         appDialog.alert(t(plans.length ? "coach.import_no_material_changes" : "coach.import_no_plans"));
         return;
       }
-      const action = buildCreatePlansAction(materialPlans, { sourceMessageId: msgId });
-      saveAgentAction(action);
-      if (msgId) setPlanImportCache(prev => ({ ...prev, [msgId]: { plans: materialPlans, action } }));
-      setPlanProposal({ msgId, assistantContent, action });
-      setShowPlanProposalReview(true);
+      const action = buildCreatePlansAction(materialPlans, {
+        id: supersedesActionId
+          ? `${supersedesActionId}-review-${Date.now()}`
+          : (force ? `create-plans-${msgId || "manual"}-${Date.now()}` : undefined),
+        sourceMessageId: msgId,
+      });
+      if (supersedesActionId) action.payload.supersedesActionId = supersedesActionId;
+      const reviewableAction = await openPlanActionReview({ action, msgId, assistantContent, preferCandidate: true });
+      if (!reviewableAction) return null;
+      return reviewableAction;
     } catch (err) {
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== extractRunRef.current) return;
       console.error("[AI Coach] Plan-extract error:", err);
@@ -3549,7 +3713,7 @@ Rules:
     }
   }
 
-  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, contextLogs = logs, openProposal = true, signal }) {
+  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, contextLogs = logs, openProposal = true, supersedesActionId = null, signal }) {
     throwIfAborted(signal);
     const data = plans
       ? null
@@ -3581,14 +3745,22 @@ Rules:
       payload: {
         ...baseAction.payload,
         ...actionMeta.payload,
+        ...(supersedesActionId ? { supersedesActionId } : {}),
       },
     };
-    saveAgentAction(action);
+    const reviewableAction = await preparePlanActionForReview(action, { preferCandidate: true });
+    if (!reviewableAction) return null;
     if (openProposal) {
-      setPlanProposal({ msgId: null, assistantContent: "", action, deferredReview: true });
+      setPlanProposal({
+        msgId: null,
+        assistantContent: "",
+        action: reviewableAction.action,
+        deferredReview: true,
+        calendarGuard: calendarGuardFromAction(reviewableAction.action),
+      });
       setShowPlanProposalReview(false);
     }
-    return action;
+    return reviewableAction.action;
   }
 
   async function proposePlanDeviationRescue(opts = {}) {
@@ -3654,13 +3826,14 @@ Rules:
         },
         contextLogs: freshLogs,
         openProposal: !quiet,
+        supersedesActionId: opts.supersedesActionId || null,
         signal: controller.signal,
       });
       if (!action) {
         if (!quiet) appDialog.alert(t("coach.plan_rescue_no_plans"));
         return false;
       }
-      return true;
+      return action;
     } catch (err) {
       if (isAbortLikeError(err, controller.signal)) return false;
       console.error("[AI Coach] Plan rescue error:", err);
@@ -3737,13 +3910,14 @@ Rules:
         },
         contextLogs: freshLogs,
         openProposal: !quiet,
+        supersedesActionId: opts.supersedesActionId || null,
         signal: controller.signal,
       });
       if (!action) {
         if (!quiet) appDialog.alert(t("coach.recovery_guard_no_plans"));
         return false;
       }
-      return true;
+      return action;
     } catch (err) {
       if (isAbortLikeError(err, controller.signal)) return false;
       console.error("[AI Coach] Recovery guard error:", err);
@@ -3832,13 +4006,14 @@ Rules:
         },
         contextLogs: freshLogs,
         openProposal: !quiet,
+        supersedesActionId: opts.supersedesActionId || null,
         signal: controller.signal,
       });
       if (!action) {
         if (!quiet) appDialog.alert(t("coach.proactive_no_plans"));
         return false;
       }
-      return true;
+      return action;
     } catch (err) {
       if (isAbortLikeError(err, controller.signal)) return false;
       console.error("[AI Coach] Combined adjustment error:", err);
@@ -3943,10 +4118,9 @@ Rules:
     }
   }
 
-  function openProactivePlanAction(action) {
+  async function openProactivePlanAction(action) {
     if (!action?.id) return;
-    setPlanProposal({ msgId: null, assistantContent: "", action });
-    setShowPlanProposalReview(true);
+    return openPlanActionReview({ action });
   }
 
   async function applyPlanRestTags(restDates = [], workoutDates = [], contextNotes = dailyNotes) {
@@ -3970,8 +4144,53 @@ Rules:
 
   async function confirmImportPlans(workouts, { restDates = [], replacePlannedDates = [], replacePlannedIds = [] } = {}) {
     const sourceAction = planProposal?.action || null;
+    if (!sourceAction?.id) return false;
     const freshContext = await getFreshAgentContext();
     if (!freshContext) return false;
+    const authoritativeAction = freshContext.agentActions.find(action => action?.id === sourceAction.id) || sourceAction;
+    if (!hasCalendarBaseline(authoritativeAction)) {
+      const prepared = await preparePlanActionForReview(authoritativeAction, { context: freshContext });
+      if (prepared) {
+        setPlanProposal(prev => prev ? {
+          ...prev,
+          action: prepared.action,
+          calendarGuard: calendarGuardFromAction(prepared.action),
+        } : prev);
+        appDialog.alert(t("coach.calendar_guard_review_again"));
+      }
+      return false;
+    }
+    const executionRequest = buildCalendarExecutionRequest({
+      workouts,
+      restDates,
+      replacePlannedDates,
+      replacePlannedIds,
+    });
+    const guardResult = compareCalendarExecutionGuard({
+      action: authoritativeAction,
+      logs: freshContext.logs,
+      dailyNotes: freshContext.dailyNotes,
+      request: executionRequest,
+    });
+    const guarded = await runCalendarMutationIfSafe(guardResult, {
+      onBlocked: async (blocked) => {
+        const staleAction = markCalendarActionStale(authoritativeAction, blocked);
+        try {
+          await persistReviewablePlanAction(staleAction);
+        } catch (err) {
+          console.warn("[calendar guard] stale action save failed:", err);
+          syncPlanActionLocal(staleAction);
+        }
+        setPlanProposal(prev => prev ? {
+          ...prev,
+          action: staleAction,
+          calendarGuard: calendarGuardFromAction(staleAction),
+        } : prev);
+      },
+      execute: async safe => safe,
+    });
+    if (!guarded.executed) return false;
+
     const planChanges = workouts
       .filter(w => w?._targetPlanId)
       .map(w => ({
@@ -3979,30 +4198,28 @@ Rules:
         before: compactPlanSnapshot(freshContext.logs.find(l => l.id === w._targetPlanId)),
         after: compactPlanSnapshot(w),
       }));
-    const untaggedWorkouts = workouts.map((w) => {
+    const taggedWorkouts = tagAgentPlanWorkouts(workouts, authoritativeAction.id);
+    const cleanWorkouts = taggedWorkouts.map((w) => {
       const clean = { ...w };
       delete clean._targetPlanId;
       return clean;
     });
-    const cleanWorkouts = tagAgentPlanWorkouts(untaggedWorkouts, sourceAction?.id);
     const workoutDates = cleanWorkouts.map(w => w.date).filter(Boolean);
-    const targetedPlanIds = [...new Set((replacePlannedIds || []).filter(Boolean))];
-    let activeAction = sourceAction;
+    const targetedPlanIds = executionRequest.targetPlanIds;
+    let activeAction = authoritativeAction;
     let calendarSaved = false;
     try {
-      if (sourceAction) {
-        activeAction = await persistPlanActionRecord(
-          sourceAction,
-          action => markAgentActionStatus(action, AGENT_ACTION_STATUS.EXECUTING),
-        );
-      }
+      activeAction = await persistPlanActionRecord(
+        authoritativeAction,
+        action => markAgentActionStatus(
+          markCalendarActionAttempt(action, executionRequest),
+          AGENT_ACTION_STATUS.EXECUTING,
+        ),
+      );
       const alreadyCreated = findPersistedAgentPlans(freshContext.logs, sourceAction?.id);
-      const calendarAlreadySaved = isAgentPlanBatchPersisted(freshContext.logs, sourceAction?.id, cleanWorkouts.length);
-      const appliedRestDates = await applyPlanRestTags(restDates, workoutDates, freshContext.dailyNotes);
-      const dateWideReplaceDates = [...new Set([
-        ...replacePlannedDates,
-        ...appliedRestDates,
-      ].filter(Boolean))];
+      const calendarAlreadySaved = guarded.value.ownWritesComplete === true;
+      await applyPlanRestTags(executionRequest.restDates, workoutDates, freshContext.dailyNotes);
+      const dateWideReplaceDates = executionRequest.dateWideReplaceDates;
       const created = calendarAlreadySaved
         ? alreadyCreated
         : await bulkAddLogs(cleanWorkouts, {
@@ -4023,7 +4240,14 @@ Rules:
           updatedPlanIds: targetedPlanIds,
           updatedPlanCount: targetedPlanIds.length,
           planChanges,
-          plannedRestDates: appliedRestDates,
+          plannedRestDates: executionRequest.restDates,
+          executionGuard: {
+            ...(action.result?.executionGuard || {}),
+            state: "executed",
+            completedAt: new Date().toISOString(),
+            conflicts: [],
+            reasonCodes: [],
+          },
         }));
       }
       setPlanProposal(null);
@@ -4053,12 +4277,66 @@ Rules:
     setShowPlanProposalReview(false);
   }
 
-  function reExtractPlanProposal() {
+  async function reExtractPlanProposal() {
     if (!planProposal?.msgId || !planProposal?.assistantContent) return;
-    const { msgId, assistantContent } = planProposal;
+    const { msgId, assistantContent, action } = planProposal;
     setPlanProposal(null);
     setShowPlanProposalReview(false);
-    importToCalendar(assistantContent, msgId, { force: true });
+    const successor = await importToCalendar(assistantContent, msgId, {
+      force: true,
+      supersedesActionId: action?.id || null,
+    });
+    if (successor) await markPlanActionSuperseded(action, successor);
+  }
+
+  async function markPlanActionSuperseded(action, successorAction) {
+    if (!action?.id || !successorAction?.id || isCalendarActionStale(successorAction)) return;
+    if ([AGENT_ACTION_STATUS.EXECUTED, AGENT_ACTION_STATUS.REJECTED, AGENT_ACTION_STATUS.CANCELLED].includes(action.status)) return;
+    const superseded = markCalendarActionSuperseded(action, successorAction.id);
+    try {
+      await persistReviewablePlanAction(superseded);
+    } catch (err) {
+      console.warn("[calendar guard] superseded action save failed:", err);
+      syncPlanActionLocal(superseded);
+    }
+  }
+
+  async function reviewPlanProposalAgainstLatest() {
+    const staleAction = planProposal?.action;
+    if (!staleAction?.id || planReReviewLoading) return;
+    setPlanReReviewLoading(true);
+    try {
+      let successor = null;
+      const sourceMessage = planProposal?.assistantContent
+        || messageContentForCoach(chatMessages.find(message => message?.id === staleAction.sourceMessageId)?.content || "");
+      if (staleAction.sourceMessageId && sourceMessage) {
+        setShowPlanProposalReview(false);
+        successor = await importToCalendar(sourceMessage, staleAction.sourceMessageId, {
+          force: true,
+          supersedesActionId: staleAction.id,
+        });
+      } else if (["plan_deviation_rescue", "recovery_load_guard", "combined_training_adjustment"].includes(staleAction.source)) {
+        setShowPlanProposalReview(false);
+        successor = await proposeProactiveTrainingAdjustment(staleAction.source, {
+          quiet: false,
+          supersedesActionId: staleAction.id,
+        });
+      } else if ((staleAction.payload?.updatedPlanIds || []).length > 0) {
+        appDialog.alert(t("coach.calendar_guard_regenerate_required"));
+        return;
+      } else {
+        const successorDraft = createCalendarActionSuccessor(staleAction);
+        successor = await openPlanActionReview({ action: successorDraft });
+      }
+      if (!successor || isCalendarActionStale(successor)) {
+        appDialog.alert(t("coach.calendar_guard_regenerate_required"));
+        setShowPlanProposalReview(true);
+        return;
+      }
+      await markPlanActionSuperseded(staleAction, successor);
+    } finally {
+      setPlanReReviewLoading(false);
+    }
   }
 
   async function generateImportReviewSummaryMap(reviewed, rawNote, coachReply = "") {
@@ -4777,14 +5055,20 @@ Rules:
           from the AI Coach tab while the extraction was running. */}
       {planProposal && showPlanProposalReview && (
         <CoachPlanImportModal
+          key={planProposal.action.id}
           action={planProposal.action}
           assistantContent={planProposal.assistantContent}
           plans={getCreatePlans(planProposal.action)}
           existingPlans={logs.filter(l => l?.isPlanned)}
+          calendarGuard={planProposal.calendarGuard}
+          reviewingLatest={planReReviewLoading}
           onConfirm={confirmImportPlans}
           onCancel={() => { setPlanProposal(null); setShowPlanProposalReview(false); }}
-          onReject={rejectPlanProposal}
-          onReExtract={planProposal.msgId ? reExtractPlanProposal : undefined}
+          onReject={planProposal.calendarGuard
+            ? () => { setPlanProposal(null); setShowPlanProposalReview(false); }
+            : rejectPlanProposal}
+          onReExtract={planProposal.msgId && !planProposal.calendarGuard ? reExtractPlanProposal : undefined}
+          onReviewLatest={planProposal.calendarGuard ? reviewPlanProposalAgainstLatest : undefined}
         />
       )}
 

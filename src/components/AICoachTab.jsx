@@ -19,6 +19,7 @@ import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTex
 import { buildSystemPrompt } from "../utils/profile";
 import { buildMemoryFactReview, buildMemoryFactSnapshotFromReview, extractMemoryFacts, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isCreatePlansAction, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
+import { isCalendarActionStale } from "../utils/calendarExecutionGuard";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { shouldAutoQuietProactiveAction, shouldAutoTriggerPlanDeviation, shouldAutoTriggerRecoveryGuard } from "../utils/actionPlanFilters";
 import { normalizeComposerTextChange } from "../utils/composerInput";
@@ -4380,7 +4381,7 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
                   )}
                 </span>
                 <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                  <StatusPill status={action.status} t={t} />
+                  <StatusPill status={isCalendarActionStale(action) ? "stale" : action.status} t={t} />
                   <span style={{ color: "var(--ink-3)", fontSize: 14 }}>{open ? "⌃" : "⌄"}</span>
                 </span>
               </button>
@@ -4391,13 +4392,13 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
                   display: "grid", gap: 8,
                 }}>
                   <AgentActionDetails action={action} t={t} />
-                  {action.status === AGENT_ACTION_STATUS.FAILED && isCreatePlansAction(action) && onRetry && (
+                  {(action.status === AGENT_ACTION_STATUS.FAILED || isCalendarActionStale(action)) && isCreatePlansAction(action) && onRetry && (
                     <button
                       type="button"
                       {...instantPress(`agent-action-retry-${id}`, () => onRetry(action))}
                       style={{ ...s.btn, justifySelf: "start", minHeight: 0, padding: "6px 10px", fontSize: 12 }}
                     >
-                      {t("coach.agent_action_retry")}
+                      {t(isCalendarActionStale(action) ? "coach.calendar_guard_review_latest" : "coach.agent_action_retry")}
                     </button>
                   )}
                   {onAskCoach && (
@@ -4550,9 +4551,21 @@ function PlanActionDetails({ action, t }) {
   const restDates = Array.isArray(action.result?.plannedRestDates) ? action.result.plannedRestDates : [];
   const outcome = action.result?.outcome;
   const outcomeCounts = outcome?.counts || null;
+  const executionGuard = action.result?.executionGuard;
+  const staleDates = Array.isArray(executionGuard?.affectedDates) ? executionGuard.affectedDates : [];
+  const stalePlanIds = Array.isArray(executionGuard?.planIds) ? executionGuard.planIds : [];
 
   return (
     <>
+      {isCalendarActionStale(action) && (
+        <ActionDetailSection title={t("coach.calendar_guard_stale_title")}>
+          <div style={detailEmptyStyle}>
+            {t("coach.calendar_guard_stale_body", {
+              items: [...staleDates, ...stalePlanIds.map(id => `ID ${id}`)].join(", ") || t("coach.calendar_guard_scope_unknown"),
+            })}
+          </div>
+        </ActionDetailSection>
+      )}
       {plans.length > 0 && (
         <ActionDetailSection title={t("coach.agent_actions_items")}>
           <div style={{ display: "grid", gap: 6 }}>

@@ -230,6 +230,15 @@ describe("agent action helpers", () => {
       label: "save_failed",
       score: 0,
     });
+
+    expect(getAgentActionQualitySignal({
+      type: "create_plans",
+      status: "proposed",
+      result: { executionGuard: { state: "stale" } },
+    })).toMatchObject({
+      label: "stale",
+      score: 0,
+    });
   });
 
   it("describes targeted plan updates without date-wide overwrite warnings", () => {
@@ -291,6 +300,14 @@ describe("agent action helpers", () => {
     expect(findPersistedAgentPlans(tagged, "action-1")).toHaveLength(2);
     expect(isAgentPlanBatchPersisted(tagged, "action-1", 2)).toBe(true);
     expect(isAgentPlanBatchPersisted(tagged.slice(0, 1), "action-1", 2)).toBe(false);
+
+    const targeted = tagAgentPlanWorkouts([{
+      date: "2026-06-22",
+      type: "Road Run",
+      isPlanned: true,
+      _targetPlanId: "old-plan-1",
+    }], "action-2");
+    expect(targeted[0].planDetail.agentActionTargetPlanId).toBe("old-plan-1");
   });
 
   it("keeps partial or failed execution out of the executed state", () => {

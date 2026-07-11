@@ -65,6 +65,10 @@
 
 - 最近教练建议已经提供轻量审计入口；继续保持面向用户的可读摘要，不扩成内部矩阵或调试页。
 - 如要追踪停止/扣费/服务端完成状态，把任务结果写入 `result` / `error`。
+- 未来自动执行需要记录 `auto` / `guarded` / `requires_user`、policy 版本、
+  风险级别、执行基线、幂等键、冲突原因和撤销/补偿信息。先在 Aevum
+  生态契约里定稿，再决定复用 JSON 字段还是审核 schema；不要在 Ultreia
+  单独发明一套不兼容的全局动作协议。
 
 ## 已建表并接入
 
@@ -75,6 +79,9 @@
 - 长期记忆已切到 `coach_memory_facts` 事实卡片，AI Coach / 周报只读取 active facts。
 - 旧 `coach_memory` / `coach_memory_zh` 字段仅作为历史兼容字段保留；Wilf 迁移完成后可用一次性 SQL 清空个人账号旧文本。
 - 自动更新通过 Action Card 审核后启用事实，具备主题、来源、归档和恢复能力。
+- `coach_memory_facts` 是 Ultreia 训练域长期记忆，不是 Aevum 的全局短期/
+  长期记忆库。向 Aevum 上报时只发送隐私裁剪后的 Report 和来源引用，
+  不复制整张事实表。
 
 建议方向：
 

@@ -23,12 +23,13 @@ spreadsheet.
 - Ultreia owns training records, calendar planning, races, PRs, recovery,
   weather-to-training interpretation, AI Coach, reports, training memory, and
   training-specific Agent actions.
-- Aevum owns global entry points, reviewed events, memory inbox, permissions,
-  and future cross-domain Agent routing.
+- Aevum owns global entry points, cross-product policy, derived-memory
+  lifecycle, exception handling, and cross-domain Agent routing.
 - Viatica owns private ledger data. Sidera owns learning, capture/reflection,
   knowledge graph, and deep research.
-- Ultreia may use approved Aevum context as explainable coaching input, but it
-  must not read private Viatica or Sidera data directly.
+- Ultreia may use policy-authorized, scoped, still-valid Aevum context as
+  explainable coaching input, but it must not read private Viatica or Sidera
+  data directly.
 
 For ecosystem-level source of truth, read Aevum's `docs/ecosystem/` folder.
 
@@ -66,9 +67,12 @@ anything that makes training judgment feel gamified or unserious.
 
 - Training data should become visual material, not just text on a background.
 - Mobile readability wins over decorative density.
-- Coaching advice must explain which data or approved context it used.
-- Training plans and health-risk decisions should stay confirmable, not black
-  box automatic changes.
+- Coaching advice must explain which data or authorized context it used.
+- Current training writes stay confirmable. The target Agent may automatically
+  execute explicitly authorized, reversible, low-risk adjustments only after
+  fresh-state and conflict guards pass; material load increases, key-session or
+  target-race changes, and health-risk decisions remain stricter or
+  `requires_user`.
 - Brand presence should be visible but restrained.
 - Exported images should work as standalone artifacts outside the app.
 - Family consistency means shared app-shell discipline, not turning Ultreia into
@@ -77,17 +81,21 @@ anything that makes training judgment feel gamified or unserious.
 ## Data And AI Principles
 
 - Use the shared Aevum account, but keep Ultreia data in training-owned tables.
-- Cross-product facts must arrive through reviewed Aevum events or memory.
-- AI Coach can propose plans, rescues, reports, memories, and action cards, but
-  risky or durable actions need user confirmation.
+- Cross-product facts must arrive through Aevum Report/Query policy, not direct
+  access to another product's private store.
+- Action Card is a typed action and audit record. The current UI uses manual
+  confirmation; future actions declare `auto`, `guarded`, or `requires_user`.
+- Ultreia may autonomously report meaningful training changes to Aevum, but a
+  Report cannot grant a new scope or directly write Aevum memory.
 - Desktop Codex Runner is preferred for richer coach tasks; fallback providers
   must preserve clear error and provenance behavior.
 
 ## Current Milestone
 
-Keep Ultreia stable as the mature training product while gradually turning AI
-Coach from copilot into a confirmable Agent. Do not expand it into ledger,
-knowledge-base, or global launcher responsibilities.
+Keep Ultreia stable as the mature training product while advancing AI Coach
+from a confirmable Agent into a policy-governed training Agent. First finish
+conflict-safe execution and the narrow Aevum Query/Report vertical slice. Do
+not expand it into ledger, knowledge-base, or global launcher responsibilities.
 
 ## Accessibility & Inclusion
 

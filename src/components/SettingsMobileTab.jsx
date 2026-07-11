@@ -27,6 +27,13 @@ export function SettingsMobileTab({
   onOpenProfile,
   onRefreshWallet,
   onOpenWeatherSettings,
+  onOpenPushSettings,
+  onOpenWeeklyReportSettings,
+  onOpenLocationSettings,
+  pushEnabled,
+  pushTimes = [],
+  weeklyReportEnabled,
+  defaultLocation,
   weatherAutoUpdate,
   weatherIntervalHours,
   profileFlash,
@@ -94,6 +101,19 @@ export function SettingsMobileTab({
   const email = user?.email || "";
   const otherSettings = (
     <>
+      <div style={{ padding: "12px 14px 7px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--ink-3)", textTransform: "uppercase" }}>
+        {t("settings.notifications_automation")}
+      </div>
+      <SubCell
+        primary={t("settings.daily_push")}
+        secondary={pushEnabled
+          ? t("settings.daily_push_on", { time: pushTimes.join(" / ") || "—" })
+          : t("settings.daily_push_off")}
+        onClick={onOpenPushSettings} />
+      <SubCell
+        primary={t("settings.weekly_report_auto")}
+        secondary={weeklyReportEnabled ? t("settings.automation_on") : t("settings.automation_off")}
+        onClick={onOpenWeeklyReportSettings} />
       <SubCell
         primary={t("settings.weather_updates")}
         secondary={weatherAutoUpdate !== false
@@ -104,6 +124,11 @@ export function SettingsMobileTab({
             })
           : t("settings.weather_updates_off")}
         onClick={onOpenWeatherSettings} />
+      <SubCell
+        primary={t("settings.location")}
+        secondary={defaultLocation?.name || t("settings.location_missing")}
+        onClick={onOpenLocationSettings} />
+      <div style={{ height: 1, background: "var(--rule-soft)", margin: "4px 14px" }} />
       <SubCell
         primary={t("settings.language")}
         rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}

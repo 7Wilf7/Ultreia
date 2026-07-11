@@ -68,37 +68,20 @@ function daysUntilRace(dateStr, now) {
   return Math.round((race - today) / 86400000);
 }
 
-function shouldSkipRaceSwipe(target) {
-  return !!target?.closest?.("button,input,textarea,select,a,[role='button'],[data-dropdown-menu]");
-}
-
 export function RacesTab({
   races, addRace, updateRace, now, setConfirmDelete, itraPI, setItraPI,
   profile,
-  // Lifted to AppShell so the chosen top/sub tab survives switching away to
-  // another top-level tab and back (within one app session).
-  mobileTopTab, setMobileTopTab, mobileSubTab, setMobileSubTab,
+  mobileSubTab, setMobileSubTab,
 }) {
   const t = useT();
   const appDialog = useAppDialog();
   const { lang } = useLanguage();
   const isNarrow = useIsNarrow();
   const isMobile = useIsMobile();
-  const topSwipe = useRef(null);
   const instantPress = useInstantPress();
-  const [topTabMotionDir, setTopTabMotionDir] = useState(0);
-  const [selectedMobileTopTab, setSelectedMobileTopTab] = useState(mobileTopTab || "races");
   const [selectedMobileSubTab, setSelectedMobileSubTab] = useState(mobileSubTab || "target");
-  const commitParentMobileTopTab = useDeferredCommit(setMobileTopTab);
+  const [mobilePrOpen, setMobilePrOpen] = useState(false);
   const commitParentMobileSubTab = useDeferredCommit(setMobileSubTab);
-
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (!cancelled) setSelectedMobileTopTab(mobileTopTab || "races");
-    });
-    return () => { cancelled = true; };
-  }, [mobileTopTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,86 +91,11 @@ export function RacesTab({
     return () => { cancelled = true; };
   }, [mobileSubTab]);
 
-  function changeMobileTopTab(nextTab) {
-    if (nextTab === selectedMobileTopTab) return;
-    const order = { races: 0, pr: 1 };
-    setTopTabMotionDir((order[nextTab] ?? 0) > (order[selectedMobileTopTab] ?? 0) ? 1 : -1);
-    setSelectedMobileTopTab(nextTab);
-    commitParentMobileTopTab(nextTab);
-  }
-
   function changeMobileSubTab(nextTab) {
     if (nextTab === selectedMobileSubTab) return;
     if (addingMode) cancelAdd();
     setSelectedMobileSubTab(nextTab);
     commitParentMobileSubTab(nextTab);
-  }
-
-  function onTopSwipeStart(e) {
-    if (!isMobile || e.touches.length !== 1 || shouldSkipRaceSwipe(e.target)) {
-      topSwipe.current = null;
-      return;
-    }
-    const p = e.touches[0];
-    topSwipe.current = {
-      x: p.clientX,
-      y: p.clientY,
-      t: e.timeStamp || 0,
-      w: e.currentTarget?.clientWidth || window.innerWidth || 1,
-      mode: null,
-    };
-  }
-
-  function onTopSwipeMove(e) {
-    if (!isMobile || e.touches.length !== 1 || !topSwipe.current) return;
-    const st = topSwipe.current;
-    const p = e.touches[0];
-    const dx = p.clientX - st.x;
-    const dy = p.clientY - st.y;
-    if (st.mode == null) {
-      if (Math.abs(dx) > Math.abs(dy) * 1.08 && Math.abs(dx) > 8) {
-        const dir = dx < 0 ? 1 : -1;
-        const canMove = (dir > 0 && selectedMobileTopTab === "races") || (dir < 0 && selectedMobileTopTab === "pr");
-        st.mode = canMove ? "inner" : "pass";
-      } else if (Math.abs(dy) > 6 || Math.abs(dx) > 6) {
-        st.mode = "scroll";
-      } else {
-        return;
-      }
-    }
-    if (st.mode === "inner") {
-      e.stopPropagation();
-      e.preventDefault?.();
-    }
-  }
-
-  function onTopSwipeEnd(e) {
-    if (!isMobile || !topSwipe.current) return;
-    const st = topSwipe.current;
-    topSwipe.current = null;
-    if (st.mode !== "inner") {
-      return;
-    }
-    const p = e.changedTouches?.[0];
-    if (!p) return;
-    const dx = p.clientX - st.x;
-    const dy = p.clientY - st.y;
-    const dt = Math.max(1, (e.timeStamp || 0) - (st.t || 0));
-    const velocity = dx / dt;
-    const threshold = Math.min((st.w || 1) * 0.16, 58);
-    const shouldCommit = Math.abs(dx) >= threshold || Math.abs(velocity) > 0.38;
-    if (!shouldCommit || Math.abs(dx) < Math.abs(dy) * 1.08) {
-      return;
-    }
-    if (dx < 0 && selectedMobileTopTab === "races") {
-      e.stopPropagation();
-      changeMobileTopTab("pr");
-    } else if (dx > 0 && selectedMobileTopTab === "pr") {
-      e.stopPropagation();
-      changeMobileTopTab("races");
-    } else {
-      return;
-    }
   }
 
   // Race-day weather for upcoming TARGET races that have a location (outdoor
@@ -293,13 +201,11 @@ export function RacesTab({
   const [selectedHistoryFilter, setSelectedHistoryFilter] = useState(historyFilter);
   const commitTargetFilter = useDeferredCommit(setTargetFilter);
   const commitHistoryFilter = useDeferredCommit(setHistoryFilter);
-  // Mobile-only sub-navigation. Top tabs split PR (Personal Records bar)
-  // from Races (the two lists). Inside Races, sub-tabs split Target vs
-  // History — replacing the desktop's stacked sections. Defaults match the
+  // Mobile-only navigation splits Target vs History. Personal Records is a
+  // collapsible summary inside History. Defaults match the
   // user's primary use case: opening the Races bottom-nav tab lands on
   // upcoming target races.
-  // mobileTopTab ("pr" | "races") + mobileSubTab ("target" | "history") are
-  // now passed in from AppShell (lifted for cross-tab session memory).
+  // mobileSubTab is passed in from AppShell for cross-tab session memory.
 
   function startAdd(mode) {
     if (editingRaceId) cancelEdit();
@@ -779,26 +685,8 @@ export function RacesTab({
   // sub-tabs Target / History; the count lives in the sub-tab label so the
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
-    const topTabMotionClass = topTabMotionDir
-      ? (topTabMotionDir > 0 ? "ultreia-tab-in-right" : "ultreia-tab-in-left")
-      : undefined;
     return (
-      <div
-        className="ultreia-no-motion-surface"
-        data-mobile-inner-swipe="true"
-        data-swipe-prev={selectedMobileTopTab === "pr" ? "true" : "false"}
-        data-swipe-next={selectedMobileTopTab === "races" ? "true" : "false"}
-        onTouchStart={onTopSwipeStart}
-        onTouchMove={onTopSwipeMove}
-        onTouchEnd={onTopSwipeEnd}
-        style={{ minHeight: "100%" }}
-      >
-        {/* Sticky header: top tab strip + (Races sub-tab strip when active).
-            Side margins bleed past main's 14px gutters. Negative `top`
-            (matching main's padding) lifts the sticky's pinned position up
-            past main's padding edge so when scrolled there's no gap above —
-            position:sticky measures `top` from the padding edge, so a
-            positive top:0 leaves a visible 14px slit; negative kills it. */}
+      <div className="ultreia-no-motion-surface" style={{ minHeight: "100%" }}>
         <div style={{
           position: "sticky",
           top: "calc(-1 * max(env(safe-area-inset-top), 14px))",
@@ -808,39 +696,9 @@ export function RacesTab({
           marginTop: "calc(-1 * max(env(safe-area-inset-top), 14px))",
           paddingTop: "calc(max(env(safe-area-inset-top), 14px) + 4px)",
         }}>
-        {/* Top tab strip: Races (left) | PR (right) */}
-        <div style={{ display: "flex", borderBottom: "1px solid var(--rule)", marginBottom: 14 }}>
-          {[
-            { id: "races", label: t("races.tab_races") },
-            { id: "pr",    label: t("races.tab_pr") },
-          ].map(tab => {
-            const active = selectedMobileTopTab === tab.id;
-            return (
-              <button key={tab.id} {...instantPress(`races-top-${tab.id}`, () => changeMobileTopTab(tab.id))}
-                style={{
-                  flex: 1, background: "transparent", border: "none",
-                  padding: "12px 8px",
-                  fontSize: 14, fontWeight: active ? 600 : 500,
-                  color: active ? "var(--ink-1)" : "var(--ink-3)",
-                  borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
-                  marginBottom: -1,
-                  borderRadius: 0,
-                  transition: "none",
-                  touchAction: "manipulation",
-                  WebkitTapHighlightColor: "transparent",
-                }}>
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Sub-tab strip — sticks below the top tab strip when Races is active.
-            Stays inside the sticky wrapper so both nav rows pin together. */}
-        {selectedMobileTopTab === "races" && (
           <div style={{
             display: "flex",
-            marginBottom: 12,
+            marginBottom: 14,
             border: "1px solid var(--rule)",
             borderRadius: 8,
             background: "var(--panel)",
@@ -872,62 +730,54 @@ export function RacesTab({
               );
             })}
           </div>
-        )}
-        </div> {/* /sticky header */}
-
-        <div key={selectedMobileTopTab} className={topTabMotionClass}>
-          {selectedMobileTopTab === "pr" && (
-            <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
-          )}
-
-          {selectedMobileTopTab === "races" && (
-            <>
-              {pastRaceWarning && (
-                <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
-                  <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
-                  <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button
-                      onClick={() => commitRace(false)}
-                      disabled={raceSaving}
-                      aria-busy={raceSaving ? "true" : undefined}
-                      style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: raceSaving ? 0.72 : 1 }}
-                    >
-                      {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
-                      {raceSaving ? t("common.saving") : t("races.past_warn_move")}
-                    </button>
-                    <button
-                      {...instantPress("past-race-warning-cancel-mobile", () => setPastRaceWarning(null))}
-                      disabled={raceSaving}
-                      style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
-                    >
-                      {t("common.cancel")}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                {selectedMobileSubTab === "target" && renderMobileSection({
-                  kind: "target",
-                  list: targetRacesList,
-                  all: targetRacesAll,
-                  filter: targetFilter,
-                  setFilter: setTargetFilter,
-                  emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
-                })}
-                {selectedMobileSubTab === "history" && renderMobileSection({
-                  kind: "history",
-                  list: historyRacesList,
-                  all: historyRacesAll,
-                  filter: historyFilter,
-                  setFilter: setHistoryFilter,
-                  emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
-                })}
-              </div>
-            </>
-          )}
         </div>
+
+        {pastRaceWarning && (
+          <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
+            <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
+            <div style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 10 }}>{t("races.past_warn_body")}</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => commitRace(false)} disabled={raceSaving} aria-busy={raceSaving ? "true" : undefined}
+                style={{ ...s.btn, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, opacity: raceSaving ? 0.72 : 1 }}>
+                {raceSaving && <Spinner size={13} thickness={1.6} color="currentColor" />}
+                {raceSaving ? t("common.saving") : t("races.past_warn_move")}
+              </button>
+              <button {...instantPress("past-race-warning-cancel-mobile", () => setPastRaceWarning(null))} disabled={raceSaving}
+                style={{ ...s.btnGhost, opacity: raceSaving ? 0.55 : 1, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {selectedMobileSubTab === "target" && renderMobileSection({
+          kind: "target", list: targetRacesList, all: targetRacesAll,
+          filter: targetFilter, setFilter: setTargetFilter,
+          emptyMessage: targetRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_target"),
+        })}
+        {selectedMobileSubTab === "history" && (
+          <>
+            <button type="button" {...instantPress("races-history-pr-toggle", () => setMobilePrOpen(open => !open))}
+              aria-expanded={mobilePrOpen}
+              style={{
+                ...s.btnGhost, width: "100%", marginBottom: 10, minHeight: 42,
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+              <span>{t("races.tab_pr")}</span>
+              <span style={{ color: "var(--ink-3)" }}>{mobilePrOpen ? "⌃" : "⌄"}</span>
+            </button>
+            {mobilePrOpen && (
+              <div style={{ marginBottom: 14 }}>
+                <PersonalRecordsBar races={races} itraPI={itraPI} setItraPI={setItraPI} />
+              </div>
+            )}
+            {renderMobileSection({
+              kind: "history", list: historyRacesList, all: historyRacesAll,
+              filter: historyFilter, setFilter: setHistoryFilter,
+              emptyMessage: historyRacesAll.length > 0 ? t("races.filter_empty") : t("races.empty_history"),
+            })}
+          </>
+        )}
         {modals}
       </div>
     );

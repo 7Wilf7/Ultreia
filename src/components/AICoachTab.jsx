@@ -12,20 +12,20 @@ import {
   TRAINING_PREFERENCE_OPTIONS,
   DEFAULT_COACH_CONFIG,
 } from "../constants";
-import { COACH_ACTION_MATRIX } from "../data/coachActionMatrix";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
-import { cityAbbreviationFromLocation, cityFromLocation, hasValidCoords } from "../lib/weather";
+import { hasValidCoords } from "../lib/weather";
 import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTextTokenCounter, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
 import { buildSystemPrompt } from "../utils/profile";
 import { buildMemoryFactReview, buildMemoryFactSnapshotFromReview, extractMemoryFacts, MEMORY_SECTIONS } from "../utils/memory";
-import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
+import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isCreatePlansAction, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmentSignature } from "../utils/proactiveTrainingAdjustment";
 import { shouldAutoQuietProactiveAction, shouldAutoTriggerPlanDeviation, shouldAutoTriggerRecoveryGuard } from "../utils/actionPlanFilters";
 import { normalizeComposerTextChange } from "../utils/composerInput";
+import { hasActionableCalendarSuggestion } from "../utils/calendarSuggestion";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
-import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon, PinIcon } from "./Icons";
+import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon } from "./Icons";
 import { ItemActionModal } from "./ItemActionModal";
 import { RaceBriefingModal } from "./RaceBriefingModal";
 import { useAppDialog } from "./AppDialogContext";
@@ -453,7 +453,8 @@ const CoachChatMessages = memo(function CoachChatMessages({
         const providerMeta = !isUser ? formatProviderMeta(parsedMessage.meta, lang) : "";
         const hasDisplayContent = String(displayContent || "").trim().length > 0;
         if (!isUser && m.isStreaming && !hasDisplayContent) return null;
-        const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && showCalendarButton;
+        const canImport = m.role === "assistant" && !m.isLocal && importToCalendar && showCalendarButton
+          && hasActionableCalendarSuggestion(messageContentForCoach(m.content));
         const canResend = isUser && i === lastUserIdx && !chatLoading && sendChat;
         const extracting = extractingForMsgId === m.id;
         const hasCachedAction = canImport && !!hasPlanImportCache?.(m.id);
@@ -730,7 +731,7 @@ export function AICoachTab({
   // Lifted from AppShell so they survive tab switches — the user can send
   // a message, tab away, and the spinner badge on the AI Coach tab still
   // shows the model is working.
-  chatLoading, contextCompressing = false, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
+  chatLoading, contextCompressing = false, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   codexRunnerStatus = null,
   agentContextSync = null, onRetryAgentContext,
   planDeviationSummary = null,
@@ -740,7 +741,7 @@ export function AICoachTab({
   handledProactiveAdjustmentSignatures = [],
   proactiveAdjustmentLoading = false, onProactiveTrainingAdjustmentRequest, onStopProactiveTrainingAdjustment, onOpenProactiveAction,
   raceBriefingLoading = false, onRaceBriefingRequest,
-  agentActions = [], onDeleteAgentAction,
+  agentActions = [], onDeleteAgentAction, onRetryAgentAction,
   memoryFacts = [], onMemoryFactStatus, onMemoryFactDelete,
   // Shared weather context — { currentWeather, forecastByDate, status,
   // error, refetch }. Drives the Weather status pill below + the prompt
@@ -887,10 +888,6 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
-  const contextUsageButtonRef = useRef(null);
-  const contextUsagePointerAtRef = useRef(0);
-  const [showContextUsage, setShowContextUsage] = useState(false);
-  const [contextUsagePopoverPosition, setContextUsagePopoverPosition] = useState(null);
   const [preciseTextTokenCounter, setPreciseTextTokenCounter] = useState(null);
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
@@ -1686,8 +1683,6 @@ export function AICoachTab({
       : '—');
   const weatherActive = wStatus === 'ready';
   const hasDefaultLocation = hasValidCoords(defaultLocation);
-  const locationCity = cityFromLocation(defaultLocation);
-  const locationLabel = cityAbbreviationFromLocation(defaultLocation, lang);
   const runnerOptimistic = codexRunnerStatus?.optimistic === true;
   const runnerLastSeenIso = runnerOptimistic ? null : (codexRunnerStatus?.last_seen_at || null);
   const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
@@ -1746,11 +1741,6 @@ export function AICoachTab({
     codexRunnerStatus?.last_error ? `${lang === "zh" ? "上次错误" : "Last error"}: ${codexRunnerStatus.last_error}` : null,
   ].filter(Boolean).join(" · ");
   const displayProviderLabel = expectedProvider === "desktop_codex" ? "Codex" : providerLabel;
-  const providerTitle = expectedProvider === "desktop_codex"
-    ? (lang === "zh" ? "下一次 AI Coach 对话预计调用 Codex" : "Next AI Coach chat is expected to use Codex")
-    : coachProviderFallback
-      ? (lang === "zh" ? "Codex 不可用时会自动回退到 DeepSeek" : "Falls back to DeepSeek when Codex is unavailable")
-      : (lang === "zh" ? `AI Coach 最近使用 ${providerLabel}` : `AI Coach recently used ${providerLabel}`);
   const countTokens = preciseTextTokenCounter || estimateTextTokens;
   const baseContextUsage = useMemo(() => {
     let systemTokens;
@@ -1810,60 +1800,21 @@ export function AICoachTab({
     : contextUsage.ratio >= 0.75
       ? "var(--warn)"
       : "var(--moss)";
-  const closeContextUsagePopover = useCallback(() => {
-    setShowContextUsage(false);
-  }, []);
-  const updateContextUsagePopoverPosition = useCallback(() => {
-    const rect = contextUsageButtonRef.current?.getBoundingClientRect?.();
-    if (!rect || typeof window === "undefined") return;
-    const viewportWidth = window.innerWidth || 360;
-    const viewportHeight = window.innerHeight || 640;
-    const width = Math.min(286, Math.max(240, viewportWidth - 32));
-    const safeLeftMax = Math.max(16, viewportWidth - width - 16);
-    const left = Math.min(Math.max(16, rect.right - width), safeLeftMax);
-    const estimatedHeight = 128;
-    const belowTop = rect.bottom + 8;
-    const top = belowTop + estimatedHeight <= viewportHeight - 12
-      ? belowTop
-      : Math.max(12, rect.top - estimatedHeight - 8);
-    setContextUsagePopoverPosition({ top, left, width });
-  }, []);
-  const toggleContextUsagePopover = useCallback(() => {
-    if (!showContextUsage) updateContextUsagePopoverPosition();
-    setShowContextUsage(v => !v);
-  }, [showContextUsage, updateContextUsagePopoverPosition]);
-  const pressContextUsagePopover = useCallback((event) => {
-    if (event.pointerType === "mouse") return;
-    contextUsagePointerAtRef.current = Date.now();
-    event.preventDefault?.();
-    toggleContextUsagePopover();
-  }, [toggleContextUsagePopover]);
-  const clickContextUsagePopover = useCallback((event) => {
-    const at = Date.now();
-    if (contextUsagePointerAtRef.current && at - contextUsagePointerAtRef.current < 750) {
-      event.preventDefault?.();
-      return;
-    }
-    toggleContextUsagePopover();
-  }, [toggleContextUsagePopover]);
-  useLayoutEffect(() => {
-    if (!showContextUsage) return undefined;
-    updateContextUsagePopoverPosition();
-    window.addEventListener("resize", updateContextUsagePopoverPosition);
-    window.addEventListener("scroll", updateContextUsagePopoverPosition, true);
-    return () => {
-      window.removeEventListener("resize", updateContextUsagePopoverPosition);
-      window.removeEventListener("scroll", updateContextUsagePopoverPosition, true);
-    };
-  }, [showContextUsage, updateContextUsagePopoverPosition]);
-  useEffect(() => {
-    if (!showContextUsage) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") closeContextUsagePopover();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [closeContextUsagePopover, showContextUsage]);
+  const compactFocusRace = getNextCoachTargetRace(races, now);
+  const compactFocusPlan = getNextCoachPlan(logs, now);
+  const compactFocusWatchCount = buildCoachFocusWatchItems({
+    planDeviationSummary,
+    recoveryGuardSummary,
+    proactiveAdjustment,
+    raceBriefing,
+    t,
+  }).length;
+  const compactFocusTitle = compactFocusRace?.name
+    || (compactFocusPlan ? formatCoachFocusPlan(compactFocusPlan, t, lang) : t("coach.focus_training_data"));
+  const compactFocusMeta = [
+    compactFocusRace?.daysToRace != null ? t("coach.focus_days_to_race", { days: compactFocusRace.daysToRace }) : "",
+    compactFocusWatchCount > 0 ? t("coach.focus_watch_count", { count: compactFocusWatchCount }) : t("coach.focus_stable"),
+  ].filter(Boolean).join(" · ");
   const statusPill = (icon, label, value, active = true, compact = false) => (
     <span style={{
       display: "inline-flex",
@@ -2044,6 +1995,7 @@ export function AICoachTab({
                 actions={agentActions}
                 t={t}
                 onDelete={onDeleteAgentAction}
+                onRetry={onRetryAgentAction}
                 onOpenRaceBriefing={handleOpenRaceBriefingFromAgentActions}
                 onAskCoach={(action) => {
                   sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
@@ -2235,45 +2187,20 @@ export function AICoachTab({
             flex: "0 0 auto",
           }}
         />
-        <button
-          ref={contextUsageButtonRef}
-          type="button"
-          onPointerDown={pressContextUsagePopover}
-          onClick={clickContextUsagePopover}
-          title={providerTitle}
-          aria-expanded={showContextUsage}
-          aria-controls="coach-context-usage-popover"
+        <span
           style={{
             display: "inline-flex", alignItems: "center", gap: 6,
             minHeight: 26, padding: "4px 9px",
             border: "1px solid var(--rule)", borderRadius: 2,
             background: "var(--bg-elevated)", color: "var(--ink-2)",
             fontSize: 11, fontFamily: "var(--font-sans)",
-            whiteSpace: "nowrap", cursor: "pointer",
+            whiteSpace: "nowrap",
             flex: "0 0 auto",
-            touchAction: "manipulation",
-            WebkitTapHighlightColor: "transparent",
           }}>
           <span style={{ color: "var(--moss)", display: "inline-flex" }}><CoachIcon size={12} /></span>
           {!isMobile && <span style={{ color: "var(--ink-3)" }}>Model</span>}
           <span style={{ color: "var(--ink-1)", fontWeight: 600 }}>{displayProviderLabel}</span>
-          <span aria-hidden="true" style={{
-            width: 14,
-            height: 14,
-            borderRadius: 999,
-            background: `conic-gradient(${contextUsageAccent} ${Math.round(contextUsage.ratio * 360)}deg, var(--panel-3) 0deg)`,
-            boxShadow: "inset 0 0 0 1px var(--rule)",
-            display: "inline-block",
-            position: "relative",
-          }}>
-            <span style={{
-              position: "absolute",
-              inset: 4,
-              borderRadius: 999,
-              background: "var(--bg-elevated)",
-            }} />
-          </span>
-        </button>
+        </span>
         {/* Mode / Memory / Import pills crowd the mobile header — the same
             info is reachable via ⚙ → settings hub on mobile. Desktop has
             room so it keeps all four. */}
@@ -2316,32 +2243,6 @@ export function AICoachTab({
             <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherLabel}</span>
           </button>
         ) : statusPill(<span>☁</span>, "Weather", weatherLabel, weatherActive, isMobile)}
-
-        {onOpenLocationSettings && (
-          <button type="button" {...instantPress("coach-location-settings", onOpenLocationSettings)}
-            title={hasDefaultLocation
-              ? (lang === "zh" ? `天气城市：${locationCity || defaultLocation?.name || ""}；点开查看具体地点` : `Weather city: ${locationCity || defaultLocation?.name || ""}; open for details`)
-              : (lang === "zh" ? "设置天气默认地点" : "Set default weather location")}
-            aria-label={lang === "zh" ? "设置天气默认地点" : "Set default weather location"}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              minHeight: 26, padding: "4px 9px",
-              border: `1px solid ${hasDefaultLocation ? "var(--rule)" : "var(--warn)"}`,
-              borderRadius: 2,
-              background: hasDefaultLocation ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)",
-              color: hasDefaultLocation ? "var(--ink-2)" : "var(--warn)",
-              fontSize: 11, fontFamily: "var(--font-sans)",
-              cursor: "pointer", whiteSpace: "nowrap", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
-              flex: "0 0 auto",
-            }}>
-            <span style={{ color: hasDefaultLocation ? "var(--moss)" : "var(--warn)", display: "inline-flex" }}>
-              <PinIcon size={12} />
-            </span>
-            <span style={{ color: hasDefaultLocation ? "var(--ink-1)" : "var(--warn)", fontWeight: 600 }}>
-              {locationLabel}
-            </span>
-          </button>
-        )}
 
         <span style={{ flex: 1, minWidth: 6 }} />
         {!isMobile && showHeaderManualAdjustmentShortcut && (
@@ -2447,81 +2348,32 @@ export function AICoachTab({
           {t("coach.context_syncing")}
         </div>
       )}
-      {showContextUsage && (
-        <ModalRoot onClose={closeContextUsagePopover}>
-          <div
-            onPointerDown={closeContextUsagePopover}
-            style={{
-              position: "fixed",
-              inset: 0,
-              zIndex: 9999,
-              background: "transparent",
-              WebkitTapHighlightColor: "transparent",
-            }}>
-            <div
-              id="coach-context-usage-popover"
-              role="dialog"
-              aria-label={t("coach.context_used")}
-              onPointerDown={(event) => event.stopPropagation()}
-              style={{
-                position: "fixed",
-                top: contextUsagePopoverPosition?.top ?? 64,
-                left: contextUsagePopoverPosition?.left ?? 16,
-                width: contextUsagePopoverPosition?.width ?? "calc(100vw - 32px)",
-                maxWidth: "calc(100vw - 32px)",
-                boxSizing: "border-box",
-                padding: "9px 11px",
-                border: "1px solid var(--rule)",
-                borderRadius: 8,
-                background: "var(--bg-elevated)",
-                color: "var(--ink-2)",
-                display: "grid",
-                gap: 6,
-                boxShadow: "0 8px 8px oklch(0.04 0.006 274 / 0.22)",
-              }}>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                fontSize: 12,
-                fontFamily: "var(--font-sans)",
-              }}>
-                <span style={{ color: "var(--ink-3)" }}>{t("coach.context_used")}</span>
-                <span style={{ color: "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
-                  ≈ {contextUsage.usedLabel} / {contextUsage.totalLabel}
-                </span>
-              </div>
-              <div style={{
-                height: 5,
-                borderRadius: 999,
-                background: "var(--bg-sunken)",
-                overflow: "hidden",
-              }}>
-                <div style={{
-                  width: `${Math.min(100, Math.round(contextUsage.ratio * 100))}%`,
-                  height: "100%",
-                  borderRadius: 999,
-                  background: contextUsageAccent,
-                }} />
-              </div>
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 10,
-                fontSize: 12,
-                fontFamily: "var(--font-sans)",
-              }}>
-                <span style={{ color: "var(--ink-3)" }}>{t("coach.context_remaining")}</span>
-                <span style={{ color: contextUsage.nearLimit ? "var(--danger)" : "var(--ink-1)", fontWeight: 650, fontFamily: "var(--font-mono)" }}>
-                  ≈ {contextUsage.remainingLabel}
-                </span>
-              </div>
-            </div>
-          </div>
-        </ModalRoot>
-      )}
+      <button
+        type="button"
+        {...instantPress("coach-focus-summary", () => setShowCoachFocus(true))}
+        style={{
+          width: "100%",
+          margin: "-2px 0 10px",
+          padding: "9px 11px",
+          border: "1px solid var(--rule-soft)",
+          borderRadius: 7,
+          background: "var(--bg-elevated)",
+          color: "var(--ink-1)",
+          display: "grid",
+          gridTemplateColumns: "auto minmax(0, 1fr) auto",
+          alignItems: "center",
+          gap: 9,
+          textAlign: "left",
+          cursor: "pointer",
+        }}
+      >
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", color: "var(--ink-3)", textTransform: "uppercase" }}>{t("coach.current_focus")}</span>
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: "block", fontSize: 12.5, fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactFocusTitle}</span>
+          <span style={{ display: "block", marginTop: 2, fontSize: 10.5, color: compactFocusWatchCount ? "var(--warn)" : "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{compactFocusMeta}</span>
+        </span>
+        <span style={{ color: "var(--ink-3)" }}>›</span>
+      </button>
       {/* Soft hint once estimated context usage approaches the safe limit. Two states:
           • EXPANDED (default) — full banner with the "consider distilling
             to memory" explanation + Open Memory button + ✕ dismiss
@@ -3165,7 +3017,6 @@ export function AICoachTab({
                     { header: t("coach.group_advanced"), items: [
                       { id: "prompt", label: t("coach.preview_prompt"), muted: true },
                       { id: "calendar", label: t("coach.calendar_btn_label"), muted: true },
-                      { id: "matrix", label: t("coach.action_matrix_title"), muted: true },
                       { id: "clear", label: t("coach.clear_chat"), muted: true, danger: true },
                     ] },
                   ].filter(group => group.items.length > 0).map((group, gi) => (
@@ -3276,6 +3127,7 @@ export function AICoachTab({
                       actions={agentActions}
                       t={t}
                       onDelete={onDeleteAgentAction}
+                      onRetry={onRetryAgentAction}
                       onOpenRaceBriefing={handleOpenRaceBriefingFromAgentActions}
                       onAskCoach={(action) => {
                         sendChat?.(buildAgentActionFollowUpMessage(action, t, lang));
@@ -3305,9 +3157,6 @@ export function AICoachTab({
                     </div>
                   )}
 
-                  {coachHubTab === "matrix" && (
-                    <CoachActionMatrix matrix={COACH_ACTION_MATRIX} lang={lang} t={t} />
-                  )}
 
                   {coachHubTab === "memory" && (
                     <div>
@@ -3353,6 +3202,18 @@ export function AICoachTab({
 
                   {coachHubTab === "prompt" && (
                     <div>
+                      <div style={{ ...coachFocusBlockStyle, marginBottom: 14 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 7, fontSize: 12 }}>
+                          <span style={{ color: "var(--ink-3)" }}>{t("coach.context_used")}</span>
+                          <span style={{ color: "var(--ink-1)", fontFamily: "var(--font-mono)" }}>≈ {contextUsage.usedLabel} / {contextUsage.totalLabel}</span>
+                        </div>
+                        <div style={{ height: 5, borderRadius: 999, background: "var(--bg-sunken)", overflow: "hidden" }}>
+                          <div style={{ width: `${Math.min(100, Math.round(contextUsage.ratio * 100))}%`, height: "100%", background: contextUsageAccent }} />
+                        </div>
+                        <div style={{ marginTop: 7, fontSize: 11, color: "var(--ink-3)" }}>
+                          {t("coach.context_remaining")}: ≈ {contextUsage.remainingLabel}
+                        </div>
+                      </div>
                       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
                         <PromptLangSwitch value={previewLang} onChange={setPreviewLang} />
                       </div>
@@ -4352,106 +4213,7 @@ const memoryFactButtonStyle = {
   boxShadow: "none",
 };
 
-function CoachActionMatrix({ matrix = [], lang = "zh", t }) {
-  const rows = [...matrix].sort((a, b) => (a.rank || 0) - (b.rank || 0));
-  return (
-    <div>
-      <div style={{ ...s.muted, lineHeight: 1.55, margin: "0 0 12px" }}>
-        {t("coach.action_matrix_hint")}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map(card => (
-          <div key={card.id} style={{
-            border: "1px solid var(--rule)",
-            borderRadius: 6,
-            background: "var(--bg-elevated)",
-            padding: "11px 12px",
-          }}>
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 650, color: "var(--ink-1)", lineHeight: 1.35 }}>
-                  {card.rank}. {matrixText(card.title, lang)}
-                </div>
-                <div style={{ marginTop: 3, fontSize: 11, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>
-                  {card.phase}
-                </div>
-              </div>
-              <span style={actionMatrixStatusStyle(card.status)}>
-                {t(`coach.action_matrix_status_${card.status}`)}
-              </span>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <ActionMatrixLine label={t("coach.action_matrix_trigger")} text={matrixText(card.trigger, lang)} />
-              <ActionMatrixLine label={t("coach.action_matrix_suggestion")} text={matrixText(card.suggestion, lang)} />
-              <ActionMatrixLine label={t("coach.action_matrix_boundary")} text={matrixText(card.boundary, lang)} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ActionMatrixLine({ label, text }) {
-  return (
-    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-2)" }}>
-      <span style={{ color: "var(--ink-3)", marginRight: 6 }}>{label}</span>
-      <span>{text}</span>
-    </div>
-  );
-}
-
-function matrixText(value, lang) {
-  if (!value) return "";
-  if (typeof value === "string") return value;
-  return value[lang] || value.zh || value.en || "";
-}
-
-function actionMatrixStatusStyle(status) {
-  const base = {
-    display: "inline-flex",
-    alignItems: "center",
-    flexShrink: 0,
-    minHeight: 0,
-    border: "1px solid var(--rule)",
-    borderRadius: 999,
-    padding: "3px 8px",
-    fontSize: 11,
-    lineHeight: 1.2,
-    whiteSpace: "nowrap",
-  };
-  if (status === "observing") {
-    return {
-      ...base,
-      color: "var(--moss-deep)",
-      background: "var(--moss-bg)",
-      borderColor: "var(--moss)",
-    };
-  }
-  if (status === "next") {
-    return {
-      ...base,
-      color: "var(--accent-dark)",
-      background: "var(--accent-soft)",
-      borderColor: "var(--accent)",
-    };
-  }
-  if (status === "deferred") {
-    return {
-      ...base,
-      color: "var(--ink-3)",
-      background: "var(--paper)",
-      borderColor: "var(--rule)",
-    };
-  }
-  return {
-    ...base,
-    color: "var(--ink-2)",
-    background: "var(--paper-2)",
-  };
-}
-
-function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceBriefing }) {
+function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceBriefing, onRetry }) {
   const instantPress = useInstantPress();
   const recent = useMemo(() => {
     return [...(actions || [])]
@@ -4602,6 +4364,15 @@ function RecentAgentActions({ actions = [], t, onDelete, onAskCoach, onOpenRaceB
                   display: "grid", gap: 8,
                 }}>
                   <AgentActionDetails action={action} t={t} />
+                  {action.status === AGENT_ACTION_STATUS.FAILED && isCreatePlansAction(action) && onRetry && (
+                    <button
+                      type="button"
+                      {...instantPress(`agent-action-retry-${id}`, () => onRetry(action))}
+                      style={{ ...s.btn, justifySelf: "start", minHeight: 0, padding: "6px 10px", fontSize: 12 }}
+                    >
+                      {t("coach.agent_action_retry")}
+                    </button>
+                  )}
                   {onAskCoach && (
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       {isRaceBriefingAction(action) && (

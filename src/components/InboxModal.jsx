@@ -193,7 +193,7 @@ export function InboxModal({
   const otherAgentActions = useMemo(
     () => (agentActions || [])
       .filter(action => isMemoryUpdateAction(action) || isRaceBriefingAction(action))
-      .filter(action => action?.status !== "rejected" && action?.status !== "cancelled")
+      .filter(action => ["proposed", "accepted", "executing", "failed"].includes(action?.status))
       .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
       .slice(0, 20),
     [agentActions],

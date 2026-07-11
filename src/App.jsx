@@ -2160,10 +2160,8 @@ function AppShell({
   // survives switching top tabs (those components unmount when their tab is
   // inactive). Resets only on a full app restart (fresh state on mount).
   //   trainingView — Activities / Charts toggle inside Training
-  //   racesTopTab  — Races / PR top tabs inside Races (mobile)
-  //   racesSubTab  — Target / History sub-tabs inside Races
+  //   racesSubTab  — Target / History tabs inside Races (mobile)
   const [trainingView, setTrainingView] = useState("activities");
-  const [racesTopTab, setRacesTopTab] = useState("races");
   const [racesSubTab, setRacesSubTab] = useState("target");
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
@@ -4370,7 +4368,6 @@ Rules:
           chatInput={coachChatDraft}
           setChatInput={setCoachChatDraft}
           coachProviderLabel={lastCoachProvider.label}
-          coachProviderFallback={lastCoachProvider.fallback}
           codexRunnerStatus={codexRunnerStatus}
           agentContextSync={agentContextSync}
           onRetryAgentContext={() => refreshAgentContext({ silent: false })}
@@ -4379,6 +4376,7 @@ Rules:
           importToCalendar={importToCalendar}
           agentActions={agentActions}
           onDeleteAgentAction={deleteAgentAction}
+          onRetryAgentAction={openProactivePlanAction}
           memoryFacts={memoryFacts}
           onMemoryFactStatus={setMemoryFactStatus}
           onMemoryFactDelete={deleteMemoryFact}
@@ -4431,8 +4429,6 @@ Rules:
           itraPI={itraPI}
           setItraPI={setItraPI}
           profile={profile}
-          mobileTopTab={racesTopTab}
-          setMobileTopTab={setRacesTopTab}
           mobileSubTab={racesSubTab}
           setMobileSubTab={setRacesSubTab}
         />
@@ -4447,6 +4443,13 @@ Rules:
         onOpenProfile={() => setProfileEditorMode("preview")}
         onRefreshWallet={refreshWallet}
         onOpenWeatherSettings={() => setShowWeatherSettings(true)}
+        onOpenPushSettings={() => setShowPushSettings(true)}
+        onOpenWeeklyReportSettings={() => setShowWeeklyReportSettings(true)}
+        onOpenLocationSettings={() => setShowLocationSettings(true)}
+        pushEnabled={pushEnabled}
+        pushTimes={pushTimes}
+        weeklyReportEnabled={weeklyReportEnabled}
+        defaultLocation={defaultLocation}
         weatherAutoUpdate={weatherSettings.autoUpdate}
         weatherIntervalHours={weatherSettings.intervalHours}
         profileFlash={profileFlash}

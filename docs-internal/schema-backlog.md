@@ -47,7 +47,7 @@
 - 2026-06-23 已建表。
 - 计划导入 Action Card、Memory 更新 Action Card 已开始写入 `agent_actions`。
 - App 启动时会读取账号下的 `create_plans` 动作，用来恢复 AI Coach 消息下方的已提炼 / 已执行 / 已忽略状态。
-- 写入 action log 是 best-effort；如果日志保存失败，不阻止计划导入或 Memory 保存。
+- Calendar / Memory 数据与 action log 采用一致性门槛：两边都成功后才显示已保存。Calendar 计划带动作标记，日志保存失败后可只修复日志，避免重试时重复创建计划。
 
 现状：
 
@@ -62,7 +62,7 @@
 
 后续动作：
 
-- 后续如需要更完整的审计页，再增加 action log 可视化入口。
+- 最近教练建议已经提供轻量审计入口；继续保持面向用户的可读摘要，不扩成内部矩阵或调试页。
 - 如要追踪停止/扣费/服务端完成状态，把任务结果写入 `result` / `error`。
 
 ## 已建表并接入

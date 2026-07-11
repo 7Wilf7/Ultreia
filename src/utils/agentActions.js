@@ -227,6 +227,27 @@ export function getCreatePlans(action) {
   return Array.isArray(action.payload?.plans) ? action.payload.plans : [];
 }
 
+export function tagAgentPlanWorkouts(workouts = [], actionId = "") {
+  if (!actionId) return workouts.map(workout => ({ ...workout }));
+  return workouts.map((workout, index) => ({
+    ...workout,
+    planDetail: {
+      ...(workout?.planDetail || {}),
+      agentActionId: actionId,
+      agentActionItemKey: `${index}:${workout?.date || ""}:${workout?.type || ""}`,
+    },
+  }));
+}
+
+export function findPersistedAgentPlans(logs = [], actionId = "") {
+  if (!actionId) return [];
+  return logs.filter(log => log?.isPlanned && log?.planDetail?.agentActionId === actionId);
+}
+
+export function isAgentPlanBatchPersisted(logs = [], actionId = "", expectedCount = 0) {
+  return expectedCount > 0 && findPersistedAgentPlans(logs, actionId).length >= expectedCount;
+}
+
 export function getMemoryUpdate(action) {
   if (!isMemoryUpdateAction(action)) return { en: "", zh: "" };
   return action.payload?.memory && typeof action.payload.memory === "object"

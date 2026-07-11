@@ -6,7 +6,7 @@ import { SPARTAN_SUBTYPES, RUN_GROUP_TYPES, DAILY_TAGS } from "../constants";
 import { formatDuration, formatPlanDuration, formatPaceFromSec, formatSpeedKmh, formatSwimPace } from "./format";
 import { formatWorkoutNoteForDisplay } from "./importReviewNotes";
 import { computeTrainingLoad, formatTrainingLoadLine } from "./trainingLoad";
-import { evaluatePlanOutcome } from "./planMatch";
+import { matchPlansToActuals } from "./planMatch";
 import { getAgentActionQualitySignal } from "./agentActions";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -415,9 +415,8 @@ function buildPlanAdherence(logs, now) {
   if (!planned.length) return null;
 
   let done = 0, partial = 0, missed = 0;
-  const lines = planned.map(p => {
-    const dayLogs = logs.filter(l => l.date === p.date);
-    const { outcome } = evaluatePlanOutcome(p, dayLogs, { isPast: true });
+  const matched = matchPlansToActuals(planned, logs, { isPast: true });
+  const lines = matched.map(({ plan: p, outcome }) => {
     if (outcome === "done") done++;
     else if (outcome === "partial") partial++;
     else missed++;

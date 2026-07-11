@@ -732,6 +732,7 @@ export function AICoachTab({
   // shows the model is working.
   chatLoading, contextCompressing = false, chatInput, setChatInput, coachProviderLabel: currentProviderLabel = "DeepSeek", coachProviderFallback = null, extractingForMsgId, sendChat, importToCalendar, onStopChat, onStopExtraction, hasPlanImportCache, getPlanImportActionStatus,
   codexRunnerStatus = null,
+  agentContextSync = null, onRetryAgentContext,
   planDeviationSummary = null,
   recoveryGuardSummary = null,
   raceBriefingSummary = null,
@@ -1470,7 +1471,7 @@ export function AICoachTab({
       }
       if (memoryProposal?.action) {
         const nextAction = recordMemoryActionDecision
-          ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
+          ? await recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.EXECUTED, {
               savedLanguages: ["facts"],
               savedCharacterCount: {
                 en: factsToSave.reduce((sum, fact) => sum + String(fact.contentEn || "").length, 0),
@@ -1489,14 +1490,18 @@ export function AICoachTab({
       appDialog.alert(t("coach.memory_facts_save_failed", { msg: err?.message || String(err) }));
     }
   }
-  function rejectMemoryProposal() {
-    if (memoryProposal?.action) {
-      const nextAction = recordMemoryActionDecision
-        ? recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED)
-        : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED);
-      setLastMemoryAction(nextAction);
+  async function rejectMemoryProposal() {
+    try {
+      if (memoryProposal?.action) {
+        const nextAction = recordMemoryActionDecision
+          ? await recordMemoryActionDecision(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED)
+          : markAgentActionStatus(memoryProposal.action, AGENT_ACTION_STATUS.REJECTED);
+        setLastMemoryAction(nextAction);
+      }
+      setMemoryProposal(null);
+    } catch (err) {
+      appDialog.alert(t("coach.agent_action_save_failed", { msg: err?.message || String(err) }));
     }
-    setMemoryProposal(null);
   }
 
   function setStyle(id)        { patchCoachConfig({ style: id }); }
@@ -2416,6 +2421,32 @@ export function AICoachTab({
           </button>
         )}
       </div>
+      {agentContextSync?.status === "partial" && (
+        <button
+          type="button"
+          {...instantPress("coach-context-retry", onRetryAgentContext)}
+          style={{
+            ...s.btnGhost,
+            width: "100%",
+            margin: "-3px 0 10px",
+            padding: "6px 9px",
+            minHeight: 30,
+            borderColor: "var(--warn)",
+            color: "var(--warn)",
+            fontSize: 11,
+            justifyContent: "space-between",
+          }}
+        >
+          <span>{t("coach.context_sync_partial")}</span>
+          <span>{t("common.retry")}</span>
+        </button>
+      )}
+      {agentContextSync?.status === "syncing" && (
+        <div style={{ ...s.muted, margin: "-3px 0 10px", fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
+          <Spinner size={10} thickness={1.4} />
+          {t("coach.context_syncing")}
+        </div>
+      )}
       {showContextUsage && (
         <ModalRoot onClose={closeContextUsagePopover}>
           <div

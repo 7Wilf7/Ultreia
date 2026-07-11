@@ -14,6 +14,9 @@ import {
   isMemoryUpdateAction,
   isRaceBriefingAction,
   isPlanUpdateItem,
+  tagAgentPlanWorkouts,
+  findPersistedAgentPlans,
+  isAgentPlanBatchPersisted,
   isRestPlanItem,
   markAgentActionStatus,
 } from "./agentActions";
@@ -275,5 +278,16 @@ describe("agent action helpers", () => {
       status: "executed",
       decidedAt: "2026-06-19T08:00:00.000Z",
     });
+  });
+
+  it("tags Calendar writes so a failed action-log save can retry without duplicate plans", () => {
+    const tagged = tagAgentPlanWorkouts([
+      { date: "2026-06-20", type: "Road Run", isPlanned: true, planDetail: { keySession: true } },
+      { date: "2026-06-21", type: "Strength", isPlanned: true },
+    ], "action-1");
+    expect(tagged[0].planDetail).toMatchObject({ keySession: true, agentActionId: "action-1", agentActionItemKey: "0:2026-06-20:Road Run" });
+    expect(findPersistedAgentPlans(tagged, "action-1")).toHaveLength(2);
+    expect(isAgentPlanBatchPersisted(tagged, "action-1", 2)).toBe(true);
+    expect(isAgentPlanBatchPersisted(tagged.slice(0, 1), "action-1", 2)).toBe(false);
   });
 });

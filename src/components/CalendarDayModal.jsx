@@ -4,14 +4,14 @@
 // zero runtime benefit, so we disable the dev-only Fast-Refresh rule here (same
 // call LanguageContext.jsx makes).
 /* eslint-disable react-refresh/only-export-components */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { s } from "../styles";
 import { ACTIVITY_TYPES, DAILY_TAGS, DAILY_TAG_ICONS, RUN_GROUP_TYPES, RUN_PACE_TYPES, STRENGTH_SUBS, TYPE_COLOR } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { formatDuration, formatPlanDuration, timeOfDayToStartedAt, startedAtToTimeOfDay } from "../utils/format";
 import { formatWorkoutReviewNoteParts } from "../utils/importReviewNotes";
-import { evaluatePlanOutcome } from "../utils/planMatch";
+import { matchPlansToActuals } from "../utils/planMatch";
 import { planFields } from "../utils/planFields";
 
 // Compact target readout for a PLANNED row, by type. Mirrors planFields so the
@@ -187,12 +187,12 @@ export function CalendarDayModal({
   const instantPress = useInstantPress();
   const instantTap = useInstantTap();
   const isPast = !isFuture && !isToday;
-  // A planned session is reconciled against the SAME-TYPE completed workouts on
-  // this day, comparing the planned target (distance / ascent / duration) to
-  // what was actually done — see evaluatePlanOutcome. An explicit planStatus
-  // (the "did it" / "skip" buttons below) always wins.
+  const planOutcomes = useMemo(() => new Map(
+    matchPlansToActuals(logs.filter(log => log?.isPlanned), logs, { isPast })
+      .map(result => [result.plan, result.outcome]),
+  ), [isPast, logs]);
   function planOutcome(l) {
-    return evaluatePlanOutcome(l, logs, { isPast }).outcome;
+    return planOutcomes.get(l) || null;
   }
   function setPlanStatus(id, status) {
     updateLog(id, { planStatus: status }).catch(() => {});

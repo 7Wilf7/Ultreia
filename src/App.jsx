@@ -91,7 +91,7 @@ import {
   normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
-import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, getCreatePlans, markAgentActionStatus } from "./utils/agentActions";
+import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, findPersistedAgentPlans, getCreatePlans, isAgentPlanBatchPersisted, markAgentActionStatus, tagAgentPlanWorkouts } from "./utils/agentActions";
 import {
   buildImportCoachReviewNote,
   buildImportSelfReviewNote,
@@ -675,6 +675,7 @@ const APP_BOOT_STARTED_AT = Date.now();
 const RUNNER_STATUS_POLL_MS = 2_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
+const AGENT_CONTEXT_STALE_MS = 5 * 60 * 1000;
 const COACH_MESSAGE_CACHE_LIMIT = 200;
 
 function createOptimisticRunnerStatus(source = {}) {
@@ -1062,6 +1063,13 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   const [dailyNotesHydrated, setDailyNotesHydrated] = useState(() => bootDailyNotesCacheRef.current.length > 0);
   const [agentActions, setAgentActions] = useState([]);
   const [memoryFacts, setMemoryFacts] = useState([]);
+  const [agentContextSync, setAgentContextSync] = useState({
+    status: "cached",
+    lastSyncedAt: null,
+    failedKeys: [],
+    error: "",
+  });
+  const agentContextRefreshRef = useRef(null);
 
   // ── Supabase-backed (loaded async on mount) ─────────────────────────────
   const [profile, setProfileState] = useState(null);
@@ -1353,6 +1361,76 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     }
     finally { setRefreshing(false); }
   }, [loadData]);
+
+  const refreshAgentContext = useCallback((options = {}) => {
+    if (agentContextRefreshRef.current) return agentContextRefreshRef.current;
+    const silent = options.silent === true;
+    const run = (async () => {
+      if (!silent) setAgentContextSync(prev => ({ ...prev, status: "syncing", failedKeys: [], error: "" }));
+      const tasks = [
+        ["workouts", () => db.workouts.listMyWorkouts()],
+        ["races", () => db.races.listMyRaces()],
+        ["dailyNotes", () => db.dailyNotes.listMyDailyNotes()],
+        ["memoryFacts", () => db.memoryFacts.listMyFacts()],
+        ["agentActions", () => db.agentActions.listMyActions()],
+      ];
+      const pieces = await Promise.all(tasks.map(([key, task]) => (
+        withTimeout(task(), `agent-context:${key}`, 12000)
+          .then(value => ({ key, value }), error => ({ key, error }))
+      )));
+      const result = Object.fromEntries(pieces.map(piece => [piece.key, piece]));
+      const failures = pieces.filter(piece => piece.error);
+
+      if (!result.workouts.error) {
+        setLogs(result.workouts.value || []);
+        writeWorkoutCache(user.id, result.workouts.value || []);
+      }
+      if (!result.races.error) {
+        setRaces(result.races.value || []);
+        writeRaceCache(user.id, result.races.value || []);
+      }
+      if (!result.dailyNotes.error) {
+        setDailyNotes(result.dailyNotes.value || []);
+        writeDailyNotesCache(user.id, result.dailyNotes.value || []);
+        setDailyNotesHydrated(true);
+      }
+      if (!result.memoryFacts.error) setMemoryFacts(result.memoryFacts.value || []);
+      if (!result.agentActions.error) setAgentActions(result.agentActions.value || []);
+
+      const lastSyncedAt = failures.length === 0 ? new Date().toISOString() : null;
+      const failedKeys = failures.map(piece => piece.key);
+      const error = failures.map(piece => `${piece.key}: ${piece.error?.message || piece.error}`).join("; ");
+      setAgentContextSync(prev => ({
+        status: failures.length === 0 ? "synced" : "partial",
+        lastSyncedAt: lastSyncedAt || prev.lastSyncedAt,
+        failedKeys,
+        error,
+      }));
+      return {
+        ok: failures.length === 0,
+        failedKeys,
+        error,
+        data: Object.fromEntries(pieces.filter(piece => !piece.error).map(piece => [piece.key, piece.value])),
+      };
+    })().finally(() => {
+      agentContextRefreshRef.current = null;
+    });
+    agentContextRefreshRef.current = run;
+    return run;
+  }, [user.id]);
+
+  useEffect(() => {
+    const refreshIfStale = () => {
+      if (document.visibilityState !== "visible") return;
+      const last = agentContextSync.lastSyncedAt ? new Date(agentContextSync.lastSyncedAt).getTime() : 0;
+      if (!last || Date.now() - last >= AGENT_CONTEXT_STALE_MS) {
+        refreshAgentContext({ silent: true }).catch(() => {});
+      }
+    };
+    document.addEventListener("visibilitychange", refreshIfStale);
+    refreshIfStale();
+    return () => document.removeEventListener("visibilitychange", refreshIfStale);
+  }, [agentContextSync.lastSyncedAt, refreshAgentContext]);
 
   const retryDataLoad = useCallback(async () => {
     setDataLoading(true);
@@ -1672,6 +1750,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
     replacePlannedIds = [],
     onPersisted = null,
     onFailed = null,
+    showError = true,
   } = {}) {
     const optimistics = workouts.map(w => ({
       id: makeTempId("bulk"),
@@ -1699,7 +1778,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       }),
     ]);
 
-    (async () => {
+    const persistPromise = (async () => {
       try {
         if (replacePlannedDates) await db.workouts.deletePlannedOnDates(planDates);
         if (plannedIdSet.size) await db.workouts.deletePlannedByIds([...plannedIdSet]);
@@ -1739,7 +1818,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           writeWorkoutCache(user.id, next);
           return next;
         });
-        onPersisted?.(created);
+        await onPersisted?.(created);
+        return created;
       } catch (err) {
         console.error("[bulkAddLogs] background save failed:", err);
         const tempIds = new Set(optimistics.map(o => o.id));
@@ -1747,12 +1827,13 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         // A replace import may have already deleted the old plan rows before
         // failing — resync from server truth so the calendar isn't left wrong.
         if (replacePlannedDates || plannedIdSet.size) refreshLogs().catch(() => {});
-        onFailed?.(err);
-        window.alert(err.message);
+        await onFailed?.(err);
+        if (showError) window.alert(err.message);
+        throw err;
       }
     })();
 
-    return Promise.resolve(optimistics);
+    return persistPromise;
   }
 
   function deleteLogs(ids) {
@@ -1906,7 +1987,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // Optimistic: patch local state from `tags` (we don't have a server row
   // yet, but the shape is straightforward) and replace with the canonical
   // row on success / roll back on failure.
-  function setDailyTags(date, tags) {
+  function setDailyTags(date, tags, { showError = true } = {}) {
     let snapshot = null;
     setDailyNotes(prev => {
       snapshot = prev.find(n => n.date === date) || null;
@@ -1923,7 +2004,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
       return [optimistic, ...without];
     });
 
-    (async () => {
+    const persistPromise = (async () => {
       try {
         const updated = await db.dailyNotes.setDailyTags(date, tags, "");
         setDailyNotes(prev => {
@@ -1938,11 +2019,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           const without = prev.filter(n => n.date !== date);
           return snapshot ? [snapshot, ...without] : without;
         });
-        window.alert("Failed to update daily tags: " + err.message);
+        if (showError) window.alert("Failed to update daily tags: " + err.message);
+        throw err;
       }
     })();
 
-    return Promise.resolve();
+    return persistPromise;
   }
 
   // Morning readiness check-in — same optimistic pattern as setDailyTags but
@@ -2009,6 +2091,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
           <AppShell
             user={user} signOut={signOut} changePassword={changePassword} deleteAccount={deleteAccount}
             logs={logs} refreshLogs={refreshLogs} refresh={refresh} refreshing={refreshing}
+            refreshAgentContext={refreshAgentContext} agentContextSync={agentContextSync}
             addLog={addLog} updateLog={updateLog} bulkAddLogs={bulkAddLogs} deleteLogs={deleteLogs}
             races={races}
             addRace={addRace} updateRace={updateRace} deleteRace={deleteRace}
@@ -2048,7 +2131,8 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
 
 function AppShell({
   user, signOut, changePassword, deleteAccount,
-  logs, refreshLogs, refresh, refreshing, addLog, updateLog, bulkAddLogs, deleteLogs,
+  logs, refreshLogs, refresh, refreshing, refreshAgentContext, agentContextSync,
+  addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
   chatMessages, agentActions = [], setAgentActions, memoryFacts = [], setMemoryFacts, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
   dailyNotes, dailyNotesHydrated, setDailyTags, setReadiness,
@@ -2409,20 +2493,25 @@ function AppShell({
   useEffect(() => {
     try { localStorage.setItem("ultreia.coachPlanImportCache.v1", JSON.stringify(planImportCache)); } catch { /* ignore cache write failure */ }
   }, [planImportCache]);
-  function saveAgentAction(action) {
-    if (!action?.id || !action?.type) return;
+  function saveAgentAction(action, { throwOnError = false } = {}) {
+    if (!action?.id || !action?.type) return Promise.resolve(null);
     setAgentActions?.(prev => mergeAgentActionList(prev, action));
-    db.agentActions.upsertAction(action)
+    return db.agentActions.upsertAction(action)
       .then(saved => {
         if (saved) setAgentActions?.(prev => mergeAgentActionList(prev, saved));
+        return saved || action;
       })
       .catch(err => {
         console.warn("[agent_actions] save failed:", err);
+        if (throwOnError) throw err;
+        return null;
       });
   }
   async function saveMemoryFacts(facts = [], { replaceActiveSnapshot = false, returnSummary = false } = {}) {
+    const freshContext = await getFreshAgentContext();
+    if (!freshContext) throw new Error(t("coach.context_refresh_blocked"));
     const prepared = replaceActiveSnapshot
-      ? prepareMemoryFactSnapshot(facts, memoryFacts)
+      ? prepareMemoryFactSnapshot(facts, freshContext.memoryFacts)
       : { facts, archivedFacts: [] };
     const safeFacts = (Array.isArray(prepared.facts) ? prepared.facts : []).filter(f => f?.clientId || f?.id);
     const savedFacts = safeFacts.length ? await db.memoryFacts.upsertFacts(safeFacts) : [];
@@ -2535,12 +2624,32 @@ function AppShell({
     return nextAction;
   }
 
-  function recordMemoryActionDecision(action, status, result = null) {
+  async function recordMemoryActionDecision(action, status, result = null) {
     const nextAction = result && status === AGENT_ACTION_STATUS.EXECUTED
       ? completeAgentAction(action, result)
       : markAgentActionStatus(action, status);
-    saveAgentAction(nextAction);
+    await saveAgentAction(nextAction, { throwOnError: true });
     setLastMemoryAction(nextAction);
+    return nextAction;
+  }
+
+  async function persistPlanActionRecord(action, transform) {
+    if (!action || typeof transform !== "function") return null;
+    const nextAction = transform(action);
+    setAgentActions(prev => mergeAgentActionList(prev, nextAction));
+    if (nextAction.sourceMessageId) {
+      setPlanImportCache(prev => {
+        const cached = prev[nextAction.sourceMessageId] || {};
+        return {
+          ...prev,
+          [nextAction.sourceMessageId]: { ...cached, action: nextAction },
+        };
+      });
+    }
+    setPlanProposal(prev => (
+      prev?.action?.id === nextAction.id ? { ...prev, action: nextAction } : prev
+    ));
+    await saveAgentAction(nextAction, { throwOnError: true });
     return nextAction;
   }
 
@@ -2666,14 +2775,51 @@ function AppShell({
     return next;
   }, [setWallet]);
 
+  async function getFreshAgentContext({ blockOnFailure = true } = {}) {
+    try {
+      const refreshed = await refreshAgentContext?.({ silent: false });
+      if (refreshed?.ok) return {
+        logs: refreshed.data.workouts || [],
+        races: refreshed.data.races || [],
+        dailyNotes: refreshed.data.dailyNotes || [],
+        memoryFacts: refreshed.data.memoryFacts || [],
+        agentActions: refreshed.data.agentActions || [],
+      };
+      if (blockOnFailure) {
+        appDialog.alert(t("coach.context_refresh_blocked"));
+        return null;
+      }
+      return {
+        logs: refreshed?.data?.workouts || logs,
+        races: refreshed?.data?.races || races,
+        dailyNotes: refreshed?.data?.dailyNotes || dailyNotes,
+        memoryFacts: refreshed?.data?.memoryFacts || memoryFacts,
+        agentActions: refreshed?.data?.agentActions || agentActions,
+      };
+    } catch (err) {
+      console.warn("[agent context] refresh failed:", err);
+      if (blockOnFailure) {
+        appDialog.alert(t("coach.context_refresh_blocked"));
+        return null;
+      }
+      return { logs, races, dailyNotes, memoryFacts, agentActions };
+    }
+  }
+
   // Ask the LLM to distill durable Memory facts from the current chat + existing
   // fact cards. Runs at app scope (not inside AICoachTab) so unmounting that tab
   // mid-request doesn't drop the result. Errors surface via alert; success
   // sets memoryProposal, which both the Memory modal and the top banner react to.
   async function proposeMemoryUpdate() {
     if (!chatMessages.length) { appDialog.alert(t("coach.memory_need_chat")); return; }
+    const freshContext = await getFreshAgentContext();
+    if (!freshContext) return;
     const chatTranscript = chatMessages.map(m => `[${m.role}]\n${messageContentForCoach(m.content)}`).join("\n\n");
-    const memoryPrompt = buildMemoryUpdatePrompt({ memoryFacts, chatTranscript, races });
+    const memoryPrompt = buildMemoryUpdatePrompt({
+      memoryFacts: freshContext.memoryFacts,
+      chatTranscript,
+      races: freshContext.races,
+    });
     setMemoryUpdating(true);
     try {
       const data = await db.usage.coachProxy({
@@ -3107,12 +3253,12 @@ function AppShell({
     setChatMessages(prev => [...prev, { id: optimisticId, role: "user", content: visibleUserMsg, isLocal: true }]);
     setChatLoading(true);
 
-    let freshLogs = logs;
-    try {
-      freshLogs = await refreshLogs();
-    } catch (err) {
-      console.warn("[AI Coach] refreshLogs failed, using cached state:", err);
-    }
+    const freshContext = await getFreshAgentContext({ blockOnFailure: false });
+    let freshLogs = freshContext.logs;
+    const freshRaces = freshContext.races;
+    const freshDailyNotes = freshContext.dailyNotes;
+    const freshMemoryFacts = freshContext.memoryFacts;
+    const freshAgentActions = freshContext.agentActions;
 
     if (opts.ensureLogs?.length) {
       const keyOf = l => `${l.date}|${l.type}|${Math.round(Number(l.duration) || 0)}|${Math.round((Number(l.distance) || 0) * 1000)}`;
@@ -3129,7 +3275,7 @@ function AppShell({
     let raceDayWeather = null;
     try {
       const nowMs = Date.now();
-      const nextRace = races
+      const nextRace = freshRaces
         .filter(r => r.isTarget && r.category !== "Hyrox" && r.date
           && Number.isFinite(r.locationLat) && Number.isFinite(r.locationLng)
           && new Date(`${r.date}T00:00:00`).getTime() >= nowMs - 86400000)
@@ -3149,8 +3295,9 @@ function AppShell({
     const systemPrompt = buildSystemPrompt({
       profile, coachConfig,
       dataBlock: buildDataBlock({
-        logs: freshLogs, races, now, lang: "en",
-        currentWeather, forecastByDate, planForecastByLocation, dailyNotes, raceDayWeather, agentActions, memoryFacts,
+        logs: freshLogs, races: freshRaces, now, lang: "en",
+        currentWeather, forecastByDate, planForecastByLocation, dailyNotes: freshDailyNotes,
+        raceDayWeather, agentActions: freshAgentActions, memoryFacts: freshMemoryFacts,
       }),
       lang: "en",
     });
@@ -3283,18 +3430,21 @@ function AppShell({
       setShowPlanProposalReview(true);
       return;
     }
+    const freshContext = await getFreshAgentContext();
+    if (!freshContext) return;
     const controller = new AbortController();
     const runId = extractRunRef.current + 1;
     extractRunRef.current = runId;
     extractAbortRef.current = controller;
     setExtractingForMsgId(msgId);
     const extractionDataBlock = buildDataBlock({
-      logs, races, now, lang: "en",
+      logs: freshContext.logs, races: freshContext.races, now, lang: "en",
       currentWeather: weatherCtx.currentWeather,
       forecastByDate: weatherCtx.forecastByDate,
-      dailyNotes,
+      dailyNotes: freshContext.dailyNotes,
       raceDayWeather: null,
-      agentActions,
+      agentActions: freshContext.agentActions,
+      memoryFacts: freshContext.memoryFacts,
     });
     const todayStr = localDateKey(now);
     const dayOfWeek = now.toLocaleDateString("en-US", { weekday: "long" });
@@ -3362,7 +3512,7 @@ Rules:
       if (controller.signal.aborted || runId !== extractRunRef.current) return;
       const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
       const plans = parsePlansFromLLM(text);
-      const materialPlans = filterNoopPlanUpdates(plans, logs.filter(l => l?.isPlanned));
+      const materialPlans = filterNoopPlanUpdates(plans, freshContext.logs.filter(l => l?.isPlanned));
       if (materialPlans.length === 0) {
         appDialog.alert(t(plans.length ? "coach.import_no_material_changes" : "coach.import_no_plans"));
         return;
@@ -3384,7 +3534,7 @@ Rules:
     }
   }
 
-  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, openProposal = true, signal }) {
+  async function generateProactivePlanAction({ source, kind, prompt, plans, actionMeta, contextLogs = logs, openProposal = true, signal }) {
     throwIfAborted(signal);
     const data = plans
       ? null
@@ -3401,7 +3551,7 @@ Rules:
     );
     const actionablePlans = filterNoopPlanUpdates(
       filterActionableProactivePlans(parsedPlans, source, now || new Date()),
-      logs.filter(l => l?.isPlanned),
+      contextLogs.filter(l => l?.isPlanned),
     );
     if (actionablePlans.length === 0) return null;
     const baseAction = buildCreatePlansAction(actionablePlans, {
@@ -3434,12 +3584,9 @@ Rules:
     proactiveAdjustmentAbortRef.current = controller;
     setPlanRescueLoading(true);
     try {
-      let freshLogs = logs;
-      try {
-        freshLogs = await refreshLogs();
-      } catch (err) {
-        console.warn("[AI Coach] refreshLogs failed before plan rescue, using cached state:", err);
-      }
+      const freshContext = await getFreshAgentContext();
+      if (!freshContext) return false;
+      const freshLogs = freshContext.logs;
 
       throwIfAborted(controller.signal);
 
@@ -3451,15 +3598,15 @@ Rules:
 
       const dataBlock = buildDataBlock({
         logs: freshLogs,
-        races,
+        races: freshContext.races,
         now: now || new Date(),
         lang: "en",
         currentWeather: weatherCtx.currentWeather,
         forecastByDate: weatherCtx.forecastByDate,
-        dailyNotes,
+        dailyNotes: freshContext.dailyNotes,
         raceDayWeather: null,
-        agentActions,
-        memoryFacts,
+        agentActions: freshContext.agentActions,
+        memoryFacts: freshContext.memoryFacts,
       });
       const prompt = buildPlanDeviationRescuePrompt({
         summary,
@@ -3490,6 +3637,7 @@ Rules:
             },
           },
         },
+        contextLogs: freshLogs,
         openProposal: !quiet,
         signal: controller.signal,
       });
@@ -3517,16 +3665,13 @@ Rules:
     proactiveAdjustmentAbortRef.current = controller;
     setRecoveryGuardLoading(true);
     try {
-      let freshLogs = logs;
-      try {
-        freshLogs = await refreshLogs();
-      } catch (err) {
-        console.warn("[AI Coach] refreshLogs failed before recovery guard, using cached state:", err);
-      }
+      const freshContext = await getFreshAgentContext();
+      if (!freshContext) return false;
+      const freshLogs = freshContext.logs;
 
       throwIfAborted(controller.signal);
 
-      const summary = summarizeRecoveryGuard(freshLogs, dailyNotes, now || new Date());
+      const summary = summarizeRecoveryGuard(freshLogs, freshContext.dailyNotes, now || new Date());
       if (!summary) {
         if (!quiet) appDialog.alert(t("coach.recovery_guard_no_signal"));
         return false;
@@ -3534,15 +3679,15 @@ Rules:
 
       const dataBlock = buildDataBlock({
         logs: freshLogs,
-        races,
+        races: freshContext.races,
         now: now || new Date(),
         lang: "en",
         currentWeather: weatherCtx.currentWeather,
         forecastByDate: weatherCtx.forecastByDate,
-        dailyNotes,
+        dailyNotes: freshContext.dailyNotes,
         raceDayWeather: null,
-        agentActions,
-        memoryFacts,
+        agentActions: freshContext.agentActions,
+        memoryFacts: freshContext.memoryFacts,
       });
       const prompt = buildRecoveryGuardPrompt({
         summary,
@@ -3575,6 +3720,7 @@ Rules:
             },
           },
         },
+        contextLogs: freshLogs,
         openProposal: !quiet,
         signal: controller.signal,
       });
@@ -3603,31 +3749,28 @@ Rules:
     setPlanRescueLoading(true);
     setRecoveryGuardLoading(true);
     try {
-      let freshLogs = logs;
-      try {
-        freshLogs = await refreshLogs();
-      } catch (err) {
-        console.warn("[AI Coach] refreshLogs failed before combined adjustment, using cached state:", err);
-      }
+      const freshContext = await getFreshAgentContext();
+      if (!freshContext) return false;
+      const freshLogs = freshContext.logs;
 
       throwIfAborted(controller.signal);
 
       const currentNow = now || new Date();
       const planSummary = summarizePlanDeviation(freshLogs, currentNow);
-      const recoverySummary = summarizeRecoveryGuard(freshLogs, dailyNotes, currentNow);
+      const recoverySummary = summarizeRecoveryGuard(freshLogs, freshContext.dailyNotes, currentNow);
       if (!planSummary || !recoverySummary) return false;
 
       const dataBlock = buildDataBlock({
         logs: freshLogs,
-        races,
+        races: freshContext.races,
         now: currentNow,
         lang: "en",
         currentWeather: weatherCtx.currentWeather,
         forecastByDate: weatherCtx.forecastByDate,
-        dailyNotes,
+        dailyNotes: freshContext.dailyNotes,
         raceDayWeather: null,
-        agentActions,
-        memoryFacts,
+        agentActions: freshContext.agentActions,
+        memoryFacts: freshContext.memoryFacts,
       });
       const prompt = buildCombinedTrainingAdjustmentPrompt({
         planSummary,
@@ -3672,6 +3815,7 @@ Rules:
             },
           },
         },
+        contextLogs: freshLogs,
         openProposal: !quiet,
         signal: controller.signal,
       });
@@ -3790,57 +3934,74 @@ Rules:
     setShowPlanProposalReview(true);
   }
 
-  function applyPlanRestTags(restDates = [], workoutDates = []) {
+  async function applyPlanRestTags(restDates = [], workoutDates = [], contextNotes = dailyNotes) {
     const workoutDateSet = new Set(workoutDates.filter(Boolean));
     const addRestDates = [...new Set(restDates.filter(Boolean))].filter(date => !workoutDateSet.has(date));
     const clearRestDates = [...workoutDateSet];
     for (const date of addRestDates) {
-      const current = dailyNotes.find(n => n.date === date)?.tags || [];
+      const current = contextNotes.find(n => n.date === date)?.tags || [];
       if (!current.includes("planned_rest")) {
-        setDailyTags(date, ["planned_rest", ...current]).catch(() => {});
+        await setDailyTags(date, ["planned_rest", ...current], { showError: false });
       }
     }
     for (const date of clearRestDates) {
-      const current = dailyNotes.find(n => n.date === date)?.tags || [];
+      const current = contextNotes.find(n => n.date === date)?.tags || [];
       if (current.includes("planned_rest")) {
-        setDailyTags(date, current.filter(tag => tag !== "planned_rest")).catch(() => {});
+        await setDailyTags(date, current.filter(tag => tag !== "planned_rest"), { showError: false });
       }
     }
     return addRestDates;
   }
 
-  function confirmImportPlans(workouts, { restDates = [], replacePlannedDates = [], replacePlannedIds = [] } = {}) {
-    // bulkAddLogs is optimistic — the rows appear on Calendar before this
-    // returns. Close the review modal immediately and skip the "success"
-    // alert (which used to compete with a possible later failure alert).
+  async function confirmImportPlans(workouts, { restDates = [], replacePlannedDates = [], replacePlannedIds = [] } = {}) {
     const sourceAction = planProposal?.action || null;
+    const freshContext = await getFreshAgentContext();
+    if (!freshContext) return false;
     const planChanges = workouts
       .filter(w => w?._targetPlanId)
       .map(w => ({
         targetPlanId: w._targetPlanId,
-        before: compactPlanSnapshot(logs.find(l => l.id === w._targetPlanId)),
+        before: compactPlanSnapshot(freshContext.logs.find(l => l.id === w._targetPlanId)),
         after: compactPlanSnapshot(w),
       }));
-    const cleanWorkouts = workouts.map(w => {
+    const untaggedWorkouts = workouts.map((w) => {
       const clean = { ...w };
       delete clean._targetPlanId;
       return clean;
     });
+    const cleanWorkouts = tagAgentPlanWorkouts(untaggedWorkouts, sourceAction?.id);
     const workoutDates = cleanWorkouts.map(w => w.date).filter(Boolean);
-    const appliedRestDates = applyPlanRestTags(restDates, workoutDates);
-    const dateWideReplaceDates = [...new Set([
-      ...replacePlannedDates,
-      ...appliedRestDates,
-    ].filter(Boolean))];
     const targetedPlanIds = [...new Set((replacePlannedIds || []).filter(Boolean))];
-    const acceptedAction = updatePlanActionRecord(sourceAction, action => markAgentActionStatus(action, AGENT_ACTION_STATUS.ACCEPTED)) || sourceAction;
-    bulkAddLogs(cleanWorkouts, {
-      source: "ai_coach_plan",
-      replacePlannedDates: dateWideReplaceDates.length > 0,
-      replacePlannedDatesOn: dateWideReplaceDates,
-      replacePlannedIds: targetedPlanIds,
-      onPersisted: (created) => {
-        updatePlanActionRecord(acceptedAction, action => completeAgentAction(action, {
+    let activeAction = sourceAction;
+    let calendarSaved = false;
+    try {
+      if (sourceAction) {
+        activeAction = await persistPlanActionRecord(
+          sourceAction,
+          action => markAgentActionStatus(action, AGENT_ACTION_STATUS.EXECUTING),
+        );
+      }
+      const alreadyCreated = findPersistedAgentPlans(freshContext.logs, sourceAction?.id);
+      const calendarAlreadySaved = isAgentPlanBatchPersisted(freshContext.logs, sourceAction?.id, cleanWorkouts.length);
+      const appliedRestDates = await applyPlanRestTags(restDates, workoutDates, freshContext.dailyNotes);
+      const dateWideReplaceDates = [...new Set([
+        ...replacePlannedDates,
+        ...appliedRestDates,
+      ].filter(Boolean))];
+      const created = calendarAlreadySaved
+        ? alreadyCreated
+        : await bulkAddLogs(cleanWorkouts, {
+            source: "ai_coach_plan",
+            replacePlannedDates: dateWideReplaceDates.length > 0,
+            replacePlannedDatesOn: dateWideReplaceDates,
+            replacePlannedIds: targetedPlanIds,
+            showError: false,
+          });
+      calendarSaved = true;
+      if (activeAction) {
+        activeAction = await persistPlanActionRecord(activeAction, action => completeAgentAction(action, {
+          ...(action.result || {}),
+          calendarSaved: true,
           createdWorkoutIds: (created || []).map(w => w.id).filter(Boolean),
           createdWorkoutCount: (created || []).length,
           updatedPlanIds: targetedPlanIds,
@@ -3848,13 +4009,26 @@ Rules:
           planChanges,
           plannedRestDates: appliedRestDates,
         }));
-      },
-      onFailed: (err) => {
-        updatePlanActionRecord(acceptedAction, action => failAgentAction(action, err));
-      },
-    });
-    setPlanProposal(null);
-    setShowPlanProposalReview(false);
+      }
+      setPlanProposal(null);
+      setShowPlanProposalReview(false);
+      return true;
+    } catch (err) {
+      if (activeAction) {
+        const failedAction = failAgentAction({
+          ...activeAction,
+          result: {
+            ...(activeAction.result || {}),
+            calendarSaved: calendarSaved || freshContext.logs.some(log => log?.planDetail?.agentActionId === activeAction.id),
+          },
+        }, err);
+        setAgentActions(prev => mergeAgentActionList(prev, failedAction));
+        setPlanProposal(prev => prev ? { ...prev, action: failedAction } : prev);
+        await saveAgentAction(failedAction).catch(() => null);
+      }
+      appDialog.alert(t("coach.agent_action_execute_failed", { msg: err?.message || String(err) }));
+      return false;
+    }
   }
 
   function rejectPlanProposal() {
@@ -4198,6 +4372,8 @@ Rules:
           coachProviderLabel={lastCoachProvider.label}
           coachProviderFallback={lastCoachProvider.fallback}
           codexRunnerStatus={codexRunnerStatus}
+          agentContextSync={agentContextSync}
+          onRetryAgentContext={() => refreshAgentContext({ silent: false })}
           extractingForMsgId={extractingForMsgId}
           sendChat={sendChat}
           importToCalendar={importToCalendar}

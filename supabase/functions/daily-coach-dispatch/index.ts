@@ -385,6 +385,8 @@ function buildPrompt(opts: {
   return { system, user };
 }
 
+const WEEKLY_READINESS_COLUMNS = ["readiness_sleep", "readiness_legs", "readiness_energy"] as const;
+
 function buildWeeklyRecapPrompt(opts: {
   lang: string; today: string; weekStart: string; weekEnd: string; nextStart: string; nextEnd: string;
   completed: any[]; plannedThisWeek: any[]; plannedNextWeek: any[]; notes: any[];
@@ -404,8 +406,9 @@ function buildWeeklyRecapPrompt(opts: {
   };
   const noteLine = (n: any) => {
     const tags = Array.isArray(n.tags) && n.tags.length ? `tags:${n.tags.join(",")}` : "";
-    const readiness = [n.readiness_sleep, n.readiness_legs, n.readiness_energy].some(v => v != null)
-      ? `readiness sleep/legs/energy=${n.readiness_sleep ?? "-"}-${n.readiness_legs ?? "-"}-${n.readiness_energy ?? "-"}`
+    const readinessValues = WEEKLY_READINESS_COLUMNS.map(column => n[column]);
+    const readiness = readinessValues.some(v => v != null)
+      ? `readiness sleep/legs/energy=${readinessValues.map(v => v ?? "-").join("-")}`
       : "";
     return [n.date, tags, readiness].filter(Boolean).join(" ");
   };

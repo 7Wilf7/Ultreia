@@ -3,7 +3,7 @@
 // A logged-in user can permanently delete their own Aevum account.
 // The JS client can't delete its own auth user (that needs service_role), so
 // this function identifies the caller from their JWT and deletes the auth user.
-// Product data in Aevum / Ultreia / Viatica is cleaned by database-level
+// Product data in Aevum / Ultreia / Viatica / Sidera is cleaned by database-level
 // ON DELETE CASCADE constraints from each user-owned table to auth.users.
 //
 // Do not manually enumerate product tables here. Aevum account deletion is a

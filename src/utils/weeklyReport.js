@@ -2,6 +2,7 @@ import { formatDuration, formatPaceFromSec } from "./format";
 import { buildDataBlock } from "./coachPrompt";
 import { formatWorkoutNoteForDisplay } from "./importReviewNotes";
 import { coachPreferenceContextBlock } from "./profile";
+import { formatReadinessValues } from "./readinessContract";
 
 export const KEEP_REPORTS = 8;
 const STORAGE_KEY_PREFIX = "ultreia.weeklyReports.v1";
@@ -76,11 +77,7 @@ function fmtDailyNote(n) {
   const parts = [n.date];
   if (Array.isArray(n.tags) && n.tags.length) parts.push(`tags: ${n.tags.join(", ")}`);
   if (n.readiness && typeof n.readiness === "object") {
-    const r = n.readiness;
-    const bits = [];
-    for (const key of ["sleep", "soreness", "fatigue", "motivation", "stress", "legs"]) {
-      if (r[key] != null && r[key] !== "") bits.push(`${key}:${r[key]}`);
-    }
+    const bits = formatReadinessValues(n.readiness);
     if (bits.length) parts.push(`readiness: ${bits.join(", ")}`);
   }
   if (n.note) parts.push(`note: ${String(n.note).replace(/\s+/g, " ").slice(0, 160)}`);

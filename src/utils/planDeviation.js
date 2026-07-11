@@ -1,5 +1,5 @@
 import { ACTIVITY_TYPES } from "../constants";
-import { evaluatePlanOutcome } from "./planMatch";
+import { matchPlansToActuals } from "./planMatch";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -85,9 +85,8 @@ export function summarizePlanDeviation(logs = [], now = new Date(), opts = {}) {
   let missedCount = 0;
   const items = [];
 
-  for (const plan of pastPlans) {
-    const dayLogs = safeLogs.filter(l => l?.date === plan.date);
-    const { outcome, ratio } = evaluatePlanOutcome(plan, dayLogs, { isPast: true });
+  const matchedPastPlans = matchPlansToActuals(pastPlans, safeLogs, { isPast: true });
+  for (const { plan, outcome, ratio } of matchedPastPlans) {
     if (outcome === "done") {
       doneCount += 1;
     } else if (outcome === "partial") {

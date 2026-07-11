@@ -1,51 +1,159 @@
-// Plan ↔ actual reconciliation. A planned session is matched against the
-// COMPLETED (non-planned) workouts on the SAME DATE and of the SAME TYPE, then
-// the planned target metric is compared to what was actually done:
-//   • distance types (runs / trail / hiking / cycling) → compare distance
-//   • floor-climbing-style ascent-only plans            → compare ascent
-//   • swim / strength (time targets)                    → compare duration
-//   • HIIT / metric-less plans                          → any same-type session = done
-// Over-achievement counts as done (planned 5 km, ran 8 km → done). A same-type
-// session that falls short is "partial"; no same-type session at all is "missed"
-// (past) or "pending" (today/future). Explicit "done" still wins; legacy
-// "skipped" values are intentionally ignored and fall back to matching.
+// Deterministic one-to-one plan ↔ actual reconciliation.
 //
-// Shared by the Calendar day modal (per-row badge) and the AI Coach prompt's
-// plan-adherence block so the app and the coach agree on what "done" means.
+// Matching is performed per date and activity type. An actual workout can
+// satisfy at most one planned row. Explicit planStatus="done" remains a manual
+// override and does not consume an actual workout. Candidate preference is:
+//   1. compatible explicit subtypes / training content;
+//   2. closest available distance, duration and ascent targets;
+//   3. matching morning/evening slot;
+//   4. stable ids/indexes as deterministic tie-breakers.
+//
+// Calendar, AI Coach adherence, proactive deviation and outcome evaluation all
+// use this module so the runner never sees competing definitions of "done".
 
-// Completion threshold — actual/planned at or above this counts as done.
 export const PLAN_DONE_RATIO = 0.8;
 
-// Which planned field is the target to compare against. Order matters: distance
-// is the headline metric for endurance types; ascent for pure climbs; duration
-// for time-based work.
+const RACE_SUBTYPE = "race";
+
+function numeric(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function stableKey(item, index) {
+  return String(item?.id || item?.clientId || `${index}`).trim();
+}
+
+function normalizedContentSubtypes(item) {
+  return [...new Set((Array.isArray(item?.subTypes) ? item.subTypes : [])
+    .map(value => String(value || "").trim().toLowerCase())
+    .filter(value => value && value !== RACE_SUBTYPE))]
+    .sort();
+}
+
+function subtypeCompatibility(plan, actual) {
+  const planned = normalizedContentSubtypes(plan);
+  const completed = normalizedContentSubtypes(actual);
+  if (!planned.length && !completed.length) return { compatible: true, penalty: 0.2 };
+  if (!planned.length || !completed.length) return { compatible: true, penalty: 0.35 };
+  const overlap = planned.filter(value => completed.includes(value)).length;
+  if (overlap === 0) return { compatible: false, penalty: Number.POSITIVE_INFINITY };
+  const exact = planned.length === completed.length && overlap === planned.length;
+  return { compatible: true, penalty: exact ? 0 : 0.1 };
+}
+
+function metricDistance(plan, actual) {
+  const metrics = ["distance", "duration", "ascent"];
+  let compared = 0;
+  let total = 0;
+  for (const metric of metrics) {
+    const target = numeric(plan?.[metric]);
+    const completed = numeric(actual?.[metric]);
+    if (!target) continue;
+    compared += 1;
+    total += completed ? Math.abs(completed - target) / target : 2;
+  }
+  return compared ? total / compared : 0.75;
+}
+
+function timeSlot(item) {
+  const explicit = String(item?.timeOfDay || item?.planDetail?.timeOfDay || "").toLowerCase();
+  if (explicit === "am" || explicit === "pm") return explicit;
+  if (!item?.startedAt) return "";
+  const d = new Date(item.startedAt);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.getHours() < 12 ? "am" : "pm";
+}
+
+function candidateScore(plan, actual) {
+  const subtype = subtypeCompatibility(plan, actual);
+  if (!subtype.compatible) return null;
+  const planSlot = timeSlot(plan);
+  const actualSlot = timeSlot(actual);
+  const timePenalty = planSlot && actualSlot ? (planSlot === actualSlot ? 0 : 0.3) : 0.12;
+  return subtype.penalty * 100 + metricDistance(plan, actual) * 10 + timePenalty;
+}
+
 function planTarget(plan) {
-  if (plan.distance > 0) return { kind: "distance", target: plan.distance };
-  if (plan.ascent > 0) return { kind: "ascent", target: plan.ascent };
-  if (plan.duration > 0) return { kind: "duration", target: plan.duration };
+  if (numeric(plan?.distance)) return { kind: "distance", target: numeric(plan.distance) };
+  if (numeric(plan?.ascent)) return { kind: "ascent", target: numeric(plan.ascent) };
+  if (numeric(plan?.duration)) return { kind: "duration", target: numeric(plan.duration) };
   return { kind: "none", target: 0 };
 }
 
-// Evaluate one planned row against a day's logs.
-//   plan     — the planned workout row (isPlanned === true)
-//   dayLogs  — ALL logs on that date (planned + completed); we filter internally
-//   isPast   — whether the date is strictly before today
-// Returns { outcome, ratio }:
-//   outcome: 'done' | 'partial' | 'missed' | 'pending' | null
-//   ratio:   actual/target when a quantitative compare happened, else null
+function resultForMatch(plan, actual, isPast) {
+  if (!actual) return { outcome: isPast ? "missed" : "pending", ratio: null, actual: null };
+  const { kind, target } = planTarget(plan);
+  if (kind === "none" || target <= 0) return { outcome: "done", ratio: null, actual };
+  const ratio = numeric(actual?.[kind]) / target;
+  return ratio >= PLAN_DONE_RATIO
+    ? { outcome: "done", ratio, actual }
+    : { outcome: "partial", ratio, actual };
+}
+
+// Returns one result per planned row, in input order:
+// { plan, actual, outcome, ratio }. Plans and completed workouts may span
+// multiple dates; candidates are always restricted to the same date + type.
+export function matchPlansToActuals(plans = [], dayLogs = [], { isPast = false } = {}) {
+  const safePlans = (Array.isArray(plans) ? plans : []).filter(plan => plan?.isPlanned);
+  const actuals = (Array.isArray(dayLogs) ? dayLogs : []).filter(log => log && !log.isPlanned);
+  const results = new Map();
+  const availablePlans = [];
+
+  safePlans.forEach((plan, planIndex) => {
+    if (plan.planStatus === "done") {
+      results.set(plan, { plan, outcome: "done", ratio: null, actual: null });
+    } else {
+      availablePlans.push({ plan, planIndex, key: stableKey(plan, planIndex) });
+    }
+  });
+
+  const candidates = [];
+  availablePlans.forEach((planEntry) => {
+    actuals.forEach((actual, actualIndex) => {
+      if (actual.date !== planEntry.plan.date || actual.type !== planEntry.plan.type) return;
+      const score = candidateScore(planEntry.plan, actual);
+      if (score == null) return;
+      candidates.push({
+        ...planEntry,
+        actual,
+        actualIndex,
+        actualKey: stableKey(actual, actualIndex),
+        score,
+      });
+    });
+  });
+
+  candidates.sort((a, b) => (
+    a.score - b.score
+    || a.key.localeCompare(b.key)
+    || a.actualKey.localeCompare(b.actualKey)
+    || a.planIndex - b.planIndex
+    || a.actualIndex - b.actualIndex
+  ));
+
+  const matchedPlans = new Set();
+  const matchedActuals = new Set();
+  for (const candidate of candidates) {
+    if (matchedPlans.has(candidate.plan) || matchedActuals.has(candidate.actual)) continue;
+    matchedPlans.add(candidate.plan);
+    matchedActuals.add(candidate.actual);
+    results.set(candidate.plan, {
+      plan: candidate.plan,
+      ...resultForMatch(candidate.plan, candidate.actual, isPast),
+    });
+  }
+
+  for (const { plan } of availablePlans) {
+    if (!results.has(plan)) results.set(plan, { plan, ...resultForMatch(plan, null, isPast) });
+  }
+  return safePlans.map(plan => results.get(plan));
+}
+
+// Compatibility helper for isolated callers. Shared product flows with more
+// than one plan must call matchPlansToActuals once for the whole day/window.
 export function evaluatePlanOutcome(plan, dayLogs, { isPast } = {}) {
   if (!plan?.isPlanned) return { outcome: null, ratio: null };
-  if (plan.planStatus === "done") return { outcome: "done", ratio: null };
-
-  const sameType = (dayLogs || []).filter(l => !l.isPlanned && l.type === plan.type);
-  if (sameType.length === 0) return { outcome: isPast ? "missed" : "pending", ratio: null };
-
-  const { kind, target } = planTarget(plan);
-  if (kind === "none" || target <= 0) return { outcome: "done", ratio: null };
-
-  const actual = sameType.reduce((sum, l) => sum + (Number(l[kind]) || 0), 0);
-  const ratio = target > 0 ? actual / target : 0;
-  return ratio >= PLAN_DONE_RATIO
-    ? { outcome: "done", ratio }
-    : { outcome: "partial", ratio };
+  const result = matchPlansToActuals([plan], dayLogs, { isPast })[0];
+  return { outcome: result?.outcome ?? null, ratio: result?.ratio ?? null };
 }

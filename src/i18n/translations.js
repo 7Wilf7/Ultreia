@@ -4,6 +4,7 @@
 const dict = {
   // ===== Common =====
   "common.stop":          { en: "Stop",                     zh: "停止" },
+  "common.retry":         { en: "Retry",                    zh: "重试" },
 
   // ===== Header =====
   "header.title":         { en: "Ultreia",                  zh: "Ultreia" },
@@ -48,7 +49,7 @@ const dict = {
   "settings.section_admin":   { en: "Admin",                zh: "管理员" },
   "settings.delete_account": { en: "Delete Aevum account",  zh: "删除 Aevum 账号" },
   "del.title":               { en: "Delete Aevum account",  zh: "删除 Aevum 账号" },
-  "del.warning":             { en: "This permanently deletes your entire Aevum account and removes your personal data across Aevum, Ultreia, and Viatica, including training records, coach chats, settings, and ledger data. It cannot be undone.", zh: "此操作将永久删除你的整个 Aevum 账号，并删除 Aevum / Ultreia / Viatica 下的所有个人数据，包括训练记录、教练对话、设置和账本数据。此操作无法恢复。" },
+  "del.warning":             { en: "This permanently deletes your entire Aevum account and removes your personal data across Aevum, Ultreia, Viatica, and Sidera, including training records, coach chats, settings, ledger data, and Sidera knowledge/records. It cannot be undone.", zh: "此操作将永久删除你的整个 Aevum 账号，并删除 Aevum / Ultreia / Viatica / Sidera 下的所有个人数据，包括训练记录、教练对话、设置、账本数据和 Sidera 知识/记录数据。此操作无法恢复。" },
   "del.password":            { en: "Password",              zh: "密码" },
   "del.confirm_password":    { en: "Re-enter password",     zh: "再次输入密码" },
   "del.mismatch":            { en: "The two passwords don't match.", zh: "两次输入的密码不一致。" },
@@ -1180,6 +1181,11 @@ const dict = {
   "coach.memory_facts_hint": { en: "Current facts enter Coach prompts; archived facts do not. Open a category to manage the underlying facts.", zh: "当前事实进入 Coach 和周复盘；已归档不进入。展开分类可管理底层事实。" },
   "coach.memory_facts_empty": { en: "No reviewed facts yet. Accept an auto Memory update to create facts.", zh: "还没有已审核事实。接受一次自动 Memory 更新后会生成事实卡片。" },
   "coach.memory_facts_save_failed": { en: "Failed to save Memory facts: {msg}", zh: "保存记忆事实失败：{msg}" },
+  "coach.context_refresh_blocked": { en: "Training data could not be refreshed, so this suggestion was not generated or executed. Retry after the connection recovers.", zh: "训练数据未能刷新，暂不生成或执行建议。请在网络恢复后重试。" },
+  "coach.context_syncing": { en: "Refreshing training context…", zh: "正在刷新训练上下文……" },
+  "coach.context_sync_partial": { en: "Some training context is not current. Actions are paused.", zh: "部分训练上下文未刷新，动作已暂停。" },
+  "coach.agent_action_save_failed": { en: "Failed to save suggestion status: {msg}", zh: "保存建议状态失败：{msg}" },
+  "coach.agent_action_execute_failed": { en: "The action did not finish saving: {msg}. You can retry it safely.", zh: "动作未能完整保存：{msg}。可以安全重试。" },
   "coach.memory_facts_archived_empty": { en: "No archived facts.", zh: "还没有归档的事实。" },
   "coach.memory_facts_count": { en: "{count} shown", zh: "显示 {count} 条" },
   "coach.memory_facts_filter_current": { en: "Current", zh: "当前" },

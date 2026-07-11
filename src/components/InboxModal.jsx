@@ -433,7 +433,7 @@ export function InboxModal({
           </button>
         </div>
 
-        <div ref={scrollRef} style={styles.body}>
+        <div ref={scrollRef} className="ultreia-native-scroll-y" style={styles.body}>
           {tab === "daily" ? (
             renderMessageRows(dailyItems, t("inbox.daily_empty"))
           ) : tab === "weekly" ? (

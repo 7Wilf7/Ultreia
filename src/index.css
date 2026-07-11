@@ -344,6 +344,13 @@ summary::-webkit-details-marker { display: none; }
   transform: translateZ(0);
 }
 
+/* Long mobile reading surfaces should enter native vertical panning directly.
+   Declaring the axis up front avoids an extra gesture-arbitration wait when a
+   drag begins on selectable text or a tappable inbox row. */
+.ultreia-native-scroll-y {
+  touch-action: pan-y;
+}
+
 .ultreia-pager-track::-webkit-scrollbar {
   display: none;
 }

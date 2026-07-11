@@ -493,7 +493,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     const track = trackRef.current;
     if (!track) return undefined;
 
-    const beginPagerTouch = (point = null, target = null, timeStamp = 0) => {
+    const beginPagerPointer = (point = null, target = null, timeStamp = 0, pointerId = null) => {
       const wasSettling = Boolean(pagerSettleFrameRef.current || pagerSettleTimerRef.current);
       const settlingLeft = trackOffsetRef.current;
       const settleTarget = wasSettling ? (pagerSettleTargetRef.current ?? visualTabRef.current) : null;
@@ -517,6 +517,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
         lastAt: timeStamp || performance.now(),
         velocity: 0,
         target,
+        pointerId,
         mode: null,
       };
     };
@@ -528,12 +529,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       primePagerDragRendering();
     };
 
-    const endPagerTouch = (event) => {
+    const endPagerPointer = (event) => {
+      const gesture = pagerGestureRef.current;
+      if (event?.pointerId != null && gesture?.pointerId != null && event.pointerId !== gesture.pointerId) return;
       const mode = pagerGestureRef.current?.mode;
       if (mode === "outer") {
-        event?.preventDefault?.();
         event?.stopPropagation?.();
-        const gesture = pagerGestureRef.current;
         flushQueuedTrackOffset();
         const width = pagerWidthRef.current || measurePagerWidth();
         const current = gesture.current ?? visualTabRef.current;
@@ -565,14 +566,15 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       alignTrackToTab(visualTabRef.current);
     };
 
-    const onPagerTouchStart = (event) => {
-      if (event.touches.length === 1) beginPagerTouch(event.touches[0], event.target, event.timeStamp);
+    const onPagerPointerDown = (event) => {
+      if (!event.isPrimary || event.pointerType === "mouse") return;
+      beginPagerPointer(event, event.target, event.timeStamp, event.pointerId);
     };
 
-    const onPagerTouchMove = (event) => {
+    const onPagerPointerMove = (event) => {
       const gesture = pagerGestureRef.current;
-      if (!gesture?.touching || event.touches.length !== 1 || shouldSkipPagerDrag(gesture.target)) return;
-      const point = event.touches[0];
+      if (!gesture?.touching || event.pointerId !== gesture.pointerId || shouldSkipPagerDrag(gesture.target)) return;
+      const point = event;
       const at = event.timeStamp || performance.now();
       const dx = point.clientX - gesture.x;
       const dy = point.clientY - gesture.y;
@@ -607,7 +609,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
 
       if (gesture.mode !== "outer") return;
-      event.preventDefault();
       event.stopPropagation();
       const width = pagerWidthRef.current || measurePagerWidth();
       const maxLeft = Math.max(0, (tabCount - 1) * width);
@@ -622,16 +623,19 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
     };
 
-    track.addEventListener("touchstart", onPagerTouchStart, { capture: true, passive: true });
-    track.addEventListener("touchmove", onPagerTouchMove, { capture: true, passive: false });
-    track.addEventListener("touchend", endPagerTouch, { capture: true, passive: false });
-    track.addEventListener("touchcancel", endPagerTouch, { capture: true, passive: false });
+    // Pointer Events + touch-action: pan-y keep vertical scrolling on the
+    // browser compositor. The previous non-passive touchmove listener made
+    // Chromium/WebView wait for JavaScript before starting some scrolls.
+    track.addEventListener("pointerdown", onPagerPointerDown, true);
+    track.addEventListener("pointermove", onPagerPointerMove, true);
+    track.addEventListener("pointerup", endPagerPointer, true);
+    track.addEventListener("pointercancel", endPagerPointer, true);
     track.addEventListener("click", suppressClickAfterDrag, true);
     return () => {
-      track.removeEventListener("touchstart", onPagerTouchStart, true);
-      track.removeEventListener("touchmove", onPagerTouchMove, true);
-      track.removeEventListener("touchend", endPagerTouch, true);
-      track.removeEventListener("touchcancel", endPagerTouch, true);
+      track.removeEventListener("pointerdown", onPagerPointerDown, true);
+      track.removeEventListener("pointermove", onPagerPointerMove, true);
+      track.removeEventListener("pointerup", endPagerPointer, true);
+      track.removeEventListener("pointercancel", endPagerPointer, true);
       track.removeEventListener("click", suppressClickAfterDrag, true);
     };
   }, [

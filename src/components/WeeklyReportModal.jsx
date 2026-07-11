@@ -177,7 +177,7 @@ export function WeeklyReportPage({
         </div>
       </div>
 
-      <div style={{
+      <div className="ultreia-native-scroll-y" style={{
         flex: 1,
         minHeight: 0,
         overflowY: "auto",

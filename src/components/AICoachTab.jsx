@@ -2732,7 +2732,7 @@ export function AICoachTab({
         maxHeight: isMobile ? undefined : 500,
         display: "flex", flexDirection: "column", minWidth: 0,
       }}>
-      <div ref={chatScrollRef} onScroll={onChatScroll} className="ultreia-scroll-stable" data-mobile-vertical-scroll="true" style={{
+      <div ref={chatScrollRef} onScroll={onChatScroll} className="ultreia-scroll-stable ultreia-native-scroll-y" data-mobile-vertical-scroll="true" style={{
         ...s.card,
         marginBottom: 0,
         flex: 1,
@@ -2741,7 +2741,6 @@ export function AICoachTab({
         overscrollBehaviorX: "auto",
         overscrollBehaviorY: "contain",
         WebkitOverflowScrolling: "touch",
-        touchAction: "pan-x pan-y",
         contain: "layout paint",
         ...(isMobile ? {
           background: "var(--bg-elevated)",

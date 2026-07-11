@@ -4,6 +4,7 @@ import { useT } from "../i18n/LanguageContext";
 import { UpdateChecker } from "./UpdateChecker";
 import { WalletPanel } from "./WalletModal";
 import { productLogoUrl } from "../assets/logo";
+import { clearPwaCacheAndReload } from "../core/pwa";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 
 const GROUP_ORDER = { wallet: 0, admin: 1, other: 2 };
@@ -55,24 +56,10 @@ export function SettingsMobileTab({
   // version after a deploy.
   const isNative = Capacitor.isNativePlatform?.() === true;
 
-  // Drop the service worker + all Cache Storage, then hard-reload so the PWA
-  // pulls the freshly-deployed index and assets from the network.
-  async function clearCacheAndReload() {
+  async function handleClearCacheAndReload() {
     if (clearing) return;
     setClearing(true);
-    try {
-      if ("serviceWorker" in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
-      }
-      if (typeof caches !== "undefined") {
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-    } catch (e) {
-      console.warn("[clear-cache] failed:", e);
-    }
-    window.location.reload();
+    await clearPwaCacheAndReload();
   }
 
   function toggleAccount() {
@@ -127,7 +114,7 @@ export function SettingsMobileTab({
           primary={t("settings.clear_cache")}
           secondary={clearing ? t("settings.clear_cache_working") : t("settings.clear_cache_desc")}
           instant={false}
-          onClick={clearCacheAndReload} />
+          onClick={handleClearCacheAndReload} />
       )}
       <UpdateChecker />
     </>

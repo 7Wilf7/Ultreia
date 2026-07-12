@@ -730,6 +730,8 @@ const BOOT_MOTION_CSS = `
   isolation: isolate;
   --boot-duration: 1800ms;
   --boot-delay: calc(-1 * var(--boot-elapsed, 0ms));
+  --family-splash-logo-size: min(33vmin, 158px);
+  --family-splash-wordmark-size: min(12.5vmin, 52px);
 }
 .ultreia-boot-stack {
   display: flex;
@@ -737,12 +739,12 @@ const BOOT_MOTION_CSS = `
   align-items: center;
   justify-content: center;
   gap: min(2.8vmin, 16px);
-  transform: translateY(-3.4vmin);
+  transform: translateY(-2.8vmin);
   text-align: center;
 }
 .ultreia-boot-logo-stage {
-  width: min(31vmin, 152px);
-  height: min(31vmin, 152px);
+  width: var(--family-splash-logo-size);
+  height: var(--family-splash-logo-size);
 }
 .ultreia-boot-logo-static {
   display: block;
@@ -767,7 +769,7 @@ const BOOT_MOTION_CSS = `
 .ultreia-word-final {
   font-family: TSSign, "Segoe Script", cursive;
   font-weight: 400;
-  font-size: min(12.5vmin, 49px);
+  font-size: var(--family-splash-wordmark-size);
   line-height: 1;
   letter-spacing: 0;
   color: var(--ink-1);
@@ -854,8 +856,10 @@ const BOOT_MOTION_CSS = `
   }
 }
 @keyframes ultreiaWordReveal {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 0 0 0); }
+  0% { clip-path: inset(0 100% 0 0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  26% { clip-path: inset(0 56% 0 0); animation-timing-function: linear; }
+  74% { clip-path: inset(0 42% 0 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  100% { clip-path: inset(0 0 0 0); }
 }
 @keyframes ultreiaGreetingReveal {
   0%, 66% { opacity: 0; transform: translate3d(0, 4px, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
@@ -1007,6 +1011,16 @@ export default function App() {
     completePasswordRecovery,
     clearRecoveryMode,
   } = useAuth();
+  const [bootRevealComplete, setBootRevealComplete] = useState(() => (
+    Date.now() - APP_BOOT_STARTED_AT >= BOOT_REVEAL_MS
+  ));
+
+  useEffect(() => {
+    if (bootRevealComplete) return undefined;
+    const remainingMs = Math.max(0, BOOT_REVEAL_MS - (Date.now() - APP_BOOT_STARTED_AT));
+    const timer = window.setTimeout(() => setBootRevealComplete(true), remainingMs);
+    return () => window.clearTimeout(timer);
+  }, [bootRevealComplete]);
 
   // Watchdog: if auth init never resolves the loading state, surface it on the
   // error overlay so a stuck-on-splash boot is diagnosable on the device.
@@ -1037,7 +1051,7 @@ export default function App() {
       />
     );
   }
-  if (loading) return <LoadingScreen userId={user?.id} />;
+  if (loading || !bootRevealComplete) return <LoadingScreen userId={user?.id} />;
   if (recoveryMode) {
     return (
       <PasswordRecoveryModal

@@ -6,7 +6,9 @@
 - Logo source: `resources/brand/ultreia-original.png`.
 - Source verification: the repository file is byte-identical to `Desktop/logo/Ultreia.png` (1024 x 1024).
 - Splash duration: 1800ms.
-- Wordmark reveal: 1200ms, left to right, `linear`.
+- Logo stage: `min(33vmin, 158px)` square.
+- Wordmark: `min(12.5vmin, 52px)`, weight 400, line-height 1.
+- Wordmark reveal: 1200ms, left to right, fast-slow-fast.
 
 ## Logo rules
 
@@ -21,20 +23,29 @@ The Logo has no motion:
 
 ## Wordmark rules
 
-The signature-style Ultreia wordmark is the only animated brand actor. It uses a single clip-path progression:
+The signature-style Ultreia wordmark is the only animated brand actor. It uses
+the same three-part clip-path progression as Aevum, Viatica, and Sidera:
 
 ```css
-from { clip-path: inset(0 100% 0 0); }
-to   { clip-path: inset(0 0 0 0); }
+0%   { clip-path: inset(0 100% 0 0); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+26%  { clip-path: inset(0 56% 0 0);  animation-timing-function: linear; }
+74%  { clip-path: inset(0 42% 0 0);  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+100% { clip-path: inset(0 0 0 0); }
 ```
 
-The animation timing function must remain `linear`. Do not add intermediate keyframes because they recreate the fast-slow-fast pacing that this contract replaces.
+The opening 26% reveals 44% of the wordmark, the middle 48% advances only 14%,
+and the closing 26% finishes the remaining 42%. Literal easing values stay in
+the keyframes so Chromium does not silently fall back to a uniform curve.
 
 Under `prefers-reduced-motion: reduce`, the finished wordmark appears immediately.
 
 ## Family alignment
 
-Aevum, Ultreia, Viatica, and Sidera use the same splash contract: exact desktop source Logo from frame 0, 1200ms linear wordmark reveal, 1800ms total splash. Product color, source artwork, and wordmark text remain product-specific.
+Aevum, Ultreia, Viatica, and Sidera use the same splash contract: exact desktop
+source Logo from frame 0, identical responsive Logo and wordmark sizes, one
+1200ms fast-slow-fast wordmark reveal, and one 1800ms core splash clock. Product
+color, source artwork, and wordmark text remain product-specific. A slow data
+load may hold the finished lockup after 1800ms, but must not restart the motion.
 
 ## Archived evidence
 

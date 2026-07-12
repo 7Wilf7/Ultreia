@@ -55,7 +55,7 @@
 - 周报提炼计划复用 `create_plans`，来源通过 `source_ref_type/source_ref_id` 区分。
 - Calendar 建议的日期后执行观察复用现有 `result` JSON 的 `outcome` 子对象，不需要新增列；写入时保留原执行审计字段。
 
-建议字段见 `docs-internal/agentization-roadmap.md` Phase 3。
+当前字段、边界和后续接入顺序见 `docs-internal/agentization-roadmap.md`。
 
 建表 SQL：
 
@@ -66,9 +66,10 @@
 - 最近教练建议已经提供轻量审计入口；继续保持面向用户的可读摘要，不扩成内部矩阵或调试页。
 - 如要追踪停止/扣费/服务端完成状态，把任务结果写入 `result` / `error`。
 - 未来自动执行需要记录 `auto` / `guarded` / `requires_user`、policy 版本、
-  风险级别、执行基线、幂等键、冲突原因和撤销/补偿信息。先在 Aevum
-  生态契约里定稿，再决定复用 JSON 字段还是审核 schema；不要在 Ultreia
-  单独发明一套不兼容的全局动作协议。
+  风险级别、执行基线、幂等键、冲突原因和撤销/补偿信息。Aevum Phase A
+  已给出 canonical contract 和存储 baseline；Ultreia 接入前仍需逐项映射
+  本地 `agent_actions` 字段并评审必要的 schema 变化，不得单独发明一套
+  不兼容的全局动作协议。
 
 ## 已建表并接入
 

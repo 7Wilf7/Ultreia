@@ -93,9 +93,12 @@ anything that makes training judgment feel gamified or unserious.
 ## Current Milestone
 
 Keep Ultreia stable as the mature training product while advancing AI Coach
-from a confirmable Agent into a policy-governed training Agent. First finish
-conflict-safe execution and the narrow Aevum Query/Report vertical slice. Do
-not expand it into ledger, knowledge-base, or global launcher responsibilities.
+from a confirmable Agent into a policy-governed training Agent. The Calendar
+conflict-safe prerequisite and Aevum Phase A foundation are complete. The next
+milestone is the first `agent_report.v1` vertical slice in shadow mode; it is
+not connected yet. A narrow Query may proceed independently but does not block
+proactive Reports. Do not expand Ultreia into ledger, knowledge-base, or global
+launcher responsibilities.
 
 ## Accessibility & Inclusion
 

@@ -133,5 +133,7 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `usage_quota` — 旧免费额度表，仅保留删除账号兼容；新扣费逻辑不要继续依赖它
 - `viatica_accounts` / `viatica_budgets` / `viatica_preferences` / `viatica_transactions` — 同一 Aevum Supabase project 下的 Viatica 表；账号删除时通过 `user_id → auth.users(id) ON DELETE CASCADE` 清理
 - `sidera_entries` / `sidera_nodes` / `sidera_links` / `sidera_reviews` / `sidera_messages` / `sidera_agent_actions` / `sidera_preferences` — 同一 Aevum Supabase project 下的 Sidera 表；AI 建议先落为待确认 action，不静默写入长期知识库
+- `aevum_standing_policies` / `aevum_agent_reports` / `aevum_derived_memories` / `aevum_derived_memory_sources` / `aevum_cross_product_actions` / `aevum_agent_journal_entries` — Aevum Phase A 自治控制面基础表；已建立但当前为空，客户端权限锁定，不代表 Ultreia 已接通运行时
+- `aevum_agent_context_memories` — Aevum Phase A 派生记忆上下文视图；当前仅供未来可信服务端路径读取
 
 公共字段约定：`id uuid PK`、用户归属表用 `user_id uuid → auth.users(id) ON DELETE CASCADE`、`created_at timestamptz`、`updated_at timestamptz`（如有）。RLS 全部按 `auth.uid() = user_id` 过滤；非用户归属的系统表需单独说明边界。

@@ -64,6 +64,12 @@ export function shouldOuterPagerHandleSwipe({ direction, currentTab, tabCount, i
   return false;
 }
 
+export function shouldInnerPagerOwnSwipe({ swipeNext, swipePrev, dx }) {
+  if (dx < 0) return swipeNext === true || swipeNext === "true";
+  if (dx > 0) return swipePrev === true || swipePrev === "true";
+  return false;
+}
+
 export function resolveMobilePagerTouchStart({
   visualTab,
   trackLeft = 0,

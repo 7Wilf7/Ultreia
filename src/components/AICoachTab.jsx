@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
+import { memo, startTransition, useState, useEffect, useRef, useMemo, useLayoutEffect, useCallback, useDeferredValue } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -15,8 +15,8 @@ import {
 import { useT, useLanguage } from "../i18n/LanguageContext";
 import { useIsMobile } from "../hooks/useMediaQuery";
 import { cityAbbreviationFromLocation, hasValidCoords } from "../lib/weather";
-import { buildDataBlock, buildPromptSkeleton, estimateTextTokens, loadPreciseTextTokenCounter, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
-import { buildSystemPrompt } from "../utils/profile";
+import { buildPromptSkeleton, estimateTextTokens, formatLocalDateTime, messageContentForCoach, parseCoachMessageMeta } from "../utils/coachPrompt";
+import { calculateCoachBaseContextUsage, scheduleCoachContextCalculation } from "../utils/coachContextUsage";
 import { buildMemoryFactReview, buildMemoryFactSnapshotFromReview, extractMemoryFacts, MEMORY_SECTIONS } from "../utils/memory";
 import { AGENT_ACTION_STATUS, getAgentActionQualitySignal, getPlanTargetId, isCreatePlansAction, isPlanUpdateItem, isRaceBriefingAction, isRestPlanItem, markAgentActionStatus } from "../utils/agentActions";
 import { isCalendarActionStale } from "../utils/calendarExecutionGuard";
@@ -781,7 +781,7 @@ export function AICoachTab({
     const next = normalizeCoachConfig(nextConfig);
     optimisticCoachConfigRef.current = next;
     setOptimisticCoachConfig(next);
-    setCoachConfig?.(next);
+    startTransition(() => setCoachConfig?.(next));
   }, [setCoachConfig]);
   const patchCoachConfig = useCallback((patch) => {
     commitCoachConfig({
@@ -801,7 +801,7 @@ export function AICoachTab({
       if (isMobilePagerTouching()) return;
       setRunnerNowMs(Date.now());
     };
-    const initialTimer = setTimeout(refreshRunnerClock, 0);
+    const initialTimer = setTimeout(refreshRunnerClock, 120);
     const timer = setInterval(refreshRunnerClock, 5000);
     return () => {
       clearTimeout(initialTimer);
@@ -897,7 +897,6 @@ export function AICoachTab({
   // (resets on page reload, which is the point — fresh page → fresh
   // reminder if conversation is still long).
   const [longChatHintCollapsed, setLongChatHintCollapsed] = useState(false);
-  const [preciseTextTokenCounter, setPreciseTextTokenCounter] = useState(null);
   const [proactiveAdjustmentSnoozedUntil, setProactiveAdjustmentSnoozedUntil] = useState(readProactiveAdjustmentSnooze);
   const [raceBriefingSnoozedUntil, setRaceBriefingSnoozedUntil] = useState(readRaceBriefingSnooze);
   const [raceBriefingAction, setRaceBriefingAction] = useState(null);
@@ -907,17 +906,6 @@ export function AICoachTab({
     catch { return ""; }
   });
   const [confirmManualAdjustment, setConfirmManualAdjustment] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    loadPreciseTextTokenCounter()
-      .then((countTokens) => {
-        if (!cancelled) setPreciseTextTokenCounter(() => countTokens);
-      })
-      .catch(() => {
-        if (!cancelled) setPreciseTextTokenCounter(null);
-      });
-    return () => { cancelled = true; };
-  }, []);
   const proactiveAdjustmentSnoozed = proactiveAdjustmentSnoozedUntil > runnerNowMs;
   const proactiveAutoPaused = Number(proactiveAutoPauseUntil) > runnerNowMs;
   const raceBriefingSnoozed = raceBriefingSnoozedUntil > runnerNowMs;
@@ -1752,39 +1740,37 @@ export function AICoachTab({
     codexRunnerStatus?.last_error ? `${lang === "zh" ? "上次错误" : "Last error"}: ${codexRunnerStatus.last_error}` : null,
   ].filter(Boolean).join(" · ");
   const displayProviderLabel = expectedProvider === "desktop_codex" ? "Codex" : providerLabel;
-  const countTokens = preciseTextTokenCounter || estimateTextTokens;
-  const baseContextUsage = useMemo(() => {
-    let systemTokens;
-    try {
-      const dataBlock = buildDataBlock({
+  const currentWeather = weatherCtx?.currentWeather || null;
+  const forecastByDate = weatherCtx?.forecastByDate || null;
+  const promptContextHourKey = formatLocalDateTime(now).slice(0, 13);
+  const [baseContextUsage, setBaseContextUsage] = useState({
+    systemTokens: COACH_CONTEXT_FIXED_OVERHEAD_TOKENS,
+    historyTokens: 0,
+  });
+  useEffect(() => {
+    const contextNow = new Date(`${promptContextHourKey.replace(" ", "T")}:00:00`);
+    return scheduleCoachContextCalculation({
+      host: window,
+      calculate: () => calculateCoachBaseContextUsage({
         logs,
         races,
-        now,
-        lang: "en",
-        currentWeather: weatherCtx?.currentWeather || null,
-        forecastByDate: weatherCtx?.forecastByDate || null,
+        now: contextNow,
+        currentWeather,
+        forecastByDate,
         dailyNotes,
         agentActions,
         memoryFacts,
-      });
-      const systemPrompt = buildSystemPrompt({
         profile,
         coachConfig,
-        dataBlock,
-        lang: "en",
-      });
-      systemTokens = countTokens(systemPrompt);
-    } catch {
-      systemTokens = COACH_CONTEXT_FIXED_OVERHEAD_TOKENS;
-    }
-    const historyTokens = chatMessages.reduce((sum, m) => (
-      sum + countTokens(`[${m.role || "user"}]\n${messageContentForCoach(m.content)}`)
-    ), 0);
-    return { systemTokens, historyTokens };
-  }, [agentActions, chatMessages, coachConfig, countTokens, dailyNotes, logs, memoryFacts, now, profile, races, weatherCtx]);
+        chatMessages,
+        fixedOverheadTokens: COACH_CONTEXT_FIXED_OVERHEAD_TOKENS,
+      }),
+      commit: next => startTransition(() => setBaseContextUsage(next)),
+    });
+  }, [agentActions, chatMessages, coachConfig, currentWeather, dailyNotes, forecastByDate, logs, memoryFacts, profile, promptContextHourKey, races]);
   const contextUsage = useMemo(() => {
     const draft = String(deferredComposerInput || "").trim();
-    const draftTokens = draft ? countTokens(`[user]\n${draft}`) : 0;
+    const draftTokens = draft ? estimateTextTokens(`[user]\n${draft}`) : 0;
     const imageTokens = Math.max(0, coachImages.length) * COACH_IMAGE_ESTIMATE_TOKENS;
     const usedTokens = Math.max(0, Math.round(
       baseContextUsage.systemTokens
@@ -1805,7 +1791,7 @@ export function AICoachTab({
       totalLabel: formatTokenK(COACH_CONTEXT_WINDOW_TOKENS),
       nearLimit: remainingTokens <= COACH_CONTEXT_WARN_REMAINING_TOKENS,
     };
-  }, [baseContextUsage, coachImages.length, countTokens, deferredComposerInput]);
+  }, [baseContextUsage, coachImages.length, deferredComposerInput]);
   const contextUsageAccent = contextUsage.nearLimit
     ? "var(--danger)"
     : contextUsage.ratio >= 0.75

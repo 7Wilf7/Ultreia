@@ -2,8 +2,10 @@
 //
 // The app owner's DeepSeek key stays in Edge Function secrets. Phase-1
 // desktop_codex support never receives Codex credentials: it only writes an
-// ai_jobs row and waits briefly for a local desktop runner to write back text.
-// If the runner is offline/missing/slow, this function falls back to DeepSeek.
+// ai_jobs row. Legacy callers wait briefly; start_async callers receive a job
+// id immediately and the runner persists the final chat/report sink. If the
+// runner is unavailable, text-only async jobs use DeepSeek against the same
+// durable job and sink.
 // AI calls do not check wallet balance or debit wallet records in personal mode.
 //
 // Auth: caller must be logged in (verify JWT can stay ON). Deploy:
@@ -16,6 +18,8 @@
 // Auto-injected: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
 
 const DEEPSEEK = {
   id: "deepseek",
@@ -33,6 +37,9 @@ const DESKTOP_RUNNER_STALE_MS = 8_000;
 const DESKTOP_CODEX_ERROR_COOLDOWN_MS = 5 * 60_000;
 const DESKTOP_CODEX_AUTH_ERROR_COOLDOWN_MS = 24 * 60 * 60_000;
 const DESKTOP_JOB_TTL_MS = 2 * 60_000;
+const ASYNC_JOB_TTL_MS = 15 * 60_000;
+const DEEPSEEK_ASYNC_TIMEOUT_MS = 2 * 60_000;
+const ASYNC_JOB_SOURCE = "coach_proxy_async";
 const DESKTOP_POLL_MS = 1000;
 const IMAGE_INPUT_CAPABILITY_KEYS = ["supportsImageInput", "imageInput"];
 const AI_JOB_KINDS = new Set([
@@ -56,11 +63,45 @@ type ImageAttachment = {
 type CoachRequestBody = {
   action?: string;
   kind?: string;
+  request_id?: string;
+  job_id?: string;
+  runner_id?: string;
+  failure_reason?: string;
+  sink?: unknown;
   system?: string;
   messages?: unknown;
   attachments?: unknown;
   max_tokens?: number;
   stream?: boolean;
+};
+
+type AsyncSink = {
+  type: "coach_message" | "coach_report";
+  user_message_id?: string;
+  report_id?: string;
+  range?: {
+    start: string;
+    end: string;
+    next_start: string | null;
+    next_end: string | null;
+    range_mode: string;
+  };
+};
+
+type AsyncJobRow = {
+  id: string;
+  user_id: string;
+  kind: string;
+  status: string;
+  payload: Record<string, unknown>;
+  result: Record<string, unknown>;
+  provider_requested?: string | null;
+  provider_actual?: string | null;
+  fallback_provider?: string | null;
+  fallback_reason?: string | null;
+  error?: string | null;
+  runner_id?: string | null;
+  expires_at?: string | null;
 };
 
 function tokenUsage(usage: unknown): {
@@ -182,7 +223,7 @@ function normalizeImageAttachments(value: unknown): ImageAttachment[] {
 }
 
 function publicErrorMessage(value: unknown): string | null {
-  const text = stringValue(value);
+  const text = stringValue(value) || stringValue(objectValue(value).message);
   if (!text) return null;
   return text.replace(/sk-[A-Za-z0-9_.*-]+/g, "[redacted]").slice(0, 240);
 }
@@ -364,16 +405,613 @@ function desktopJobPayload(body: CoachRequestBody & { attachments?: ImageAttachm
   };
 }
 
-function redactedDesktopJobPayload(payload: ReturnType<typeof desktopJobPayload>) {
+function redactedJobPayload(payload: unknown) {
+  const value = objectValue(payload);
+  const attachments = Array.isArray(value.attachments) ? value.attachments : [];
   return {
-    ...payload,
-    attachments: payload.attachments.map(attachment => ({
-      type: attachment.type,
-      name: attachment.name,
-      mediaType: attachment.mediaType,
-      redacted: true,
-    })),
+    ...value,
+    attachments: attachments.map(item => {
+      const attachment = objectValue(item);
+      return {
+        type: stringValue(attachment.type) || "image",
+        name: (stringValue(attachment.name) || "coach-image").slice(0, 100),
+        mediaType: stringValue(attachment.mediaType),
+        redacted: true,
+      };
+    }),
   };
+}
+
+function uuidValue(value: unknown): string | null {
+  const text = stringValue(value);
+  return text && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)
+    ? text.toLowerCase()
+    : null;
+}
+
+function dateValue(value: unknown): string | null {
+  const text = stringValue(value);
+  if (!text || !/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  const parsed = Date.parse(`${text}T00:00:00Z`);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === text ? text : null;
+}
+
+function normalizeAsyncSink(kind: string, value: unknown, jobId?: string): AsyncSink | null {
+  const sink = objectValue(value);
+  if (kind === "coach_chat") {
+    const userMessageId = uuidValue(sink.user_message_id ?? sink.userMessageId);
+    return userMessageId ? { type: "coach_message", user_message_id: userMessageId } : null;
+  }
+  if (kind !== "weekly_report") return null;
+
+  const range = objectValue(sink.range);
+  const start = dateValue(range.start ?? range.period_start);
+  const end = dateValue(range.end ?? range.period_end);
+  const nextStart = dateValue(range.next_start ?? range.nextStart);
+  const nextEnd = dateValue(range.next_end ?? range.nextEnd);
+  if (!start || !end || start > end || (!!nextStart !== !!nextEnd) || (nextStart && nextEnd && nextStart > nextEnd)) {
+    return null;
+  }
+  const rangeModeValue = stringValue(range.range_mode ?? range.rangeMode) || "this";
+  if (rangeModeValue !== "this" && rangeModeValue !== "last") return null;
+  const rangeMode = rangeModeValue;
+  return {
+    type: "coach_report",
+    ...(jobId ? { report_id: jobId } : {}),
+    range: {
+      start,
+      end,
+      next_start: nextStart,
+      next_end: nextEnd,
+      range_mode: rangeMode,
+    },
+  };
+}
+
+function appendCoachMeta(text: string, meta: Record<string, unknown>): string {
+  return `${text.trim()}\n\n<!-- ultreia-meta:${JSON.stringify(meta)} -->`;
+}
+
+function coachUsageMeta(usage: unknown) {
+  const normalized = tokenUsage(usage);
+  if (normalized.input <= 0 && normalized.output <= 0 && normalized.total <= 0) return null;
+  return {
+    inputTokens: normalized.input,
+    outputTokens: normalized.output,
+    totalTokens: normalized.total,
+    inputCacheHitTokens: normalized.inputCacheHit,
+    inputCacheMissTokens: normalized.inputCacheMiss,
+    inputCacheWriteTokens: normalized.inputCacheWrite,
+  };
+}
+
+function asyncJobPayload(
+  body: CoachRequestBody & { attachments?: ImageAttachment[] },
+  requestId: string,
+  sink: AsyncSink,
+) {
+  return {
+    source: ASYNC_JOB_SOURCE,
+    client_request_id: requestId,
+    sink,
+    system: typeof body.system === "string" ? body.system : "",
+    messages: Array.isArray(body.messages) ? body.messages : [],
+    attachments: Array.isArray(body.attachments) ? body.attachments : [],
+    max_tokens: Number(body.max_tokens || 8000),
+    stream: false,
+  };
+}
+
+function asyncAccepted(job: AsyncJobRow, sink?: AsyncSink): Response {
+  const result = objectValue(job.result);
+  return json({
+    accepted: true,
+    job_id: String(job.id || ""),
+    status: String(job.status || "queued"),
+    provider: stringValue(job.provider_actual) || stringValue(job.provider_requested),
+    fallback_provider: stringValue(job.fallback_provider),
+    fallback_reason: stringValue(job.fallback_reason),
+    error: publicErrorMessage(job.error),
+    finalized: !!stringValue(result.finalized_at),
+    sink: sink || objectValue(objectValue(job.payload).sink),
+  }, 202);
+}
+
+async function callDeepSeekOnce(body: CoachRequestBody): Promise<Record<string, unknown>> {
+  const key = Deno.env.get(DEEPSEEK.keyEnv);
+  if (!key) throw new Error("server_misconfigured");
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(DEEPSEEK.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({
+        model: DEEPSEEK.model,
+        max_tokens: body.max_tokens || 8000,
+        system: body.system || "",
+        messages: body.messages,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(DEEPSEEK_ASYNC_TIMEOUT_MS),
+    });
+  } catch (e) {
+    throw new Error(`upstream_failed:${publicErrorMessage(e) || "network_error"}`);
+  }
+
+  const data = await upstream.json().catch(() => null);
+  if (!upstream.ok || !data) {
+    const detail = (data as { error?: { message?: unknown } } | null)?.error?.message;
+    throw new Error(`upstream_error:${publicErrorMessage(detail) || upstream.status}`);
+  }
+  const text = extractText(data).trim();
+  if (!text) throw new Error("upstream_empty_response");
+  return {
+    text,
+    usage: objectValue((data as { usage?: unknown }).usage),
+    model: DEEPSEEK.model,
+    provider: DEEPSEEK.id,
+    upstream_id: stringValue((data as { id?: unknown }).id),
+    completed_at: new Date().toISOString(),
+  };
+}
+
+async function markAsyncSinkFailed(admin: any, job: AsyncJobRow, message: string) {
+  const sink = objectValue(job.payload?.sink);
+  if (sink.type !== "coach_report") return;
+  const { error } = await admin
+    .from("coach_reports")
+    .update({ status: "failed", error: publicErrorMessage(message) || "generation_failed" })
+    .eq("id", job.id)
+    .eq("user_id", job.user_id)
+    .eq("status", "running");
+  if (error) throw new Error(`coach_report_fail:${error.message}`);
+}
+
+async function finalizeAsyncFailure(admin: any, job: AsyncJobRow, message: string): Promise<AsyncJobRow> {
+  const result = objectValue(job.result);
+  if (stringValue(result.failure_finalized_at)) return job;
+  await markAsyncSinkFailed(admin, job, message);
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({
+      payload: redactedJobPayload(job.payload),
+      result: { ...result, failure_finalized_at: new Date().toISOString() },
+    })
+    .eq("id", job.id)
+    .eq("user_id", job.user_id)
+    .contains("payload", { source: ASYNC_JOB_SOURCE })
+    .in("status", ["failed", "expired"])
+    .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+    .maybeSingle();
+  if (error || !data?.id) throw new Error(`async_failure_marker:${error?.message || "job_not_terminal"}`);
+  return data as AsyncJobRow;
+}
+
+async function expireAsyncJobIfNeeded(admin: any, job: AsyncJobRow): Promise<AsyncJobRow> {
+  const expiresAt = Date.parse(stringValue(job.expires_at) || "");
+  if (!["queued", "claimed", "running"].includes(job.status)
+    || !Number.isFinite(expiresAt)
+    || expiresAt > Date.now()) return job;
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({
+      status: "expired",
+      payload: redactedJobPayload(job.payload),
+      error: "async_job_expired",
+      fallback_reason: "async_job_expired",
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", job.id)
+    .eq("user_id", job.user_id)
+    .in("status", ["queued", "claimed", "running"])
+    .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+    .maybeSingle();
+  if (error) throw new Error(`async_expire:${error.message}`);
+  return data?.id ? data as AsyncJobRow : job;
+}
+
+async function finalizeAsyncSink(admin: any, job: AsyncJobRow): Promise<void> {
+  const payload = objectValue(job.payload);
+  if (payload.source !== ASYNC_JOB_SOURCE) throw new Error("not_async_job");
+  const sink = objectValue(payload.sink);
+  const result = objectValue(job.result);
+  const text = stringValue(result.text)?.trim();
+  if (!text) throw new Error("async_result_text_required");
+  const provider = stringValue(result.provider) || stringValue(job.provider_actual) || DESKTOP_CODEX.id;
+  const model = stringValue(result.model) || (provider === DEEPSEEK.id ? DEEPSEEK.model : DESKTOP_CODEX.model);
+  const usage = objectValue(result.usage);
+  const fallback = job.fallback_provider
+    ? { from: DESKTOP_CODEX.id, to: job.fallback_provider, reason: job.fallback_reason || "desktop_failed" }
+    : null;
+  const finalizedAt = new Date().toISOString();
+
+  if (sink.type === "coach_message") {
+    const content = appendCoachMeta(text, {
+      provider,
+      model,
+      freeTier: false,
+      usage: coachUsageMeta(usage),
+      fallback,
+      createdAt: stringValue(result.completed_at) || finalizedAt,
+      jobId: job.id,
+    });
+    const { error } = await admin
+      .from("coach_messages")
+      .upsert({ id: job.id, user_id: job.user_id, role: "assistant", content }, { onConflict: "id" });
+    if (error) throw new Error(`coach_message_finalize:${error.message}`);
+    return;
+  }
+
+  if (sink.type === "coach_report") {
+    const { data: current, error: readError } = await admin
+      .from("coach_reports")
+      .select("metadata")
+      .eq("id", job.id)
+      .eq("user_id", job.user_id)
+      .maybeSingle();
+    if (readError || !current) throw new Error(`coach_report_read:${readError?.message || "missing_report"}`);
+    const metadata = objectValue(current.metadata);
+    const { data, error } = await admin
+      .from("coach_reports")
+      .update({
+        status: "ready",
+        body: text,
+        error: null,
+        wallet_charge_cents: 0,
+        model,
+        metadata: {
+          ...metadata,
+          provider,
+          fallback,
+          usage: Object.keys(usage).length ? usage : null,
+          finalized_at: finalizedAt,
+        },
+      })
+      .eq("id", job.id)
+      .eq("user_id", job.user_id)
+      .eq("status", "running")
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(`coach_report_finalize:${error.message}`);
+    if (!data?.id) {
+      const { data: ready } = await admin
+        .from("coach_reports")
+        .select("id")
+        .eq("id", job.id)
+        .eq("user_id", job.user_id)
+        .eq("status", "ready")
+        .maybeSingle();
+      if (!ready?.id) throw new Error("coach_report_not_active");
+    }
+    return;
+  }
+
+  throw new Error("unsupported_async_sink");
+}
+
+async function markAsyncFinalized(admin: any, job: AsyncJobRow): Promise<AsyncJobRow> {
+  const finalizedAt = new Date().toISOString();
+  const result = { ...objectValue(job.result), finalized_at: finalizedAt };
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({ result })
+    .eq("id", job.id)
+    .eq("user_id", job.user_id)
+    .in("status", ["completed", "fallback_used"])
+    .select("id,user_id,kind,status,payload,result,provider_actual,fallback_provider,fallback_reason,error,runner_id")
+    .maybeSingle();
+  if (error || !data?.id) throw new Error(`async_finalize_marker:${error?.message || "job_not_terminal"}`);
+  return data as AsyncJobRow;
+}
+
+async function finalizeAsyncJob(admin: any, job: AsyncJobRow): Promise<AsyncJobRow> {
+  if (stringValue(objectValue(job.result).finalized_at)) return job;
+  await finalizeAsyncSink(admin, job);
+  return await markAsyncFinalized(admin, job);
+}
+
+async function findAsyncJob(admin: any, uid: string, kind: string, requestId: string): Promise<AsyncJobRow | null> {
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+    .eq("user_id", uid)
+    .eq("kind", kind)
+    .contains("payload", { source: ASYNC_JOB_SOURCE, client_request_id: requestId })
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`async_job_lookup:${error.message}`);
+  return data?.id ? data as AsyncJobRow : null;
+}
+
+async function readAsyncJobById(admin: any, uid: string, jobId: string): Promise<AsyncJobRow | null> {
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+    .eq("id", jobId)
+    .eq("user_id", uid)
+    .maybeSingle();
+  if (error) throw new Error(`async_job_read:${error.message}`);
+  if (!data?.id || objectValue(data.payload).source !== ASYNC_JOB_SOURCE) return null;
+  return data as AsyncJobRow;
+}
+
+async function handleAsyncStatus(admin: any, uid: string, body: CoachRequestBody): Promise<Response> {
+  const jobId = uuidValue(body.job_id);
+  if (!jobId) return json({ error: "bad_job_id" }, 400);
+  let job: AsyncJobRow | null;
+  try { job = await readAsyncJobById(admin, uid, jobId); } catch (e) {
+    return json({ error: publicErrorMessage(e) || "async_job_read_failed" }, 500);
+  }
+  if (!job) return json({ error: "async_job_not_found" }, 404);
+  try { job = await expireAsyncJobIfNeeded(admin, job); } catch { /* A later poll or runner reconciliation can retry. */ }
+  if (["completed", "fallback_used"].includes(job.status)
+    && stringValue(objectValue(job.result).text)
+    && !stringValue(objectValue(job.result).finalized_at)) {
+    try { job = await finalizeAsyncJob(admin, job); } catch { /* Runner reconciliation remains the fallback. */ }
+  } else if (["failed", "expired"].includes(job.status)
+    && !stringValue(objectValue(job.result).failure_finalized_at)) {
+    try { job = await finalizeAsyncFailure(admin, job, job.error || job.status); } catch { /* A later poll can retry. */ }
+  }
+  return asyncAccepted(job, objectValue(job.payload).sink as AsyncSink);
+}
+
+async function handleCancelAsync(admin: any, uid: string, body: CoachRequestBody): Promise<Response> {
+  const jobId = uuidValue(body.job_id);
+  if (!jobId) return json({ error: "bad_job_id" }, 400);
+  let job: AsyncJobRow | null;
+  try { job = await readAsyncJobById(admin, uid, jobId); } catch (e) {
+    return json({ error: publicErrorMessage(e) || "async_job_read_failed" }, 500);
+  }
+  if (!job) return json({ error: "async_job_not_found" }, 404);
+  if (["queued", "claimed", "running"].includes(job.status)) {
+    const { data, error } = await admin
+      .from("ai_jobs")
+      .update({
+        status: "expired",
+        payload: redactedJobPayload(job.payload),
+        error: "user_cancelled",
+        fallback_reason: "user_cancelled",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("user_id", uid)
+      .in("status", ["queued", "claimed", "running"])
+      .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+      .maybeSingle();
+    if (error) return json({ error: "async_cancel_failed" }, 500);
+    if (data?.id) job = data as AsyncJobRow;
+  }
+  if (job.status === "expired" && job.error === "user_cancelled") {
+    job = await finalizeAsyncFailure(admin, job, "user_cancelled").catch(() => job);
+  }
+  return asyncAccepted(job, objectValue(job.payload).sink as AsyncSink);
+}
+
+async function completeDeepSeekAsyncJob(
+  admin: any,
+  job: AsyncJobRow,
+  body: CoachRequestBody,
+  terminalStatus: "completed" | "fallback_used",
+): Promise<void> {
+  let result: Record<string, unknown>;
+  try {
+    result = await callDeepSeekOnce(body);
+  } catch (e) {
+    const message = publicErrorMessage(e) || "deepseek_failed";
+    const { data, error } = await admin
+      .from("ai_jobs")
+      .update({
+        status: "failed",
+        provider_actual: DEEPSEEK.id,
+        payload: redactedJobPayload(job.payload),
+        error: message,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", job.id)
+      .eq("user_id", job.user_id)
+      .eq("status", "queued")
+      .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+      .maybeSingle();
+    if (error) {
+      console.error("async DeepSeek failure update failed", job.id, publicErrorMessage(error.message));
+      return;
+    }
+    if (data?.id) await finalizeAsyncFailure(admin, data as AsyncJobRow, message).catch(() => {});
+    return;
+  }
+
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .update({
+      status: terminalStatus,
+      provider_actual: DEEPSEEK.id,
+      payload: redactedJobPayload(job.payload),
+      result,
+      error: null,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", job.id)
+    .eq("user_id", job.user_id)
+    .eq("status", "queued")
+    .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+    .maybeSingle();
+  if (error) {
+    console.error("async DeepSeek completion update failed", job.id, publicErrorMessage(error.message));
+    return;
+  }
+  if (data?.id) {
+    await finalizeAsyncJob(admin, data as AsyncJobRow)
+      .catch(e => console.error("async DeepSeek sink finalize deferred", job.id, publicErrorMessage(e)));
+  }
+}
+
+async function handleStartAsync(
+  admin: any,
+  uid: string,
+  body: CoachRequestBody & { attachments?: ImageAttachment[] },
+): Promise<Response> {
+  const requestId = uuidValue(body.request_id);
+  const kind = stringValue(body.kind);
+  if (!requestId || (kind !== "coach_chat" && kind !== "weekly_report") || !Array.isArray(body.messages)) {
+    return json({ error: "bad_async_input" }, 400);
+  }
+  const preliminarySink = normalizeAsyncSink(kind, body.sink);
+  if (!preliminarySink) return json({ error: "bad_async_sink" }, 400);
+
+  if (kind === "coach_chat") {
+    const { data, error } = await admin
+      .from("coach_messages")
+      .select("id")
+      .eq("id", preliminarySink.user_message_id)
+      .eq("user_id", uid)
+      .eq("role", "user")
+      .maybeSingle();
+    if (error) return json({ error: "async_sink_check_failed" }, 500);
+    if (!data?.id) return json({ error: "async_sink_forbidden" }, 403);
+  }
+
+  let existing: AsyncJobRow | null;
+  try {
+    existing = await findAsyncJob(admin, uid, kind, requestId);
+  } catch (e) {
+    return json({ error: publicErrorMessage(e) || "async_job_lookup_failed" }, 500);
+  }
+  if (existing) {
+    if (["completed", "fallback_used"].includes(existing.status)
+      && stringValue(objectValue(existing.result).text)
+      && !stringValue(objectValue(existing.result).finalized_at)) {
+      try { existing = await finalizeAsyncJob(admin, existing); } catch { /* Reconciler or a later retry will finish it. */ }
+    }
+    return asyncAccepted(existing, objectValue(existing.payload).sink as AsyncSink);
+  }
+
+  // The client request id is also the database primary key, so concurrent or
+  // retried submissions cannot create duplicate durable jobs.
+  const jobId = requestId;
+  const sink = normalizeAsyncSink(kind, body.sink, jobId)!;
+  const preference = await readProviderPreference(admin, uid);
+  const attachments = Array.isArray(body.attachments) ? body.attachments : [];
+  const runner = preference === "deepseek_only"
+    ? { ok: false as const, reason: "deepseek_only" }
+    : await hasFreshDesktopRunner(admin, attachments.length > 0);
+  const useDesktop = runner.ok;
+  const fallbackReason = useDesktop ? null : runner.reason;
+  const payload = asyncJobPayload(body, requestId, sink);
+
+  if (kind === "weekly_report") {
+    const range = sink.range!;
+    const { error } = await admin.from("coach_reports").insert({
+      id: jobId,
+      user_id: uid,
+      period_start: range.start,
+      period_end: range.end,
+      next_start: range.next_start,
+      next_end: range.next_end,
+      range_mode: range.range_mode,
+      source: "manual",
+      status: "running",
+      title: "AI 周复盘",
+      body: "",
+      model: useDesktop ? DESKTOP_CODEX.model : DEEPSEEK.model,
+      metadata: { trigger: "manual_async", job_id: jobId, client_request_id: requestId },
+    });
+    if (error && error.code !== "23505") {
+      return json({ error: "coach_report_create_failed", detail: publicErrorMessage(error.message) }, 500);
+    }
+  }
+
+  const { data: inserted, error: jobError } = await admin
+    .from("ai_jobs")
+    .insert({
+      id: jobId,
+      user_id: uid,
+      kind,
+      status: "queued",
+      provider_requested: useDesktop ? DESKTOP_CODEX.id : DEEPSEEK.id,
+      target_runner_id: useDesktop ? runner.runnerId : null,
+      fallback_provider: !useDesktop && preference !== "deepseek_only" ? DEEPSEEK.id : null,
+      fallback_reason: !useDesktop && preference !== "deepseek_only" ? fallbackReason : null,
+      payload,
+      expires_at: new Date(Date.now() + ASYNC_JOB_TTL_MS).toISOString(),
+    })
+    .select("id,user_id,kind,status,provider_requested,provider_actual,fallback_provider,fallback_reason,payload,result,error,runner_id,expires_at")
+    .single();
+  if (jobError || !inserted?.id) {
+    if (jobError?.code === "23505") {
+      const current = await findAsyncJob(admin, uid, kind, requestId).catch(() => null);
+      if (current) return asyncAccepted(current, objectValue(current.payload).sink as AsyncSink);
+    }
+    if (kind === "weekly_report") {
+      await admin.from("coach_reports").update({ status: "failed", error: "async_job_create_failed" }).eq("id", jobId);
+    }
+    return json({ error: "async_job_create_failed", detail: publicErrorMessage(jobError?.message) }, 500);
+  }
+  let job = inserted as AsyncJobRow;
+
+  if (useDesktop) return asyncAccepted(job, sink);
+  if (attachments.length) {
+    const reason = fallbackReason || "image_requires_codex";
+    const { data } = await admin
+      .from("ai_jobs")
+      .update({
+        status: "failed",
+        payload: redactedJobPayload(job.payload),
+        error: reason,
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", jobId)
+      .eq("status", "queued")
+      .select("id,user_id,kind,status,payload,result,provider_actual,fallback_provider,fallback_reason,error,runner_id,expires_at")
+      .maybeSingle();
+    if (data?.id) job = data as AsyncJobRow;
+    job = await finalizeAsyncFailure(admin, job, reason).catch(() => job);
+    return asyncAccepted(job, sink);
+  }
+
+  const terminalStatus = preference === "deepseek_only" ? "completed" : "fallback_used";
+  EdgeRuntime.waitUntil(completeDeepSeekAsyncJob(admin, job, body, terminalStatus));
+  return asyncAccepted(job, sink);
+}
+
+async function handleRunnerDeepSeekFallback(admin: any, body: CoachRequestBody): Promise<Response> {
+  const jobId = uuidValue(body.job_id);
+  const runnerId = stringValue(body.runner_id);
+  if (!jobId || !runnerId) return json({ error: "bad_runner_fallback_input" }, 400);
+  const { data, error } = await admin
+    .from("ai_jobs")
+    .select("id,user_id,kind,status,payload,result,provider_actual,fallback_provider,fallback_reason,error,runner_id")
+    .eq("id", jobId)
+    .eq("runner_id", runnerId)
+    .in("status", ["claimed", "running"])
+    .maybeSingle();
+  if (error) return json({ error: "runner_fallback_job_read_failed" }, 500);
+  if (!data?.id) return json({ error: "runner_fallback_job_not_active" }, 409);
+  const payload = objectValue(data.payload);
+  if (payload.source !== ASYNC_JOB_SOURCE || !Array.isArray(payload.messages)) {
+    return json({ error: "runner_fallback_not_allowed" }, 403);
+  }
+  if (Array.isArray(payload.attachments) && payload.attachments.length) {
+    return json({ error: "image_requires_codex" }, 409);
+  }
+  try {
+    const result = await callDeepSeekOnce({
+      system: stringValue(payload.system) || "",
+      messages: payload.messages,
+      max_tokens: Number(payload.max_tokens || 8000),
+    });
+    return json({
+      result,
+      fallback: {
+        from: DESKTOP_CODEX.id,
+        to: DEEPSEEK.id,
+        reason: publicErrorMessage(body.failure_reason) || "desktop_failed",
+      },
+    });
+  } catch (e) {
+    return json({ error: publicErrorMessage(e) || "runner_deepseek_fallback_failed" }, 502);
+  }
 }
 
 async function markDesktopFallback(admin: any, jobId: string, reason: string, fallbackProvider: string | null = DEEPSEEK.id, redactedPayload?: unknown) {
@@ -425,7 +1063,7 @@ async function tryDesktopCodex(opts: {
   const waitMs = desktopWaitMs(opts.kind, opts.body.stream === true, waitPreference);
   const expiresAt = new Date(Date.now() + Math.max(waitMs + 15_000, DESKTOP_JOB_TTL_MS)).toISOString();
   const queuedPayload = desktopJobPayload(opts.body);
-  const redactedPayload = redactedDesktopJobPayload(queuedPayload);
+  const redactedPayload = redactedJobPayload(queuedPayload);
   const { data: job, error: jobErr } = await opts.admin
     .from("ai_jobs")
     .insert({
@@ -501,13 +1139,25 @@ Deno.serve(async (req) => {
   let body: CoachRequestBody;
   try { body = await req.json(); } catch { return json({ error: "bad_input" }, 400); }
 
-  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceRoleKey);
+  if (body.action === "runner_deepseek_fallback") {
+    if (jwt !== serviceRoleKey) return json({ error: "unauthorized" }, 401);
+    return await handleRunnerDeepSeekFallback(admin, body);
+  }
+
   const { data: { user }, error: whoErr } = await admin.auth.getUser(jwt);
   if (whoErr || !user) return json({ error: "unauthorized" }, 401);
   const uid = user.id;
 
   if (body.action === "runner_status") {
     return json(await readDesktopRunnerStatus(admin, uid));
+  }
+  if (body.action === "job_status") {
+    return await handleAsyncStatus(admin, uid, body);
+  }
+  if (body.action === "cancel_async") {
+    return await handleCancelAsync(admin, uid, body);
   }
 
   if (!Array.isArray(body.messages)) return json({ error: "bad_input" }, 400);
@@ -519,6 +1169,10 @@ Deno.serve(async (req) => {
     return json({ error: String((e as Error)?.message || e) }, 400);
   }
   const bodyForDesktop = { ...body, attachments: imageAttachments };
+
+  if (body.action === "start_async") {
+    return await handleStartAsync(admin, uid, bodyForDesktop);
+  }
 
   let fallback: Record<string, unknown> | null = null;
   const kind = aiJobKind(body.kind);

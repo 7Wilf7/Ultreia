@@ -128,6 +128,11 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `push_log` — 推送 / 后台任务去重日志
 - `ai_jobs` — desktop runner / AI 后台任务队列
 - `ai_runners` — runner 在线状态登记，不是单用户数据
+
+共享 desktop Codex runner 的代码和运行说明由 Aevum 管理，macOS 路径为
+`/Users/danxiao/Projects/Aevum/tools/desktop-codex-runner`。Ultreia 继续负责
+AI Coach 的任务创建、DeepSeek fallback 和结果落库；Sidera 通过同一
+`ai_jobs` 队列与 `company-mac-mini-codex` runner id 使用该 runner。
 - `invite_codes` — 一次性邀请码（注册用，service_role 烧码）
 - `wallets` — 旧公开模式钱包余额（人民币分）；当前个人模式 AI / 天气不依赖
 - `wallet_ledger` — 旧公开模式钱包流水（AI / 天气 / 充值 / 退款等）；当前个人模式 AI / 天气不写入

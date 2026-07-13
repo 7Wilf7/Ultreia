@@ -221,6 +221,12 @@ begin
 end;
 $$;
 
+-- SECURITY DEFINER queue functions must never be callable by app clients.
+revoke all on function public.claim_ai_job(text, integer) from public, anon, authenticated;
+revoke all on function public.expire_stale_ai_jobs() from public, anon, authenticated;
+grant execute on function public.claim_ai_job(text, integer) to service_role;
+grant execute on function public.expire_stale_ai_jobs() to service_role;
+
 alter table public.ai_jobs enable row level security;
 alter table public.ai_runners enable row level security;
 

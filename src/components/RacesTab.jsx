@@ -14,6 +14,7 @@ import { useAppDialog } from "./AppDialogContext";
 import { Spinner } from "./Spinner";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
 import { useDeferredCommit } from "../hooks/useDeferredCommit";
+import { raceSubTabSwipeBoundary, resolveRaceSubTabSwipe, shouldStartRaceSubTabSwipe } from "../utils/raceSubTabSwipe";
 
 // Shared grid template for race rows (desktop only). Same fixed columns for
 // the Target and History sections so every column lines up across both lists.
@@ -82,6 +83,7 @@ export function RacesTab({
   const [selectedMobileSubTab, setSelectedMobileSubTab] = useState(mobileSubTab || "target");
   const [mobilePrOpen, setMobilePrOpen] = useState(false);
   const commitParentMobileSubTab = useDeferredCommit(setMobileSubTab);
+  const subTabSwipeRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +98,38 @@ export function RacesTab({
     if (addingMode) cancelAdd();
     setSelectedMobileSubTab(nextTab);
     commitParentMobileSubTab(nextTab);
+  }
+
+  function startSubTabSwipe(event) {
+    const isInteractive = !!event.target?.closest?.("button,input,textarea,select,[contenteditable='true'],[data-dropdown-menu]");
+    if (!shouldStartRaceSubTabSwipe({
+      isPrimary: event.isPrimary,
+      pointerType: event.pointerType,
+      isWithinRoot: event.currentTarget.contains(event.target),
+      isInteractive,
+    })) {
+      subTabSwipeRef.current = null;
+      return;
+    }
+    subTabSwipeRef.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+  }
+
+  function endSubTabSwipe(event) {
+    const start = subTabSwipeRef.current;
+    subTabSwipeRef.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const nextTab = resolveRaceSubTabSwipe({
+      currentTab: selectedMobileSubTab,
+      startX: start.x,
+      startY: start.y,
+      endX: event.clientX,
+      endY: event.clientY,
+    });
+    if (nextTab) changeMobileSubTab(nextTab);
   }
 
   // Race-day weather for upcoming TARGET races that have a location (outdoor
@@ -685,8 +719,18 @@ export function RacesTab({
   // sub-tabs Target / History; the count lives in the sub-tab label so the
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
+    const swipeBoundary = raceSubTabSwipeBoundary(selectedMobileSubTab);
     return (
-      <div className="ultreia-no-motion-surface" style={{ minHeight: "100%" }}>
+      <div
+        className="ultreia-no-motion-surface"
+        data-mobile-inner-swipe="true"
+        data-swipe-next={swipeBoundary.swipeNext ? "true" : "false"}
+        data-swipe-prev={swipeBoundary.swipePrev ? "true" : "false"}
+        onPointerDown={startSubTabSwipe}
+        onPointerUp={endSubTabSwipe}
+        onPointerCancel={() => { subTabSwipeRef.current = null; }}
+        style={{ minHeight: "100%", touchAction: "pan-y" }}
+      >
         <div style={{
           position: "sticky",
           top: "calc(-1 * max(env(safe-area-inset-top), 14px))",

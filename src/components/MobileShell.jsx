@@ -10,6 +10,7 @@ import {
   getMobilePagerTapWindow,
   mergeTabWindows,
   resolveMobilePagerTouchStart,
+  shouldInnerPagerOwnSwipe,
   shouldReuseMobilePagerPane,
   shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
@@ -73,12 +74,6 @@ function shouldSkipPagerDrag(target) {
 
 function getInnerSwipe(target) {
   return target?.closest?.("[data-mobile-inner-swipe='true']") || null;
-}
-
-function innerSwipeOwnsGesture(inner, dx) {
-  if (dx < 0) return inner.dataset.swipeNext === "true";
-  if (dx > 0) return inner.dataset.swipePrev === "true";
-  return false;
 }
 
 function horizontalScrollerOwnsGesture(target, dx, stopAt) {
@@ -589,7 +584,11 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       if (gesture.mode == null) {
         if (absX > PAGER_DRAG_AXIS_LOCK_PX && absX > absY * PAGER_DRAG_AXIS_RATIO) {
           const innerSwipe = getInnerSwipe(gesture.target);
-          if (innerSwipe && innerSwipeOwnsGesture(innerSwipe, dx)) {
+          if (innerSwipe && shouldInnerPagerOwnSwipe({
+            swipeNext: innerSwipe.dataset.swipeNext,
+            swipePrev: innerSwipe.dataset.swipePrev,
+            dx,
+          })) {
             gesture.mode = "inner";
             return;
           }

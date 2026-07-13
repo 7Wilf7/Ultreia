@@ -4,7 +4,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { popBackHandler, hasBackHandler } from "./lib/backStack";
 import {
   DEFAULT_PROFILE, DEFAULT_COACH_CONFIG, DEFAULT_LANG,
-  DEFAULT_MODEL, ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
+  ACTIVITY_TYPES, ADMIN_EMAIL, PRODUCT_PUBLIC_FEATURES,
   RUN_GROUP_TYPES, WEATHER_RELEVANT_TYPES,
 } from "./constants";
 import { isProfileComplete, buildSystemPrompt, coachPreferenceContextBlock } from "./utils/profile";
@@ -84,11 +84,9 @@ import {
 import { initPushNotifications, notifyTaskDone, setPushKeepAliveEnabled } from "./lib/push";
 import { productBootLogoUrl, productLogoUrl } from "./assets/logo";
 import {
-  appendCoachMessageMeta,
   estimateTextTokens,
   loadPreciseTextTokenCounter,
   messageContentForCoach,
-  normalizeTokenUsage,
   parseCoachMessageMeta,
 } from "./utils/coachPrompt";
 import { AGENT_ACTION_STATUS, buildCreatePlansAction, buildMemoryUpdateAction, buildRaceBriefingAction, completeAgentAction, failAgentAction, findPersistedAgentPlans, getCreatePlans, markAgentActionStatus, tagAgentPlanWorkouts } from "./utils/agentActions";
@@ -498,18 +496,6 @@ function readinessComplete(readiness) {
   return !!(readiness?.sleep && readiness?.legs && readiness?.energy);
 }
 
-function buildCoachReplyMeta({ providerId, model, usage, fallback }) {
-  const normalized = normalizeTokenUsage(usage);
-  return {
-    provider: providerId,
-    model,
-    freeTier: false,
-    usage: normalized || null,
-    fallback: fallback || null,
-    createdAt: new Date().toISOString(),
-  };
-}
-
 function coachProviderLabel(providerId, fallback = null) {
   const provider = String(providerId || "").toLowerCase();
   const base = provider === "desktop_codex"
@@ -862,8 +848,8 @@ const BOOT_MOTION_CSS = `
   100% { clip-path: inset(0 0 0 0); }
 }
 @keyframes ultreiaGreetingReveal {
-  0%, 66% { opacity: 0; transform: translate3d(0, 4px, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  90%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
+  0% { opacity: 0; transform: translate3d(0, 4px, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+  24%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
 }
 @keyframes ultreiaCreditReveal {
   0%, 72% { opacity: 0; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
@@ -1106,6 +1092,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   // fall back to server-side DeepSeek. Legacy API settings may still exist in
   // user_settings, but normal users no longer configure or use personal keys.
   const [coachConfig, setCoachConfigState] = useState(DEFAULT_COACH_CONFIG);
+  const coachConfigRef = useRef(DEFAULT_COACH_CONFIG);
   const [lang, setLangState] = useState(DEFAULT_LANG);
   // Default location for weather fetch — used when navigator.geolocation /
   // Capacitor Geolocation are unavailable or denied. lng/lat are WGS84 numbers
@@ -1208,10 +1195,12 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
         const settingsData = result.settings?.error ? null : result.settings?.value;
         if (result.settings && !result.settings.error) {
           if (settingsData) {
-            setCoachConfigState({
+            const nextCoachConfig = {
               ...DEFAULT_COACH_CONFIG,
               ...(settingsData.coachConfig || {}),
-            });
+            };
+            coachConfigRef.current = nextCoachConfig;
+            setCoachConfigState(nextCoachConfig);
             setDefaultLocationState({
               lng: Number.isFinite(settingsData.defaultLng) ? settingsData.defaultLng : null,
               lat: Number.isFinite(settingsData.defaultLat) ? settingsData.defaultLat : null,
@@ -1536,7 +1525,10 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
   }
 
   async function updateSettings(patch) {
-    if ("coachConfig" in patch) setCoachConfigState(patch.coachConfig);
+    if ("coachConfig" in patch) {
+      coachConfigRef.current = patch.coachConfig;
+      setCoachConfigState(patch.coachConfig);
+    }
     if ("lang" in patch) setLangState(patch.lang);
     if ("pushEnabled" in patch) setPushEnabledState(patch.pushEnabled === true);
     if ("pushHours" in patch) setPushHoursState(Array.isArray(patch.pushHours) ? patch.pushHours : []);
@@ -2150,7 +2142,7 @@ function AuthedApp({ user, signOut, changePassword, deleteAccount }) {
             dailyNotes={dailyNotes} dailyNotesHydrated={dailyNotesHydrated} setDailyTags={setDailyTags} setReadiness={setReadiness}
             itraPI={itraPI} setItraPI={setItraPI}
             profile={profile} setProfile={setProfile}
-            coachConfig={coachConfig} setCoachConfig={setCoachConfig}
+            coachConfig={coachConfig} coachConfigRef={coachConfigRef} setCoachConfig={setCoachConfig}
             lang={lang} setLang={setLang}
             defaultLocation={defaultLocation}
             trainingLocations={trainingLocations}
@@ -2178,9 +2170,9 @@ function AppShell({
   logs, refreshLogs, refresh, refreshing, refreshAgentContext, agentContextSync,
   addLog, updateLog, bulkAddLogs, deleteLogs,
   races, addRace, updateRace, deleteRace,
-  chatMessages, agentActions = [], setAgentActions, memoryFacts = [], setMemoryFacts, setChatMessages, appendLocalChatMessage, clearAllChatMessages,
+  chatMessages, agentActions = [], setAgentActions, memoryFacts = [], setMemoryFacts, setChatMessages, appendLocalChatMessage, clearAllChatMessages: clearAllChatMessagesPersisted,
   dailyNotes, dailyNotesHydrated, setDailyTags, setReadiness,
-  itraPI, setItraPI, profile, setProfile, coachConfig, setCoachConfig,
+  itraPI, setItraPI, profile, setProfile, coachConfig, coachConfigRef, setCoachConfig,
   lang, setLang,
   defaultLocation,
   trainingLocations = [], createTrainingLocation, setDefaultTrainingLocation, deleteTrainingLocation,
@@ -2195,6 +2187,10 @@ function AppShell({
   const isMobile = useIsMobile();
   const isNarrow = useIsNarrow();
   const instantPress = useInstantPress();
+  const currentCoachConfig = useCallback(
+    () => coachConfigRef?.current || coachConfig,
+    [coachConfig, coachConfigRef],
+  );
   const [tab, setTab] = useState(0);
   const [period, setPeriod] = useState({ type: "all" });
   const [periodDropdown, setPeriodDropdown] = useState(null);
@@ -2210,27 +2206,9 @@ function AppShell({
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [now, setNow] = useState(new Date());
   const mobilePagerDraggingRef = useRef(false);
-  const pendingCoachStreamRef = useRef(null);
-  const flushPendingCoachStream = useCallback(() => {
-    const pending = pendingCoachStreamRef.current;
-    if (!pending) return;
-    pendingCoachStreamRef.current = null;
-    setChatMessages(prev => {
-      let changed = false;
-      const next = prev.map(m => {
-        if (m.id !== pending.id) return m;
-        changed = true;
-        return { ...m, content: pending.text };
-      });
-      return changed ? next : prev;
-    });
-  }, [setChatMessages]);
   const handleMobilePagerDragActiveChange = useCallback((active) => {
     mobilePagerDraggingRef.current = active;
-    if (!active) {
-      flushPendingCoachStream();
-    }
-  }, [flushPendingCoachStream]);
+  }, []);
   const planDeviationTodayKey = localDateKey(now);
   const planDeviationSummary = useMemo(
     () => summarizePlanDeviation(logs, new Date(`${planDeviationTodayKey}T12:00:00`)),
@@ -2461,12 +2439,14 @@ function AppShell({
   });
   const chatAbortRef = useRef(null);
   const chatRunRef = useRef(0);
+  const chatJobIdRef = useRef(null);
   const runnerStatusAbortRef = useRef(null);
   const runnerDisconnectSinceRef = useRef(null);
   const extractAbortRef = useRef(null);
   const extractRunRef = useRef(0);
   const weeklyReportAbortRef = useRef(null);
   const weeklyReportRunRef = useRef(0);
+  const weeklyReportJobIdRef = useRef(null);
   const proactiveAdjustmentAbortRef = useRef(null);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
   const prepareRunnerStatusForDisplay = useCallback((status) => {
@@ -2844,12 +2824,33 @@ function AppShell({
     return nextAction;
   }
 
-  function stopCoachChat() {
+  function cancelCoachChatTask({ throwOnError = false } = {}) {
+    const jobId = chatJobIdRef.current;
     chatAbortRef.current?.abort();
     chatAbortRef.current = null;
+    chatJobIdRef.current = null;
     chatRunRef.current += 1;
     setChatLoading(false);
     setChatMessages(prev => prev.filter(m => !m.isStreaming));
+    if (!jobId) return Promise.resolve();
+    return db.usage.cancelCoachJob(jobId).catch((err) => {
+      if (throwOnError) throw err;
+      console.warn("[AI Coach] background job cancellation failed:", err);
+    });
+  }
+
+  function stopCoachChat() {
+    void cancelCoachChatTask();
+  }
+
+  async function clearAllChatMessages() {
+    try {
+      await cancelCoachChatTask({ throwOnError: true });
+      return await clearAllChatMessagesPersisted();
+    } catch (err) {
+      appDialog.alert(`Failed to cancel the active AI Coach task: ${err?.message || String(err)}`);
+      return false;
+    }
   }
 
   function stopPlanExtraction() {
@@ -2859,17 +2860,33 @@ function AppShell({
     setExtractingForMsgId(null);
   }
 
-  function stopWeeklyReport() {
+  function cancelWeeklyReportTask({ refreshReports = false, throwOnError = false } = {}) {
+    const jobId = weeklyReportJobIdRef.current;
     weeklyReportAbortRef.current?.abort();
     weeklyReportAbortRef.current = null;
+    weeklyReportJobIdRef.current = null;
     weeklyReportRunRef.current += 1;
     setWeeklyReportLoading(false);
+    if (!jobId) return Promise.resolve();
+    return db.usage.cancelCoachJob(jobId)
+      .then(() => refreshReports
+        ? db.coachReports.listMyReports({ limit: WEEKLY_REPORT_LIST_LIMIT }).then(setWeeklyReports)
+        : null)
+      .catch((err) => {
+        if (throwOnError) throw err;
+        console.warn("[weekly report] background job cancellation failed:", err);
+      });
+  }
+
+  function stopWeeklyReport() {
+    void cancelWeeklyReportTask({ refreshReports: true });
   }
 
   async function clearWeeklyReports() {
     const snapshot = weeklyReports;
-    setWeeklyReports([]);
     try {
+      await cancelWeeklyReportTask({ throwOnError: true });
+      setWeeklyReports([]);
       await db.coachReports.clearAll();
       return true;
     } catch (err) {
@@ -3103,10 +3120,150 @@ function AppShell({
     notifyTaskDone(payload).catch(() => {});
   }
 
+  const refreshPersistedCoachMessages = useCallback(async () => {
+    const messages = await db.coachMessages.listMyMessages();
+    setChatMessages(messages);
+    writeCoachMessagesCache(user.id, messages);
+    return messages;
+  }, [setChatMessages, user.id]);
+
+  const refreshPersistedWeeklyReports = useCallback(async () => {
+    const reports = await db.coachReports.listMyReports({ limit: WEEKLY_REPORT_LIST_LIMIT });
+    setWeeklyReports(reports);
+    return reports;
+  }, []);
+
+  const applyCoachJobProvider = useCallback((job, messages) => {
+    const jobId = job?.job_id || job?.id;
+    const assistant = messages.find(message => message.id === jobId);
+    const meta = parseCoachMessageMeta(assistant?.content || "").meta || {};
+    const fallbackProvider = job?.fallback_provider || job?.fallbackProvider || null;
+    const fallback = meta.fallback || (fallbackProvider ? {
+      from: "desktop_codex",
+      to: fallbackProvider,
+      reason: job?.fallback_reason || job?.fallbackReason || "desktop_failed",
+    } : null);
+    const providerId = meta.provider || job?.provider || job?.provider_actual || job?.provider_requested || "deepseek";
+    setLastCoachProvider({
+      id: providerId,
+      label: coachProviderLabel(providerId, fallback),
+      fallback,
+    });
+    if (providerId === "desktop_codex") {
+      setCodexRunnerStatus(prev => ({
+        ...prev,
+        provider: "desktop_codex",
+        state: "online",
+        runner_state: "online",
+        codex_status: "ok",
+        model: meta.model || prev?.model || "Codex",
+        last_ok_at: new Date().toISOString(),
+        checked_at: new Date().toISOString(),
+      }));
+    } else if (fallback?.from === "desktop_codex") {
+      refreshCodexRunnerStatus({ force: true });
+    }
+  }, [refreshCodexRunnerStatus]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let disposed = false;
+    let reconciling = false;
+    const monitorControllers = new Set();
+
+    async function monitorJob(job) {
+      const jobId = job?.id;
+      const isChat = job?.kind === "coach_chat";
+      const jobRef = isChat ? chatJobIdRef : weeklyReportJobIdRef;
+      const abortRef = isChat ? chatAbortRef : weeklyReportAbortRef;
+      if (!jobId || jobRef.current) return;
+
+      const controller = new AbortController();
+      monitorControllers.add(controller);
+      jobRef.current = jobId;
+      abortRef.current = controller;
+      if (isChat) {
+        setChatLoading(true);
+      } else {
+        const range = job?.payload?.sink?.range || {};
+        setWeeklyReportRange({
+          start: range.start,
+          end: range.end,
+          nextStart: range.next_start,
+          nextEnd: range.next_end,
+          rangeMode: range.range_mode || "this",
+        });
+        setWeeklyReportLoading(true);
+        setWeeklyReportError("");
+      }
+
+      try {
+        const terminal = await db.usage.waitForCoachJob(jobId, { signal: controller.signal });
+        if (disposed || controller.signal.aborted) return;
+        if (["failed", "expired"].includes(terminal?.status)) {
+          if (!isChat) setWeeklyReportError(terminal?.error || "generation_failed");
+          return;
+        }
+        if (isChat) {
+          const messages = await refreshPersistedCoachMessages();
+          applyCoachJobProvider(terminal, messages);
+        } else {
+          await refreshPersistedWeeklyReports();
+        }
+      } catch (err) {
+        if (!controller.signal.aborted && err?.name !== "AbortError" && err?.code !== "aborted") {
+          console.warn("[AI Coach] background job recovery failed:", err);
+        }
+      } finally {
+        monitorControllers.delete(controller);
+        if (jobRef.current === jobId) jobRef.current = null;
+        if (abortRef.current === controller) abortRef.current = null;
+        if (!disposed) {
+          if (isChat) setChatLoading(false);
+          else setWeeklyReportLoading(false);
+        }
+      }
+    }
+
+    async function reconcileCoachJobs({ refreshResults = false } = {}) {
+      if (reconciling || disposed) return;
+      reconciling = true;
+      try {
+        if (refreshResults) {
+          const refreshes = [];
+          if (!chatAbortRef.current) refreshes.push(refreshPersistedCoachMessages());
+          if (!weeklyReportAbortRef.current) refreshes.push(refreshPersistedWeeklyReports());
+          await Promise.all(refreshes);
+        }
+        const jobs = await db.usage.listActiveCoachJobs();
+        if (disposed) return;
+        for (const job of jobs) void monitorJob(job);
+      } catch (err) {
+        if (!disposed) console.warn("[AI Coach] persisted result reconciliation failed:", err);
+      } finally {
+        reconciling = false;
+      }
+    }
+
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") void reconcileCoachJobs({ refreshResults: true });
+    };
+    void reconcileCoachJobs();
+    document.addEventListener("visibilitychange", handleVisible);
+    window.addEventListener("focus", handleVisible);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", handleVisible);
+      for (const controller of monitorControllers) controller.abort();
+    };
+  }, [applyCoachJobProvider, refreshPersistedCoachMessages, refreshPersistedWeeklyReports, user?.id]);
+
   const generateWeeklyReport = useCallback(async (range, rangeMode) => {
     if (weeklyReportLoading) return;
     const controller = new AbortController();
     const runId = weeklyReportRunRef.current + 1;
+    let jobId = null;
     weeklyReportRunRef.current = runId;
     weeklyReportAbortRef.current = controller;
     setWeeklyReportRange(range);
@@ -3115,7 +3272,7 @@ function AppShell({
     try {
       const prompt = buildWeeklyReportPrompt({
         lang: "zh",
-        coachConfig,
+        coachConfig: currentCoachConfig(),
         logs,
         races,
         dailyNotes,
@@ -3124,27 +3281,41 @@ function AppShell({
         agentActions,
         memoryFacts,
       });
-      const data = await db.usage.coachProxy({
+      const requestId = db.usage.createCoachJobRequestId();
+      jobId = requestId;
+      weeklyReportJobIdRef.current = requestId;
+      const accepted = await db.usage.startCoachJob({
         kind: "weekly_report",
+        requestId,
         system: prompt.system,
         messages: [{ role: "user", content: prompt.user }],
         max_tokens: 8000,
-        signal: controller.signal,
+        sink: {
+          range: {
+            start: range.start,
+            end: range.end,
+            next_start: range.nextStart || null,
+            next_end: range.nextEnd || null,
+            range_mode: rangeMode || "this",
+          },
+        },
       });
+      if (!accepted?.job_id) throw new Error("async_job_missing_id");
+      jobId = accepted.job_id;
+      weeklyReportJobIdRef.current = jobId;
+      if (controller.signal.aborted || runId !== weeklyReportRunRef.current) {
+        await db.usage.cancelCoachJob(jobId).catch(() => {});
+        return;
+      }
+      await refreshPersistedWeeklyReports();
+      const terminal = await db.usage.waitForCoachJob(jobId, { signal: controller.signal });
       if (controller.signal.aborted || runId !== weeklyReportRunRef.current) return;
-      const text = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || "";
-      const report = {
-        id: `${range.start}:${Date.now()}`,
-        rangeMode,
-        start: range.start,
-        end: range.end,
-        nextStart: range.nextStart,
-        nextEnd: range.nextEnd,
-        generatedAt: new Date().toISOString(),
-        text,
-      };
-      const savedReport = await db.coachReports.createReport(report);
-      setWeeklyReports(prev => [savedReport, ...prev].slice(0, WEEKLY_REPORT_LIST_LIMIT));
+      if (["failed", "expired"].includes(terminal?.status)) {
+        const error = new Error(terminal?.error || "generation_failed");
+        error.code = terminal?.error || terminal?.status;
+        throw error;
+      }
+      await refreshPersistedWeeklyReports();
       notifyTaskDone({
         title: t("weekly_report.notification_title"),
         body: t("weekly_report.notification_body"),
@@ -3155,26 +3326,27 @@ function AppShell({
     } finally {
       if (runId === weeklyReportRunRef.current) {
         weeklyReportAbortRef.current = null;
+        if (weeklyReportJobIdRef.current === jobId) weeklyReportJobIdRef.current = null;
         setWeeklyReportLoading(false);
       }
     }
   }, [
     agentActions,
-    coachConfig,
     dailyNotes,
     logs,
     memoryFacts,
     now,
     races,
+    refreshPersistedWeeklyReports,
     t,
     weeklyReportLoading,
+    currentCoachConfig,
   ]);
 
   // ── Lifted sendChat — talks to the personal-mode coach proxy.
   //    Takes the user's typed message; reads everything else from props/
-  //    state in this scope. Streams the assistant turn locally, then persists
-  //    one final row. On API or network errors, emits a transient local-only
-  //    bubble that won't pollute the DB.
+  //    state in this scope. The proxy persists the final assistant turn so an
+  //    Android WebView suspension cannot lose it. API errors stay local-only.
   function exportJsonBackup() {
     try {
       const coachMessagesForBackup = chatMessages.map(m => {
@@ -3405,7 +3577,7 @@ function AppShell({
     try {
       const preliminarySystemPrompt = buildSystemPrompt({
         profile,
-        coachConfig,
+        coachConfig: currentCoachConfig(),
         dataBlock: buildDataBlock({
           logs,
           races,
@@ -3484,7 +3656,7 @@ function AppShell({
     const planForecastByLocation = await buildPlanLocationForecastMap(freshLogs, now || new Date());
 
     const systemPrompt = buildSystemPrompt({
-      profile, coachConfig,
+      profile, coachConfig: currentCoachConfig(),
       dataBlock: buildDataBlock({
         logs: freshLogs, races: freshRaces, now, lang: "en",
         currentWeather, forecastByDate, planForecastByLocation, dailyNotes: freshDailyNotes,
@@ -3493,10 +3665,18 @@ function AppShell({
       lang: "en",
     });
 
+    if (controller.signal.aborted || runId !== chatRunRef.current) {
+      setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
+      setChatLoading(false);
+      if (chatAbortRef.current === controller) chatAbortRef.current = null;
+      return false;
+    }
+
+    let savedUserMessage;
     try {
-      const saved = await db.coachMessages.appendMessage("user", visibleUserMsg);
+      savedUserMessage = await db.coachMessages.appendMessage("user", visibleUserMsg);
       setChatMessages(prev => {
-        const next = prev.map(m => m.id === optimisticId ? saved : m);
+        const next = prev.map(m => m.id === optimisticId ? savedUserMessage : m);
         writeCoachMessagesCache(user.id, next);
         return next;
       });
@@ -3504,92 +3684,51 @@ function AppShell({
       setChatMessages(prev => prev.filter(m => m.id !== optimisticId));
       window.alert("Failed to save message: " + err.message);
       setChatLoading(false);
+      if (chatAbortRef.current === controller) chatAbortRef.current = null;
       return false;
     }
 
-    const streamingId = `stream-${Date.now()}`;
-    setChatMessages(prev => [...prev, {
-      id: streamingId,
-      role: "assistant",
-      content: "",
-      createdAt: new Date().toISOString(),
-      isLocal: true,
-      isStreaming: true,
-    }]);
-
+    let jobId = null;
     let finalReplyText;
     try {
-      const data = await db.usage.coachProxyStream({
+      const requestId = db.usage.createCoachJobRequestId();
+      jobId = requestId;
+      chatJobIdRef.current = requestId;
+      const accepted = await db.usage.startCoachJob({
         kind: "coach_chat",
+        requestId,
         system: systemPrompt,
         messages: messagesToSend,
         attachments: imageAttachments,
         max_tokens: 8000,
-        signal: controller.signal,
-        onToken: (text) => {
-          if (controller.signal.aborted || runId !== chatRunRef.current) return;
-          if (mobilePagerDraggingRef.current) {
-            pendingCoachStreamRef.current = { id: streamingId, text };
-            return;
-          }
-          setChatMessages(prev => prev.map(m => (
-            m.id === streamingId ? { ...m, content: text } : m
-          )));
+        sink: {
+          user_message_id: savedUserMessage.id,
         },
       });
-      if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
+      if (!accepted?.job_id) throw new Error("async_job_missing_id");
+      jobId = accepted.job_id;
+      chatJobIdRef.current = jobId;
+      if (controller.signal.aborted || runId !== chatRunRef.current) {
+        await db.usage.cancelCoachJob(jobId).catch(() => {});
+        return false;
+      }
+      const terminal = await db.usage.waitForCoachJob(jobId, { signal: controller.signal });
       if (controller.signal.aborted || runId !== chatRunRef.current) return false;
-      const reply = data.content?.filter(b => b.type === "text").map(b => b.text).join("") || t("coach.no_response");
-      finalReplyText = reply;
-      const providerId = data.provider || "deepseek";
-      setLastCoachProvider({
-        id: providerId,
-        label: coachProviderLabel(providerId, data.fallback || null),
-        fallback: data.fallback || null,
-      });
-      if (providerId === "desktop_codex") {
-        setCodexRunnerStatus(prev => ({
-          ...prev,
-          provider: "desktop_codex",
-          state: "online",
-          runner_state: "online",
-          codex_status: "ok",
-          model: data.model || prev?.model || "Codex",
-          last_ok_at: new Date().toISOString(),
-          checked_at: new Date().toISOString(),
-        }));
-      } else if (data.fallback?.from === "desktop_codex") {
-        refreshCodexRunnerStatus({ force: true });
+      if (["failed", "expired"].includes(terminal?.status)) {
+        const error = new Error(terminal?.error || terminal?.status || "generation_failed");
+        error.code = terminal?.error || terminal?.status;
+        throw error;
       }
-      const meta = buildCoachReplyMeta({
-        providerId,
-        model: data.model || DEFAULT_MODEL,
-        usage: data.usage,
-        fallback: data.fallback || null,
-      });
-      const finalContent = appendCoachMessageMeta(reply, meta);
-      try {
-        const saved = await db.coachMessages.appendMessage("assistant", finalContent);
-        if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
-        setChatMessages(prev => {
-          const next = prev.map(m => m.id === streamingId ? saved : m);
-          writeCoachMessagesCache(user.id, next);
-          return next;
-        });
-      } catch (err) {
-        if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
-        setChatMessages(prev => prev.map(m => (
-          m.id === streamingId ? { ...m, content: finalContent, isStreaming: false } : m
-        )));
-        window.alert("Failed to save message: " + err.message);
-      }
+      const messages = await refreshPersistedCoachMessages();
+      const savedAssistant = messages.find(message => message.id === jobId);
+      if (!savedAssistant) throw new Error("async_coach_message_missing");
+      finalReplyText = parseCoachMessageMeta(savedAssistant.content).text || t("coach.no_response");
+      applyCoachJobProvider(terminal, messages);
       notifyWhenBackground({
         title: t("coach.notification_title"),
         body: t("coach.notification_body"),
       });
     } catch (err) {
-      if (pendingCoachStreamRef.current?.id === streamingId) pendingCoachStreamRef.current = null;
-      setChatMessages(prev => prev.filter(m => m.id !== streamingId));
       if (err?.code === "aborted" || err?.name === "AbortError" || controller.signal.aborted || runId !== chatRunRef.current) {
         return false;
       }
@@ -3602,6 +3741,7 @@ function AppShell({
     } finally {
       if (runId === chatRunRef.current) {
         chatAbortRef.current = null;
+        if (chatJobIdRef.current === jobId) chatJobIdRef.current = null;
         setChatLoading(false);
       }
     }
@@ -3813,7 +3953,7 @@ Rules:
       const prompt = buildPlanDeviationRescuePrompt({
         summary,
         dataBlock,
-        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
+        coachPreferenceBlock: coachPreferenceContextBlock(currentCoachConfig(), "en"),
         now: now || new Date(),
       });
       const action = await generateProactivePlanAction({
@@ -3895,7 +4035,7 @@ Rules:
       const prompt = buildRecoveryGuardPrompt({
         summary,
         dataBlock,
-        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
+        coachPreferenceBlock: coachPreferenceContextBlock(currentCoachConfig(), "en"),
         now: now || new Date(),
       });
       const action = await generateProactivePlanAction({
@@ -3980,7 +4120,7 @@ Rules:
         planSummary,
         recoverySummary,
         dataBlock,
-        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
+        coachPreferenceBlock: coachPreferenceContextBlock(currentCoachConfig(), "en"),
         now: currentNow,
       });
       const action = await generateProactivePlanAction({
@@ -4099,7 +4239,7 @@ Rules:
       const prompt = buildRaceBriefingPrompt({
         summary,
         dataBlock,
-        coachPreferenceBlock: coachPreferenceContextBlock(coachConfig, "en"),
+        coachPreferenceBlock: coachPreferenceContextBlock(currentCoachConfig(), "en"),
         raceDayWeather,
         now: currentNow,
       });

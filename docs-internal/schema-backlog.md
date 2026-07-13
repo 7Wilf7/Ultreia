@@ -2,6 +2,15 @@
 
 用于记录“现在还放在设备本地 / 前端状态里，但后续应该进 Supabase”的项目。这里只做排查和排序；真正建表时仍按项目规则先给 SQL，等 Dashboard 执行完成后再改 DAL 和前端。
 
+## 2026-07-13 生产 Schema 审计
+
+结论：当前功能依赖的生产表和字段已齐全，没有发现“功能已使用但生产环境尚未建表”的缺口；训练偏好不需要新表。
+
+- AI Coach 训练偏好属于账号级配置，已保存在 `user_settings.coach_config.trainingPreferences`，并由现有账号设置读写链路同步；不需要单独建立训练偏好表。
+- 普通 AI Coach 消息和手动周报的持久后台执行复用现有 `ai_jobs` 任务队列；完成结果分别落入现有 `coach_messages` 和 `coach_reports`，不需要新增后台任务表。
+- 权限审查曾发现 `claim_ai_job` 与 `expire_stale_ai_jobs` 对 `PUBLIC` / `anon` / `authenticated` 开放。2026-07-13 已执行 `docs-internal/supabase-ai-jobs.sql` 中的 revoke / grant 修复，并核实只有 `service_role` 保留执行权。
+- 后续功能如确实需要新表、列、约束或权限，仍必须重新执行 SQL gate，不能把本次“现有生产 Schema 齐全”当作未来改动的预授权。
+
 ## 已建表并接入
 
 ### 4. `agent_report_outbox`

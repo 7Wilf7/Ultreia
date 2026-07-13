@@ -35,6 +35,7 @@ import { ProfileEditor, ProfilePreview } from "./components/ProfileEditor";
 import { PushSettingsModal } from "./components/PushSettingsModal";
 import { InboxModal } from "./components/InboxModal";
 import { countInboxUnreadByTab, firstUnreadInboxTab } from "./utils/inboxTabs";
+import { countUnreadWeeklyReportRanges, mergeWeeklyReportUnread } from "./utils/weeklyReportInbox";
 import { RaceBriefingModal } from "./components/RaceBriefingModal";
 import { WeeklyReportPage } from "./components/WeeklyReportModal";
 import {
@@ -70,6 +71,10 @@ import {
 import { useAuth } from "./hooks/useAuth";
 import { useIsMobile, useIsNarrow } from "./hooks/useMediaQuery";
 import { useInstantPress } from "./hooks/useInstantPress";
+import {
+  createOptimisticRunnerStatus,
+  resolveRunnerStatusForDisplay,
+} from "./utils/runnerStatus";
 import * as db from "./lib/db";
 import {
   getCurrentLocation,
@@ -673,35 +678,9 @@ function throwIfAborted(signal) {
 const BOOT_REVEAL_MS = 1800;
 const APP_BOOT_STARTED_AT = Date.now();
 const RUNNER_STATUS_POLL_MS = 5_000;
-const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
 const AGENT_CONTEXT_STALE_MS = 5 * 60 * 1000;
 const COACH_MESSAGE_CACHE_LIMIT = 200;
-
-function createOptimisticRunnerStatus(source = {}) {
-  return {
-    ...source,
-    provider: "desktop_codex",
-    state: "online",
-    runner_state: "online",
-    codex_status: source.codex_status === "ok" ? "ok" : "unknown",
-    expected_provider: source.preference === "deepseek_only" ? "deepseek" : "desktop_codex",
-    optimistic: true,
-    pending_state: source.state || null,
-    checked_at: source.checked_at || new Date().toISOString(),
-  };
-}
-
-function isRunnerHardFailure(status) {
-  return status?.codex_status === "auth_error"
-    || status?.codex_status === "error"
-    || status?.reason === "desktop_codex_auth_error";
-}
-
-function shouldConfirmRunnerDisconnect(status) {
-  const state = status?.state || "unknown";
-  return state === "unknown" || state === "offline" || state === "error";
-}
 
 const BOOT_MOTION_CSS = `
 .ultreia-boot-screen {
@@ -795,21 +774,9 @@ const BOOT_MOTION_CSS = `
   color: var(--ink-2);
   line-height: 1.4;
 }
-.ultreia-boot-built {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: max(5vmin, env(safe-area-inset-bottom, 0px));
-  text-align: center;
-  font-family: var(--font-sans);
-  font-size: min(3.1vmin, 12px);
-  color: var(--ink-3);
-  letter-spacing: 0.04em;
-}
 @media (prefers-reduced-motion: no-preference) {
   .ultreia-word-final,
-  .ultreia-boot-greeting,
-  .ultreia-boot-built {
+  .ultreia-boot-greeting {
     animation-duration: var(--boot-duration);
     animation-delay: var(--boot-delay);
     animation-fill-mode: both;
@@ -826,15 +793,10 @@ const BOOT_MOTION_CSS = `
     animation-name: ultreiaGreetingReveal;
     will-change: opacity, transform;
   }
-  .ultreia-boot-built {
-    animation-name: ultreiaCreditReveal;
-    will-change: opacity;
-  }
 }
 @media (prefers-reduced-motion: reduce) {
   .ultreia-word-final,
-  .ultreia-boot-greeting,
-  .ultreia-boot-built {
+  .ultreia-boot-greeting {
     opacity: 1;
     transform: none;
     filter: none;
@@ -850,10 +812,6 @@ const BOOT_MOTION_CSS = `
 @keyframes ultreiaGreetingReveal {
   0% { opacity: 0; transform: translate3d(0, 4px, 0); animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
   24%, 100% { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-@keyframes ultreiaCreditReveal {
-  0%, 72% { opacity: 0; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
-  94%, 100% { opacity: 1; }
 }
 `;
 
@@ -928,7 +886,6 @@ function LoadingScreen({
           )}
         </div>
       </div>
-      <div className="ultreia-boot-built">Built with Codex and Claude Code</div>
     </div>
   );
 }
@@ -2267,7 +2224,11 @@ function AppShell({
   useEffect(() => {
     db.pushInbox.listMine().then(setInboxItems).catch(() => {});
   }, []);
-  const inboxUnreadByTab = useMemo(() => countInboxUnreadByTab(inboxItems), [inboxItems]);
+  const inboxUnreadByTab = useMemo(() => {
+    const pushUnread = countInboxUnreadByTab(inboxItems);
+    const reportUnread = countUnreadWeeklyReportRanges(weeklyReports, now);
+    return mergeWeeklyReportUnread(pushUnread, reportUnread);
+  }, [inboxItems, now, weeklyReports]);
   const inboxUnread = inboxUnreadByTab.total;
 
   useEffect(() => {
@@ -2450,19 +2411,11 @@ function AppShell({
   const proactiveAdjustmentAbortRef = useRef(null);
   const weeklyReportExtracting = typeof extractingForMsgId === "string" && extractingForMsgId.startsWith("weekly-report:");
   const prepareRunnerStatusForDisplay = useCallback((status) => {
-    const next = status || { state: "unknown", provider: "desktop_codex" };
-    if (!shouldConfirmRunnerDisconnect(next) || isRunnerHardFailure(next)) {
-      if (!shouldConfirmRunnerDisconnect(next)) runnerDisconnectSinceRef.current = null;
-      return next;
-    }
-
-    const now = Date.now();
-    const disconnectSince = runnerDisconnectSinceRef.current || now;
-    runnerDisconnectSinceRef.current = disconnectSince;
-    if (now - disconnectSince < RUNNER_STATUS_DISCONNECT_CONFIRM_MS) {
-      return createOptimisticRunnerStatus(next);
-    }
-    return next;
+    const resolved = resolveRunnerStatusForDisplay(status, {
+      disconnectSince: runnerDisconnectSinceRef.current,
+    });
+    runnerDisconnectSinceRef.current = resolved.disconnectSince;
+    return resolved.status;
   }, []);
   const refreshCodexRunnerStatus = useCallback(async (options = {}) => {
     const force = options.force === true;
@@ -2895,6 +2848,27 @@ function AppShell({
       return false;
     }
   }
+
+  const markWeeklyReportViewed = useCallback((report) => {
+    if (!report?.id || report.readAt || report.status === "failed" || !String(report.text || "").trim()) return;
+    const readAt = new Date().toISOString();
+    setWeeklyReports(prev => prev.map(item => (
+      item.id === report.id ? { ...item, readAt } : item
+    )));
+    db.coachReports.markRead(report.id, readAt)
+      .then((saved) => {
+        if (!saved) return;
+        setWeeklyReports(prev => prev.map(item => (item.id === saved.id ? saved : item)));
+      })
+      .catch((err) => {
+        console.warn("[weekly report] mark read failed:", err);
+        setWeeklyReports(prev => prev.map(item => (
+          item.id === report.id && item.readAt === readAt
+            ? { ...item, readAt: report.readAt || null }
+            : item
+        )));
+      });
+  }, []);
 
   function openWeeklyReportFromInbox(range) {
     setInboxTab("weekly");
@@ -5149,6 +5123,7 @@ Rules:
             onGenerate={generateWeeklyReport}
             onStopGenerate={stopWeeklyReport}
             onStopImport={stopPlanExtraction}
+            onViewed={markWeeklyReportViewed}
             onImportPlan={(text, id) => {
               setShowWeeklyReport(false);
               setReturnToInboxAfterWeeklyReport(false);

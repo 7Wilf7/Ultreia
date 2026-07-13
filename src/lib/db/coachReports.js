@@ -103,6 +103,20 @@ export async function importStoredReports(reports = []) {
   return (data ?? []).map(fromRow);
 }
 
+export async function markRead(id, readAt = new Date().toISOString()) {
+  const { data, error } = await supabase
+    .from('coach_reports')
+    .update({ read_at: readAt })
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) {
+    console.error('markRead (coach report) failed:', error);
+    throw new Error(error.message);
+  }
+  return fromRow(data);
+}
+
 export async function clearAll() {
   const userId = await getCurrentUserId();
   const { error } = await supabase

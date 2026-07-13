@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { s } from "../styles";
@@ -71,6 +71,7 @@ export function WeeklyReportPage({
   onGenerate,
   onStopGenerate,
   onStopImport,
+  onViewed,
 }) {
   const t = useT();
   const instantPress = useInstantPress();
@@ -97,6 +98,21 @@ export function WeeklyReportPage({
     return rangeReports.sort((a, b) => String(b.generatedAt || "").localeCompare(String(a.generatedAt || "")))[0] || null;
   }, [reports, range.start, range.end]);
   const canDiscuss = !!selected && discussionText.trim().length > 0;
+  const viewedReportIdsRef = useRef(new Set());
+
+  useEffect(() => {
+    if (!selected?.id || selected.readAt || selected.status === "failed" || !String(selected.text || "").trim()) return undefined;
+    const markViewed = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (viewedReportIdsRef.current.has(selected.id)) return;
+      viewedReportIdsRef.current.add(selected.id);
+      onViewed?.(selected);
+    };
+    markViewed();
+    if (typeof document === "undefined") return undefined;
+    document.addEventListener("visibilitychange", markViewed);
+    return () => document.removeEventListener("visibilitychange", markViewed);
+  }, [onViewed, selected]);
 
   function handleDiscussionTextChange(event) {
     const normalized = normalizeComposerTextChange(discussionTextRef.current, event.target.value, {

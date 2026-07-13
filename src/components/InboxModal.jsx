@@ -5,6 +5,7 @@ import { ModalRoot } from "./ModalRoot";
 import * as db from "../lib/db";
 import { useAppDialog } from "./AppDialogContext";
 import { weekWindow } from "../utils/weeklyReport";
+import { buildWeeklyReportRanges, isWeeklyReportUnread } from "../utils/weeklyReportInbox";
 import { isMemoryUpdateAction, isRaceBriefingAction } from "../utils/agentActions";
 import { countInboxUnreadByTab, getInboxItemTab, mergeInboxRefreshRows } from "../utils/inboxTabs";
 import { useInstantPress, useInstantTap } from "../hooks/useInstantPress";
@@ -20,43 +21,6 @@ function shortRange(start, end) {
 
 function rangesEqual(a, b) {
   return !!a && !!b && a.start === b.start && a.end === b.end;
-}
-
-function reportSortValue(report) {
-  return String(report?.generatedAt || report?.createdAt || report?.updatedAt || "");
-}
-
-function buildWeeklyRanges(reports, now) {
-  const thisWeek = weekWindow(now || new Date(), 0);
-  const lastWeek = weekWindow(now || new Date(), -1);
-  const byKey = new Map();
-  for (const range of [thisWeek, lastWeek]) {
-    byKey.set(`${range.start}:${range.end}`, {
-      ...range,
-      reports: [],
-      latest: null,
-      defaultRange: rangesEqual(range, lastWeek),
-    });
-  }
-  for (const report of reports || []) {
-    if (!report?.start || !report?.end) continue;
-    const key = `${report.start}:${report.end}`;
-    const current = byKey.get(key) || {
-      start: report.start,
-      end: report.end,
-      nextStart: report.nextStart,
-      nextEnd: report.nextEnd,
-      reports: [],
-      latest: null,
-      defaultRange: false,
-    };
-    current.nextStart ||= report.nextStart;
-    current.nextEnd ||= report.nextEnd;
-    current.reports.push(report);
-    if (!current.latest || reportSortValue(report) > reportSortValue(current.latest)) current.latest = report;
-    byKey.set(key, current);
-  }
-  return [...byKey.values()].sort((a, b) => String(b.start).localeCompare(String(a.start)));
 }
 
 // Full-screen in-app inbox. Rows are written server-side by the
@@ -203,7 +167,7 @@ export function InboxModal({
     ...otherItems.map(item => ({ kind: "inbox", item, sortAt: item.createdAt || "" })),
   ].sort((a, b) => String(b.sortAt || "").localeCompare(String(a.sortAt || ""))), [otherAgentActions, otherItems]);
   const weeklyRanges = useMemo(
-    () => buildWeeklyRanges(reports || [], now),
+    () => buildWeeklyReportRanges(reports || [], now),
     [reports, now],
   );
   const hasWeeklyReports = weeklyRanges.some(range => range.latest);
@@ -444,6 +408,7 @@ export function InboxModal({
                 {weeklyRanges.map(range => {
                   const active = rangesEqual(range, weekWindow(now || new Date(), -1));
                   const running = weeklyReportLoading && (!activeWeeklyReportRange || rangesEqual(range, activeWeeklyReportRange));
+                  const unread = isWeeklyReportUnread(range.latestReady);
                   return (
                     <button
                       key={`${range.start}:${range.end}`}
@@ -463,6 +428,7 @@ export function InboxModal({
                           {t("weekly_report.generating")}
                         </span>
                       )}
+                      {!running && unread && <span aria-label="Unread" style={styles.weekUnreadDot} />}
                     </button>
                   );
                 })}
@@ -750,6 +716,13 @@ const styles = {
     fontWeight: 650,
     color: "var(--accent-dark)",
     whiteSpace: "nowrap",
+  },
+  weekUnreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: "50%",
+    background: "var(--moss)",
+    flexShrink: 0,
   },
   actionBar: {
     position: "fixed",

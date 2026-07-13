@@ -648,12 +648,6 @@ function formatTokenK(tokens) {
   return String(n);
 }
 
-function runnerAgeMs(iso, nowMs) {
-  if (!iso) return null;
-  const ms = Date.parse(iso);
-  return Number.isFinite(ms) ? Math.max(0, nowMs - ms) : null;
-}
-
 const COACH_IMAGE_LIMIT = 3;
 const COACH_IMAGE_MAX_SIDE = 1280;
 const COACH_IMAGE_MAX_DATA_URL_CHARS = 2_200_000;
@@ -1684,17 +1678,7 @@ export function AICoachTab({
   const weatherDisplayLabel = weatherLocationLabel && weatherActive ? `${weatherLocationLabel} ${weatherLabel}` : weatherLabel;
   const runnerOptimistic = codexRunnerStatus?.optimistic === true;
   const runnerLastSeenIso = runnerOptimistic ? null : (codexRunnerStatus?.last_seen_at || null);
-  const runnerAge = runnerAgeMs(runnerLastSeenIso, runnerNowMs);
-  const runnerFreshMs = Number(codexRunnerStatus?.fresh_ms) || 12_000;
-  const runnerStaleMs = Number(codexRunnerStatus?.stale_ms) || 8_000;
-  const serverRunnerState = codexRunnerStatus?.state || "online";
-  const runnerState = (serverRunnerState === "online" || serverRunnerState === "stale") && runnerAge !== null
-    ? runnerAge > runnerFreshMs + runnerStaleMs
-      ? "offline"
-      : runnerAge > runnerFreshMs
-        ? "stale"
-        : "online"
-    : serverRunnerState;
+  const runnerState = codexRunnerStatus?.state || "online";
   const runnerCodexStatus = codexRunnerStatus?.codex_status || "unknown";
   const runnerHealthy = runnerState === "online" && runnerCodexStatus !== "error" && runnerCodexStatus !== "auth_error";
   const expectedProvider = runnerHealthy && codexRunnerStatus?.expected_provider !== "deepseek" ? "desktop_codex" : "deepseek";

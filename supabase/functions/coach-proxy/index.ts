@@ -365,14 +365,17 @@ async function readDesktopRunnerStatus(admin: any, uid: string) {
   const ageMs = ageMsFromIso(data.last_seen_at);
   const runnerState = runnerHeartbeatState(status, ageMs);
   const codexStatus = codexStatusValue(metadata.lastCodexStatus);
-  const state = codexStatus === "error" || codexStatus === "auth_error" ? "error" : runnerState;
+  const lastErrorAgeMs = ageMsFromIso(metadata.lastCodexErrorAt);
+  const codexErrorActive = (codexStatus === "error" || codexStatus === "auth_error")
+    && (lastErrorAgeMs === null || lastErrorAgeMs <= codexErrorCooldownMs(codexStatus));
+  const state = codexErrorActive ? "error" : runnerState;
   const expectedProvider = state === "online" && preference !== "deepseek_only" ? DESKTOP_CODEX.id : DEEPSEEK.id;
 
   return {
     provider: DESKTOP_CODEX.id,
     state,
     runner_state: runnerState,
-    codex_status: codexStatus,
+    codex_status: codexErrorActive ? codexStatus : (codexStatus === "ok" ? "ok" : "unknown"),
     preference,
     expected_provider: expectedProvider,
     runner_id: String(data.id),

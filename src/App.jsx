@@ -686,7 +686,7 @@ function throwIfAborted(signal) {
 
 const BOOT_REVEAL_MS = 1800;
 const APP_BOOT_STARTED_AT = Date.now();
-const RUNNER_STATUS_POLL_MS = 2_000;
+const RUNNER_STATUS_POLL_MS = 5_000;
 const RUNNER_STATUS_DISCONNECT_CONFIRM_MS = 5_000;
 const BOOT_CRITICAL_DATA_KEYS = new Set(["profile", "settings", "workouts"]);
 const AGENT_CONTEXT_STALE_MS = 5 * 60 * 1000;
@@ -2228,7 +2228,6 @@ function AppShell({
   const handleMobilePagerDragActiveChange = useCallback((active) => {
     mobilePagerDraggingRef.current = active;
     if (!active) {
-      setNow(new Date());
       flushPendingCoachStream();
     }
   }, [flushPendingCoachStream]);
@@ -2520,17 +2519,19 @@ function AppShell({
   }, [prepareRunnerStatusForDisplay]);
   useEffect(() => {
     refreshCodexRunnerStatus({ force: true });
-    const timer = setInterval(refreshCodexRunnerStatus, RUNNER_STATUS_POLL_MS);
+    const timer = tab === TAB_COACH
+      ? setInterval(refreshCodexRunnerStatus, RUNNER_STATUS_POLL_MS)
+      : null;
     const handleVisible = () => {
       if (document.visibilityState === "visible") refreshCodexRunnerStatus({ force: true });
     };
     document.addEventListener("visibilitychange", handleVisible);
     return () => {
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       document.removeEventListener("visibilitychange", handleVisible);
       runnerStatusAbortRef.current?.abort();
     };
-  }, [refreshCodexRunnerStatus]);
+  }, [refreshCodexRunnerStatus, tab]);
   useEffect(() => {
     if (!(agentActions || []).some(a => a?.type === "create_plans" && a.sourceMessageId)) return undefined;
     const timer = setTimeout(() => {
@@ -4506,11 +4507,22 @@ Rules:
   }, [profile]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
+    const intervalMs = isMobile ? 60_000 : 1_000;
+    const refreshClock = () => {
       if (!mobilePagerDraggingRef.current) setNow(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    };
+    const handleVisible = () => {
+      if (document.visibilityState === "visible") refreshClock();
+    };
+    const timer = setInterval(refreshClock, intervalMs);
+    document.addEventListener("visibilitychange", handleVisible);
+    window.addEventListener("focus", refreshClock);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisible);
+      window.removeEventListener("focus", refreshClock);
+    };
+  }, [isMobile]);
 
   useEffect(() => {
     function onClick(e) {
@@ -4609,7 +4621,7 @@ Rules:
   // `tab === N` fragment) so the mobile pager can render the CURRENT tab AND a
   // neighbor simultaneously during a finger-follow swipe. Index 4 is the
   // mobile-only Settings page (desktop has no Settings tab; it never asks for 4).
-  const renderTab = (which) => {
+  const renderTab = (which, paneActive = which === tab) => {
     if (which === TAB_TRAINING) return (
         <TrainingTab
           logs={logs}
@@ -4655,6 +4667,7 @@ Rules:
     );
     if (which === TAB_COACH) return (
         <AICoachTab
+          isActive={!isMobile || paneActive}
           logs={logs}
           races={races}
           profile={profile}

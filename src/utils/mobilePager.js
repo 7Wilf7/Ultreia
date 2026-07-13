@@ -34,8 +34,27 @@ export function getMobilePagerTapWindow(from, to, count) {
   ]);
 }
 
+export function getMobilePagerPreheatQueue(renderedTabs, activeTab, count) {
+  const rendered = new Set(renderedTabs);
+  return Array.from({ length: Math.max(0, count) }, (_, idx) => idx)
+    .filter(idx => !rendered.has(idx))
+    .sort((a, b) => Math.abs(a - activeTab) - Math.abs(b - activeTab) || a - b);
+}
+
 export function shouldRenderMobilePagerPane(idx, renderedTabs, visualTab, propTab) {
   return renderedTabs.includes(idx) || idx === visualTab || idx === propTab;
+}
+
+export function shouldReuseMobilePagerPane(previous, next) {
+  if (previous.idx !== next.idx || previous.shouldRender !== next.shouldRender) return false;
+  if (!next.shouldRender) return true;
+  if (previous.isActive !== next.isActive) return false;
+  if (!next.isActive) return true;
+  return previous.renderTab === next.renderTab;
+}
+
+export function isMobilePagerTouching(root = typeof document === "undefined" ? null : document) {
+  return Boolean(root?.querySelector?.('.ultreia-mobile-shell[data-pager-touching="true"]'));
 }
 
 export function shouldOuterPagerHandleSwipe({ direction, currentTab, tabCount, innerCanMove = false }) {

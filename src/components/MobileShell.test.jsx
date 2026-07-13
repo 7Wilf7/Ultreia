@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   getMobilePagerJumpWindow,
+  getMobilePagerPreheatQueue,
   getMobilePagerRenderWindow,
   getMobilePagerTapWindow,
+  isMobilePagerTouching,
+  mergeTabWindows,
   resolveMobilePagerTouchStart,
+  shouldReuseMobilePagerPane,
   shouldOuterPagerHandleSwipe,
   shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
@@ -34,10 +38,66 @@ describe("MobileShell pager render window", () => {
     expect(getMobilePagerTapWindow(2, 2, 5)).toEqual([2]);
   });
 
+  it("preheats missing tabs one at a time from nearest to farthest", () => {
+    expect(getMobilePagerPreheatQueue([0, 1], 0, 5)).toEqual([2, 3, 4]);
+    expect(getMobilePagerPreheatQueue([3, 4], 4, 5)).toEqual([2, 1, 0]);
+    expect(getMobilePagerPreheatQueue([1, 2, 3], 2, 5)).toEqual([0, 4]);
+  });
+
+  it("retains already mounted tabs across an early long jump", () => {
+    expect(mergeTabWindows([0, 1], [0, 4])).toEqual([0, 1, 4]);
+    expect(mergeTabWindows([0, 1, 4], [3, 4])).toEqual([0, 1, 3, 4]);
+  });
+
+  it("reads the drag marker from the mobile shell element", () => {
+    expect(isMobilePagerTouching({ querySelector: () => ({}) })).toBe(true);
+    expect(isMobilePagerTouching({ querySelector: () => null })).toBe(false);
+  });
+
   it("always renders the visible tab even if the render window is stale", () => {
     expect(shouldRenderMobilePagerPane(3, [0, 1], 3, 0)).toBe(true);
     expect(shouldRenderMobilePagerPane(4, [0, 1], 0, 4)).toBe(true);
     expect(shouldRenderMobilePagerPane(2, [0, 1], 3, 4)).toBe(false);
+  });
+
+  it("freezes hidden preheated panes until they become active again", () => {
+    const previousRender = () => null;
+    const base = {
+      idx: 2,
+      shouldRender: true,
+      isActive: false,
+      renderTab: previousRender,
+    };
+
+    expect(shouldReuseMobilePagerPane(base, {
+      ...base,
+      renderTab: () => null,
+    })).toBe(true);
+    expect(shouldReuseMobilePagerPane(base, {
+      ...base,
+      isActive: true,
+      renderTab: () => null,
+    })).toBe(false);
+  });
+
+  it("refreshes the active pane and reacts to mount-window changes", () => {
+    const previousRender = () => null;
+    const active = {
+      idx: 1,
+      shouldRender: true,
+      isActive: true,
+      renderTab: previousRender,
+    };
+
+    expect(shouldReuseMobilePagerPane(active, {
+      ...active,
+      renderTab: () => null,
+    })).toBe(false);
+    expect(shouldReuseMobilePagerPane(active, active)).toBe(true);
+    expect(shouldReuseMobilePagerPane(active, {
+      ...active,
+      shouldRender: false,
+    })).toBe(false);
   });
 
   it("lets nested swipers keep gestures until their boundary", () => {

@@ -43,19 +43,19 @@ export RUNNING_HEARTBEAT_MS="5000"
 export LEASE_SECONDS="180"
 export CODEX_TIMEOUT_MS="180000"
 export CODEX_PACKAGE="@openai/codex@0.142.0"
-export CODEX_MODEL="gpt-5.5"
-export CODEX_REASONING_EFFORT="xhigh"
+export CODEX_MODEL="gpt-5.6-sol"
+export CODEX_REASONING_EFFORT="ultra"
 npm run start
 ```
 
-Use `CODEX_REASONING_EFFORT=xhigh` only when slower, deeper answers are worth
+Use `CODEX_REASONING_EFFORT=ultra` only when slower, deeper answers are worth
 the extra latency and quota usage.
 
 The company Mac mini may use a third-party API-key Codex provider configured in
 the local Codex config. Do not switch accounts, and do not bypass the user config.
 
 For convenience on the company Mac mini, a local double-click launcher can live
-on the Desktop as `Start Ultreia Codex Runner.command`. It should only export the
+on the Desktop as `Start Ultreia Runner.command`. It should only export the
 non-secret runner settings above, read the Supabase `service_role` key from the
 machine's logged-in Supabase CLI session at runtime, and then run `npm run start`
 from this folder. Do not write the service role key into the Desktop launcher.
@@ -75,7 +75,7 @@ then ask Codex:
 > `RUNNER_ID=company-mac-mini-codex`, `POLL_MS=2000`,
 > `RUNNING_HEARTBEAT_MS=5000`, `LEASE_SECONDS=180`,
 > `CODEX_TIMEOUT_MS=180000`, `CODEX_PACKAGE=@openai/codex@0.142.0`,
-> `CODEX_MODEL=gpt-5.5`, and `CODEX_REASONING_EFFORT=xhigh`; then run `npm run start` from
+> `CODEX_MODEL=gpt-5.6-sol`, and `CODEX_REASONING_EFFORT=ultra`; then run `npm run start` from
 > `tools/desktop-codex-runner`. Keep the runner running and do not commit any
 > `.env`, secret, or temporary Supabase files.
 
@@ -86,7 +86,7 @@ spawn compatibility. On macOS/Linux, it calls `npx ...` directly. The effective
 Codex invocation is:
 
 ```bash
-npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-rules --disable plugins --disable apps --disable browser_use --disable browser_use_external --disable computer_use --disable image_generation --sandbox read-only --skip-git-repo-check --cd <empty temp dir> [--model gpt-5.5] [-c model_reasoning_effort=\"xhigh\"] [--image <temp image>] -
+npx -y @openai/codex@0.142.0 exec --json --ephemeral --ignore-rules --disable plugins --disable apps --disable browser_use --disable browser_use_external --disable computer_use --disable image_generation --sandbox read-only --skip-git-repo-check --cd <empty temp dir> [--model gpt-5.6-sol] [-c model_reasoning_effort=\"ultra\"] [--image <temp image>] -
 ```
 
 That keeps the run local, non-interactive, read-only, and tool-light while still

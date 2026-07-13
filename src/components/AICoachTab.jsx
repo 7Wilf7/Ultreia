@@ -24,6 +24,7 @@ import { planAdjustmentSignature, recoveryAdjustmentSignature, trainingAdjustmen
 import { shouldAutoQuietProactiveAction, shouldAutoTriggerPlanDeviation, shouldAutoTriggerRecoveryGuard } from "../utils/actionPlanFilters";
 import { normalizeComposerTextChange } from "../utils/composerInput";
 import { hasActionableCalendarSuggestion } from "../utils/calendarSuggestion";
+import { isMobilePagerTouching } from "../utils/mobilePager";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon } from "./Icons";
@@ -717,6 +718,7 @@ async function prepareCoachImageAttachment(file) {
 }
 
 export function AICoachTab({
+  isActive = true,
   coachConfig: incomingCoachConfig, setCoachConfig,
   profile = null,
   chatMessages,
@@ -794,12 +796,18 @@ export function AICoachTab({
   // every chat message render.
   const mdComponents = useMemo(() => makeMdComponents(isMobile), [isMobile]);
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (typeof document !== "undefined" && document.body?.dataset?.ultreiaPagerTouching === "true") return;
+    if (!isActive) return undefined;
+    const refreshRunnerClock = () => {
+      if (isMobilePagerTouching()) return;
       setRunnerNowMs(Date.now());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
+    };
+    const initialTimer = setTimeout(refreshRunnerClock, 0);
+    const timer = setInterval(refreshRunnerClock, 5000);
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(timer);
+    };
+  }, [isActive]);
   const [showCoachConfig, setShowCoachConfig] = useState(false);
   const [showCoachFocus, setShowCoachFocus] = useState(false);
   const [showTrainingPreferences, setShowTrainingPreferences] = useState(false);

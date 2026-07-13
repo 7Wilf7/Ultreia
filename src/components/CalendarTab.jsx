@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef } from "react";
+import { startTransition, useMemo, useState, useRef } from "react";
 import { s } from "../styles";
 import { RUN_GROUP_TYPES, TYPE_COLOR, DAILY_TAGS, DAILY_TAG_ICONS } from "../constants";
 import { useT, useLanguage } from "../i18n/LanguageContext";
@@ -158,6 +158,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
   // Tap a day → one centered day modal that views + edits + adds. dayKey also
   // drives the ‹/› day stepping inside the modal.
   const [dayKey, setDayKey] = useState(null);
+  const [selectedDayKey, setSelectedDayKey] = useState(null);
 
   // Shift a YYYY-MM-DD key by N days (for the preview's prev/next arrows).
   function shiftDayKey(key, delta) {
@@ -166,7 +167,8 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
   }
   function selectDayKey(key) {
     const [y, m] = key.split("-").map(Number);
-    setDayKey(key);
+    setSelectedDayKey(key);
+    startTransition(() => setDayKey(key));
     if (!Number.isFinite(y) || !Number.isFinite(m)) return;
     const target = y * 12 + (m - 1);
     setViewMonth(v => {
@@ -331,7 +333,7 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
           const isWeekend = monIdx(d) >= 5;
           const dayLogs = byDate.get(key) || [];
           const dayNote = notesByDate.get(key) || null;
-          const isSelected = key === dayKey;
+          const isSelected = key === selectedDayKey;
 
           return (
             <DayCell
@@ -388,7 +390,10 @@ export function CalendarTab({ logs, addLog, updateLog, setConfirmDelete, dailyNo
             weather={w}
             onPrev={() => selectDayKey(shiftDayKey(k, -1))}
             onNext={() => selectDayKey(shiftDayKey(k, 1))}
-            onClose={() => setDayKey(null)}
+            onClose={() => {
+              setDayKey(null);
+              setSelectedDayKey(null);
+            }}
             addLog={addLog}
             updateLog={updateLog}
             setConfirmDelete={setConfirmDelete}

@@ -1,14 +1,16 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { memo, startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useT } from "../i18n/LanguageContext";
 import { Spinner } from "./Spinner";
 import { CalendarIcon, CoachIcon, FootIcon, SettingsIcon, TrophyIcon } from "./Icons";
 import {
   getMobilePagerJumpWindow,
+  getMobilePagerPreheatQueue,
   getMobilePagerRenderWindow,
   getMobilePagerTapWindow,
   mergeTabWindows,
   resolveMobilePagerTouchStart,
+  shouldReuseMobilePagerPane,
   shouldRenderMobilePagerPane,
 } from "../utils/mobilePager";
 
@@ -28,8 +30,9 @@ const PAGER_DRAG_DISTANCE_FRACTION = 0.18;
 const PAGER_DRAG_MAX_DISTANCE_PX = 86;
 const PAGER_DRAG_VELOCITY_PX_PER_MS = 0.38;
 const PAGER_EDGE_RESISTANCE = 0.32;
-const TAB_PREHEAT_DELAY_MS = 60;
-const TAB_PREHEAT_IDLE_TIMEOUT_MS = 450;
+const TAB_PREHEAT_DELAY_MS = 900;
+const TAB_PREHEAT_IDLE_TIMEOUT_MS = 1600;
+const TAB_PREHEAT_STEP_MS = 180;
 
 function triggerTabHaptic() {
   try {
@@ -47,10 +50,6 @@ function sameTabWindow(a, b) {
 
 function clampTabIndex(idx, count) {
   return Math.max(0, Math.min(count - 1, idx));
-}
-
-function getAllTabIndexes(count) {
-  return Array.from({ length: Math.max(0, count) }, (_, idx) => idx);
 }
 
 function easeOutCubic(t) {
@@ -101,16 +100,17 @@ const PagerPaneContent = memo(function PagerPaneContent({
   shouldRender,
   renderTab,
   idx,
+  isActive,
 }) {
   if (!shouldRender) return null;
   return (
     <div className="ultreia-pager-content-shell" data-full-pane="true">
       <div className="ultreia-pager-full-content">
-        {renderTab(idx)}
+        {renderTab(idx, isActive)}
       </div>
     </div>
   );
-});
+}, shouldReuseMobilePagerPane);
 
 export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCount = 5, onRefresh = null, refreshing = false, onPagerDragActiveChange = null }) {
   const t = useT();
@@ -138,7 +138,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const pendingTrackOffsetRef = useRef(null);
   const pagerWidthRef = useRef(1);
   const pagerGestureRef = useRef({ touching: false, current: tab, startLeft: tab });
-  const renderTrimTimerRef = useRef(null);
   const preheatHandleRef = useRef(null);
   const preheatedAllTabsRef = useRef(false);
   const tabPropRef = useRef(tab);
@@ -209,9 +208,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   const setRenderedWindow = useCallback((nextRenderedTabs) => {
-    const normalizedTabs = preheatedAllTabsRef.current
-      ? mergeTabWindows(renderedTabsRef.current, nextRenderedTabs)
-      : nextRenderedTabs;
+    // Once a pane has mounted, retain its local state and scroll position.
+    // Hidden panes are isolated by PagerPaneContent's memo comparator.
+    const normalizedTabs = mergeTabWindows(renderedTabsRef.current, nextRenderedTabs);
     if (sameTabWindow(normalizedTabs, renderedTabsRef.current)) return;
     renderedTabsRef.current = normalizedTabs;
     setRenderedTabs(normalizedTabs);
@@ -231,7 +230,26 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   const preheatAllTabs = useCallback(() => {
     if (preheatedAllTabsRef.current) return;
     preheatedAllTabsRef.current = true;
-    setRenderedWindow(getAllTabIndexes(tabCount));
+    const queue = getMobilePagerPreheatQueue(
+      renderedTabsRef.current,
+      visualTabRef.current,
+      tabCount,
+    );
+    const mountNext = () => {
+      preheatHandleRef.current = null;
+      const next = queue.shift();
+      if (next == null) return;
+      startTransition(() => {
+        setRenderedWindow([next]);
+      });
+      if (queue.length) {
+        preheatHandleRef.current = {
+          type: "timeout",
+          id: window.setTimeout(mountNext, TAB_PREHEAT_STEP_MS),
+        };
+      }
+    };
+    mountNext();
   }, [setRenderedWindow, tabCount]);
 
   const scheduleTabPreheat = useCallback((delay = TAB_PREHEAT_DELAY_MS) => {
@@ -354,25 +372,9 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       pagerDragFrameRef.current = 0;
     }
     pendingTrackOffsetRef.current = null;
-    if (renderTrimTimerRef.current) {
-      clearTimeout(renderTrimTimerRef.current);
-      renderTrimTimerRef.current = null;
-    }
     cancelDeferredVisualTabCommit();
     cancelDeferredAppTabCommit();
   }, [cancelDeferredAppTabCommit, cancelDeferredVisualTabCommit]);
-
-  const scheduleRenderedWindowTrim = useCallback((next, delay = 220) => {
-    if (preheatedAllTabsRef.current) return;
-    if (renderTrimTimerRef.current) clearTimeout(renderTrimTimerRef.current);
-    const clamped = Math.max(0, Math.min(tabCount - 1, next));
-    renderTrimTimerRef.current = setTimeout(() => {
-      renderTrimTimerRef.current = null;
-      if (preheatedAllTabsRef.current) return;
-      if (pagerTouchActiveRef.current || pagerSettleTimerRef.current || pagerSettleFrameRef.current || visualTabRef.current !== clamped) return;
-      setRenderedWindow(getMobilePagerRenderWindow(clamped, tabCount));
-    }, delay);
-  }, [setRenderedWindow, tabCount]);
 
   const finishPagerGesture = useCallback(() => {
     pagerGestureRef.current = {
@@ -411,8 +413,7 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
     alignTrackToTab(clamped);
     commitAppTabNow(clamped);
     finishPagerGesture();
-    scheduleRenderedWindowTrim(clamped);
-  }, [alignTrackToTab, commitAppTabNow, commitVisualTab, finishPagerGesture, measurePagerWidth, scheduleRenderedWindowTrim, tabCount]);
+  }, [alignTrackToTab, commitAppTabNow, commitVisualTab, finishPagerGesture, measurePagerWidth, tabCount]);
 
   const animatePagerToTab = useCallback((next) => {
     if (pagerSettleTimerRef.current) {
@@ -688,7 +689,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       commitVisualTabImmediately(next, { renderedWindow: targetWindow });
       alignTrackToTab(next);
       scheduleAppTabCommit(next);
-      scheduleRenderedWindowTrim(next);
       return;
     }
 
@@ -712,7 +712,6 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
       }
       alignTrackToTab(target);
       scheduleAppTabCommit(target);
-      scheduleRenderedWindowTrim(target);
     });
   }
 
@@ -758,10 +757,12 @@ export function MobileShell({ tab, setTab, coachBusy = false, renderTab, tabCoun
   }
 
   function renderPaneContent(idx, shouldRender) {
+    const isActive = idx === visualTab;
     return (
       <PagerPaneContent
         idx={idx}
         shouldRender={shouldRender}
+        isActive={isActive}
         renderTab={renderTab}
       />
     );

@@ -15,7 +15,7 @@ const CODEX_PACKAGE = env.CODEX_PACKAGE || "@openai/codex@0.142.0";
 const CODEX_MODEL = env.CODEX_MODEL || "";
 const CODEX_REASONING_EFFORT = optionalEnum(
   env.CODEX_REASONING_EFFORT,
-  ["minimal", "low", "medium", "high", "xhigh"],
+  ["minimal", "low", "medium", "high", "xhigh", "ultra"],
   "CODEX_REASONING_EFFORT",
 );
 const MAX_PROMPT_CHARS = positiveInt(env.MAX_PROMPT_CHARS, 120000);

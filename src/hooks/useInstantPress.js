@@ -4,18 +4,23 @@ const DUPLICATE_CLICK_WINDOW_MS = 750;
 const TAP_MOVE_TOLERANCE_PX = 10;
 const SYNTHETIC_CLICK_SUPPRESSION_MS = 450;
 
-let suppressSyntheticClickUntil = 0;
-let syntheticClickGuardInstalled = false;
+let syntheticClickUntil = 0;
+let syntheticClickGuardDocument = null;
 
 function interactionNow() {
   return Date.now();
 }
 
 function installSyntheticClickGuard() {
-  if (syntheticClickGuardInstalled || typeof document === "undefined") return;
-  syntheticClickGuardInstalled = true;
+  if (typeof document === "undefined" || syntheticClickGuardDocument === document) return;
+  syntheticClickGuardDocument = document;
+  syntheticClickUntil = 0;
+  const clearPendingClick = () => { syntheticClickUntil = 0; };
+  document.addEventListener("pointerdown", clearPendingClick, true);
+  document.addEventListener("keydown", clearPendingClick, true);
   document.addEventListener("click", (event) => {
-    if (interactionNow() > suppressSyntheticClickUntil) return;
+    if (interactionNow() > syntheticClickUntil) return;
+    syntheticClickUntil = 0;
     event.preventDefault?.();
     event.stopPropagation?.();
     event.stopImmediatePropagation?.();
@@ -23,11 +28,8 @@ function installSyntheticClickGuard() {
 }
 
 function suppressNextSyntheticClick() {
-  suppressSyntheticClickUntil = Math.max(
-    suppressSyntheticClickUntil,
-    interactionNow() + SYNTHETIC_CLICK_SUPPRESSION_MS,
-  );
   installSyntheticClickGuard();
+  syntheticClickUntil = interactionNow() + SYNTHETIC_CLICK_SUPPRESSION_MS;
 }
 
 export function useInstantPress({ duplicateClickWindowMs = DUPLICATE_CLICK_WINDOW_MS } = {}) {

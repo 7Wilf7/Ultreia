@@ -62,6 +62,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
 - 函数：
   - `daily-coach-dispatch`（pg_cron 定时生成每日 AI 打卡、后台周报和夜间 Memory 审核 → FCM 推送 / 写 `push_inbox`；部署加 `--no-verify-jwt`；AI provider 优先 desktop Codex runner，失败回退 DeepSeek；个人模式不扣钱包）
+  - `agent-report-dispatch`（独立 shadow Reporter；每 30 分钟 Cron，约本地 00:30 计算 14 日计划偏差候选，其余 tick 只重试；写 `agent_report_outbox` 并以 HMAC 投递 Aevum ingress；不调用 LLM、不推通知、不写训练数据；部署加 `--no-verify-jwt`）
   - `coach-proxy`（AI Coach 代理；优先把 `coach_chat` / `weekly_report` / `memory_update` / `plan_extract` / `plan_deviation_rescue` 等任务派给 desktop Codex runner，失败回退 DeepSeek；个人模式不检查钱包余额、不扣钱包）
   - `weather-proxy`（彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；个人模式不检查钱包余额、不扣钱包）
   - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
@@ -71,7 +72,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica / Sidera 个人数据）
   - `push-test`（早期冒烟测试，可退役）
 
-**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
 
 ## 历史教训（避免重蹈）
 
@@ -118,6 +119,7 @@ DAL 层（`src/lib/db/*.js`）的 FIELD_MAP / fromRow / toRow 跟着改时也要
 - `coach_report_notes` — 周复盘相关备注 / 交互记录
 - `coach_memory_facts` — AI Coach 长期记忆事实卡
 - `agent_actions` — AI Coach Action Card 生命周期记录
+- `agent_report_outbox` — Ultreia → Aevum shadow Report 的单行水位、pending envelope、退避与租约；仅 service-role
 - `training_locations` — 训练地点 / 天气位置
 - `daily_notes` — 每日笔记 / 打卡
 - `push_subscriptions` — 设备推送订阅（FCM token）

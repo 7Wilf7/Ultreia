@@ -4,6 +4,28 @@
 
 ## 已建表并接入
 
+### 4. `agent_report_outbox`
+
+状态：
+
+- 2026-07-12 已建表并通过 7 项权限、唯一键与空表验收。
+- 只由 service-role 后台 Reporter 读写；浏览器角色无权限、无 RLS policy。
+- 每个用户与 Report 信号只保留一行水位和最多一个持久化 pending envelope。
+- 记录源指纹、成功 content hash、固定 report ID、重试次数、下次尝试、暂停和
+  短租约；不复用 `push_log`、`agent_actions`、`coach_reports` 或 `ai_jobs`。
+
+运行时：
+
+- `agent-report-dispatch` 只服务已配置的 Wilf 用户；配置缺失 fail closed。
+- 2026-07-13 真实 canary 成功写入一个确定性 envelope，Aevum 返回
+  `recorded`；outbox 以成功 receipt 推进交付水位并清空 pending bundle。
+- source 不变、未达阈值、或内容已成功投递三种情况均 quiet skip。
+- timeout / 429 / 5xx 按 30 分钟、2 小时、6 小时重试同一 envelope；三次后暂停
+  24 小时。其他 4xx 阻断并保留错误，不盲目重试。
+
+建表 SQL 已在 2026-07-12 人工评审并执行；后续任何字段或约束变化仍需重新走
+SQL gate。
+
 ### 1. `coach_reports`
 
 状态：

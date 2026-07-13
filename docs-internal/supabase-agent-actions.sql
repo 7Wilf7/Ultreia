@@ -126,18 +126,18 @@ begin
 end;
 $$;
 
+-- The action lifecycle can gain states over time. Always rebuild this named
+-- constraint so rerunning the migration upgrades an older definition instead
+-- of silently keeping it.
 do $$
 begin
-  if not exists (
-    select 1 from pg_constraint
-    where conname = 'agent_actions_status_check'
-      and conrelid = 'public.agent_actions'::regclass
-  ) then
-    alter table public.agent_actions
-      add constraint agent_actions_status_check check (
-        status in ('proposed', 'accepted', 'executing', 'executed', 'rejected', 'failed', 'cancelled')
-      );
-  end if;
+  alter table public.agent_actions
+    drop constraint if exists agent_actions_status_check;
+
+  alter table public.agent_actions
+    add constraint agent_actions_status_check check (
+      status in ('proposed', 'accepted', 'executing', 'executed', 'rejected', 'failed', 'cancelled')
+    );
 end;
 $$;
 

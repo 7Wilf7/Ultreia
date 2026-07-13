@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_ACTION_STATUS,
@@ -24,6 +26,18 @@ import {
 } from "./agentActions";
 
 describe("agent action helpers", () => {
+  it("keeps the repeatable database constraint aligned with every action status", () => {
+    const sqlPath = fileURLToPath(new URL("../../docs-internal/supabase-agent-actions.sql", import.meta.url));
+    const sql = readFileSync(sqlPath, "utf8");
+    const constraintMatch = sql.match(
+      /drop constraint if exists agent_actions_status_check;[\s\S]*?add constraint agent_actions_status_check check \([\s\S]*?status in \(([^)]+)\)/,
+    );
+
+    expect(constraintMatch).not.toBeNull();
+    const databaseStatuses = [...constraintMatch[1].matchAll(/'([^']+)'/g)].map(match => match[1]);
+    expect(databaseStatuses).toEqual(Object.values(AGENT_ACTION_STATUS));
+  });
+
   it("builds a confirmable create_plans action", () => {
     const action = buildCreatePlansAction([{ date: "2026-06-20", type: "Road Run" }], {
       id: "a1",

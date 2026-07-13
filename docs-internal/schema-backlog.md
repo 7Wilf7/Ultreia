@@ -76,6 +76,7 @@ SQL gate。
 状态：
 
 - 2026-06-23 已建表。
+- 2026-07-13 已在生产环境刷新动作状态约束，完整支持 `proposed / accepted / executing / executed / rejected / failed / cancelled`；重复执行建表 SQL 会重建该约束，避免保留旧定义。
 - 计划导入 Action Card、Memory 更新 Action Card 已开始写入 `agent_actions`。
 - App 启动时会读取账号下的 `create_plans` 动作，用来恢复 AI Coach 消息下方的已提炼 / 已执行 / 已忽略状态。
 - Calendar / Memory 数据与 action log 采用一致性门槛：两边都成功后才显示已保存。Calendar 计划带动作标记，日志保存失败后可只修复日志，避免重试时重复创建计划。

@@ -62,7 +62,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
 - 函数：
   - `daily-coach-dispatch`（pg_cron 定时生成每日 AI 打卡、后台周报和夜间 Memory 审核 → FCM 推送 / 写 `push_inbox`；部署加 `--no-verify-jwt`；AI provider 优先 desktop Codex runner，失败回退 DeepSeek；个人模式不扣钱包）
-  - `agent-report-dispatch`（七类独立 Report pipeline；每 30 分钟 Cron，本地 00:30 从训练域快照提取去隐私特征并运行 Aevum B2 detector catalog，其余 tick 只处理到期重试；每类独立 outbox / lease / cadence，以 HMAC 投递 Aevum，单类 blocked / paused / retry 不阻塞其它类型；不调用 LLM、不推通知、不写训练数据；部署加 `--no-verify-jwt`）
+  - `agent-report-dispatch`（v8 七类独立 Report pipeline 已部署并通过 producer B2 schema acceptance；每 30 分钟 Cron、本地 00:30 从训练域快照提取去隐私特征并运行 Aevum B2 detector catalog，其余 tick 只处理到期重试；每类独立 outbox / lease / cadence，以 HMAC 投递 Aevum，单类 blocked / paused / retry 不阻塞其它类型；不调用 LLM、不推通知、不写训练数据；部署加 `--no-verify-jwt`）
   - `coach-proxy`（AI Coach 代理；优先把 `coach_chat` / `weekly_report` / `memory_update` / `plan_extract` / `plan_deviation_rescue` 等任务派给 desktop Codex runner，失败回退 DeepSeek；个人模式不检查钱包余额、不扣钱包）
   - `weather-proxy`（彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；个人模式不检查钱包余额、不扣钱包）
   - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
@@ -75,6 +75,11 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 **Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
 
 ### Agent Report 运行边界
+
+- **当前生产状态（2026-07-15）**：Aevum ingress v8 与 Ultreia dispatch v8 均为
+  `ACTIVE`；producer B2 outbox constraints 已执行并通过 10/10 只读 acceptance。
+  16:30 Asia/Shanghai 正常 `force:false` Cron 返回 HTTP 200、`processed:7`；paused B1
+  原样保留，其余六类为独立 idle 槽位。后续仍不得 force 或创建 fake Report。
 
 - `occurred_at` 表示统计窗口在用户时区内结束的真实 instant。Asia/Shanghai 的本地日结束会先转换成 UTC，绝不能把本地日期直接拼 `Z`；如果边界晚于 `reported_at`，必须报错并拒绝建 envelope，不能钳制或改写时间。
 - outbox 有 pending envelope 时，新 Cron 只能重试原 envelope，固定沿用 report ID、payload、content hash 和 idempotency key，不能用新候选覆盖。

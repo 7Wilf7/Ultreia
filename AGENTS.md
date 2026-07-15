@@ -41,7 +41,7 @@ Wilf 在 Windows 和 Mac mini 两台设备上工作。涉及 Aevum、Viatica、O
 
 - **放在 Ultreia**：训练记录、活动导入、日历训练计划、赛事、PR、天气与训练关系、AI Coach、周复盘、Action Card、运动相关长期记忆、训练海报、Ultreia 内设置和 Android / PWA 发版。
 - **放在 Aevum**：全局 Today、Quick Add、Products 入口、跨产品 Report / Query / Action 契约、standing policy、派生记忆生命周期、异常队列和全局 Agent 路由。
-- **交界需求（当前契约）**：Aevum B2 已登记七类 Ultreia Report；Ultreia 可自主发现并独立投递计划偏移、训练负荷、恢复风险、目标赛、训练偏好失效、训练进步和重复健康风险的隐私裁剪聚合。Report 不能写 Aevum memory、执行 Action、扩大 scope 或延长 retention；敏感类型由 Aevum 记录后进入 `needs_user`。窄范围只读 Query 尚未接通。改变训练数据的 Action 必须回到 Ultreia 做最新状态、权限、风险和冲突检查。
+- **交界需求（当前契约）**：Aevum B2 已登记七类 Ultreia Report；Ultreia dispatch v8 与 producer B2 outbox constraints 已部署并通过只读 acceptance，正常 Cron 已看到七个独立槽位与 HTTP 200。Ultreia 可自主发现并独立投递计划偏移、训练负荷、恢复风险、目标赛、训练偏好失效、训练进步和重复健康风险的隐私裁剪聚合。Report 不能写 Aevum memory、执行 Action、扩大 scope 或延长 retention；敏感类型由 Aevum 记录后进入 `needs_user`。窄范围只读 Query 尚未接通。改变训练数据的 Action 必须回到 Ultreia 做最新状态、权限、风险和冲突检查。
 - **不要把 Ultreia 扩成超级 App**：全局入口、跨产品编排、统一策略和全局派生记忆优先放 Aevum；Ultreia 只做训练域内最小接入。
 - 如果归属不确定，先按“是否直接改变训练体验”判断：直接改变训练记录、计划、教练建议或赛事准备 = Ultreia；只是让多个产品协同或统一入口 = Aevum。
 

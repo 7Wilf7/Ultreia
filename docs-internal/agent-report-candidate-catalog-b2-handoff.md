@@ -1,7 +1,8 @@
 # Ultreia Live Report Catalog 与 Aevum B2 Handoff
 
-> 2026-07-15。Aevum ingress v8 已部署并登记本文七类 contract；本文记录
-> Ultreia producer 的 detector、隐私、频率和 outbox 运行边界。
+> 2026-07-15。Aevum ingress v8、Ultreia dispatch v8 与 producer B2 outbox
+> constraints 已部署。只读 acceptance 10/10 PASS；16:30 Asia/Shanghai 正常
+> `force:false` Cron 返回 HTTP 200、`processed:7`，七个独立槽位均已进入调度。
 
 ## 运行边界
 
@@ -32,7 +33,7 @@ domain snapshot
 
 ### `training_state_change / repeated_plan_deviation`
 
-- 状态：`live`，Aevum B2 已登记。
+- 状态：`live`，Aevum B2 已登记，producer schema 与正常 Cron 已验收。
 - schema：`training_state_change.v1`
 
 ```json
@@ -196,11 +197,13 @@ domain snapshot
 - Aevum 不替 producer 限频，因此 Ultreia 必须根据每类最后成功投递时间执行 cadence。
 - Report / derived memory / Action 保持三层分离：recorded Report 只提供证据；派生记忆
   由 Aevum policy 决定，训练 Action 必须回 Ultreia 重新做权限、最新状态、风险、冲突和幂等检查。
-- blocked envelope archive 仍未建表；任何迁移继续走 SQL gate，不影响七类 live 投递。
+- Producer B2 migration 为 `supabase-agent-report-outbox-b2.sql`，只读验收为
+  `supabase-agent-report-outbox-b2-acceptance.sql`；2026-07-15 验收 10/10 PASS。
+- blocked envelope archive 仍未建表；任何迁移继续走 SQL gate。
 
 ## 当前 paused pending 的安全处理
 
-当前生产 paused envelope 不属于本次代码或 schema 迁移范围，保持原样：
+当前生产 paused envelope 在 B2 constraint migration 前后整行摘要完全一致：
 
 1. `paused_until` 到期前，Cron 不读取新候选、不发送、不修改 pending bundle。
 2. 到期后只用原 report ID、payload、content hash 和 idempotency key 重试一次。

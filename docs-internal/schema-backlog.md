@@ -32,13 +32,19 @@
 - 只有网络错误 / 5xx 按 30 分钟、2 小时、6 小时重试同一 envelope；三次后暂停
   24 小时，并严格等待 `paused_until`。所有确定性 4xx（包括 422、429）阻断并
   保留原 report ID、payload、content hash 和 idempotency key，不盲目重试。
-- 2026-07-15 Aevum B2 七类 catalog 已上线；现有唯一键让每个 `report_type +
-  signal_kind` 使用独立 outbox 行、租约、频率和失败状态，无需新增表或改变 RLS。
-  当前 paused B1 pending 原样保留；若未来要归档失败 envelope 或迁移 active slot，
+- 2026-07-15 16:00 Asia/Shanghai 正常 Cron 曾因 B1-only
+  `agent_report_outbox_report_type` 返回 `outbox_seed_failed` 500，六个新槽位未创建。
+- 同日已执行 `supabase-agent-report-outbox-b2.sql`：四个旧 CHECK 已替换为 exact
+  七组 catalog、七种 schema pending bundle 与 status-independent lease pair；全部
+  validated。`supabase-agent-report-outbox-b2-acceptance.sql` 为 10/10 PASS，唯一键、
+  RLS、grant 和其它安全约束未弱化。
+- 16:30 正常 `force:false` Cron 返回 HTTP 200、`processed:7`。生产现有七个独立
+  outbox 行：paused B1 的整行摘要完全未变，其余六行独立处于 idle。
+- 当前 paused B1 pending 原样保留；若未来要归档失败 envelope 或迁移 active slot，
   仍须另给 SQL、回滚和数据影响，Wilf 执行前代码不得假设相关结构已存在。
 
-建表 SQL 已在 2026-07-12 人工评审并执行；后续任何字段或约束变化仍需重新走
-SQL gate。
+建表 SQL 已在 2026-07-12 人工评审并执行，B2 constraints 于 2026-07-15 验收；
+后续任何字段或约束变化仍需重新走 SQL gate。
 
 ### 1. `coach_reports`
 

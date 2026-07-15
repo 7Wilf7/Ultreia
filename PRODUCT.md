@@ -94,12 +94,13 @@ anything that makes training judgment feel gamified or unserious.
 
 Keep Ultreia stable as the mature training product while advancing AI Coach
 from a confirmable Agent into a policy-governed training Agent. The Calendar
-conflict-safe prerequisite and Aevum B2 Report foundation are complete. Seven
-registered `agent_report.v1` training signals now run through independent live
-outboxes with producer-side cadence, privacy and schema gates. Sensitive
-recovery and health-risk evidence is recorded by Aevum as `needs_user`; Reports
-still grant no memory-write or Action authority. A narrow Query may proceed
-independently but does not block proactive Reports. Do not
+conflict-safe prerequisite and Aevum B2 receiver are complete. The seven-signal
+Ultreia v8 producer and its B2 outbox constraints are deployed; read-only
+acceptance and a normal seven-slot Cron run passed. Producer-side cadence,
+privacy and schema checks remain mandatory; sensitive recovery and health-risk
+evidence is recorded by Aevum as `needs_user`. Reports still grant no
+memory-write or Action authority. A narrow Query may proceed independently but
+does not block proactive Reports. Do not
 expand Ultreia into ledger, knowledge-base, or global launcher responsibilities.
 
 ## Accessibility & Inclusion

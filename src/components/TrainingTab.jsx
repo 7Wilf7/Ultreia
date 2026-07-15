@@ -170,7 +170,6 @@ export function TrainingTab({
   const t = useT();
   const isMobile = useIsMobile();
   const sectionTouch = useRef(null);
-  const [viewMotionDir, setViewMotionDir] = useState(0);
   const [selectedView, setSelectedView] = useState(view);
   const commitParentView = useDeferredCommit(setView);
 
@@ -184,8 +183,6 @@ export function TrainingTab({
 
   function changeView(nextView) {
     if (nextView === selectedView) return;
-    const order = { activities: 0, charts: 1 };
-    setViewMotionDir((order[nextView] ?? 0) > (order[selectedView] ?? 0) ? 1 : -1);
     setSelectedView(nextView);
     commitParentView(nextView);
   }
@@ -411,11 +408,6 @@ export function TrainingTab({
     </>
   );
 
-  // Charts enters with direction, but returning to Activities stays still.
-  // The Activities view owns its sticky filter/header, so sliding that whole
-  // subtree made labels such as “All types” look like the entire page moved.
-  const viewMotionClass = isMobile && viewMotionDir > 0 ? "ultreia-tab-in-right" : undefined;
-
   return (
     <div
       data-mobile-inner-swipe={isMobile ? "true" : undefined}
@@ -468,7 +460,7 @@ export function TrainingTab({
       </div>
       )}
 
-      <div key={selectedView} className={viewMotionClass}>
+      <div>
         {selectedView === "activities" && (
           <>
 

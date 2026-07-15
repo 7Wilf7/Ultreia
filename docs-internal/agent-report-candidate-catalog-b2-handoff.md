@@ -1,8 +1,7 @@
-# Ultreia Report Candidate Catalog 与 Aevum B2 Handoff
+# Ultreia Live Report Catalog 与 Aevum B2 Handoff
 
-> 2026-07-15。本文是 Ultreia 本地 candidate catalog 和 Aevum B2 提案，不是
-> Aevum 已批准契约。当前生产可发送类型仍只有
-> `training_state_change / repeated_plan_deviation`。
+> 2026-07-15。Aevum ingress v8 已部署并登记本文七类 contract；本文记录
+> Ultreia producer 的 detector、隐私、频率和 outbox 运行边界。
 
 ## 运行边界
 
@@ -14,26 +13,26 @@ domain snapshot
 -> local candidate catalog
 -> privacy sanitizer
 -> schema validation
--> live outbox or local shadow journal
--> Aevum ingress (live type only)
+-> independent live outbox
+-> Aevum ingress
 ```
 
 - 调度器遍历 catalog / detector registry，不包含某一训练信号的专用分支。
 - 原始训练、GPS、训练笔记和健康文本只在 Ultreia 内存中参与确定性特征提取；
   candidate 只保留计数、比例、方向、窗口和有限枚举。
-- 当前不调用模型。未来即使启用，模型也只能看到已经最小化的 features，并只
+- 当前不调用模型。`allowed_minimized` 只是未来扩展点；即使启用，模型也只能看到已经最小化的 features，并只
   能返回 catalog key 与 significance / novelty / recurrence 判断；代码重新做
   schema、confidence、privacy 和 runtime gate。
-- `runtime=live` 才能进入 outbox；`shadow` 只写有频率槽和 retention ceiling 的
-  structured log；`needs_user` 也只记录本地候选，不创建审批卡、不外发。
+- 七类均为 `runtime=live`，每类使用独立 outbox 行、lease、cadence 和失败状态。
+  sensitive Report 被 Aevum `recorded + needs_user` 后即算成功投递。
 - Report 是来源证据，不授予 Aevum memory write、Action、scope、permission 或
   retention 权限。
 
-## 当前已上线类型
+## 七类已上线类型
 
 ### `training_state_change / repeated_plan_deviation`
 
-- 状态：`live`，Aevum B1 已登记。
+- 状态：`live`，Aevum B2 已登记。
 - schema：`training_state_change.v1`
 
 ```json
@@ -61,31 +60,11 @@ domain snapshot
 - policy：normal；confidence floor `0.90`；最大频率 `1/日`；retention ceiling
   `7 天`；模型 `forbidden`；正常自动上报。
 
-## B2 候选类型
+计划依从不再是独立类型：14 日至少 4 条计划且偏移比例至少 50% 时，判断合并进
+`repeated_plan_deviation` 的 significance；payload 仍严格使用 B1 schema，同一证据
+窗口最多生成一份 Report。
 
-以下类型只在 Ultreia 本地 catalog 登记。Aevum 未完成 contract / policy 审核前，
-它们不是可发送 Report type。
-
-### 1. `training_state_change / training_adherence_pattern_change`
-
-```json
-{
-  "type": "training_state_change",
-  "signal_kind": "training_adherence_pattern_change",
-  "schema_version": "training_adherence_pattern_change.v1",
-  "window": { "start_date": "date", "end_date": "date", "lookback_days": 14 },
-  "direction": "lower_adherence",
-  "affected_ratio": "number 0..1",
-  "sample_days": 14
-}
-```
-
-- 阈值：14 日至少 4 条计划、至少 50% 为 partial / missed，且 B1 偏差检测已触发。
-- 禁止字段：单条计划 / 训练、UUID、训练指标、笔记、GPS、健康和地点详情。
-- policy：normal；floor `0.85`；最多 `1/7 天`；retention `30 天`；模型可仅看
-  minimized features；本地 `shadow`。
-
-### 2. `training_load_change / rapid_training_load_change`
+### `training_load_change / rapid_training_load_change`
 
 ```json
 {
@@ -102,10 +81,10 @@ domain snapshot
 - 阈值：两周各至少 2 次；前一周总时长至少 120 分钟；最近周相对前周 `>=1.5x`
   或 `<=0.5x`，且绝对差至少 120 分钟。
 - 禁止字段：单次时长 / 距离 / 爬升 / RPE、workout UUID、GPS、笔记、地点。
-- policy：normal；floor `0.85`；最多 `1/7 天`；retention `21 天`；模型可仅看
-  minimized features；本地 `shadow`。
+- policy：normal；floor `0.85`；最多 `1/7 天`；retention `21 天`；模型
+  `allowed_minimized`（当前未启用）；自动上报。
 
-### 3. `recovery_state_change / recovery_risk_trend`
+### `recovery_state_change / recovery_risk_trend`
 
 ```json
 {
@@ -124,10 +103,11 @@ domain snapshot
   平均下降 `>=0.5`；或高 RPE 训练至少 2 次。
 - 禁止字段：每日 sleep / legs / energy 值、疾病标签明细、RPE 数值对应训练、
   心率、HRV、Body Battery、笔记、诊断或医疗详情。
+- `sample_days=0` 合法：仅连续高 RPE 也可构成风险证据。
 - policy：sensitive；floor `0.90`；最多 `1/7 天`；retention `14 天`；模型
-  `forbidden`；本地 `shadow`。
+  `forbidden`；自动上报，Aevum 记录后 `needs_user`。
 
-### 4. `goal_context_change / target_race_context_change`
+### `goal_context_change / target_race_context_change`
 
 ```json
 {
@@ -141,32 +121,34 @@ domain snapshot
 }
 ```
 
-- 阈值：前一个完整本地日内至少一个仍为 target 的结构化赛事新增或修改。当前没有
-  赛事变更审计表，取消 target 无法可靠区分于普通历史赛事编辑，因此不猜测、不触发。
+- 阈值：前一个完整本地日内至少一个结构化赛事的 target 上下文新增、修改或取消。
 - 禁止字段：赛事名、地点、报名信息、费用、race UUID、精确用户目标描述。
-- policy：normal；floor `0.95`；最多 `1/日`；retention `90 天`；模型可仅看
-  minimized features；`needs_user`。
+- policy：normal；floor `0.95`；最多 `1/日`；retention `90 天`；模型
+  `allowed_minimized`（当前未启用）；自动上报。
 
-### 5. `training_preference_change / stable_preference_or_constraint_change`
+### `training_preference_change / preference_context_invalidated`
 
 ```json
 {
   "type": "training_preference_change",
-  "signal_kind": "stable_preference_or_constraint_change",
-  "schema_version": "training_preference_change.v1",
+  "signal_kind": "preference_context_invalidated",
+  "schema_version": "training_preference_invalidation.v1",
   "change_window": "date",
   "change_count": "integer",
-  "change_kinds": ["updated | removed"]
+  "operations": { "updated": "integer", "removed": "integer" },
+  "context_version": "64-char lowercase SHA-256"
 }
 ```
 
 - 阈值：前一个完整本地日内，至少一条已接受的训练偏好事实发生实质更新 / 归档；
-  不读取事实正文，不因纯措辞变化触发。
+  `change_count = updated + removed`。
+- 当前 active 集合只用内部 id、updated_at 规范排序后在本地计算 SHA-256；内部元数据
+  只进入 hash，不进入 payload。归档项计入 removed，但不进入 active context hash。
 - 禁止字段：Memory 正文、来源对话、source UUID、日程详情、健康或家庭约束内容。
-- policy：normal；floor `0.90`；最多 `1/7 天`；retention `180 天`；模型可仅看
-  minimized features；本地 `shadow`。
+- policy：normal；floor `0.90`；最多 `1/7 天`；retention `180 天`；模型
+  `allowed_minimized`（当前未启用）；自动上报。
 
-### 6. `training_progress_change / notable_progress_or_milestone`
+### `training_progress_change / notable_progress_or_milestone`
 
 ```json
 {
@@ -183,10 +165,10 @@ domain snapshot
 - 阈值：90 日基线至少 4 次训练；最近 7 日的单次最大值比此前 rolling max 高
   `>=10%`，且最低门槛为 10 km / 60 min / 500 m ascent。
 - 禁止字段：单次训练值、日期、路线、GPS、workout UUID、配速、心率和笔记。
-- policy：normal；floor `0.90`；最多 `1/14 天`；retention `90 天`；模型可仅看
-  minimized features；本地 `shadow`。
+- policy：normal；floor `0.90`；最多 `1/14 天`；retention `90 天`；模型
+  `allowed_minimized`（当前未启用）；自动上报。
 
-### 7. `health_risk_change / recurring_injury_or_health_risk_pattern`
+### `health_risk_change / recurring_injury_or_health_risk_pattern`
 
 ```json
 {
@@ -205,24 +187,16 @@ domain snapshot
 - 禁止字段：症状 / 伤处原文、训练笔记、疾病标签日期、医疗判断、心率 / HRV、
   用药、诊断、GPS、workout UUID。
 - policy：sensitive；floor `0.95`；最多 `1/14 天`；retention `14 天`；模型
-  `forbidden`；`needs_user`。
+  `forbidden`；自动上报，Aevum 记录后 `needs_user`。
 
-## Aevum B2 待实现
+## Aevum B2 已实现边界
 
-1. 对每个候选的 `report type + signal_kind + schema version` 独立审核；未批准项不
-   加入 ingress allowlist。
-2. 为批准项登记允许字段、敏感度 ceiling、confidence floor、最大频率、retention
-   ceiling 和 standing policy；Aevum 可进一步收紧，不能由 Ultreia 放宽。
-3. ingress 对未知 type / signal / 字段、过期 envelope、`occurred_at > reported_at`
-   返回稳定的确定性 4xx 错误码；网络 / 5xx 才属于可重试失败。
-4. 明确 `needs_user` 的异常队列和最小展示，不把敏感候选静默变成 memory 或 Action。
-5. 保持 Report / derived memory / Action 三层分离：recorded Report 只进入证据 journal；
-   派生记忆需要 Aevum policy 与来源引用；训练 Action 必须回 Ultreia 再做权限、最新
-   状态、风险、冲突和幂等检查。
-6. 若启用模型分类，模型输入必须是本文件 schema 前的 minimized features，输出只能
-   选择 Aevum allowlist key；模型超时 / 无效输出按无候选处理，不回退到扩大权限。
-7. 决定 durable shadow journal 和 blocked envelope archive 的表、RLS、TTL 删除作业与
-   运维查询；Ultreia 当前 structured log 不作为长期存储。
+- Aevum ingress v8 对七类 exact schema、sensitivity、confidence、TTL 和 standing
+  policy 做接收端校验；未知 type / signal / 字段或未来 `occurred_at` 返回确定性 4xx。
+- Aevum 不替 producer 限频，因此 Ultreia 必须根据每类最后成功投递时间执行 cadence。
+- Report / derived memory / Action 保持三层分离：recorded Report 只提供证据；派生记忆
+  由 Aevum policy 决定，训练 Action 必须回 Ultreia 重新做权限、最新状态、风险、冲突和幂等检查。
+- blocked envelope archive 仍未建表；任何迁移继续走 SQL gate，不影响七类 live 投递。
 
 ## 当前 paused pending 的安全处理
 
@@ -231,7 +205,7 @@ domain snapshot
 1. `paused_until` 到期前，Cron 不读取新候选、不发送、不修改 pending bundle。
 2. 到期后只用原 report ID、payload、content hash 和 idempotency key 重试一次。
 3. Aevum 对无效时间 envelope 返回 422 后，Ultreia 将状态置为 `blocked`，原 envelope
-   继续保留，停止重试；之后只允许本地 shadow discovery。
+   继续保留，停止重试；同一类型停止新发现，其它六类继续独立运行。
 4. 不直接清空 pending 字段，因为这会丢失生产事故证据并允许新任务占用同一槽位。
 
 如要恢复该 live signal 的新 Report，建议做一次**另行批准的事务迁移**：先把整份失败

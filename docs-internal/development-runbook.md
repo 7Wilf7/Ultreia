@@ -62,7 +62,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - 本机没装 supabase CLI / scoop，用 `npx supabase` 即可（首次自动下载）。部署时 `WARNING: Docker is not running` 可忽略（远程部署不需要 Docker）。
 - 函数：
   - `daily-coach-dispatch`（pg_cron 定时生成每日 AI 打卡、后台周报和夜间 Memory 审核 → FCM 推送 / 写 `push_inbox`；部署加 `--no-verify-jwt`；AI provider 优先 desktop Codex runner，失败回退 DeepSeek；个人模式不扣钱包）
-  - `agent-report-dispatch`（独立 Report candidate pipeline；每 30 分钟 Cron，本地 00:30 从训练域快照提取去隐私特征并运行 detector catalog，其余 tick 只处理到期重试；当前只有 `training_state_change / repeated_plan_deviation` 可写 outbox 并以 HMAC 投递 Aevum，其他类型只写最小化 shadow 日志；不调用 LLM、不推通知、不写训练数据；部署加 `--no-verify-jwt`）
+  - `agent-report-dispatch`（七类独立 Report pipeline；每 30 分钟 Cron，本地 00:30 从训练域快照提取去隐私特征并运行 Aevum B2 detector catalog，其余 tick 只处理到期重试；每类独立 outbox / lease / cadence，以 HMAC 投递 Aevum，单类 blocked / paused / retry 不阻塞其它类型；不调用 LLM、不推通知、不写训练数据；部署加 `--no-verify-jwt`）
   - `coach-proxy`（AI Coach 代理；优先把 `coach_chat` / `weekly_report` / `memory_update` / `plan_extract` / `plan_deviation_rescue` 等任务派给 desktop Codex runner，失败回退 DeepSeek；个人模式不检查钱包余额、不扣钱包）
   - `weather-proxy`（彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；个人模式不检查钱包余额、不扣钱包）
   - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
@@ -76,11 +76,12 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 
 ### Agent Report 运行边界
 
-- `occurred_at` 表示统计窗口在用户时区内结束的真实 instant。Asia/Shanghai 的本地日结束会先转换成 UTC，绝不能把本地日期直接拼 `Z`；异常情况下还会限制为不晚于 `reported_at`。
+- `occurred_at` 表示统计窗口在用户时区内结束的真实 instant。Asia/Shanghai 的本地日结束会先转换成 UTC，绝不能把本地日期直接拼 `Z`；如果边界晚于 `reported_at`，必须报错并拒绝建 envelope，不能钳制或改写时间。
 - outbox 有 pending envelope 时，新 Cron 只能重试原 envelope，固定沿用 report ID、payload、content hash 和 idempotency key，不能用新候选覆盖。
 - 只有网络错误和 5xx 可重试；任何确定性 4xx（包括 422、429）进入 `blocked` 并保留原 envelope。三次可重试失败后进入 24 小时 `paused`，`paused_until` 到期前不得运行。
-- `blocked` 会阻止新的 live envelope，但本地 00:30 仍可在短租约保护下执行只读 shadow discovery；它不能修改或清空失败 envelope。
-- shadow journal 是 Edge structured log，不是新的数据库事实表；只记录聚合 payload、置信度、处置和 retention ceiling。若未来需要可查询、可物理删除的 durable journal，必须先走 Supabase SQL gate。
+- 七个 live 类型每轮最多各处理一次，分别 claim 短租约；某一行 blocked、paused、retry 或投递失败不影响其它行。producer 根据该类型 `delivered_at` 强制执行 Aevum catalog 的最大频率，未到期不创建 pending。
+- `training_preference_change` 只读取内部 `id / updated_at / status`：归档计入 removed，active 集合规范排序后本地 SHA-256；envelope 只含 operations 计数和 opaque `context_version`。
+- 恢复和健康风险是 sensitive；Aevum 返回 `recorded` 且 disposition 为 `needs_user` 仍算成功投递，不得重试。
 - 禁止用 `force:true` 制造 canary / fake Report。部署后只观察正常 Cron；任何生产 pending 迁移都需先给操作范围和影响，获得 Wilf 批准。
 
 ## 历史教训（避免重蹈）

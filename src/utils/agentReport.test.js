@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   REPORT_CATALOG,
   REPORT_DETECTORS,
-  REPORT_TYPE,
-  SIGNAL_KIND,
   buildReportEnvelope,
+  buildReportSignatureMessage,
   buildTrainingStateCandidate,
   canonicalJson,
   classifyIngressResult,
@@ -13,11 +12,11 @@ import {
   decideOutboxRun,
   discoverReportCandidates,
   extractReportFeatures,
-  isShadowJournalDue,
+  isLiveCadenceDue,
   localDateEndInstant,
   localDateKey,
   localDateStartInstant,
-  shadowJournalEntry,
+  scheduleLiveOutboxRuns,
   shiftDateKey,
   validateCandidateAgainstCatalog,
   validateStoredPendingEnvelope,
@@ -34,7 +33,45 @@ const actual = (id, date, distance = 10, extra = {}) => ({
   duration: 60, is_planned: false, updated_at: `${date}T12:00:00Z`, ...extra,
 });
 
-describe("shadow training state candidate", () => {
+const AEVUM_B2_FIXTURES = [
+  {
+    type: "training_state_change", signal_kind: "repeated_plan_deviation", schema_version: "training_state_change.v1",
+    window: { start_date: "2026-06-28", end_date: "2026-07-11", lookback_days: 14 },
+    counts: { planned: 6, done: 3, partial: 1, missed: 2, affected: 3, missed_key_sessions: 1 },
+    affected_ratio: 0.5, state: "active",
+  },
+  {
+    type: "training_load_change", signal_kind: "rapid_training_load_change", schema_version: "training_load_change.v1",
+    window: { start_date: "2026-06-28", end_date: "2026-07-11", comparison_days: 7 },
+    direction: "rapid_increase", duration_change_ratio: 1.75, session_counts: { recent: 5, previous: 3 },
+  },
+  {
+    type: "recovery_state_change", signal_kind: "recovery_risk_trend", schema_version: "recovery_state_change.v1",
+    window: { start_date: "2026-07-05", end_date: "2026-07-11", lookback_days: 7 },
+    risk_level: "elevated", poor_readiness_days: 2, high_rpe_sessions: 1, sample_days: 5,
+  },
+  {
+    type: "goal_context_change", signal_kind: "target_race_context_change", schema_version: "goal_context_change.v1",
+    change_window: "2026-07-11", target_count: 2, nearest_target_days: 45,
+    priority_counts: { A: 1, B: 1, C: 0, unset: 0 },
+  },
+  {
+    type: "training_preference_change", signal_kind: "preference_context_invalidated", schema_version: "training_preference_invalidation.v1",
+    change_window: "2026-07-11", change_count: 2, operations: { updated: 1, removed: 1 }, context_version: "a".repeat(64),
+  },
+  {
+    type: "training_progress_change", signal_kind: "notable_progress_or_milestone", schema_version: "training_progress_change.v1",
+    window: { start_date: "2026-07-05", end_date: "2026-07-11", lookback_days: 7 },
+    metric: "distance", improvement_ratio: 1.2, baseline_days: 90,
+  },
+  {
+    type: "health_risk_change", signal_kind: "recurring_injury_or_health_risk_pattern", schema_version: "health_risk_change.v1",
+    window: { start_date: "2026-06-14", end_date: "2026-07-11", lookback_days: 28 },
+    signal_days: 3, signal_sources: { workout_text_days: 2, sick_tag_days: 1 }, recurrence: "repeated_days",
+  },
+];
+
+describe("training state candidate", () => {
   it("triggers for two deviations but not one", async () => {
     const two = await buildTrainingStateCandidate([plan("p1", "2026-07-01"), plan("p2", "2026-07-02")], { now: NOW });
     const one = await buildTrainingStateCandidate([plan("p1", "2026-07-01")], { now: NOW });
@@ -114,17 +151,19 @@ describe("occurred_at timezone semantics", () => {
     expect(localDateEndInstant("2026-07-15", "Asia/Shanghai").toISOString()).toBe("2026-07-15T15:59:59.999Z");
   });
 
-  it("fails closed by clamping occurred_at to an unusually early reported_at", async () => {
+  it("rejects a future occurred_at instead of hiding it", async () => {
     const candidate = await buildTrainingStateCandidate([
       plan("p1", "2026-07-01"), plan("p2", "2026-07-02"),
     ], { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
     const early = new Date("2026-07-14T15:00:00.000Z");
-    const envelope = await buildReportEnvelope(candidate, { reportedAt: early, timeZone: "Asia/Shanghai" });
-    expect(envelope.occurred_at).toBe(early.toISOString());
+    await expect(buildReportEnvelope(candidate, { reportedAt: early, timeZone: "Asia/Shanghai" }))
+      .rejects.toThrow("report_occurred_at_in_future");
   });
 });
 
 describe("registered detector pipeline", () => {
+  const activePreferenceId = "123e4567-e89b-42d3-a456-426614174111";
+  const removedPreferenceId = "123e4567-e89b-42d3-a456-426614174222";
   const domainSnapshot = {
     workouts: [
       plan("private-plan-1", "2026-07-01"), plan("private-plan-2", "2026-07-02"),
@@ -146,67 +185,158 @@ describe("registered detector pipeline", () => {
       { date: "2026-07-12", tags: [], readiness_sleep: 1, readiness_legs: 2, readiness_energy: 1 },
     ],
     races: [{ date: "2026-09-01", is_target: true, priority: "A", updated_at: "2026-07-14T02:00:00.000Z" }],
-    memoryFacts: [{ category: "training_preferences", status: "active", updated_at: "2026-07-14T03:00:00.000Z" }],
+    memoryFacts: [
+      { id: activePreferenceId, category: "training_preferences", status: "active", updated_at: "2026-07-14T03:00:00.000Z" },
+      { id: removedPreferenceId, category: "training_preferences", status: "archived", updated_at: "2026-07-14T04:00:00.000Z" },
+    ],
   };
 
-  it("uses a catalog and keeps only the production pair live", () => {
-    expect(REPORT_CATALOG).toHaveLength(8);
-    expect(REPORT_CATALOG.filter(entry => entry.runtime === "live")).toEqual([
-      expect.objectContaining({ reportType: REPORT_TYPE, signalKind: SIGNAL_KIND }),
+  it("matches the seven-entry Aevum B2 catalog and removes adherence", () => {
+    expect(REPORT_CATALOG).toHaveLength(7);
+    expect(REPORT_CATALOG.every(entry => entry.runtime === "live")).toBe(true);
+    expect(REPORT_CATALOG.map(entry => [entry.reportType, entry.signalKind])).toEqual([
+      ["training_state_change", "repeated_plan_deviation"],
+      ["training_load_change", "rapid_training_load_change"],
+      ["recovery_state_change", "recovery_risk_trend"],
+      ["goal_context_change", "target_race_context_change"],
+      ["training_preference_change", "preference_context_invalidated"],
+      ["training_progress_change", "notable_progress_or_milestone"],
+      ["health_risk_change", "recurring_injury_or_health_risk_pattern"],
     ]);
+    expect(REPORT_CATALOG.map(entry => entry.confidenceFloor)).toEqual([0.9, 0.85, 0.9, 0.95, 0.9, 0.9, 0.95]);
+    expect(REPORT_CATALOG.map(entry => entry.sensitivity)).toEqual(["normal", "normal", "sensitive", "normal", "normal", "normal", "sensitive"]);
+    expect(REPORT_CATALOG.map(entry => entry.retentionCeilingDays)).toEqual([7, 21, 14, 90, 180, 90, 14]);
+    expect(REPORT_CATALOG.map(entry => entry.maxFrequencyDays)).toEqual([1, 7, 7, 1, 7, 14, 14]);
+    expect(REPORT_CATALOG.map(entry => entry.modelParticipation)).toEqual([
+      "forbidden", "allowed_minimized", "forbidden", "allowed_minimized",
+      "allowed_minimized", "allowed_minimized", "forbidden",
+    ]);
+    expect(REPORT_CATALOG.some(entry => entry.signalKind === "training_adherence_pattern_change")).toBe(false);
     expect(new Set(REPORT_CATALOG.map(entry => entry.detectorId)).size).toBe(REPORT_CATALOG.length);
     expect(REPORT_DETECTORS.map(detector => detector.id)).toEqual(REPORT_CATALOG.map(entry => entry.detectorId));
   });
 
-  it("discovers multiple minimized candidates without changing the scheduler", async () => {
+  it("accepts all seven Aevum B2 fixtures without translation", () => {
+    for (const payload of AEVUM_B2_FIXTURES) {
+      const entry = REPORT_CATALOG.find(value => value.reportType === payload.type && value.signalKind === payload.signal_kind);
+      expect(validateCandidateAgainstCatalog({
+        reportType: payload.type,
+        signalKind: payload.signal_kind,
+        confidence: entry.confidenceFloor,
+        typedPayload: payload,
+      })).toMatchObject({ ok: true, entry });
+    }
+  });
+
+  it("emits all seven exact B2 payload schemas", async () => {
     const result = await discoverReportCandidates(domainSnapshot, { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
-    const signals = result.candidates.map(candidate => candidate.signalKind);
-    expect(signals).toContain(SIGNAL_KIND);
-    expect(signals).toContain("training_adherence_pattern_change");
-    expect(signals).toContain("rapid_training_load_change");
-    expect(signals).toContain("recovery_risk_trend");
-    expect(signals).toContain("target_race_context_change");
-    expect(signals).toContain("stable_preference_or_constraint_change");
-    expect(signals).toContain("notable_progress_or_milestone");
-    expect(signals).toContain("recurring_injury_or_health_risk_pattern");
+    const contextVersion = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonicalJson([
+      { id: activePreferenceId, updated_at: "2026-07-14T03:00:00.000Z" },
+    ]))).then(bytes => [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join(""));
+    expect(result.candidates.map(candidate => candidate.typedPayload)).toEqual([
+      {
+        type: "training_state_change", signal_kind: "repeated_plan_deviation", schema_version: "training_state_change.v1",
+        window: { start_date: "2026-07-01", end_date: "2026-07-14", lookback_days: 14 },
+        counts: { planned: 4, done: 0, partial: 0, missed: 4, affected: 4, missed_key_sessions: 0 },
+        affected_ratio: 1, state: "active",
+      },
+      {
+        type: "training_load_change", signal_kind: "rapid_training_load_change", schema_version: "training_load_change.v1",
+        window: { start_date: "2026-07-01", end_date: "2026-07-14", comparison_days: 7 },
+        direction: "rapid_increase", duration_change_ratio: 3, session_counts: { recent: 3, previous: 3 },
+      },
+      {
+        type: "recovery_state_change", signal_kind: "recovery_risk_trend", schema_version: "recovery_state_change.v1",
+        window: { start_date: "2026-07-08", end_date: "2026-07-14", lookback_days: 7 },
+        risk_level: "high", poor_readiness_days: 3, high_rpe_sessions: 2, sample_days: 3,
+      },
+      {
+        type: "goal_context_change", signal_kind: "target_race_context_change", schema_version: "goal_context_change.v1",
+        change_window: "2026-07-14", target_count: 1, nearest_target_days: 48,
+        priority_counts: { A: 1, B: 0, C: 0, unset: 0 },
+      },
+      {
+        type: "training_preference_change", signal_kind: "preference_context_invalidated", schema_version: "training_preference_invalidation.v1",
+        change_window: "2026-07-14", change_count: 2, operations: { updated: 1, removed: 1 }, context_version: contextVersion,
+      },
+      {
+        type: "training_progress_change", signal_kind: "notable_progress_or_milestone", schema_version: "training_progress_change.v1",
+        window: { start_date: "2026-07-08", end_date: "2026-07-14", lookback_days: 7 },
+        metric: "distance", improvement_ratio: 2.5, baseline_days: 90,
+      },
+      {
+        type: "health_risk_change", signal_kind: "recurring_injury_or_health_risk_pattern", schema_version: "health_risk_change.v1",
+        window: { start_date: "2026-06-17", end_date: "2026-07-14", lookback_days: 28 },
+        signal_days: 2, signal_sources: { workout_text_days: 2, sick_tag_days: 1 }, recurrence: "repeated_days",
+      },
+    ]);
     for (const candidate of result.candidates) {
       expect(validateCandidateAgainstCatalog(candidate).ok).toBe(true);
     }
   });
 
-  it("never exposes raw rows, ids, notes, or health details in candidates or shadow journal", async () => {
+  it("keeps preference hashing stable and every envelope free of raw text and internal ids", async () => {
     const result = await discoverReportCandidates(domainSnapshot, { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
-    const secrets = ["private-plan-1", "recent-1", "private knee pain detail", "private sore achilles detail"];
+    const reordered = await discoverReportCandidates({
+      ...domainSnapshot,
+      memoryFacts: [...domainSnapshot.memoryFacts].reverse().map(row => Object.fromEntries(Object.entries(row).reverse())),
+    }, { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
+    const firstPreference = result.candidates.find(candidate => candidate.signalKind === "preference_context_invalidated");
+    const secondPreference = reordered.candidates.find(candidate => candidate.signalKind === "preference_context_invalidated");
+    expect(firstPreference.typedPayload.context_version).toBe(secondPreference.typedPayload.context_version);
+    expect(firstPreference.typedPayload.change_count).toBe(
+      firstPreference.typedPayload.operations.updated + firstPreference.typedPayload.operations.removed,
+    );
+    const secrets = [
+      "private-plan-1", "recent-1", "private knee pain detail", "private sore achilles detail",
+      activePreferenceId, removedPreferenceId,
+    ];
     for (const candidate of result.candidates) {
       expect(containsForbiddenReportData(candidate.typedPayload, secrets)).toBe(false);
-      const journal = shadowJournalEntry(candidate, { observedAt: INCIDENT_NOW });
-      if (candidate.catalog.runtime === "live") expect(journal).toBeNull();
-      else {
-        expect(journal.model_used).toBe(false);
-        expect(journal.novelty).toBe("aggregate_changed");
-        expect(journal.retention_ceiling_at).toBeTruthy();
-        expect(containsForbiddenReportData(journal, secrets)).toBe(false);
-      }
+      const envelope = await buildReportEnvelope(candidate, { reportedAt: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
+      expect(containsForbiddenReportData(envelope, secrets)).toBe(false);
+      expect(envelope.source_ref.length).toBeLessThanOrEqual(64);
+      expect(envelope.root_lineage_id.length).toBeLessThanOrEqual(64);
+      expect(envelope.evidence_refs[0].ref.length).toBeLessThanOrEqual(64);
+      expect(canonicalJson(envelope)).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i);
     }
   });
 
-  it("ignores malformed external dates instead of failing the whole discovery run", () => {
-    const features = extractReportFeatures({
+  it("supports high-RPE recovery risk with sample_days=0", async () => {
+    const result = await discoverReportCandidates({
+      workouts: [
+        actual("rpe-1", "2026-07-10", 10, { rpe: 9 }),
+        actual("rpe-2", "2026-07-11", 10, { rpe: 8 }),
+      ],
+      dailyNotes: [], races: [], memoryFacts: [],
+    }, { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
+    const payload = result.candidates.find(candidate => candidate.signalKind === "recovery_risk_trend")?.typedPayload;
+    expect(payload).toMatchObject({ sample_days: 0, poor_readiness_days: 0, high_rpe_sessions: 2 });
+    expect(validateCandidateAgainstCatalog(result.candidates.find(candidate => candidate.signalKind === "recovery_risk_trend")).ok).toBe(true);
+  });
+
+  it("detects removing the final target race without exposing race identity", async () => {
+    const result = await discoverReportCandidates({
+      workouts: [], dailyNotes: [], memoryFacts: [],
+      races: [{ id: "private-race-id", date: "2026-09-01", is_target: false, priority: "A", updated_at: "2026-07-14T03:00:00.000Z" }],
+    }, { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
+    const payload = result.candidates.find(candidate => candidate.signalKind === "target_race_context_change")?.typedPayload;
+    expect(payload).toEqual({
+      type: "goal_context_change", signal_kind: "target_race_context_change", schema_version: "goal_context_change.v1",
+      change_window: "2026-07-14", target_count: 0, nearest_target_days: null,
+      priority_counts: { A: 0, B: 0, C: 0, unset: 0 },
+    });
+    expect(canonicalJson(payload)).not.toContain("private-race-id");
+  });
+
+  it("ignores malformed external dates instead of failing discovery", async () => {
+    const features = await extractReportFeatures({
       races: [{ date: "2026-99-99", is_target: true, updated_at: "invalid" }],
-      memoryFacts: [{ category: "training_preferences", status: "active", updated_at: "invalid" }],
+      memoryFacts: [{ id: "bad", category: "training_preferences", status: "active", updated_at: "invalid" }],
     }, { now: INCIDENT_NOW, timeZone: "Asia/Shanghai" });
     expect(features.goalContext.nearestTargetDays).toBeNull();
     expect(features.goalContext.changedCount).toBe(0);
     expect(features.preference.changedCount).toBe(0);
-  });
-
-  it("rate-limits each shadow signal to its catalog frequency slot", () => {
-    const entry = REPORT_CATALOG.find(item => item.maxFrequencyDays === 14 && item.runtime !== "live");
-    const candidate = { reportType: entry.reportType, signalKind: entry.signalKind, catalog: entry };
-    const dueDays = Array.from({ length: 28 }, (_, offset) => new Date(INCIDENT_NOW.getTime() + offset * 86400000))
-      .filter(observedAt => isShadowJournalDue(candidate, { observedAt, timeZone: "Asia/Shanghai" }));
-    expect(dueDays).toHaveLength(2);
-    expect((dueDays[1] - dueDays[0]) / 86400000).toBe(14);
   });
 
   it("rejects invented types, fields, and confidence below the catalog floor", () => {
@@ -275,6 +405,52 @@ describe("outbox retry and concurrency state machine", () => {
       .toEqual({ action: "discover", reason: "candidate_window" });
   });
 
+  it("schedules all seven due live types in one Cron round", () => {
+    const rows = REPORT_CATALOG.map((entry, index) => ({
+      id: index + 1,
+      report_type: entry.reportType,
+      signal_kind: entry.signalKind,
+      status: "idle",
+      pending_envelope: null,
+    }));
+    const scheduled = scheduleLiveOutboxRuns(rows, { now, candidateWindow: true });
+    expect(scheduled).toHaveLength(7);
+    expect(scheduled.every(item => item.run.action === "discover")).toBe(true);
+  });
+
+  it("keeps blocked, retry, and discover work independent", () => {
+    const rows = REPORT_CATALOG.map((entry, index) => ({
+      id: index + 1,
+      report_type: entry.reportType,
+      signal_kind: entry.signalKind,
+      status: "idle",
+      pending_envelope: null,
+    }));
+    rows[0] = { ...rows[0], ...pending, status: "blocked" };
+    rows[1] = { ...rows[1], ...pending, status: "retry_wait", next_attempt_at: "2026-07-14T23:00:00Z" };
+    const actions = scheduleLiveOutboxRuns(rows, { now, candidateWindow: true }).map(item => item.run);
+    expect(actions[0]).toEqual({ action: "skip", reason: "permanent_failure" });
+    expect(actions[1]).toEqual({ action: "retry", reason: "retry_due" });
+    expect(actions.slice(2).every(run => run.action === "discover")).toBe(true);
+  });
+
+  it("enforces each live type cadence from its last successful delivery", () => {
+    const weekly = REPORT_CATALOG.find(entry => entry.maxFrequencyDays === 7);
+    const delivered = { delivered_at: "2026-07-10T00:00:00.000Z" };
+    expect(isLiveCadenceDue(delivered, weekly, { now })).toBe(false);
+    expect(isLiveCadenceDue(delivered, weekly, { now: new Date("2026-07-17T00:00:00.000Z") })).toBe(true);
+    expect(isLiveCadenceDue({}, weekly, { now })).toBe(true);
+    expect(isLiveCadenceDue({ delivered_at: "invalid" }, weekly, { now })).toBe(false);
+
+    const row = {
+      report_type: weekly.reportType, signal_kind: weekly.signalKind,
+      status: "delivered", pending_envelope: null, delivered_at: "2026-07-10T00:00:00.000Z",
+    };
+    const scheduled = scheduleLiveOutboxRuns([row], { now, candidateWindow: true })
+      .find(item => item.entry === weekly);
+    expect(scheduled.run).toEqual({ action: "skip", reason: "cadence_not_due" });
+  });
+
   it("retries only network and 5xx, then pauses; all 4xx are permanent", () => {
     expect(classifyIngressResult({ status: 0, attemptCount: 0 })).toMatchObject({ kind: "retry", delaySeconds: 1800, attemptCount: 1 });
     expect(classifyIngressResult({ status: 503, attemptCount: 1 })).toMatchObject({ kind: "retry", delaySeconds: 7200, attemptCount: 2 });
@@ -288,6 +464,14 @@ describe("outbox retry and concurrency state machine", () => {
     for (const status of ["recorded", "replayed", "duplicate"]) {
       expect(classifyIngressResult({ status: 200, receipt: { status } }).kind).toBe("delivered");
     }
+  });
+
+  it("treats recorded sensitive needs_user receipts as delivered", () => {
+    expect(classifyIngressResult({
+      status: 202,
+      receipt: { status: "recorded", disposition: "needs_user" },
+      attemptCount: 0,
+    })).toEqual({ kind: "delivered" });
   });
 
   it("binds retries to the original report id, content hash, payload, and idempotency key", async () => {
@@ -304,5 +488,13 @@ describe("outbox retry and concurrency state machine", () => {
       .resolves.toEqual({ ok: false, reason: "report_id_mismatch" });
     await expect(validateStoredPendingEnvelope({ ...valid, pending_envelope: { ...valid.pending_envelope, typed_payload: { changed: true } } }))
       .resolves.toEqual({ ok: false, reason: "payload_hash_mismatch" });
+  });
+
+  it("preserves the deployed HMAC canonical message", () => {
+    expect(buildReportSignatureMessage({
+      path: "/functions/v1/aevum-agent-report-ingress",
+      timestamp: 1784046600,
+      bodyHash: "a".repeat(64),
+    })).toBe(`POST\n/functions/v1/aevum-agent-report-ingress\nultreia\n1784046600\n${"a".repeat(64)}`);
   });
 });

@@ -23,24 +23,11 @@ export const REPORT_CATALOG = Object.freeze([
     allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "counts", "affected_ratio", "state"],
   },
   {
-    reportType: "training_state_change",
-    signalKind: "training_adherence_pattern_change",
-    schemaVersion: "training_adherence_pattern_change.v1",
-    detectorId: "training_adherence_pattern_change",
-    runtime: "shadow",
-    sensitivity: "normal",
-    confidenceFloor: 0.85,
-    maxFrequencyDays: 7,
-    retentionCeilingDays: 30,
-    modelParticipation: "allowed_minimized",
-    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "direction", "affected_ratio", "sample_days"],
-  },
-  {
     reportType: "training_load_change",
     signalKind: "rapid_training_load_change",
     schemaVersion: "training_load_change.v1",
     detectorId: "rapid_training_load_change",
-    runtime: "shadow",
+    runtime: "live",
     sensitivity: "normal",
     confidenceFloor: 0.85,
     maxFrequencyDays: 7,
@@ -53,7 +40,7 @@ export const REPORT_CATALOG = Object.freeze([
     signalKind: "recovery_risk_trend",
     schemaVersion: "recovery_state_change.v1",
     detectorId: "recovery_risk_trend",
-    runtime: "shadow",
+    runtime: "live",
     sensitivity: "sensitive",
     confidenceFloor: 0.9,
     maxFrequencyDays: 7,
@@ -66,7 +53,7 @@ export const REPORT_CATALOG = Object.freeze([
     signalKind: "target_race_context_change",
     schemaVersion: "goal_context_change.v1",
     detectorId: "target_race_context_change",
-    runtime: "needs_user",
+    runtime: "live",
     sensitivity: "normal",
     confidenceFloor: 0.95,
     maxFrequencyDays: 1,
@@ -76,23 +63,23 @@ export const REPORT_CATALOG = Object.freeze([
   },
   {
     reportType: "training_preference_change",
-    signalKind: "stable_preference_or_constraint_change",
-    schemaVersion: "training_preference_change.v1",
-    detectorId: "stable_preference_or_constraint_change",
-    runtime: "shadow",
+    signalKind: "preference_context_invalidated",
+    schemaVersion: "training_preference_invalidation.v1",
+    detectorId: "preference_context_invalidated",
+    runtime: "live",
     sensitivity: "normal",
     confidenceFloor: 0.9,
     maxFrequencyDays: 7,
     retentionCeilingDays: 180,
     modelParticipation: "allowed_minimized",
-    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "change_window", "change_count", "change_kinds"],
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "change_window", "change_count", "operations", "context_version"],
   },
   {
     reportType: "training_progress_change",
     signalKind: "notable_progress_or_milestone",
     schemaVersion: "training_progress_change.v1",
     detectorId: "notable_progress_or_milestone",
-    runtime: "shadow",
+    runtime: "live",
     sensitivity: "normal",
     confidenceFloor: 0.9,
     maxFrequencyDays: 14,
@@ -105,7 +92,7 @@ export const REPORT_CATALOG = Object.freeze([
     signalKind: "recurring_injury_or_health_risk_pattern",
     schemaVersion: "health_risk_change.v1",
     detectorId: "recurring_injury_or_health_risk_pattern",
-    runtime: "needs_user",
+    runtime: "live",
     sensitivity: "sensitive",
     confidenceFloor: 0.95,
     maxFrequencyDays: 14,
@@ -133,6 +120,10 @@ export async function sha256Hex(value, cryptoImpl = globalThis.crypto) {
   const bytes = typeof value === "string" ? new TextEncoder().encode(value) : value;
   const digest = await cryptoImpl.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function buildReportSignatureMessage({ method = "POST", path, source = "ultreia", timestamp, bodyHash }) {
+  return [method, path, source, timestamp, bodyHash].join("\n");
 }
 
 export function localDateKey(date, timeZone) {
@@ -258,7 +249,11 @@ export async function buildTrainingStateCandidate(rows, options = {}) {
     sourceFingerprint,
     triggered: true,
     confidence: 0.95,
-    significance: source.counts.missed_key_sessions ? "key_session_missed" : "recurrent_deviation",
+    significance: source.counts.missed_key_sessions
+      ? "key_session_missed"
+      : source.counts.planned >= 4 && source.counts.affected / source.counts.planned >= 0.5
+        ? "low_adherence_pattern"
+        : "recurrent_deviation",
     novelty: "aggregate_changed",
     recurrence: source.counts.affected,
     source,
@@ -275,7 +270,7 @@ function average(values) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
-export function extractReportFeatures(domainSnapshot, { now = new Date(), timeZone = "Asia/Shanghai" } = {}) {
+export async function extractReportFeatures(domainSnapshot, { now = new Date(), timeZone = "Asia/Shanghai", cryptoImpl = globalThis.crypto } = {}) {
   const today = localDateKey(now, timeZone);
   const endDate = shiftDateKey(today, -1);
   const recentStart = shiftDateKey(today, -7);
@@ -304,8 +299,9 @@ export function extractReportFeatures(domainSnapshot, { now = new Date(), timeZo
   const sickDays = new Set((domainSnapshot?.dailyNotes || [])
     .filter(row => row?.date >= lookback28Start && row?.date <= endDate && Array.isArray(row.tags) && row.tags.includes("sick"))
     .map(row => row.date));
-  const targetRaces = (domainSnapshot?.races || []).filter(row => row?.is_target === true);
-  const changedTargets = targetRaces.filter(row => {
+  const races = domainSnapshot?.races || [];
+  const targetRaces = races.filter(row => row?.is_target === true);
+  const changedTargets = races.filter(row => {
     const updated = row.updated_at ? new Date(row.updated_at) : null;
     return updated && !Number.isNaN(updated.getTime()) && localDateKey(updated, timeZone) === changeStart;
   });
@@ -323,6 +319,15 @@ export function extractReportFeatures(domainSnapshot, { now = new Date(), timeZo
     const updated = new Date(row.updated_at);
     return !Number.isNaN(updated.getTime()) && localDateKey(updated, timeZone) === changeStart;
   });
+  const preferenceOperations = preferenceChanges.reduce((counts, row) => {
+    counts[row.status === "archived" ? "removed" : "updated"] += 1;
+    return counts;
+  }, { updated: 0, removed: 0 });
+  const activePreferenceMetadata = (domainSnapshot?.memoryFacts || [])
+    .filter(row => row?.category === "training_preferences" && row.status === "active" && row.id)
+    .map(row => ({ id: String(row.id), updated_at: row.updated_at ? String(row.updated_at) : null }))
+    .sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b)));
+  const preferenceContextVersion = await sha256Hex(canonicalJson(activePreferenceMetadata), cryptoImpl);
   const recentMax = {
     distance: Math.max(0, ...milestoneRecent.map(row => row.distance)),
     duration: Math.max(0, ...milestoneRecent.map(row => row.duration)),
@@ -350,7 +355,8 @@ export function extractReportFeatures(domainSnapshot, { now = new Date(), timeZo
     goalContext: { changedCount: changedTargets.length, targetCount: targetRaces.length, nearestTargetDays, priorityCounts },
     preference: {
       changedCount: preferenceChanges.length,
-      changeKinds: [...new Set(preferenceChanges.map(row => row.status === "archived" ? "removed" : "updated"))].sort(),
+      operations: preferenceOperations,
+      contextVersion: preferenceContextVersion,
     },
     milestone: { recentMax, baselineMax, recentSessions: milestoneRecent.length, baselineSessions: milestoneBaseline.length },
     health: {
@@ -376,20 +382,6 @@ export const REPORT_DETECTORS = Object.freeze([
   {
     id: "repeated_plan_deviation",
     detect: ({ adherence }) => adherence.triggered ? adherence : null,
-  },
-  {
-    id: "training_adherence_pattern_change",
-    detect: ({ adherence }) => {
-      if (!adherence.triggered || adherence.source.counts.planned < 4) return null;
-      const ratio = adherence.source.counts.affected / adherence.source.counts.planned;
-      if (ratio < 0.5) return null;
-      const entry = getCatalogEntry("training_state_change", "training_adherence_pattern_change");
-      return payloadCandidate(entry, {
-        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
-        window: { start_date: adherence.source.startDate, end_date: adherence.source.endDate, lookback_days: LOOKBACK_DAYS },
-        direction: "lower_adherence", affected_ratio: Number(ratio.toFixed(6)), sample_days: LOOKBACK_DAYS,
-      }, 0.9, { significance: "affected_ratio_at_least_half", recurrence: adherence.source.counts.affected });
-    },
   },
   {
     id: "rapid_training_load_change",
@@ -441,15 +433,16 @@ export const REPORT_DETECTORS = Object.freeze([
     },
   },
   {
-    id: "stable_preference_or_constraint_change",
+    id: "preference_context_invalidated",
     detect: ({ features }) => {
       if (!features.preference.changedCount) return null;
-      const entry = getCatalogEntry("training_preference_change", "stable_preference_or_constraint_change");
+      const entry = getCatalogEntry("training_preference_change", "preference_context_invalidated");
       return payloadCandidate(entry, {
         type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
         change_window: features.window.changeStart,
         change_count: features.preference.changedCount,
-        change_kinds: features.preference.changeKinds,
+        operations: features.preference.operations,
+        context_version: features.preference.contextVersion,
       }, 0.9, { significance: "accepted_training_preference_changed", recurrence: features.preference.changedCount });
     },
   },
@@ -520,65 +513,70 @@ function hasExactKeys(value, keys) {
     && Object.keys(value).sort().join("|") === [...keys].sort().join("|");
 }
 
-function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= 0;
+function isIntegerInRange(value, minimum, maximum) {
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum;
 }
 
 function isFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function validWindow(value, extraKey, extraValue) {
+function validWindow(value, extraKey, extraValue, inclusiveDays) {
   return hasExactKeys(value, ["start_date", "end_date", extraKey])
     && isValidDateKey(value.start_date)
     && isValidDateKey(value.end_date)
-    && value.start_date <= value.end_date
-    && value[extraKey] === extraValue;
+    && value[extraKey] === extraValue
+    && (Date.parse(`${value.end_date}T00:00:00.000Z`) - Date.parse(`${value.start_date}T00:00:00.000Z`)) / DAY_MS + 1 === inclusiveDays;
 }
 
 const PAYLOAD_VALIDATORS = Object.freeze({
   "training_state_change.v1": payload => {
     const countKeys = ["planned", "done", "partial", "missed", "affected", "missed_key_sessions"];
-    return validWindow(payload.window, "lookback_days", 14)
+    return validWindow(payload.window, "lookback_days", 14, 14)
       && hasExactKeys(payload.counts, countKeys)
-      && countKeys.every(key => isNonNegativeInteger(payload.counts[key]))
+      && countKeys.every(key => isIntegerInRange(payload.counts[key], 0, 10000))
       && payload.counts.affected === payload.counts.partial + payload.counts.missed
       && payload.counts.done + payload.counts.partial + payload.counts.missed === payload.counts.planned
+      && payload.counts.missed_key_sessions <= payload.counts.missed
       && isFiniteNumber(payload.affected_ratio) && payload.affected_ratio >= 0 && payload.affected_ratio <= 1
-      && payload.state === "active";
+      && payload.affected_ratio === (payload.counts.planned
+        ? Number((payload.counts.affected / payload.counts.planned).toFixed(6))
+        : 0)
+      && ["active", "resolved"].includes(payload.state);
   },
-  "training_adherence_pattern_change.v1": payload => validWindow(payload.window, "lookback_days", 14)
-    && payload.direction === "lower_adherence"
-    && isFiniteNumber(payload.affected_ratio) && payload.affected_ratio >= 0.5 && payload.affected_ratio <= 1
-    && payload.sample_days === 14,
-  "training_load_change.v1": payload => validWindow(payload.window, "comparison_days", 7)
-    && ["rapid_increase", "rapid_decrease"].includes(payload.direction)
-    && isFiniteNumber(payload.duration_change_ratio) && payload.duration_change_ratio >= 0
+  "training_load_change.v1": payload => validWindow(payload.window, "comparison_days", 7, 14)
+    && ((payload.direction === "rapid_increase" && payload.duration_change_ratio >= 1.5)
+      || (payload.direction === "rapid_decrease" && payload.duration_change_ratio <= 0.5))
+    && isFiniteNumber(payload.duration_change_ratio) && payload.duration_change_ratio >= 0 && payload.duration_change_ratio <= 100
     && hasExactKeys(payload.session_counts, ["recent", "previous"])
-    && isNonNegativeInteger(payload.session_counts.recent)
-    && isNonNegativeInteger(payload.session_counts.previous),
-  "recovery_state_change.v1": payload => validWindow(payload.window, "lookback_days", 7)
+    && isIntegerInRange(payload.session_counts.recent, 2, 1000)
+    && isIntegerInRange(payload.session_counts.previous, 2, 1000),
+  "recovery_state_change.v1": payload => validWindow(payload.window, "lookback_days", 7, 7)
     && ["elevated", "high"].includes(payload.risk_level)
-    && isNonNegativeInteger(payload.poor_readiness_days)
-    && isNonNegativeInteger(payload.high_rpe_sessions)
-    && isNonNegativeInteger(payload.sample_days),
+    && isIntegerInRange(payload.sample_days, 0, 7)
+    && isIntegerInRange(payload.poor_readiness_days, 0, payload.sample_days)
+    && isIntegerInRange(payload.high_rpe_sessions, 0, 100),
   "goal_context_change.v1": payload => isValidDateKey(payload.change_window)
-    && isNonNegativeInteger(payload.target_count)
-    && (payload.nearest_target_days === null || isNonNegativeInteger(payload.nearest_target_days))
+    && isIntegerInRange(payload.target_count, 0, 100)
+    && (payload.nearest_target_days === null || isIntegerInRange(payload.nearest_target_days, 0, 3650))
     && hasExactKeys(payload.priority_counts, ["A", "B", "C", "unset"])
-    && Object.values(payload.priority_counts).every(isNonNegativeInteger),
-  "training_preference_change.v1": payload => isValidDateKey(payload.change_window)
-    && isNonNegativeInteger(payload.change_count) && payload.change_count > 0
-    && Array.isArray(payload.change_kinds) && payload.change_kinds.length > 0
-    && payload.change_kinds.every(value => ["updated", "removed"].includes(value)),
-  "training_progress_change.v1": payload => validWindow(payload.window, "lookback_days", 7)
+    && Object.values(payload.priority_counts).every(value => isIntegerInRange(value, 0, 100))
+    && Object.values(payload.priority_counts).reduce((sum, value) => sum + value, 0) === payload.target_count,
+  "training_preference_invalidation.v1": payload => isValidDateKey(payload.change_window)
+    && isIntegerInRange(payload.change_count, 1, 100)
+    && hasExactKeys(payload.operations, ["updated", "removed"])
+    && Object.values(payload.operations).every(value => isIntegerInRange(value, 0, 100))
+    && payload.operations.updated + payload.operations.removed === payload.change_count
+    && /^[0-9a-f]{64}$/.test(payload.context_version),
+  "training_progress_change.v1": payload => validWindow(payload.window, "lookback_days", 7, 7)
     && ["distance", "duration", "ascent"].includes(payload.metric)
-    && isFiniteNumber(payload.improvement_ratio) && payload.improvement_ratio >= 1.1
+    && isFiniteNumber(payload.improvement_ratio) && payload.improvement_ratio >= 1.1 && payload.improvement_ratio <= 100
     && payload.baseline_days === 90,
-  "health_risk_change.v1": payload => validWindow(payload.window, "lookback_days", 28)
-    && isNonNegativeInteger(payload.signal_days) && payload.signal_days >= 2
+  "health_risk_change.v1": payload => validWindow(payload.window, "lookback_days", 28, 28)
+    && isIntegerInRange(payload.signal_days, 2, 28)
     && hasExactKeys(payload.signal_sources, ["workout_text_days", "sick_tag_days"])
-    && Object.values(payload.signal_sources).every(isNonNegativeInteger)
+    && Object.values(payload.signal_sources).every(value => isIntegerInRange(value, 0, 28))
+    && payload.signal_days <= Object.values(payload.signal_sources).reduce((sum, value) => sum + value, 0)
     && payload.recurrence === "repeated_days",
 });
 
@@ -601,7 +599,7 @@ export function validateCandidateAgainstCatalog(candidate) {
 
 export async function discoverReportCandidates(domainSnapshot, options = {}) {
   const adherence = await buildTrainingStateCandidate(domainSnapshot?.workouts || [], options);
-  const features = extractReportFeatures(domainSnapshot, options);
+  const features = await extractReportFeatures(domainSnapshot, options);
   const candidates = [];
   for (const detector of REPORT_DETECTORS) {
     const candidate = detector.detect({ adherence, features });
@@ -623,7 +621,32 @@ export async function discoverReportCandidates(domainSnapshot, options = {}) {
     }), options.cryptoImpl);
     prepared.push({ ...candidate, catalog: validation.entry });
   }
-  return { features, candidates: prepared, observations: [adherence] };
+  const evidenceBySignal = {
+    [SIGNAL_KIND]: { source_fingerprint: adherence.sourceFingerprint },
+    rapid_training_load_change: { window: features.window, load: features.load },
+    recovery_risk_trend: { window: features.window, recovery: features.recovery },
+    target_race_context_change: { change_window: features.window.changeStart, goal_context: features.goalContext },
+    preference_context_invalidated: { change_window: features.window.changeStart, preference: features.preference },
+    notable_progress_or_milestone: { window: features.window, milestone: features.milestone },
+    recurring_injury_or_health_risk_pattern: { window: features.window, health: features.health },
+  };
+  const candidateKeys = new Set(prepared.map(candidate => catalogKey(candidate.reportType, candidate.signalKind)));
+  const observations = [];
+  for (const entry of REPORT_CATALOG) {
+    if (candidateKeys.has(catalogKey(entry.reportType, entry.signalKind))) continue;
+    observations.push({
+      reportType: entry.reportType,
+      signalKind: entry.signalKind,
+      triggered: false,
+      sourceFingerprint: entry.signalKind === SIGNAL_KIND
+        ? adherence.sourceFingerprint
+        : await sha256Hex(canonicalJson(evidenceBySignal[entry.signalKind]), options.cryptoImpl),
+      typedPayload: null,
+      contentHash: null,
+      catalog: entry,
+    });
+  }
+  return { features, candidates: prepared, observations };
 }
 
 export async function buildReportEnvelope(candidate, { reportedAt = new Date(), timeZone = "Asia/Shanghai" } = {}) {
@@ -632,10 +655,24 @@ export async function buildReportEnvelope(candidate, { reportedAt = new Date(), 
   if (!validation.ok || validation.entry.runtime !== "live") throw new Error(`report_not_dispatchable:${validation.reason || validation.entry.runtime}`);
   const identity = await sha256Hex(`${candidate.reportType}\n${candidate.signalKind}\n${candidate.sourceFingerprint}\n${candidate.contentHash}`);
   const reportId = `ultreia-${identity.slice(0, 40)}`;
-  const sourceRef = `training-state-${candidate.sourceFingerprint.slice(0, 32)}`;
-  const rootLineageId = `ultreia-training-${candidate.sourceFingerprint.slice(0, 30)}`;
-  const windowEnd = localDateEndInstant(candidate.source.endDate, timeZone);
-  const occurredAt = new Date(Math.min(windowEnd.getTime(), reportedAt.getTime())).toISOString();
+  const lineageNames = {
+    repeated_plan_deviation: "plan-deviation",
+    rapid_training_load_change: "load-change",
+    recovery_risk_trend: "recovery-risk",
+    target_race_context_change: "goal-context",
+    preference_context_invalidated: "preference-context",
+    notable_progress_or_milestone: "training-progress",
+    recurring_injury_or_health_risk_pattern: "health-risk",
+  };
+  const lineageName = lineageNames[candidate.signalKind];
+  if (!lineageName) throw new Error("report_lineage_unregistered");
+  const sourceRef = `ultreia-${lineageName}-${candidate.sourceFingerprint.slice(0, 16)}`;
+  const rootLineageId = `ultreia-${lineageName}-lineage-${candidate.sourceFingerprint.slice(0, 16)}`;
+  const localEndDate = candidate.typedPayload?.window?.end_date || candidate.typedPayload?.change_window;
+  if (!isValidDateKey(localEndDate)) throw new Error("report_occurred_date_missing");
+  const windowEnd = localDateEndInstant(localEndDate, timeZone);
+  if (windowEnd.getTime() > reportedAt.getTime()) throw new Error("report_occurred_at_in_future");
+  const occurredAt = windowEnd.toISOString();
   const expiresAt = new Date(new Date(occurredAt).getTime() + validation.entry.retentionCeilingDays * DAY_MS).toISOString();
   return {
     id: reportId,
@@ -656,6 +693,32 @@ export async function buildReportEnvelope(candidate, { reportedAt = new Date(), 
     content_hash: candidate.contentHash,
     typed_payload: candidate.typedPayload,
   };
+}
+
+export function isLiveCadenceDue(outbox, catalogEntry, { now = new Date() } = {}) {
+  if (!outbox?.delivered_at) return true;
+  const deliveredAt = Date.parse(outbox.delivered_at);
+  if (Number.isNaN(deliveredAt)) return false;
+  const cadenceMs = Math.max(1, Number(catalogEntry?.maxFrequencyDays) || 1) * DAY_MS;
+  return now.getTime() - deliveredAt >= cadenceMs;
+}
+
+export function scheduleLiveOutboxRuns(rows, { now = new Date(), candidateWindow = false, limit = 7 } = {}) {
+  const byKey = new Map((rows || []).map(row => [catalogKey(row.report_type, row.signal_kind), row]));
+  return REPORT_CATALOG.filter(entry => entry.runtime === "live").slice(0, limit).map(entry => {
+    const outbox = byKey.get(catalogKey(entry.reportType, entry.signalKind));
+    let run = outbox
+      ? decideOutboxRun(outbox, { now, candidateWindow })
+      : { action: "skip", reason: "outbox_missing" };
+    if (run.action === "discover" && !isLiveCadenceDue(outbox, entry, { now })) {
+      run = { action: "skip", reason: "cadence_not_due" };
+    }
+    return {
+      entry,
+      outbox,
+      run,
+    };
+  });
 }
 
 export function decideCandidateAction(outbox, candidate) {

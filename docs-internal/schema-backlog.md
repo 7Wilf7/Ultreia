@@ -32,10 +32,10 @@
 - 只有网络错误 / 5xx 按 30 分钟、2 小时、6 小时重试同一 envelope；三次后暂停
   24 小时，并严格等待 `paused_until`。所有确定性 4xx（包括 422、429）阻断并
   保留原 report ID、payload、content hash 和 idempotency key，不盲目重试。
-- 2026-07-15 通用 candidate discovery 已复用现有 outbox；非 B1 类型只写最小化
-  Edge structured shadow log，不新增表、不改变 RLS。若 B2 需要 durable candidate
-  journal、失败 envelope 历史归档或批准后的 active-slot 迁移，再单独给 SQL、回滚和
-  数据影响，Wilf 执行前代码不得假设相关表已存在。
+- 2026-07-15 Aevum B2 七类 catalog 已上线；现有唯一键让每个 `report_type +
+  signal_kind` 使用独立 outbox 行、租约、频率和失败状态，无需新增表或改变 RLS。
+  当前 paused B1 pending 原样保留；若未来要归档失败 envelope 或迁移 active slot，
+  仍须另给 SQL、回滚和数据影响，Wilf 执行前代码不得假设相关结构已存在。
 
 建表 SQL 已在 2026-07-12 人工评审并执行；后续任何字段或约束变化仍需重新走
 SQL gate。

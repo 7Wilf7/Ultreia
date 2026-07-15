@@ -171,7 +171,7 @@ export function SettingsMobileTab({
   }
 
   return (
-    <div style={{ paddingTop: 8, paddingBottom: 8 }}>
+    <div className="ultreia-settings-mobile ultreia-native-scroll-y" style={{ paddingTop: 8, paddingBottom: 8 }}>
       {/* Identity header — tap toggles the Account group. */}
       <button type="button" {...instantTap("settings-account-toggle", toggleAccount)} style={{
         display: "flex", alignItems: "center", gap: 14,

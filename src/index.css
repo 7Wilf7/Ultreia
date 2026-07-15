@@ -351,6 +351,15 @@ summary::-webkit-details-marker { display: none; }
   touch-action: pan-y;
 }
 
+/* Keep the final Settings row above the fixed bottom navigation. This spacer
+   lives inside the content so Android WebView includes it in scrollHeight. */
+.ultreia-settings-mobile::after {
+  content: "";
+  display: block;
+  height: calc(72px + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
 .ultreia-pager-track::-webkit-scrollbar {
   display: none;
 }

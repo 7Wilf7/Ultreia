@@ -5,6 +5,123 @@ export const SIGNAL_KIND = "repeated_plan_deviation";
 export const LOOKBACK_DAYS = 14;
 
 const DAY_MS = 86400000;
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const HEALTH_SIGNAL_RE = /(pain|ache|injur|niggle|tight|sore|fatigue|exhaust|\bill\b|sick|疼|痛|不适|伤|疲|酸|紧|生病|感冒|发烧|跟腱|膝|小腿|胫骨|髂胫束)/i;
+
+export const REPORT_CATALOG = Object.freeze([
+  {
+    reportType: REPORT_TYPE,
+    signalKind: SIGNAL_KIND,
+    schemaVersion: "training_state_change.v1",
+    detectorId: "repeated_plan_deviation",
+    runtime: "live",
+    sensitivity: "normal",
+    confidenceFloor: 0.9,
+    maxFrequencyDays: 1,
+    retentionCeilingDays: 7,
+    modelParticipation: "forbidden",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "counts", "affected_ratio", "state"],
+  },
+  {
+    reportType: "training_state_change",
+    signalKind: "training_adherence_pattern_change",
+    schemaVersion: "training_adherence_pattern_change.v1",
+    detectorId: "training_adherence_pattern_change",
+    runtime: "shadow",
+    sensitivity: "normal",
+    confidenceFloor: 0.85,
+    maxFrequencyDays: 7,
+    retentionCeilingDays: 30,
+    modelParticipation: "allowed_minimized",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "direction", "affected_ratio", "sample_days"],
+  },
+  {
+    reportType: "training_load_change",
+    signalKind: "rapid_training_load_change",
+    schemaVersion: "training_load_change.v1",
+    detectorId: "rapid_training_load_change",
+    runtime: "shadow",
+    sensitivity: "normal",
+    confidenceFloor: 0.85,
+    maxFrequencyDays: 7,
+    retentionCeilingDays: 21,
+    modelParticipation: "allowed_minimized",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "direction", "duration_change_ratio", "session_counts"],
+  },
+  {
+    reportType: "recovery_state_change",
+    signalKind: "recovery_risk_trend",
+    schemaVersion: "recovery_state_change.v1",
+    detectorId: "recovery_risk_trend",
+    runtime: "shadow",
+    sensitivity: "sensitive",
+    confidenceFloor: 0.9,
+    maxFrequencyDays: 7,
+    retentionCeilingDays: 14,
+    modelParticipation: "forbidden",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "risk_level", "poor_readiness_days", "high_rpe_sessions", "sample_days"],
+  },
+  {
+    reportType: "goal_context_change",
+    signalKind: "target_race_context_change",
+    schemaVersion: "goal_context_change.v1",
+    detectorId: "target_race_context_change",
+    runtime: "needs_user",
+    sensitivity: "normal",
+    confidenceFloor: 0.95,
+    maxFrequencyDays: 1,
+    retentionCeilingDays: 90,
+    modelParticipation: "allowed_minimized",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "change_window", "target_count", "nearest_target_days", "priority_counts"],
+  },
+  {
+    reportType: "training_preference_change",
+    signalKind: "stable_preference_or_constraint_change",
+    schemaVersion: "training_preference_change.v1",
+    detectorId: "stable_preference_or_constraint_change",
+    runtime: "shadow",
+    sensitivity: "normal",
+    confidenceFloor: 0.9,
+    maxFrequencyDays: 7,
+    retentionCeilingDays: 180,
+    modelParticipation: "allowed_minimized",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "change_window", "change_count", "change_kinds"],
+  },
+  {
+    reportType: "training_progress_change",
+    signalKind: "notable_progress_or_milestone",
+    schemaVersion: "training_progress_change.v1",
+    detectorId: "notable_progress_or_milestone",
+    runtime: "shadow",
+    sensitivity: "normal",
+    confidenceFloor: 0.9,
+    maxFrequencyDays: 14,
+    retentionCeilingDays: 90,
+    modelParticipation: "allowed_minimized",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "metric", "improvement_ratio", "baseline_days"],
+  },
+  {
+    reportType: "health_risk_change",
+    signalKind: "recurring_injury_or_health_risk_pattern",
+    schemaVersion: "health_risk_change.v1",
+    detectorId: "recurring_injury_or_health_risk_pattern",
+    runtime: "needs_user",
+    sensitivity: "sensitive",
+    confidenceFloor: 0.95,
+    maxFrequencyDays: 14,
+    retentionCeilingDays: 14,
+    modelParticipation: "forbidden",
+    allowedPayloadKeys: ["type", "signal_kind", "schema_version", "window", "signal_days", "signal_sources", "recurrence"],
+  },
+]);
+
+export function catalogKey(reportType, signalKind) {
+  return `${reportType}:${signalKind}`;
+}
+
+export function getCatalogEntry(reportType, signalKind) {
+  return REPORT_CATALOG.find(entry => entry.reportType === reportType && entry.signalKind === signalKind) || null;
+}
 
 export function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -18,7 +135,7 @@ export async function sha256Hex(value, cryptoImpl = globalThis.crypto) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
-function dateParts(date, timeZone) {
+export function localDateKey(date, timeZone) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone, year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(date);
@@ -26,10 +143,47 @@ function dateParts(date, timeZone) {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-function shiftDate(dateKey, days) {
+export function shiftDateKey(dateKey, days) {
   const date = new Date(`${dateKey}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function isValidDateKey(dateKey) {
+  if (!DATE_KEY_RE.test(String(dateKey))) return false;
+  const [year, month, day] = String(dateKey).split("-").map(Number);
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  return normalized.getUTCFullYear() === year
+    && normalized.getUTCMonth() === month - 1
+    && normalized.getUTCDate() === day;
+}
+
+function timeZoneOffsetMs(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(date);
+  const get = type => Number(parts.find(part => part.type === type)?.value);
+  const representedUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return representedUtc - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+export function localDateStartInstant(dateKey, timeZone = "Asia/Shanghai") {
+  if (!isValidDateKey(dateKey)) throw new Error("invalid_local_date");
+  const [year, month, day] = String(dateKey).split("-").map(Number);
+  const utcGuess = Date.UTC(year, month - 1, day);
+  let instant = utcGuess - timeZoneOffsetMs(new Date(utcGuess), timeZone);
+  instant = utcGuess - timeZoneOffsetMs(new Date(instant), timeZone);
+  return new Date(instant);
+}
+
+export function localDateEndInstant(dateKey, timeZone = "Asia/Shanghai") {
+  return new Date(localDateStartInstant(shiftDateKey(dateKey, 1), timeZone).getTime() - 1);
+}
+
+function finiteNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }
 
 function normalizeWorkout(row) {
@@ -38,9 +192,11 @@ function normalizeWorkout(row) {
     date: row.date,
     type: row.type,
     subTypes: Array.isArray(row.sub_types) ? row.sub_types : [],
-    distance: row.distance,
-    duration: row.duration,
-    ascent: row.ascent,
+    distance: finiteNumber(row.distance),
+    duration: finiteNumber(row.duration),
+    ascent: finiteNumber(row.ascent),
+    rpe: finiteNumber(row.rpe),
+    note: typeof row.note === "string" ? row.note : "",
     startedAt: row.started_at,
     isPlanned: row.is_planned === true,
     planStatus: row.plan_status,
@@ -50,9 +206,9 @@ function normalizeWorkout(row) {
 }
 
 export function buildTrainingStateSource(rows, { now = new Date(), timeZone = "Asia/Shanghai" } = {}) {
-  const today = dateParts(now, timeZone);
-  const startDate = shiftDate(today, -LOOKBACK_DAYS);
-  const endDate = shiftDate(today, -1);
+  const today = localDateKey(now, timeZone);
+  const startDate = shiftDateKey(today, -LOOKBACK_DAYS);
+  const endDate = shiftDateKey(today, -1);
   const workouts = (Array.isArray(rows) ? rows : []).map(normalizeWorkout)
     .filter(row => row.date >= startDate && row.date <= endDate)
     .sort((a, b) => canonicalJson(a).localeCompare(canonicalJson(b)));
@@ -86,7 +242,7 @@ export async function buildTrainingStateCandidate(rows, options = {}) {
     outcomes: source.outcomes,
   }), options.cryptoImpl);
   const triggered = source.counts.affected >= 2 || source.counts.missed_key_sessions >= 1;
-  if (!triggered) return { sourceFingerprint, triggered: false, source, typedPayload: null, contentHash: null };
+  if (!triggered) return { reportType: REPORT_TYPE, signalKind: SIGNAL_KIND, sourceFingerprint, triggered: false, source, typedPayload: null, contentHash: null };
   const typedPayload = {
     type: REPORT_TYPE,
     signal_kind: SIGNAL_KIND,
@@ -97,45 +253,247 @@ export async function buildTrainingStateCandidate(rows, options = {}) {
     state: "active",
   };
   return {
+    reportType: REPORT_TYPE,
+    signalKind: SIGNAL_KIND,
     sourceFingerprint,
     triggered: true,
+    confidence: 0.95,
+    significance: source.counts.missed_key_sessions ? "key_session_missed" : "recurrent_deviation",
+    novelty: "aggregate_changed",
+    recurrence: source.counts.affected,
     source,
     typedPayload,
     contentHash: await sha256Hex(canonicalJson(typedPayload), options.cryptoImpl),
   };
 }
 
-export async function buildReportEnvelope(candidate, { reportedAt = new Date() } = {}) {
-  if (!candidate?.triggered) return null;
-  const identity = await sha256Hex(`${REPORT_TYPE}\n${SIGNAL_KIND}\n${candidate.sourceFingerprint}\n${candidate.contentHash}`);
-  const reportId = `ultreia-${identity.slice(0, 40)}`;
-  const sourceRef = `training-state-${candidate.sourceFingerprint.slice(0, 32)}`;
-  const rootLineageId = `ultreia-training-${candidate.sourceFingerprint.slice(0, 30)}`;
-  const occurredAt = `${candidate.source.endDate}T23:59:59.000Z`;
-  const expiresAt = new Date(new Date(occurredAt).getTime() + 7 * DAY_MS).toISOString();
+function rowsInRange(rows, startDate, endDate) {
+  return rows.filter(row => row.date >= startDate && row.date <= endDate);
+}
+
+function average(values) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+}
+
+export function extractReportFeatures(domainSnapshot, { now = new Date(), timeZone = "Asia/Shanghai" } = {}) {
+  const today = localDateKey(now, timeZone);
+  const endDate = shiftDateKey(today, -1);
+  const recentStart = shiftDateKey(today, -7);
+  const previousStart = shiftDateKey(today, -14);
+  const previousEnd = shiftDateKey(today, -8);
+  const lookback28Start = shiftDateKey(today, -28);
+  const baseline90Start = shiftDateKey(today, -97);
+  const changeStart = shiftDateKey(today, -1);
+  const workouts = (domainSnapshot?.workouts || []).map(normalizeWorkout).filter(row => row.date && row.date <= endDate);
+  const completed = workouts.filter(row => !row.isPlanned);
+  const recent = rowsInRange(completed, recentStart, endDate);
+  const previous = rowsInRange(completed, previousStart, previousEnd);
+  const recent28 = rowsInRange(completed, lookback28Start, endDate);
+  const milestoneRecent = rowsInRange(completed, recentStart, endDate);
+  const milestoneBaseline = rowsInRange(completed, baseline90Start, shiftDateKey(recentStart, -1));
+  const sum = (rows, key) => rows.reduce((total, row) => total + finiteNumber(row[key]), 0);
+  const notes = (domainSnapshot?.dailyNotes || []).filter(row => row?.date >= previousStart && row?.date <= endDate);
+  const readiness = notes.map(row => {
+    const values = [row.readiness_sleep, row.readiness_legs, row.readiness_energy]
+      .map(Number).filter(Number.isFinite);
+    return { date: row.date, score: average(values), sick: Array.isArray(row.tags) && row.tags.includes("sick") };
+  });
+  const recentReadiness = readiness.filter(row => row.date >= recentStart && row.score != null);
+  const previousReadiness = readiness.filter(row => row.date >= previousStart && row.date <= previousEnd && row.score != null);
+  const healthWorkoutDays = new Set(recent28.filter(row => HEALTH_SIGNAL_RE.test(row.note)).map(row => row.date));
+  const sickDays = new Set((domainSnapshot?.dailyNotes || [])
+    .filter(row => row?.date >= lookback28Start && row?.date <= endDate && Array.isArray(row.tags) && row.tags.includes("sick"))
+    .map(row => row.date));
+  const targetRaces = (domainSnapshot?.races || []).filter(row => row?.is_target === true);
+  const changedTargets = targetRaces.filter(row => {
+    const updated = row.updated_at ? new Date(row.updated_at) : null;
+    return updated && !Number.isNaN(updated.getTime()) && localDateKey(updated, timeZone) === changeStart;
+  });
+  const priorityCounts = targetRaces.reduce((counts, race) => {
+    const key = ["A", "B", "C"].includes(String(race.priority || "").toUpperCase()) ? String(race.priority).toUpperCase() : "unset";
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, { A: 0, B: 0, C: 0, unset: 0 });
+  const nearestTargetDays = targetRaces
+    .filter(race => isValidDateKey(race.date) && race.date >= today)
+    .map(race => Math.round((localDateStartInstant(race.date, timeZone) - localDateStartInstant(today, timeZone)) / DAY_MS))
+    .sort((a, b) => a - b)[0] ?? null;
+  const preferenceChanges = (domainSnapshot?.memoryFacts || []).filter(row => {
+    if (row?.category !== "training_preferences" || !row.updated_at) return false;
+    const updated = new Date(row.updated_at);
+    return !Number.isNaN(updated.getTime()) && localDateKey(updated, timeZone) === changeStart;
+  });
+  const recentMax = {
+    distance: Math.max(0, ...milestoneRecent.map(row => row.distance)),
+    duration: Math.max(0, ...milestoneRecent.map(row => row.duration)),
+    ascent: Math.max(0, ...milestoneRecent.map(row => row.ascent)),
+  };
+  const baselineMax = {
+    distance: Math.max(0, ...milestoneBaseline.map(row => row.distance)),
+    duration: Math.max(0, ...milestoneBaseline.map(row => row.duration)),
+    ascent: Math.max(0, ...milestoneBaseline.map(row => row.ascent)),
+  };
   return {
-    id: reportId,
-    contract_version: "agent_report.v1",
-    source_product: "ultreia",
-    source_ref: sourceRef,
-    root_lineage_id: rootLineageId,
-    causation_id: null,
-    occurred_at: occurredAt,
-    reported_at: reportedAt.toISOString(),
-    evidence_type: "aggregate",
-    evidence_refs: [{ product: "ultreia", ref: sourceRef, kind: "aggregate", root_lineage_id: rootLineageId }],
-    sensitivity: "normal",
-    confidence: 0.95,
-    proposed_scopes: ["aevum"],
-    retention_hint: "short",
-    expires_at: expiresAt,
-    content_hash: candidate.contentHash,
-    typed_payload: candidate.typedPayload,
+    window: { today, endDate, recentStart, previousStart, previousEnd, lookback28Start, baseline90Start, changeStart },
+    load: {
+      recentDuration: sum(recent, "duration"), previousDuration: sum(previous, "duration"),
+      recentSessions: recent.length, previousSessions: previous.length,
+    },
+    recovery: {
+      recentAverage: average(recentReadiness.map(row => row.score)),
+      previousAverage: average(previousReadiness.map(row => row.score)),
+      recentSampleDays: recentReadiness.length,
+      previousSampleDays: previousReadiness.length,
+      poorDays: recentReadiness.filter(row => row.score <= 1.67).length,
+      highRpeSessions: recent.filter(row => row.rpe >= 8).length,
+    },
+    goalContext: { changedCount: changedTargets.length, targetCount: targetRaces.length, nearestTargetDays, priorityCounts },
+    preference: {
+      changedCount: preferenceChanges.length,
+      changeKinds: [...new Set(preferenceChanges.map(row => row.status === "archived" ? "removed" : "updated"))].sort(),
+    },
+    milestone: { recentMax, baselineMax, recentSessions: milestoneRecent.length, baselineSessions: milestoneBaseline.length },
+    health: {
+      workoutSignalDays: healthWorkoutDays.size,
+      sickDays: sickDays.size,
+      totalSignalDays: new Set([...healthWorkoutDays, ...sickDays]).size,
+    },
   };
 }
 
+function payloadCandidate(entry, typedPayload, confidence, judgment) {
+  return {
+    reportType: entry.reportType,
+    signalKind: entry.signalKind,
+    typedPayload,
+    confidence,
+    novelty: "aggregate_changed",
+    ...judgment,
+  };
+}
+
+export const REPORT_DETECTORS = Object.freeze([
+  {
+    id: "repeated_plan_deviation",
+    detect: ({ adherence }) => adherence.triggered ? adherence : null,
+  },
+  {
+    id: "training_adherence_pattern_change",
+    detect: ({ adherence }) => {
+      if (!adherence.triggered || adherence.source.counts.planned < 4) return null;
+      const ratio = adherence.source.counts.affected / adherence.source.counts.planned;
+      if (ratio < 0.5) return null;
+      const entry = getCatalogEntry("training_state_change", "training_adherence_pattern_change");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        window: { start_date: adherence.source.startDate, end_date: adherence.source.endDate, lookback_days: LOOKBACK_DAYS },
+        direction: "lower_adherence", affected_ratio: Number(ratio.toFixed(6)), sample_days: LOOKBACK_DAYS,
+      }, 0.9, { significance: "affected_ratio_at_least_half", recurrence: adherence.source.counts.affected });
+    },
+  },
+  {
+    id: "rapid_training_load_change",
+    detect: ({ features }) => {
+      const { recentDuration, previousDuration, recentSessions, previousSessions } = features.load;
+      if (recentSessions < 2 || previousSessions < 2 || previousDuration < 120) return null;
+      const ratio = recentDuration / previousDuration;
+      if (!(ratio >= 1.5 || ratio <= 0.5) || Math.abs(recentDuration - previousDuration) < 120) return null;
+      const entry = getCatalogEntry("training_load_change", "rapid_training_load_change");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        window: { start_date: features.window.previousStart, end_date: features.window.endDate, comparison_days: 7 },
+        direction: ratio >= 1.5 ? "rapid_increase" : "rapid_decrease",
+        duration_change_ratio: Number(ratio.toFixed(3)),
+        session_counts: { recent: recentSessions, previous: previousSessions },
+      }, 0.9, { significance: "weekly_duration_changed_materially", recurrence: Math.min(recentSessions, previousSessions) });
+    },
+  },
+  {
+    id: "recovery_risk_trend",
+    detect: ({ features }) => {
+      const recovery = features.recovery;
+      const sustainedPoor = recovery.recentSampleDays >= 3 && recovery.poorDays >= 2;
+      const materialDrop = recovery.recentSampleDays >= 3 && recovery.previousSampleDays >= 3
+        && recovery.previousAverage - recovery.recentAverage >= 0.5;
+      if (!sustainedPoor && !materialDrop && recovery.highRpeSessions < 2) return null;
+      const entry = getCatalogEntry("recovery_state_change", "recovery_risk_trend");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        window: { start_date: features.window.recentStart, end_date: features.window.endDate, lookback_days: 7 },
+        risk_level: recovery.poorDays >= 3 || recovery.highRpeSessions >= 3 ? "high" : "elevated",
+        poor_readiness_days: recovery.poorDays, high_rpe_sessions: recovery.highRpeSessions,
+        sample_days: recovery.recentSampleDays,
+      }, 0.92, { significance: sustainedPoor ? "sustained_poor_readiness" : materialDrop ? "readiness_drop" : "repeated_high_rpe", recurrence: Math.max(recovery.poorDays, recovery.highRpeSessions) });
+    },
+  },
+  {
+    id: "target_race_context_change",
+    detect: ({ features }) => {
+      if (!features.goalContext.changedCount) return null;
+      const entry = getCatalogEntry("goal_context_change", "target_race_context_change");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        change_window: features.window.changeStart,
+        target_count: features.goalContext.targetCount,
+        nearest_target_days: features.goalContext.nearestTargetDays,
+        priority_counts: features.goalContext.priorityCounts,
+      }, 0.98, { significance: "structured_target_changed", recurrence: features.goalContext.changedCount });
+    },
+  },
+  {
+    id: "stable_preference_or_constraint_change",
+    detect: ({ features }) => {
+      if (!features.preference.changedCount) return null;
+      const entry = getCatalogEntry("training_preference_change", "stable_preference_or_constraint_change");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        change_window: features.window.changeStart,
+        change_count: features.preference.changedCount,
+        change_kinds: features.preference.changeKinds,
+      }, 0.9, { significance: "accepted_training_preference_changed", recurrence: features.preference.changedCount });
+    },
+  },
+  {
+    id: "notable_progress_or_milestone",
+    detect: ({ features }) => {
+      if (!features.milestone.recentSessions || features.milestone.baselineSessions < 4) return null;
+      const thresholds = { distance: 10, duration: 60, ascent: 500 };
+      const result = Object.keys(thresholds).map(metric => {
+        const recent = features.milestone.recentMax[metric];
+        const baseline = features.milestone.baselineMax[metric];
+        return { metric, recent, baseline, ratio: baseline > 0 ? recent / baseline : 0 };
+      }).filter(item => item.recent >= thresholds[item.metric] && item.ratio >= 1.1)
+        .sort((a, b) => b.ratio - a.ratio)[0];
+      if (!result) return null;
+      const entry = getCatalogEntry("training_progress_change", "notable_progress_or_milestone");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        window: { start_date: features.window.recentStart, end_date: features.window.endDate, lookback_days: 7 },
+        metric: result.metric, improvement_ratio: Number(result.ratio.toFixed(3)), baseline_days: 90,
+      }, 0.92, { significance: "new_rolling_personal_high", recurrence: 1 });
+    },
+  },
+  {
+    id: "recurring_injury_or_health_risk_pattern",
+    detect: ({ features }) => {
+      if (features.health.totalSignalDays < 2) return null;
+      const entry = getCatalogEntry("health_risk_change", "recurring_injury_or_health_risk_pattern");
+      return payloadCandidate(entry, {
+        type: entry.reportType, signal_kind: entry.signalKind, schema_version: entry.schemaVersion,
+        window: { start_date: features.window.lookback28Start, end_date: features.window.endDate, lookback_days: 28 },
+        signal_days: features.health.totalSignalDays,
+        signal_sources: {
+          workout_text_days: features.health.workoutSignalDays,
+          sick_tag_days: features.health.sickDays,
+        },
+        recurrence: "repeated_days",
+      }, 0.95, { significance: "health_signal_on_multiple_days", recurrence: features.health.totalSignalDays });
+    },
+  },
+]);
+
 export function containsForbiddenReportData(value, forbiddenValues = []) {
-  const forbiddenKey = /(?:user_?id|email|workout|plan_?id|distance|pace|heart|rpe|note|memory|readiness|sick|pain|gps|weather|location|race)/i;
+  const forbiddenKey = /^(?:user_?id|email|workouts?|workout_?id|plan_?id|distance|pace|heart_?rate|hr|rpe|notes?|memory|readiness|sick|pain|gps(?:_track)?|weather|location(?:_name|_lat|_lng)?|race_?name|internal_?id|health_?details?)$/i;
   let violation = false;
   const scan = current => {
     if (violation) return;
@@ -153,7 +511,155 @@ export function containsForbiddenReportData(value, forbiddenValues = []) {
   return violation;
 }
 
+function isPlainObject(value) {
+  return value != null && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasExactKeys(value, keys) {
+  return isPlainObject(value)
+    && Object.keys(value).sort().join("|") === [...keys].sort().join("|");
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isInteger(value) && value >= 0;
+}
+
+function isFiniteNumber(value) {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function validWindow(value, extraKey, extraValue) {
+  return hasExactKeys(value, ["start_date", "end_date", extraKey])
+    && isValidDateKey(value.start_date)
+    && isValidDateKey(value.end_date)
+    && value.start_date <= value.end_date
+    && value[extraKey] === extraValue;
+}
+
+const PAYLOAD_VALIDATORS = Object.freeze({
+  "training_state_change.v1": payload => {
+    const countKeys = ["planned", "done", "partial", "missed", "affected", "missed_key_sessions"];
+    return validWindow(payload.window, "lookback_days", 14)
+      && hasExactKeys(payload.counts, countKeys)
+      && countKeys.every(key => isNonNegativeInteger(payload.counts[key]))
+      && payload.counts.affected === payload.counts.partial + payload.counts.missed
+      && payload.counts.done + payload.counts.partial + payload.counts.missed === payload.counts.planned
+      && isFiniteNumber(payload.affected_ratio) && payload.affected_ratio >= 0 && payload.affected_ratio <= 1
+      && payload.state === "active";
+  },
+  "training_adherence_pattern_change.v1": payload => validWindow(payload.window, "lookback_days", 14)
+    && payload.direction === "lower_adherence"
+    && isFiniteNumber(payload.affected_ratio) && payload.affected_ratio >= 0.5 && payload.affected_ratio <= 1
+    && payload.sample_days === 14,
+  "training_load_change.v1": payload => validWindow(payload.window, "comparison_days", 7)
+    && ["rapid_increase", "rapid_decrease"].includes(payload.direction)
+    && isFiniteNumber(payload.duration_change_ratio) && payload.duration_change_ratio >= 0
+    && hasExactKeys(payload.session_counts, ["recent", "previous"])
+    && isNonNegativeInteger(payload.session_counts.recent)
+    && isNonNegativeInteger(payload.session_counts.previous),
+  "recovery_state_change.v1": payload => validWindow(payload.window, "lookback_days", 7)
+    && ["elevated", "high"].includes(payload.risk_level)
+    && isNonNegativeInteger(payload.poor_readiness_days)
+    && isNonNegativeInteger(payload.high_rpe_sessions)
+    && isNonNegativeInteger(payload.sample_days),
+  "goal_context_change.v1": payload => isValidDateKey(payload.change_window)
+    && isNonNegativeInteger(payload.target_count)
+    && (payload.nearest_target_days === null || isNonNegativeInteger(payload.nearest_target_days))
+    && hasExactKeys(payload.priority_counts, ["A", "B", "C", "unset"])
+    && Object.values(payload.priority_counts).every(isNonNegativeInteger),
+  "training_preference_change.v1": payload => isValidDateKey(payload.change_window)
+    && isNonNegativeInteger(payload.change_count) && payload.change_count > 0
+    && Array.isArray(payload.change_kinds) && payload.change_kinds.length > 0
+    && payload.change_kinds.every(value => ["updated", "removed"].includes(value)),
+  "training_progress_change.v1": payload => validWindow(payload.window, "lookback_days", 7)
+    && ["distance", "duration", "ascent"].includes(payload.metric)
+    && isFiniteNumber(payload.improvement_ratio) && payload.improvement_ratio >= 1.1
+    && payload.baseline_days === 90,
+  "health_risk_change.v1": payload => validWindow(payload.window, "lookback_days", 28)
+    && isNonNegativeInteger(payload.signal_days) && payload.signal_days >= 2
+    && hasExactKeys(payload.signal_sources, ["workout_text_days", "sick_tag_days"])
+    && Object.values(payload.signal_sources).every(isNonNegativeInteger)
+    && payload.recurrence === "repeated_days",
+});
+
+export function validateCandidateAgainstCatalog(candidate) {
+  const entry = getCatalogEntry(candidate?.reportType, candidate?.signalKind);
+  if (!entry) return { ok: false, reason: "unregistered_report_type" };
+  if (!candidate?.typedPayload || candidate.typedPayload.type !== entry.reportType
+    || candidate.typedPayload.signal_kind !== entry.signalKind
+    || candidate.typedPayload.schema_version !== entry.schemaVersion) {
+    return { ok: false, reason: "payload_identity_mismatch" };
+  }
+  if (finiteNumber(candidate.confidence) < entry.confidenceFloor) return { ok: false, reason: "confidence_below_floor" };
+  const keys = Object.keys(candidate.typedPayload);
+  if (keys.some(key => !entry.allowedPayloadKeys.includes(key))) return { ok: false, reason: "unregistered_payload_field" };
+  const validatePayload = PAYLOAD_VALIDATORS[entry.schemaVersion];
+  if (!validatePayload || !validatePayload(candidate.typedPayload)) return { ok: false, reason: "invalid_payload_schema" };
+  if (containsForbiddenReportData(candidate.typedPayload)) return { ok: false, reason: "forbidden_raw_field" };
+  return { ok: true, entry };
+}
+
+export async function discoverReportCandidates(domainSnapshot, options = {}) {
+  const adherence = await buildTrainingStateCandidate(domainSnapshot?.workouts || [], options);
+  const features = extractReportFeatures(domainSnapshot, options);
+  const candidates = [];
+  for (const detector of REPORT_DETECTORS) {
+    const candidate = detector.detect({ adherence, features });
+    if (candidate) candidates.push(candidate);
+  }
+  const prepared = [];
+  for (const candidate of candidates) {
+    if (!candidate?.triggered && candidate.signalKind === SIGNAL_KIND) continue;
+    candidate.triggered = true;
+    const validation = validateCandidateAgainstCatalog(candidate);
+    if (!validation.ok) continue;
+    candidate.contentHash ||= await sha256Hex(canonicalJson(candidate.typedPayload), options.cryptoImpl);
+    candidate.sourceFingerprint ||= await sha256Hex(canonicalJson({
+      type: candidate.reportType,
+      signal_kind: candidate.signalKind,
+      significance: candidate.significance,
+      recurrence: candidate.recurrence,
+      payload: candidate.typedPayload,
+    }), options.cryptoImpl);
+    prepared.push({ ...candidate, catalog: validation.entry });
+  }
+  return { features, candidates: prepared, observations: [adherence] };
+}
+
+export async function buildReportEnvelope(candidate, { reportedAt = new Date(), timeZone = "Asia/Shanghai" } = {}) {
+  if (!candidate?.triggered) return null;
+  const validation = validateCandidateAgainstCatalog(candidate);
+  if (!validation.ok || validation.entry.runtime !== "live") throw new Error(`report_not_dispatchable:${validation.reason || validation.entry.runtime}`);
+  const identity = await sha256Hex(`${candidate.reportType}\n${candidate.signalKind}\n${candidate.sourceFingerprint}\n${candidate.contentHash}`);
+  const reportId = `ultreia-${identity.slice(0, 40)}`;
+  const sourceRef = `training-state-${candidate.sourceFingerprint.slice(0, 32)}`;
+  const rootLineageId = `ultreia-training-${candidate.sourceFingerprint.slice(0, 30)}`;
+  const windowEnd = localDateEndInstant(candidate.source.endDate, timeZone);
+  const occurredAt = new Date(Math.min(windowEnd.getTime(), reportedAt.getTime())).toISOString();
+  const expiresAt = new Date(new Date(occurredAt).getTime() + validation.entry.retentionCeilingDays * DAY_MS).toISOString();
+  return {
+    id: reportId,
+    contract_version: "agent_report.v1",
+    source_product: "ultreia",
+    source_ref: sourceRef,
+    root_lineage_id: rootLineageId,
+    causation_id: null,
+    occurred_at: occurredAt,
+    reported_at: reportedAt.toISOString(),
+    evidence_type: "aggregate",
+    evidence_refs: [{ product: "ultreia", ref: sourceRef, kind: "aggregate", root_lineage_id: rootLineageId }],
+    sensitivity: validation.entry.sensitivity,
+    confidence: candidate.confidence,
+    proposed_scopes: ["aevum"],
+    retention_hint: "short",
+    expires_at: expiresAt,
+    content_hash: candidate.contentHash,
+    typed_payload: candidate.typedPayload,
+  };
+}
+
 export function decideCandidateAction(outbox, candidate) {
+  if (outbox?.pending_envelope) return "preserve_pending";
   if (candidate.sourceFingerprint === outbox?.observed_source_fingerprint) return "source_unchanged";
   if (!candidate.triggered) return "below_threshold";
   if (candidate.contentHash === outbox?.last_delivered_content_hash) return "content_already_delivered";
@@ -164,11 +670,84 @@ export function classifyIngressResult({ status, receipt, attemptCount = 0 }) {
   if (status >= 200 && status < 300 && ["recorded", "replayed", "duplicate"].includes(receipt?.status)) {
     return { kind: "delivered" };
   }
-  if (status === 429 || status >= 500 || status === 0) {
+  if (status === 0 || status >= 500) {
     const delays = [30 * 60, 2 * 60 * 60, 6 * 60 * 60];
     return attemptCount + 1 >= 3
       ? { kind: "paused", delaySeconds: 24 * 60 * 60, attemptCount: attemptCount + 1 }
       : { kind: "retry", delaySeconds: delays[attemptCount] || delays.at(-1), attemptCount: attemptCount + 1 };
   }
   return { kind: "blocked", attemptCount: attemptCount + 1 };
+}
+
+export function decideOutboxRun(outbox, { now = new Date(), candidateWindow = false } = {}) {
+  const nowMs = now.getTime();
+  const leaseActive = outbox?.lease_token && outbox?.lease_expires_at && Date.parse(outbox.lease_expires_at) > nowMs;
+  if (leaseActive) return { action: "skip", reason: "concurrent_claim" };
+  if (outbox?.pending_envelope) {
+    if (outbox.status === "blocked") return { action: "skip", reason: "permanent_failure" };
+    if (outbox.status === "paused") {
+      if (!outbox.paused_until || Number.isNaN(Date.parse(outbox.paused_until))) return { action: "skip", reason: "invalid_pause_state" };
+      return Date.parse(outbox.paused_until) <= nowMs
+        ? { action: "retry", reason: "pause_expired" }
+        : { action: "skip", reason: "paused_not_due" };
+    }
+    if (outbox.status === "retry_wait") {
+      if (outbox.next_attempt_at && Number.isNaN(Date.parse(outbox.next_attempt_at))) {
+        return { action: "skip", reason: "invalid_retry_state" };
+      }
+      return !outbox.next_attempt_at || Date.parse(outbox.next_attempt_at) <= nowMs
+        ? { action: "retry", reason: "retry_due" }
+        : { action: "skip", reason: "retry_not_due" };
+    }
+    if (outbox.status === "pending") return { action: "retry", reason: "pending_due" };
+    return { action: "skip", reason: "pending_state_mismatch" };
+  }
+  if (["pending", "retry_wait", "paused", "blocked"].includes(outbox?.status)) {
+    return { action: "skip", reason: "missing_pending_envelope" };
+  }
+  return candidateWindow
+    ? { action: "discover", reason: "candidate_window" }
+    : { action: "skip", reason: "outside_candidate_window" };
+}
+
+export async function validateStoredPendingEnvelope(outbox, cryptoImpl = globalThis.crypto) {
+  const envelope = outbox?.pending_envelope;
+  if (!envelope || !outbox?.pending_report_id || !outbox?.pending_content_hash) return { ok: false, reason: "pending_identity_missing" };
+  if (envelope.id !== outbox.pending_report_id) return { ok: false, reason: "report_id_mismatch" };
+  if (envelope.content_hash !== outbox.pending_content_hash) return { ok: false, reason: "content_hash_mismatch" };
+  const actualHash = await sha256Hex(canonicalJson(envelope.typed_payload), cryptoImpl);
+  if (actualHash !== outbox.pending_content_hash) return { ok: false, reason: "payload_hash_mismatch" };
+  return { ok: true, idempotencyKey: outbox.pending_report_id };
+}
+
+export function shadowJournalEntry(candidate, { observedAt = new Date() } = {}) {
+  if (!candidate?.catalog || candidate.catalog.runtime === "live") return null;
+  return {
+    event: "agent_report_shadow_candidate",
+    observed_at: observedAt.toISOString(),
+    retention_ceiling_at: new Date(observedAt.getTime() + candidate.catalog.retentionCeilingDays * DAY_MS).toISOString(),
+    report_type: candidate.reportType,
+    signal_kind: candidate.signalKind,
+    schema_version: candidate.catalog.schemaVersion,
+    disposition: candidate.catalog.runtime,
+    sensitivity: candidate.catalog.sensitivity,
+    confidence: candidate.confidence,
+    significance: candidate.significance,
+    novelty: candidate.novelty,
+    recurrence: candidate.recurrence,
+    content_hash: candidate.contentHash,
+    typed_payload: candidate.typedPayload,
+    model_used: false,
+  };
+}
+
+export function isShadowJournalDue(candidate, { observedAt = new Date(), timeZone = "Asia/Shanghai" } = {}) {
+  if (!candidate?.catalog || candidate.catalog.runtime === "live") return false;
+  const frequencyDays = Math.max(1, Number(candidate.catalog.maxFrequencyDays) || 1);
+  const dateKey = localDateKey(observedAt, timeZone);
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const dayOrdinal = Math.floor(Date.UTC(year, month - 1, day) / DAY_MS);
+  const signalOffset = [...catalogKey(candidate.reportType, candidate.signalKind)]
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0) % frequencyDays;
+  return dayOrdinal % frequencyDays === signalOffset;
 }

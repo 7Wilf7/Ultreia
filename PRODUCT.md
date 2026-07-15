@@ -94,11 +94,13 @@ anything that makes training judgment feel gamified or unserious.
 
 Keep Ultreia stable as the mature training product while advancing AI Coach
 from a confirmable Agent into a policy-governed training Agent. The Calendar
-conflict-safe prerequisite and Aevum Phase A foundation are complete. The next
-milestone is the first `agent_report.v1` vertical slice in shadow mode; it is
-not connected yet. A narrow Query may proceed independently but does not block
-proactive Reports. Do not expand Ultreia into ledger, knowledge-base, or global
-launcher responsibilities.
+conflict-safe prerequisite and Aevum Phase A foundation are complete. The B1
+`agent_report.v1` vertical slice is live only for the registered
+`training_state_change / repeated_plan_deviation` aggregate. Ultreia now
+discovers other minimized candidates in a local shadow pipeline; none may leave
+Ultreia until Aevum completes B2 contract and policy registration. A narrow
+Query may proceed independently but does not block proactive Reports. Do not
+expand Ultreia into ledger, knowledge-base, or global launcher responsibilities.
 
 ## Accessibility & Inclusion
 

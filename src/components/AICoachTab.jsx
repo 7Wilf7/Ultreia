@@ -751,7 +751,7 @@ export function AICoachTab({
   // Memory update lifted to AppShell so it survives leaving this tab (the
   // request keeps running; a top banner invites the user back when ready).
   showMemory, setShowMemory,
-  memoryUpdating, memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, recordMemoryActionDecision, saveMemoryFacts, proposeMemoryUpdate,
+  memoryProposal, setMemoryProposal, lastMemoryAction, setLastMemoryAction, recordMemoryActionDecision, saveMemoryFacts,
 }) {
   const t = useT();
   const appDialog = useAppDialog();
@@ -812,7 +812,7 @@ export function AICoachTab({
   // Preview language is independent of UI language — defaults to UI language
   // but the user can flip it to read the prompt in the other language.
   const [previewLang, setPreviewLang] = useState(lang);
-  // showMemory / memoryUpdating / memoryProposal are now lifted to AppShell
+  // showMemory / memoryProposal are lifted to AppShell
   // (props) so the update can finish after the user leaves this tab.
   const memoryDisplayLang = lang === "zh" ? "zh" : "en";
   // First-send guidance: { msg, hints } while the one-time nudge modal is open.
@@ -2037,14 +2037,6 @@ export function AICoachTab({
                 }}>
                   <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>{t("coach.memory_title")}</h2>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                    {!memoryProposal && (
-                      <button {...instantPress("coach-memory-update-mobile", proposeMemoryUpdate)}
-                        disabled={memoryUpdating || chatMessages.length === 0}
-                        style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
-                        {memoryUpdating && <Spinner size={11} thickness={1.4} />}
-                        {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
-                      </button>
-                    )}
                     <button {...instantPress("coach-memory-close", () => setShowMemory(false))} style={s.modalCloseBtn} aria-label="Close">×</button>
                   </div>
                 </div>
@@ -3159,15 +3151,7 @@ export function AICoachTab({
                   {coachHubTab === "memory" && (
                     <div>
                       <div style={{ marginBottom: 14 }}>
-                        {!memoryProposal && (
-                          <button {...instantPress("coach-memory-update-desktop", proposeMemoryUpdate)}
-                            disabled={memoryUpdating || chatMessages.length === 0}
-                            style={{ ...s.btnGhost, minHeight: 0, fontSize: 12, padding: "6px 10px", opacity: (memoryUpdating || chatMessages.length === 0) ? 0.5 : 1, display: "inline-flex", alignItems: "center", gap: 6, touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}>
-                            {memoryUpdating && <Spinner size={11} thickness={1.4} />}
-                            {memoryUpdating ? t("coach.memory_updating") : t("coach.memory_auto_update")}
-                          </button>
-                        )}
-                        <div style={{ ...s.muted, lineHeight: 1.35, fontSize: 12, marginTop: 8 }}>{t("coach.memory_hint")}</div>
+                        <div style={{ ...s.muted, lineHeight: 1.35, fontSize: 12 }}>{t("coach.memory_hint")}</div>
                       </div>
                       <MemoryReviewSetting
                         enabled={coachConfig.nightlyMemoryReview === true}

@@ -1,4 +1,4 @@
--- Nightly Memory review scheduler.
+-- Nightly autonomous Memory maintenance scheduler.
 --
 -- Run this in Supabase Dashboard SQL Editor after deploying
 -- supabase/functions/daily-coach-dispatch.

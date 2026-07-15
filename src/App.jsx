@@ -457,6 +457,7 @@ function mergeMemoryFactList(facts = [], fact) {
 
 function pendingMemoryActionToProposal(action, races = []) {
   if (action?.type !== "memory_update" || action.status !== AGENT_ACTION_STATUS.PROPOSED) return null;
+  if (action.source === "nightly_memory_review" || action.source === "nightly_memory_agent") return null;
   const memory = action.payload?.memory;
   if (!memory || typeof memory !== "object") return null;
   const parsedMemory = {
@@ -2926,11 +2927,8 @@ function AppShell({
   // First-send guidance nudge: the pending message, kept here (not in AICoachTab)
   // so it survives a tab switch — the nudge re-opens when the user returns.
   const [coachHintsPending, setCoachHintsPending] = useState(null);
-  // ── Memory-update state, LIFTED here so it survives leaving the AI Coach
-  //    tab. The user can hit "Update" in the Memory modal, walk away, and the
-  //    request keeps running; when the proposal is ready a top banner invites
-  //    them back to review it (see the memory banner near the return). showMemory
-  //    is lifted too so the banner can open the modal.
+  // Legacy manual Memory proposal state remains readable for old action rows.
+  // Nightly autonomous maintenance never creates or restores a review card.
   const [memoryUpdating, setMemoryUpdating] = useState(false);
   const [memoryProposal, setMemoryProposal] = useState(null); // { en, zh } once ready
   const [lastMemoryAction, setLastMemoryAction] = useState(null);

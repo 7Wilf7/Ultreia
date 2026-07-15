@@ -67,17 +67,21 @@ function toUpsert(action, userId) {
 
 export async function listMyActions({ limit = 100 } = {}) {
   const userId = await getCurrentUserId();
+  const fetchLimit = Math.min(500, Math.max(limit, limit + 120));
   const { data, error } = await supabase
     .from('agent_actions')
     .select('*')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
   if (error) {
     console.error('listMyActions failed:', error);
     throw new Error(error.message);
   }
-  return (data ?? []).map(fromRow);
+  return (data ?? [])
+    .filter(row => !['nightly_memory_review', 'nightly_memory_agent'].includes(row.source))
+    .slice(0, limit)
+    .map(fromRow);
 }
 
 export async function upsertAction(action) {

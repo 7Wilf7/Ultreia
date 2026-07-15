@@ -81,6 +81,7 @@ export function RacesTab({
   const isMobile = useIsMobile();
   const instantPress = useInstantPress();
   const [selectedMobileSubTab, setSelectedMobileSubTab] = useState(mobileSubTab || "target");
+  const [mobileSubTabMotionDir, setMobileSubTabMotionDir] = useState(0);
   const [mobilePrOpen, setMobilePrOpen] = useState(false);
   const commitParentMobileSubTab = useDeferredCommit(setMobileSubTab);
   const subTabSwipeRef = useRef(null);
@@ -96,6 +97,8 @@ export function RacesTab({
   function changeMobileSubTab(nextTab) {
     if (nextTab === selectedMobileSubTab) return;
     if (addingMode) cancelAdd();
+    const order = { target: 0, history: 1 };
+    setMobileSubTabMotionDir((order[nextTab] ?? 0) > (order[selectedMobileSubTab] ?? 0) ? 1 : -1);
     setSelectedMobileSubTab(nextTab);
     commitParentMobileSubTab(nextTab);
   }
@@ -720,6 +723,9 @@ export function RacesTab({
   // section header above the list goes away. Filter + Add share one row.
   if (isMobile) {
     const swipeBoundary = raceSubTabSwipeBoundary(selectedMobileSubTab);
+    const subTabMotionClass = mobileSubTabMotionDir
+      ? (mobileSubTabMotionDir > 0 ? "ultreia-tab-in-right" : "ultreia-tab-in-left")
+      : undefined;
     return (
       <div
         className="ultreia-no-motion-surface"
@@ -776,6 +782,7 @@ export function RacesTab({
           </div>
         </div>
 
+        <div key={selectedMobileSubTab} className={subTabMotionClass}>
         {pastRaceWarning && (
           <div style={{ ...s.cardDark, marginBottom: 14, border: "1px solid var(--warn)", background: "var(--warn-soft)" }}>
             <div style={{ ...s.section, color: "var(--warn)" }}>{t("races.past_warn_title")}</div>
@@ -822,6 +829,7 @@ export function RacesTab({
             })}
           </>
         )}
+        </div>
         {modals}
       </div>
     );

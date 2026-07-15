@@ -2336,6 +2336,15 @@ function AppShell({
     }
   }
 
+  function goToLocationSettings() {
+    if (isMobile) {
+      setMobileSettingsFocus({ group: "other", item: "location", tick: Date.now() });
+      setTab(TAB_SETTINGS);
+    } else {
+      setShowLocationSettings(true);
+    }
+  }
+
   function openWalletSurface() {
     if (!PRODUCT_PUBLIC_FEATURES) return;
     if (isMobile) {
@@ -4833,7 +4842,7 @@ Rules:
           /* Shared weather context — preview + status pill consume this. */
           weatherCtx={weatherCtx}
           defaultLocation={defaultLocation}
-          onOpenLocationSettings={() => setShowLocationSettings(true)}
+          onOpenLocationSettings={goToLocationSettings}
           /* Inbox entry — top-right of the AI Coach header. */
           onOpenInbox={() => {
             setInboxTab(firstUnreadInboxTab(inboxUnreadByTab));

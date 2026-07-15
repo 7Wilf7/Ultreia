@@ -411,9 +411,10 @@ export function TrainingTab({
     </>
   );
 
-  const viewMotionClass = isMobile && viewMotionDir
-    ? (viewMotionDir > 0 ? "ultreia-tab-in-right" : "ultreia-tab-in-left")
-    : undefined;
+  // Charts enters with direction, but returning to Activities stays still.
+  // The Activities view owns its sticky filter/header, so sliding that whole
+  // subtree made labels such as “All types” look like the entire page moved.
+  const viewMotionClass = isMobile && viewMotionDir > 0 ? "ultreia-tab-in-right" : undefined;
 
   return (
     <div

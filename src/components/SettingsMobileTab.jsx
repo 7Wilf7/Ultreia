@@ -99,9 +99,18 @@ export function SettingsMobileTab({
 
   const displayName = profile?.displayName || "—";
   const email = user?.email || "";
+  const locationFlash = focusGroup?.group === "other" && focusGroup?.item === "location";
+  const sectionHeadingStyle = {
+    padding: "12px 14px 7px",
+    fontSize: 11,
+    fontWeight: 700,
+    letterSpacing: "0.08em",
+    color: "var(--ink-3)",
+    textTransform: "uppercase",
+  };
   const otherSettings = (
     <>
-      <div style={{ padding: "12px 14px 7px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: "var(--ink-3)", textTransform: "uppercase" }}>
+      <div style={sectionHeadingStyle}>
         {t("settings.notifications_automation")}
       </div>
       <SubCell
@@ -124,11 +133,14 @@ export function SettingsMobileTab({
             })
           : t("settings.weather_updates_off")}
         onClick={onOpenWeatherSettings} />
-      <SubCell
+      <SubCell key={`location-${locationFlash ? focusGroup.tick : 0}`}
         primary={t("settings.location")}
         secondary={defaultLocation?.name || t("settings.location_missing")}
+        flash={locationFlash}
         onClick={onOpenLocationSettings} />
-      <div style={{ height: 1, background: "var(--rule-soft)", margin: "4px 14px" }} />
+      <div style={{ ...sectionHeadingStyle, borderTop: "1px solid var(--rule-soft)", marginTop: 4 }}>
+        {t("settings.section_other")}
+      </div>
       <SubCell
         primary={t("settings.language")}
         rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}

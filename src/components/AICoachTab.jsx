@@ -27,7 +27,7 @@ import { hasActionableCalendarSuggestion } from "../utils/calendarSuggestion";
 import { isMobilePagerTouching } from "../utils/mobilePager";
 import { ModalRoot } from "./ModalRoot";
 import { Spinner } from "./Spinner";
-import { CalendarIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon } from "./Icons";
+import { CalendarIcon, CloudIcon, CoachIcon, SettingsIcon, MailIcon, ImageIcon, PinIcon } from "./Icons";
 import { ItemActionModal } from "./ItemActionModal";
 import { RaceBriefingModal } from "./RaceBriefingModal";
 import { useAppDialog } from "./AppDialogContext";
@@ -1657,8 +1657,8 @@ export function AICoachTab({
     : (calendarImportOn ? "shown" : "hidden");
   const hasCoachImageAttachments = coachImages.length > 0;
   const canSubmitCoachMessage = !contextCompressing && (composerInput.trim().length > 0 || hasCoachImageAttachments);
-  // Weather pill value + state. When location is missing, the pill opens the
-  // AI Coach location panel so the user can set the weather place in-context.
+  // Weather and location stay separate: weather leads to the forecast, while
+  // location leads to the saved default place in Settings.
   const wStatus = weatherCtx?.status || 'idle';
   const wTemp = weatherCtx?.currentWeather?.apparentC ?? weatherCtx?.currentWeather?.tempC;
   const weatherLabel = lang === "zh"
@@ -1674,8 +1674,9 @@ export function AICoachTab({
       : '—');
   const weatherActive = wStatus === 'ready';
   const hasDefaultLocation = hasValidCoords(defaultLocation);
-  const weatherLocationLabel = hasDefaultLocation ? cityAbbreviationFromLocation(defaultLocation, lang) : "";
-  const weatherDisplayLabel = weatherLocationLabel && weatherActive ? `${weatherLocationLabel} ${weatherLabel}` : weatherLabel;
+  const weatherLocationLabel = hasDefaultLocation
+    ? cityAbbreviationFromLocation(defaultLocation, lang)
+    : (lang === "zh" ? "未设" : "unset");
   const runnerOptimistic = codexRunnerStatus?.optimistic === true;
   const runnerLastSeenIso = runnerOptimistic ? null : (codexRunnerStatus?.last_seen_at || null);
   const runnerState = codexRunnerStatus?.state || "online";
@@ -2196,26 +2197,7 @@ export function AICoachTab({
         {!isMobile && statusPill(<SettingsIcon size={12} />, "Mode", `${coachStyleLabel} / ${outputLabel} / ${interventionLabel}`)}
         {!isMobile && statusPill(<CoachIcon size={12} />, "Memory", memoryLabel, memoryReady)}
         {!isMobile && statusPill(<CalendarIcon size={12} />, "Import", calendarLabel, calendarImportOn)}
-        {/* Weather pill — kept on mobile because the whole point of weather
-            integration is the runner glancing at it before their session.
-            Clickable when status is 'no_location' so the user can jump
-            straight to the default-location modal. */}
-        {wStatus === 'no_location' && onOpenLocationSettings ? (
-          <button {...instantPress("coach-weather-location-missing", onOpenLocationSettings)}
-            title={lang === 'zh' ? '点击设置默认位置' : 'Click to set a default location'}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              minHeight: 26, padding: "4px 9px",
-              border: "1px solid var(--warn)", borderRadius: 2,
-              background: "rgba(181,78,26,0.08)", color: "var(--warn)",
-              fontSize: 11, fontFamily: "var(--font-sans)",
-              cursor: "pointer", whiteSpace: "nowrap",
-              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
-            }}>
-            <span>☁</span>
-            <span style={{ fontWeight: 600 }}>{weatherLabel}</span>
-          </button>
-        ) : onGoToWeather ? (
+        {onGoToWeather ? (
           <button type="button" {...instantPress("coach-weather-pill", onGoToWeather)}
             title={lang === "zh" ? "查看日历天气" : "View weather on the calendar"}
             style={{
@@ -2227,11 +2209,28 @@ export function AICoachTab({
               fontSize: 11, fontFamily: "var(--font-sans)",
               cursor: "pointer", whiteSpace: "nowrap", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
-            <span style={{ color: weatherActive ? "var(--moss)" : "var(--ink-3)" }}>☁</span>
+            <span style={{ color: weatherActive ? "var(--moss)" : "var(--ink-3)", display: "inline-flex" }}><CloudIcon size={12} /></span>
             {!isMobile && <span style={{ color: "var(--ink-3)" }}>Weather</span>}
-            <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherDisplayLabel}</span>
+            <span style={{ color: weatherActive ? "var(--ink-1)" : "var(--ink-3)", fontWeight: 600 }}>{weatherLabel}</span>
           </button>
-        ) : statusPill(<span>☁</span>, "Weather", weatherDisplayLabel, weatherActive, isMobile)}
+        ) : statusPill(<CloudIcon size={12} />, "Weather", weatherLabel, weatherActive, isMobile)}
+        {onOpenLocationSettings && (
+          <button type="button" {...instantPress("coach-location-pill", onOpenLocationSettings)}
+            title={lang === "zh" ? "前往设置默认位置" : "Go to default location settings"}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              minHeight: 26, padding: "4px 9px",
+              border: `1px solid ${hasDefaultLocation ? "var(--rule)" : "var(--warn)"}`, borderRadius: 2,
+              background: hasDefaultLocation ? "var(--bg-elevated)" : "rgba(181,78,26,0.08)",
+              color: hasDefaultLocation ? "var(--ink-2)" : "var(--warn)",
+              fontSize: 11, fontFamily: "var(--font-sans)",
+              cursor: "pointer", whiteSpace: "nowrap", touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+            }}>
+            <span style={{ color: hasDefaultLocation ? "var(--moss)" : "var(--warn)", display: "inline-flex" }}><PinIcon size={12} /></span>
+            {!isMobile && <span style={{ color: "var(--ink-3)" }}>Location</span>}
+            <span style={{ color: hasDefaultLocation ? "var(--ink-1)" : "var(--warn)", fontWeight: 600 }}>{weatherLocationLabel}</span>
+          </button>
+        )}
 
         <span style={{ flex: 1, minWidth: 6 }} />
         {!isMobile && showHeaderManualAdjustmentShortcut && (

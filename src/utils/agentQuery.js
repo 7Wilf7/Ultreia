@@ -14,6 +14,15 @@ export const MAX_QUERY_BODY_BYTES = 64 * 1024;
 export const MAX_QUERY_SKEW_SECONDS = 300;
 export const ULTREIA_QUERY_PATH = "/functions/v1/ultreia-agent-query";
 
+const ULTREIA_QUERY_RUNTIME_PATHS = new Set([
+  "/ultreia-agent-query",
+  ULTREIA_QUERY_PATH,
+]);
+
+export function isAllowedUltreiaQueryRuntimePath(pathname) {
+  return typeof pathname === "string" && ULTREIA_QUERY_RUNTIME_PATHS.has(pathname);
+}
+
 const REQUEST_KEYS = Object.freeze([
   "id", "contract_version", "requester_product", "owner_product", "query_type",
   "schema_version", "requested_at", "sections",

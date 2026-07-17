@@ -2,9 +2,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   MAX_QUERY_BODY_BYTES,
   QueryResponderError,
-  ULTREIA_QUERY_PATH,
   authenticateQueryRequest,
   buildQueryResultFromLoader,
+  isAllowedUltreiaQueryRuntimePath,
   localDateKey,
   shiftDateKey,
 } from "../../../src/utils/agentQuery.js";
@@ -77,7 +77,9 @@ async function loadSnapshot(db: ReturnType<typeof createClient>, userId: string,
 
 Deno.serve(async (request) => {
   if (request.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-  if (new URL(request.url).pathname !== ULTREIA_QUERY_PATH) return json({ error: "not_found" }, 404);
+  if (!isAllowedUltreiaQueryRuntimePath(new URL(request.url).pathname)) {
+    return json({ error: "not_found" }, 404);
+  }
 
   const querySecret = Deno.env.get("AEVUM_ULTREIA_QUERY_HMAC_SECRET") || "";
   const userId = Deno.env.get("AEVUM_ULTREIA_USER_ID") || "";

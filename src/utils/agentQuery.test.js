@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   MAX_QUERY_BODY_BYTES,
   ULTREIA_CONTEXT_SECTIONS,
+  ULTREIA_QUERY_PATH,
   assertNoForbiddenQueryKeys,
   assertQueryBodySize,
   authenticateQueryRequest,
@@ -12,6 +13,7 @@ import {
   deriveCurrentPhase,
   findForbiddenQueryKey,
   hmacSha256Hex,
+  isAllowedUltreiaQueryRuntimePath,
   normalizeWeeklyTemplate,
   sha256Hex,
   validateUltreiaContextQuery,
@@ -63,6 +65,23 @@ function baseSnapshot(overrides = {}) {
 }
 
 describe("Agent Query authentication and request contract", () => {
+  it("accepts only the two exact Supabase runtime paths", () => {
+    expect(isAllowedUltreiaQueryRuntimePath("/ultreia-agent-query")).toBe(true);
+    expect(isAllowedUltreiaQueryRuntimePath(ULTREIA_QUERY_PATH)).toBe(true);
+    expect(isAllowedUltreiaQueryRuntimePath("/functions/v1/other-function")).toBe(false);
+    expect(isAllowedUltreiaQueryRuntimePath("/prefix/ultreia-agent-query")).toBe(false);
+    expect(isAllowedUltreiaQueryRuntimePath("/ultreia-agent-query/extra")).toBe(false);
+  });
+
+  it("keeps the canonical HMAC path in the signature message", () => {
+    const bodyHash = "a".repeat(64);
+
+    expect(ULTREIA_QUERY_PATH).toBe("/functions/v1/ultreia-agent-query");
+    expect(buildQuerySignatureMessage(123, bodyHash)).toBe(
+      ["POST", "/functions/v1/ultreia-agent-query", "aevum", "123", bodyHash].join("\n"),
+    );
+  });
+
   it("accepts an exact signed request", async () => {
     const signed = await signedRequest();
     await expect(authenticateQueryRequest({ ...signed, secret: SECRET, now: NOW })).resolves.toEqual(request());

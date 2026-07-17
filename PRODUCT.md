@@ -99,7 +99,7 @@ Ultreia v8 producer and its B2 outbox constraints are deployed; read-only
 acceptance and a normal seven-slot Cron run passed. Producer-side cadence,
 privacy and schema checks remain mandatory; sensitive recovery and health-risk
 evidence is recorded by Aevum as `needs_user`. Reports still grant no
-memory-write or Action authority. The B3 read-only Query responder v2 is ACTIVE
+memory-write or Action authority. The B3 read-only Query responder v3 is ACTIVE
 behind an independent HMAC channel. It returns only current target, reviewed
 training-preference and aggregated 28-day training-state facts, never raw
 workouts, location, notes, health context or write authority. Query does not

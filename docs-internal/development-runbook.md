@@ -77,10 +77,12 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 
 ### Agent Query B3 运行边界
 
-- **当前生产状态（2026-07-17）**：`ultreia-agent-query` v2 已使用
+- **当前生产状态（2026-07-17）**：`ultreia-agent-query` v3 已使用
   `--no-verify-jwt` 部署为 `ACTIVE`。Aevum 必须持有相同的独立 Query HMAC secret
   才能调用；部署与状态检查没有制造测试 Query 或训练数据。
-- 只接受 `POST /functions/v1/ultreia-agent-query`，请求体上限 64 KiB；来源、Unix
+- 外部调用与 HMAC 规范路径固定为 `POST /functions/v1/ultreia-agent-query`；Function
+  内部运行时仅精确允许 `/ultreia-agent-query` 和该规范路径，不接受前缀、后缀或其他
+  Function 路径。请求体上限 64 KiB；来源、Unix
   时间戳、原始请求字节 SHA-256 和 HMAC 均在数据库读取前验证，签名与
   `requested_at` 都只有 300 秒窗口。
 - 唯一数据权限来自服务端 `AEVUM_ULTREIA_USER_ID`，请求不得指定用户。返回仅含

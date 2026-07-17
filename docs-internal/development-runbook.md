@@ -63,6 +63,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
 - 函数：
   - `daily-coach-dispatch`（pg_cron 定时生成每日 AI 打卡、后台周报和夜间 Memory 审核 → FCM 推送 / 写 `push_inbox`；部署加 `--no-verify-jwt`；AI provider 优先 desktop Codex runner，失败回退 DeepSeek；个人模式不扣钱包）
   - `agent-report-dispatch`（v8 七类独立 Report pipeline 已部署并通过 producer B2 schema acceptance；每 30 分钟 Cron、本地 00:30 从训练域快照提取去隐私特征并运行 Aevum B2 detector catalog，其余 tick 只处理到期重试；每类独立 outbox / lease / cadence，以 HMAC 投递 Aevum，单类 blocked / paused / retry 不阻塞其它类型；不调用 LLM、不推通知、不写训练数据；部署加 `--no-verify-jwt`）
+  - `ultreia-agent-query`（Aevum B3 只读 responder；只接受 Aevum 独立 HMAC 签名的精确 `training_context_snapshot` 请求，按固定用户读取最小字段并返回去隐私当前快照；不调用 LLM、不写训练数据、不触碰 Report outbox / Cron；部署加 `--no-verify-jwt`）
   - `coach-proxy`（AI Coach 代理；优先把 `coach_chat` / `weekly_report` / `memory_update` / `plan_extract` / `plan_deviation_rescue` 等任务派给 desktop Codex runner，失败回退 DeepSeek；个人模式不检查钱包余额、不扣钱包）
   - `weather-proxy`（彩云天气代理；`mode=bundle` 实时+7天预报算一次天气请求，`mode=single` 单端点；个人模式不检查钱包余额、不扣钱包）
   - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
@@ -72,7 +73,26 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica / Sidera 个人数据）
   - `push-test`（早期冒烟测试，可退役）
 
-**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）、`AEVUM_ULTREIA_QUERY_HMAC_SECRET`（Aevum → Ultreia Query 专用 HMAC secret，禁止和 Report secret 复用）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+
+### Agent Query B3 运行边界
+
+- **当前生产状态（2026-07-17）**：`ultreia-agent-query` v2 已使用
+  `--no-verify-jwt` 部署为 `ACTIVE`。Aevum 必须持有相同的独立 Query HMAC secret
+  才能调用；部署与状态检查没有制造测试 Query 或训练数据。
+- 只接受 `POST /functions/v1/ultreia-agent-query`，请求体上限 64 KiB；来源、Unix
+  时间戳、原始请求字节 SHA-256 和 HMAC 均在数据库读取前验证，签名与
+  `requested_at` 都只有 300 秒窗口。
+- 唯一数据权限来自服务端 `AEVUM_ULTREIA_USER_ID`，请求不得指定用户。返回仅含
+  当前 / 未来目标赛、七天训练偏好模板、active `training_preferences` 摘要和最近
+  28 个已完成上海本地日期的聚合训练状态。
+- 禁止返回原始 workout、GPS / location、训练 / 私人笔记、健康恢复信息、用户 ID、
+  race / memory / workout ID、source ref 或 metadata。内部 ID 只用于一对一计划匹配
+  或本地 SHA-256 fact key，永不进入响应。
+- 四组来源必须全部读取成功后才生成 `captured_at` 和响应；任何读取失败、跨上海
+  午夜、schema / privacy gate 失败都返回紧凑错误，不返回局部或合成快照。
+- Query 是只读当前状态通道，不修改训练数据，不写 Report outbox，不运行 Report
+  detector，也不授予 Aevum Action 或直接写 Ultreia 的权限。
 
 ### Agent Report 运行边界
 

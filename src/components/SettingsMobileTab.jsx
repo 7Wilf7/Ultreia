@@ -38,6 +38,7 @@ export function SettingsMobileTab({
   weatherIntervalHours,
   profileFlash,
   onOpenGuide,
+  onExportToAevum,
   onToggleLang,
   onChangePassword,
   onDeleteAccount,
@@ -146,6 +147,11 @@ export function SettingsMobileTab({
         rightValue={<LangSwitch lang={lang} onToggle={onToggleLang} />}
         onClick={onToggleLang} />
       <SubCell primary={t("settings.guide")} secondary={t("settings.guide_desc")} onClick={onOpenGuide} />
+      <SubCell
+        primary={t("settings.aevum_export")}
+        secondary={t("settings.aevum_export_desc")}
+        instant={false}
+        onClick={onExportToAevum} />
       {!isNative && (
         <SubCell
           primary={t("settings.clear_cache")}

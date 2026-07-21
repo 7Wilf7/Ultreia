@@ -1,3 +1,4 @@
+/* global __ULTREIA_SOURCE_COMMIT__ */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
@@ -63,8 +64,14 @@ import { useAppDialog } from "./components/AppDialogContext";
 import { UserBadge } from "./components/Auth/UserBadge";
 import { LoginScreen } from "./components/Auth/LoginScreen";
 import { PasswordRecoveryModal } from "./components/Auth/PasswordRecoveryModal";
+import { supabase } from "./lib/supabase";
 import { MobileShell } from "./components/MobileShell";
 import { SettingsMobileTab } from "./components/SettingsMobileTab";
+import {
+  createUltreiaAevumExport,
+  serializeUltreiaAevumExport,
+  ultreiaAevumExportFilename,
+} from "./utils/aevumMigrationExport";
 import {
   BookIcon, CalendarIcon, CoachIcon, FootIcon, GlobeIcon, SettingsIcon, TrophyIcon, WalletIcon,
 } from "./components/Icons";
@@ -3387,6 +3394,31 @@ function AppShell({
     }
   }
 
+  async function exportToAevum() {
+    try {
+      const artifact = await createUltreiaAevumExport({
+        userId: user?.id,
+        verifyOwner: async expectedId => {
+          const { data, error } = await supabase.auth.getSession();
+          return !error && data.session?.user?.id === expectedId;
+        },
+        sourceCommit: typeof __ULTREIA_SOURCE_COMMIT__ === "string" ? __ULTREIA_SOURCE_COMMIT__ : "development",
+      });
+      const blob = new Blob([serializeUltreiaAevumExport(artifact)], { type: "application/json;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = ultreiaAevumExportFilename(artifact);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      appDialog.alert(t("settings.aevum_export_done"));
+    } catch (error) {
+      appDialog.alert(t("settings.aevum_export_failed", { msg: error?.message || String(error) }));
+    }
+  }
+
   async function loadCoachContextTokenCounter() {
     try {
       return await loadPreciseTextTokenCounter();
@@ -4898,6 +4930,7 @@ Rules:
         weatherIntervalHours={weatherSettings.intervalHours}
         profileFlash={profileFlash}
         onOpenGuide={() => setShowGuide(true)}
+        onExportToAevum={exportToAevum}
         onToggleLang={toggleLang}
         onChangePassword={() => setShowChangePassword(true)}
         onDeleteAccount={() => setShowDeleteAccount(true)}

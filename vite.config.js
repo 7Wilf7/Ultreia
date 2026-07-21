@@ -41,9 +41,11 @@ export default defineConfig(({ mode }) => {
   // is intentionally NOT prefixed with VITE_ to keep it server-side — is
   // available to the dev middleware. Production: Vercel injects it directly.
   const env = loadEnv(mode, process.cwd(), '');
+  const sourceCommit = env.VERCEL_GIT_COMMIT_SHA || env.GITHUB_SHA || env.ULTREIA_SOURCE_COMMIT || 'development';
   return {
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    __ULTREIA_SOURCE_COMMIT__: JSON.stringify(sourceCommit),
   },
   build: {
     // Rolldown 1.0.0 on linux-x64 (CI) tree-shakes way too aggressively —

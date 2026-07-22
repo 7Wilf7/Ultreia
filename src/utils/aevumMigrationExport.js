@@ -215,7 +215,7 @@ export async function createUltreiaAevumExport({
     product: "ultreia",
     created_at: createdAt.toISOString(),
     source: { origin: normalizeOrigin(origin), commit: normalizeCommit(sourceCommit) },
-    owner: { kind: "aevum", fingerprint: ownerFingerprint },
+    owner: { kind: "account", fingerprint: ownerFingerprint },
     payload: { preferences, weekly_reports: weeklyReports },
     denied_keys: deniedKeys,
     stats: {

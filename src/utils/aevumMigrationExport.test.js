@@ -58,6 +58,7 @@ describe("Ultreia Aevum migration export", () => {
     expect(artifact.denied_keys).toEqual(["sb-project-auth-token", "ultreia.weather.cache.v1"]);
     expect(serializeUltreiaAevumExport(artifact)).not.toContain("must-not-leak");
     expect(artifact.owner).not.toHaveProperty("id");
+    expect(artifact.owner.kind).toBe("account");
     expect(ultreiaAevumExportFilename(artifact)).toMatch(/^ultreia-aevum-export-2026-07-22-[a-f0-9]{8}\.json$/);
   });
 

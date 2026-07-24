@@ -17,3 +17,22 @@ export function isMissingAuthUser(error: unknown) {
   const code = errorCode(error);
   return status === 404 || code === "user_not_found";
 }
+
+// Confirmation delivery errors are projected into a tiny stable set. The
+// Function never returns or logs the upstream message, recipient, URL, or
+// provider detail.
+export function classifyConfirmationSendError(error: unknown) {
+  const status = errorStatus(error);
+  const code = errorCode(error);
+  if (status === 429 || code === "over_email_send_rate_limit") return "rate_limited";
+  if (
+    code === "validation_failed"
+    || code === "email_address_invalid"
+    || code === "email_address_not_authorized"
+    || code === "email_provider_disabled"
+    || (status !== null && status >= 400 && status < 500 && status !== 401 && status !== 403)
+  ) {
+    return "rejected";
+  }
+  return "failed";
+}

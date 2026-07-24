@@ -13,7 +13,10 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   type RegistrationGateway,
 } from "./registration.ts";
-import { isMissingAuthUser } from "./auth-error.ts";
+import {
+  classifyConfirmationSendError,
+  isMissingAuthUser,
+} from "./auth-error.ts";
 import { createRegisterWithInviteHandler } from "./handler.ts";
 import { resolveRegistrationRuntimeConfig } from "./runtime-config.ts";
 // The prior 4-second cap was shorter than a cold Auth admin create on the
@@ -153,7 +156,7 @@ function createGateway(): RegistrationGateway | null {
           email,
           options: { emailRedirectTo: redirectTo },
         });
-        return error ? "failed" : "sent";
+        return error ? classifyConfirmationSendError(error) : "sent";
       } catch (error) {
         return errorState(error);
       }

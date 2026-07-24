@@ -106,6 +106,40 @@ describe("register-with-invite lifecycle", () => {
     expect(releaseCalls).toBe(1);
   });
 
+  it("reports a non-retryable confirmation rejection after exact cleanup", async () => {
+    const result = await executeInviteRegistration(
+      makeGateway({ sendSignupConfirmation: async () => "rejected" }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 422,
+      body: {
+        error: "confirmation_send_rejected",
+        stage: "confirmation_send",
+        retryable: false,
+      },
+    });
+  });
+
+  it("reports a retryable confirmation rate limit after exact cleanup", async () => {
+    const result = await executeInviteRegistration(
+      makeGateway({ sendSignupConfirmation: async () => "rate_limited" }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 429,
+      body: {
+        error: "confirmation_rate_limited",
+        stage: "confirmation_send",
+        retryable: true,
+      },
+    });
+  });
+
   it("returns a determinate timeout boundary when Auth account creation times out", async () => {
     const result = await executeInviteRegistration(
       makeGateway({ createAccount: async () => ({ state: "timeout" }) }),

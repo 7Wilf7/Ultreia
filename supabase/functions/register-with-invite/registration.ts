@@ -33,6 +33,8 @@ export type RegistrationFailureDiagnostic = {
     | "account_create_rejected"
     | "registration_cleanup_required"
     | "confirmation_send_failed"
+    | "confirmation_send_rejected"
+    | "confirmation_rate_limited"
     | "unexpected";
   retryable: boolean;
 };
@@ -56,6 +58,8 @@ const DIAGNOSTIC_OUTCOMES = new Set<Exclude<RegistrationFailureDiagnostic["outco
   "account_create_rejected",
   "registration_cleanup_required",
   "confirmation_send_failed",
+  "confirmation_send_rejected",
+  "confirmation_rate_limited",
 ]);
 
 // This is the only diagnostic projection the deployed handler may log. It
@@ -110,7 +114,7 @@ export type RegistrationGateway = {
   sendSignupConfirmation(
     email: string,
     redirectTo: string,
-  ): Promise<"sent" | "failed" | "timeout">;
+  ): Promise<"sent" | "failed" | "timeout" | "rejected" | "rate_limited">;
   deleteAccount(accountId: string): Promise<"deleted" | "failed" | "timeout">;
   accountExists(accountId: string): Promise<boolean | "unknown">;
   releaseInvite(
@@ -256,5 +260,9 @@ export async function executeInviteRegistration(
   if (!cleaned) return failure("registration_cleanup_required", "cleanup", 500, false);
   return confirmationState === "timeout"
     ? gatewayFailure("confirmation_send", confirmationState)
+    : confirmationState === "rate_limited"
+    ? failure("confirmation_rate_limited", "confirmation_send", 429, true)
+    : confirmationState === "rejected"
+    ? failure("confirmation_send_rejected", "confirmation_send", 422, false)
     : failure("confirmation_send_failed", "confirmation_send", 503, true);
 }

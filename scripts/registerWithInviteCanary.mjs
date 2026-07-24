@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import {
   buildPrivateTableAuditSql,
@@ -8,6 +8,8 @@ import {
 } from "./registerWithInvitePrivateTableAudit.mjs";
 
 const FUNCTION_NAME = "register-with-invite";
+const RUN_RECORD_DIRECTORY = new URL("../supabase/.temp/", import.meta.url);
+const RUN_RECORD_FILE = new URL("../supabase/.temp/register-with-invite-canary-result.json", import.meta.url);
 const SAFE_ERROR_CATEGORIES = new Set([
   "bad_input",
   "weak_password",
@@ -127,7 +129,18 @@ async function exactAccountIds(email) {
   return exactAccountIdsFromRows(rows);
 }
 
-function print(result) {
+async function checkpoint(result, phase) {
+  try {
+    await mkdir(RUN_RECORD_DIRECTORY, { recursive: true });
+    await writeFile(RUN_RECORD_FILE, `${JSON.stringify({ ...result, checkpoint: phase })}\n`, "utf8");
+    result.recording_state = "recorded";
+  } catch {
+    result.recording_state = "unavailable";
+  }
+}
+
+async function print(result) {
+  await checkpoint(result, "final");
   return new Promise(resolve => {
     process.stdout.write(`${JSON.stringify(result)}\n`, resolve);
   });
@@ -167,12 +180,14 @@ async function runLifecycle() {
     auth_after_cleanup_count: null,
     invite_after_cleanup_count: null,
     private_table_audit: null,
+    recording_state: "pending",
     passed: false,
   };
   let inviteCreated = false;
   let accountId = null;
 
   try {
+    await checkpoint(result, "started");
     result.auth_before_count = (await exactAccountIds(email)).length;
     if (result.auth_before_count !== 0) throw new Error("unexpected_account_collision");
 
@@ -184,6 +199,7 @@ async function runLifecycle() {
       `SELECT COUNT(*)::bigint AS row_count FROM public.invite_codes WHERE code = ${sqlLiteral(code)}`,
     );
     if (result.invite_before_count !== 1) throw new Error("invite_create_unverified");
+    await checkpoint(result, "invite_verified");
 
     result.function_request_count = 1;
     const response = await invokeOnce(configuration, { email, password, code }, 55_000);
@@ -197,9 +213,12 @@ async function runLifecycle() {
     result.invite_consumed_after_count = await oneCount(
       `SELECT COUNT(*)::bigint AS row_count FROM public.invite_codes WHERE code = ${sqlLiteral(code)} AND used_by IS NOT NULL`,
     );
+    await checkpoint(result, "function_completed");
   } catch {
     result.response_category = result.function_request_count === 0 ? "setup_failed" : result.response_category;
+    await checkpoint(result, "execution_interrupted");
   } finally {
+    await checkpoint(result, "cleanup_started");
     if (accountId) {
       try {
         await runLinkedDbQuery(`DELETE FROM auth.users WHERE id = ${sqlLiteral(accountId)}::uuid`);
@@ -228,6 +247,8 @@ async function runLifecycle() {
       }
     }
 
+    await checkpoint(result, "cleanup_completed");
+
     if (accountId && result.auth_after_cleanup_count === 0) {
       try {
         const audit = summarizePrivateTableAudit(
@@ -243,6 +264,8 @@ async function runLifecycle() {
         result.private_table_audit = { audit_error: "cleanup_audit_unavailable" };
       }
     }
+
+    await checkpoint(result, "audit_completed");
 
     result.passed = result.function_request_count === 1
       && result.response_received === true

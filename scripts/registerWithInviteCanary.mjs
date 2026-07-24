@@ -24,6 +24,31 @@ const SAFE_ERROR_CATEGORIES = new Set([
 ]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function errorCode(error) {
+  if (typeof error !== "object" || error === null) return "";
+  const direct = "code" in error ? error.code : undefined;
+  if (typeof direct === "string") return direct;
+  const cause = "cause" in error ? error.cause : undefined;
+  return typeof cause === "object" && cause !== null && "code" in cause && typeof cause.code === "string"
+    ? cause.code
+    : "";
+}
+
+// The production summary deliberately classifies transport failures without
+// retaining the raw Node/Undici error, URL, request body, or credentials.
+export function classifyRequestFailure(error, timedOut) {
+  if (timedOut) return "request_timeout";
+  const code = errorCode(error);
+  if (code === "ECONNRESET" || code === "ECONNABORTED" || code === "UND_ERR_SOCKET") {
+    return "request_connection_reset";
+  }
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "request_dns_failed";
+  if (code.startsWith("ERR_TLS") || code === "UNABLE_TO_VERIFY_LEAF_SIGNATURE") {
+    return "request_tls_failed";
+  }
+  return "request_failed";
+}
+
 function sqlLiteral(value) {
   return `'${value.replaceAll("'", "''")}'`;
 }
@@ -87,11 +112,11 @@ async function invokeOnce(configuration, body, timeoutMs) {
       category: accepted ? "accepted" : error,
       accepted,
     };
-  } catch {
+  } catch (error) {
     return {
       responseReceived: false,
       status: null,
-      category: controller.signal.aborted ? "request_timeout" : "request_failed",
+      category: classifyRequestFailure(error, controller.signal.aborted),
       accepted: false,
     };
   } finally {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { exactAccountIdsFromRows } from "./registerWithInviteCanary.mjs";
+import {
+  classifyRequestFailure,
+  exactAccountIdsFromRows,
+} from "./registerWithInviteCanary.mjs";
 
 describe("register-with-invite canary account lookup", () => {
   it("accepts the aggregate zero-account shape without exposing an identifier", () => {
@@ -18,5 +21,21 @@ describe("register-with-invite canary account lookup", () => {
       account_count: 2,
       account_id: "00000000-0000-4000-8000-000000000000",
     }])).toThrow("invalid_account_lookup");
+  });
+});
+
+describe("register-with-invite canary transport summaries", () => {
+  it("classifies timeout, DNS, TLS, and connection reset without raw errors", () => {
+    expect(classifyRequestFailure(new Error("ignored"), true)).toBe("request_timeout");
+    expect(classifyRequestFailure({ cause: { code: "ENOTFOUND" } }, false)).toBe("request_dns_failed");
+    expect(classifyRequestFailure({ cause: { code: "ERR_TLS_CERT_ALTNAME_INVALID" } }, false))
+      .toBe("request_tls_failed");
+    expect(classifyRequestFailure({ cause: { code: "UND_ERR_SOCKET" } }, false))
+      .toBe("request_connection_reset");
+  });
+
+  it("keeps unknown failures non-sensitive", () => {
+    expect(classifyRequestFailure({ cause: { code: "provider-detail-not-allowed" } }, false))
+      .toBe("request_failed");
   });
 });

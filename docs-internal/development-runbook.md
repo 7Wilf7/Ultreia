@@ -73,7 +73,14 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica / Sidera 个人数据）
   - `push-test`（已正式退役；保留为受现有网关 JWT 保护的 `410` 终止端点，不读取设备、不调用推送提供方、不接受目标参数。若未来确需恢复，先重新做身份、owner/role、单目标和安全汇总响应审查，再从此变更前的已审查版本回滚并单独部署）
 
-**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）、`AEVUM_ULTREIA_QUERY_HMAC_SECRET`（Aevum → Ultreia Query 专用 HMAC secret，禁止和 Report secret 复用）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
+**Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）、`AEVUM_ULTREIA_QUERY_HMAC_SECRET`（Aevum → Ultreia Query 专用 HMAC secret，禁止和 Report secret 复用）。平台自动注入 `SUPABASE_URL` 与 `SUPABASE_SECRET_KEYS`；Function 优先读取后者的 `default`，只把旧 `SUPABASE_SERVICE_ROLE_KEY` 留作兼容回退，二者都不手动写入或记录。
+
+`register-with-invite` 的生产核验只在当次明确授权下执行，且顺序固定：先运行
+`node scripts/registerWithInviteCanary.mjs diagnosis`，确认只读诊断请求拿到安全响应；
+再最多一次运行 `node scripts/registerWithInviteCanary.mjs lifecycle`。后者只生成
+`.invalid` 一次性地址、只发一次 Function 请求、完成后精确删除临时 Auth 账号和邀请码，
+并使用 `scripts/registerWithInvitePrivateTableAudit.mjs` 内固定的 28 表 ownership 清单做
+只读 count 审计。脚本输出仅为安全汇总；任一清理或 28 表证明失败都不得标记 canary 通过。
 
 ### Agent Query B3 运行边界
 

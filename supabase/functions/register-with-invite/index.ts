@@ -11,37 +11,15 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  executeInviteRegistration,
-  registrationFailureDiagnostic,
   type RegistrationGateway,
-  type RegistrationResult,
 } from "./registration.ts";
-
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+import { createRegisterWithInviteHandler } from "./handler.ts";
+import { resolveRegistrationRuntimeConfig } from "./runtime-config.ts";
 // The prior 4-second cap was shorter than a cold Auth admin create on the
 // hosted path. Eight seconds remains bounded while leaving time for the exact
 // account/invite cleanup sequence within the total Function budget.
 const REQUEST_TIMEOUT_MS = 8_000;
 const FUNCTION_BUDGET_MS = 48_000;
-
-function json(obj: unknown, status = 200): Response {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { ...CORS, "Content-Type": "application/json" },
-  });
-}
-
-function registrationResponse(result: RegistrationResult): Response {
-  const diagnostic = registrationFailureDiagnostic(result);
-  if (diagnostic) console.warn(JSON.stringify(diagnostic));
-  return json(result.body, result.status);
-}
 
 function timeoutError() {
   const error = new Error("request_timed_out");
@@ -104,11 +82,10 @@ function isNotFound(error: unknown) {
 }
 
 function createGateway(): RegistrationGateway | null {
-  const supabaseUrl = Deno.env.get("SUPABASE_URL");
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRoleKey) return null;
+  const config = resolveRegistrationRuntimeConfig(Deno.env);
+  if (!config) return null;
 
-  const db = createClient(supabaseUrl, serviceRoleKey, {
+  const db = createClient(config.supabaseUrl, config.serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
     global: { fetch: createTimedFetch() },
   });
@@ -238,39 +215,4 @@ function createGateway(): RegistrationGateway | null {
   };
 }
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-  if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
-
-  let body: Record<string, unknown>;
-  try {
-    const parsed = await req.json();
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return json({ error: "bad_input" }, 400);
-    }
-    body = parsed as Record<string, unknown>;
-  } catch {
-    return json({ error: "bad_input" }, 400);
-  }
-
-  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  const password = typeof body.password === "string" ? body.password : "";
-  const code = typeof body.code === "string" ? body.code.trim() : "";
-  if (!EMAIL_RE.test(email) || email.length > 320 || !code || code.length > 128) {
-    return json({ error: "bad_input" }, 400);
-  }
-  if (password.length < 6 || password.length > 256) {
-    return json({ error: "weak_password" }, 400);
-  }
-
-  const gateway = createGateway();
-  if (!gateway) {
-    return registrationResponse({
-      status: 503,
-      body: { error: "registration_unavailable", stage: "configuration", retryable: false },
-    });
-  }
-
-  const result = await executeInviteRegistration(gateway, { email, password, code }, new Date());
-  return registrationResponse(result);
-});
+Deno.serve(createRegisterWithInviteHandler({ createGateway }));

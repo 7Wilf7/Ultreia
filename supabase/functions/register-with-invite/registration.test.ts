@@ -123,6 +123,49 @@ describe("register-with-invite lifecycle", () => {
     });
   });
 
+  it("reports an upstream invite-lookup failure without creating an account", async () => {
+    let accountCreateCalls = 0;
+    const result = await executeInviteRegistration(
+      makeGateway({
+        lookupInvite: async () => "failed",
+        createAccount: async () => {
+          accountCreateCalls += 1;
+          return { state: "created", accountId: "opaque-account" };
+        },
+      }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 503,
+      body: {
+        error: "registration_unavailable",
+        stage: "invite_lookup",
+        retryable: true,
+      },
+    });
+    expect(accountCreateCalls).toBe(0);
+  });
+
+  it("rejects a duplicate submission before any Auth call", async () => {
+    let accountCreateCalls = 0;
+    const result = await executeInviteRegistration(
+      makeGateway({
+        lookupInvite: async () => "used",
+        createAccount: async () => {
+          accountCreateCalls += 1;
+          return { state: "created", accountId: "opaque-account" };
+        },
+      }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({ status: 400, body: { error: "code_used" } });
+    expect(accountCreateCalls).toBe(0);
+  });
+
   it("does not expose an Auth rejection detail", async () => {
     const result = await executeInviteRegistration(
       makeGateway({ createAccount: async () => ({ state: "rejected" }) }),
@@ -136,6 +179,23 @@ describe("register-with-invite lifecycle", () => {
         error: "account_create_rejected",
         stage: "account_create",
         retryable: false,
+      },
+    });
+  });
+
+  it("reports a retryable Auth request failure without exposing provider detail", async () => {
+    const result = await executeInviteRegistration(
+      makeGateway({ createAccount: async () => ({ state: "failed" }) }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 503,
+      body: {
+        error: "registration_unavailable",
+        stage: "account_create",
+        retryable: true,
       },
     });
   });

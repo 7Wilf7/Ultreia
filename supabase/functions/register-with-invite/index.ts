@@ -13,6 +13,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   type RegistrationGateway,
 } from "./registration.ts";
+import { isMissingAuthUser } from "./auth-error.ts";
 import { createRegisterWithInviteHandler } from "./handler.ts";
 import { resolveRegistrationRuntimeConfig } from "./runtime-config.ts";
 // The prior 4-second cap was shorter than a cold Auth admin create on the
@@ -74,11 +75,6 @@ function createTimedFetch() {
       upstreamSignal?.removeEventListener("abort", abortFromUpstream);
     }
   };
-}
-
-function isNotFound(error: unknown) {
-  const message = errorMessage(error).toLowerCase();
-  return message.includes("not found") || message.includes("does not exist");
 }
 
 function createGateway(): RegistrationGateway | null {
@@ -176,7 +172,7 @@ function createGateway(): RegistrationGateway | null {
       try {
         const { data, error } = await db.auth.admin.getUserById(accountId);
         if (data?.user) return true;
-        if (!error || isNotFound(error)) return false;
+        if (!error || isMissingAuthUser(error)) return false;
         return "unknown";
       } catch {
         return "unknown";

@@ -186,6 +186,7 @@ function CreateAccountModal({ initialEmail, register, tt, isMobile, onClose, onR
         case "email_taken":   setError(tt("login.err_email_taken")); break;
         case "weak_password": setError(tt("login.err_pw_short")); break;
         case "confirmation_send_failed": setError(tt("login.err_confirmation_send")); break;
+        case "registration_cleanup_required": setError(tt("login.err_registration_cleanup")); break;
         default:              setError(tt("login.err_register"));
       }
       setSubmitting(false);

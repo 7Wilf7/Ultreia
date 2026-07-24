@@ -365,6 +365,7 @@ const dict = {
   "login.err_invalid_code": { en: "Invalid invite code.",   zh: "邀请码无效。" },
   "login.err_code_used":  { en: "This invite code has already been used.", zh: "该邀请码已被使用。" },
   "login.err_email_taken": { en: "This email is already registered — try signing in instead.", zh: "该邮箱已注册，请直接登录。" },
+  "login.err_registration_cleanup": { en: "Registration did not finish safely. Please contact the administrator before trying again.", zh: "注册未能安全完成，请联系管理员后再试。" },
   "login.err_register":   { en: "Registration failed. Please try again.", zh: "注册失败，请重试。" },
   "common.optional":      { en: "(optional)",               zh: "（可选）" },
   "common.saving":        { en: "Saving…",                  zh: "保存中…" },

@@ -69,9 +69,9 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
   - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
-  - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建 auth 用户 → 烧码；部署加 `--no-verify-jwt`）
+  - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建未确认 auth 用户 → 条件烧码 → 发送确认邮件；确认邮件失败或超时时会以固定失败阶段响应，并仅在精确账号删除已核实后释放该邀请码；部署加 `--no-verify-jwt`）
   - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica / Sidera 个人数据）
-  - `push-test`（早期冒烟测试，可退役）
+  - `push-test`（已正式退役；保留为受现有网关 JWT 保护的 `410` 终止端点，不读取设备、不调用推送提供方、不接受目标参数。若未来确需恢复，先重新做身份、owner/role、单目标和安全汇总响应审查，再从此变更前的已审查版本回滚并单独部署）
 
 **Edge Function Secrets**（Supabase Dashboard → Edge Functions → Secrets，**不进 git**）：`FCM_SERVICE_ACCOUNT`（service-account JSON）、`CRON_SECRET`（须与 pg_cron SQL 里发的一致）、`SHARED_DEEPSEEK_KEY`（服务端 DeepSeek key）、`SHARED_CAIYUN_TOKEN`（服务端彩云 token）、`AEVUM_ULTREIA_USER_ID`（唯一启用的 Wilf auth UUID）、`AEVUM_ULTREIA_REPORT_HMAC_SECRET`（Ultreia → Aevum 独立 HMAC secret）、`AEVUM_ULTREIA_QUERY_HMAC_SECRET`（Aevum → Ultreia Query 专用 HMAC secret，禁止和 Report secret 复用）。`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` 平台自动注入。
 

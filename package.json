@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:functions": "vitest run supabase/functions",
     "preview": "vite preview",
     "assets:brand": "node scripts/make-logo-assets.mjs && node scripts/make-poster-mark.mjs && npm run assets:android",
     "assets:android": "node scripts/make-adaptive-foreground.mjs && node scripts/make-splash.mjs"

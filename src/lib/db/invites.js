@@ -63,8 +63,10 @@ export async function deleteInviteCode(code) {
 }
 
 // Calls the Edge Function. Throws an Error whose `.code` is the server's error
-// id (invalid_code / code_used / email_taken / weak_password / bad_input) so the
-// UI can map it to a friendly message.
+// id (invalid_code / code_used / email_taken / weak_password /
+// confirmation_send_failed / registration_cleanup_required) so the UI can map
+// it to a friendly message. A safe server-side failure stage is retained on the
+// Error for diagnostics without exposing account or invite details.
 export async function registerWithInvite(email, password, code) {
   const { data, error } = await supabase.functions.invoke('register-with-invite', {
     body: { email, password, code },
@@ -78,10 +80,13 @@ export async function registerWithInvite(email, password, code) {
       if (ctx && typeof ctx.json === 'function') {
         const body = await ctx.json();
         serverErr = body?.error || '';
+        const serverStage = typeof body?.stage === 'string' ? body.stage : '';
+        if (serverStage) error.stage = serverStage;
       }
     } catch { /* fall through to generic */ }
     const e = new Error(serverErr || error.message || 'register_failed');
     e.code = serverErr || 'register_failed';
+    if (error.stage) e.stage = error.stage;
     throw e;
   }
   if (data && data.error) {

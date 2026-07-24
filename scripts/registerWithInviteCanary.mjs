@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { request as httpsRequest } from "node:https";
 import { fileURLToPath } from "node:url";
 import {
   buildPrivateTableAuditSql,
@@ -8,6 +9,7 @@ import {
 } from "./registerWithInvitePrivateTableAudit.mjs";
 
 const FUNCTION_NAME = "register-with-invite";
+const MAX_RESPONSE_BODY_BYTES = 16 * 1024;
 const RUN_RECORD_DIRECTORY = new URL("../supabase/.temp/", import.meta.url);
 const RUN_RECORD_FILE = new URL("../supabase/.temp/register-with-invite-canary-result.json", import.meta.url);
 const SAFE_ERROR_CATEGORIES = new Set([
@@ -49,6 +51,30 @@ export function classifyRequestFailure(error, timedOut) {
   return "request_failed";
 }
 
+// Project-level 4xx/5xx bodies are parsed only into the existing allowlist.
+// The raw body is discarded immediately so an unexpected gateway response
+// cannot be persisted by the production canary.
+export function summarizeFunctionResponse(status, rawBody) {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    // The status remains safe to report even if a gateway returned no JSON.
+  }
+  const error = typeof parsed?.error === "string" && SAFE_ERROR_CATEGORIES.has(parsed.error)
+    ? parsed.error
+    : "unexpected";
+  const accepted = status === 200
+    && parsed?.ok === true
+    && parsed?.needsEmailVerification === true;
+  return {
+    responseReceived: true,
+    status,
+    category: accepted ? "accepted" : error,
+    accepted,
+  };
+}
+
 function sqlLiteral(value) {
   return `'${value.replaceAll("'", "''")}'`;
 }
@@ -81,47 +107,84 @@ async function functionConfiguration() {
 }
 
 async function invokeOnce(configuration, body, timeoutMs) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(configuration.url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${configuration.apiKey}`,
-        apikey: configuration.apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    let parsed = null;
+  const url = new URL(configuration.url);
+  const payload = JSON.stringify(body);
+  return new Promise(resolve => {
+    let settled = false;
+    let timedOut = false;
+    let timeoutId = null;
+    const settle = result => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+      resolve(result);
+    };
+    let request;
     try {
-      parsed = await response.json();
-    } catch {
-      // The status remains safe to report even if a gateway returned no JSON.
+      request = httpsRequest({
+        protocol: url.protocol,
+        hostname: url.hostname,
+        port: url.port || undefined,
+        path: `${url.pathname}${url.search}`,
+        method: "POST",
+        agent: false,
+        headers: {
+          Authorization: `Bearer ${configuration.apiKey}`,
+          apikey: configuration.apiKey,
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+          Connection: "close",
+        },
+      }, response => {
+        let bodyText = "";
+        let bodyBytes = 0;
+        response.setEncoding("utf8");
+        response.on("data", chunk => {
+          bodyBytes += Buffer.byteLength(chunk);
+          if (bodyBytes > MAX_RESPONSE_BODY_BYTES) {
+            response.destroy();
+            settle(summarizeFunctionResponse(response.statusCode ?? 0, ""));
+            return;
+          }
+          bodyText += chunk;
+        });
+        response.once("error", error => {
+          settle({
+            responseReceived: false,
+            status: null,
+            category: classifyRequestFailure(error, timedOut),
+            accepted: false,
+          });
+        });
+        response.once("end", () => settle(summarizeFunctionResponse(response.statusCode ?? 0, bodyText)));
+      });
+    } catch (error) {
+      settle({
+        responseReceived: false,
+        status: null,
+        category: classifyRequestFailure(error, false),
+        accepted: false,
+      });
+      return;
     }
-    const error = typeof parsed?.error === "string" && SAFE_ERROR_CATEGORIES.has(parsed.error)
-      ? parsed.error
-      : "unexpected";
-    const accepted = response.status === 200
-      && parsed?.ok === true
-      && parsed?.needsEmailVerification === true;
-    return {
-      responseReceived: true,
-      status: response.status,
-      category: accepted ? "accepted" : error,
-      accepted,
-    };
-  } catch (error) {
-    return {
-      responseReceived: false,
-      status: null,
-      category: classifyRequestFailure(error, controller.signal.aborted),
-      accepted: false,
-    };
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      request.destroy();
+    }, timeoutMs);
+    request.setTimeout(timeoutMs, () => {
+      timedOut = true;
+      request.destroy();
+    });
+    request.once("error", error => {
+      settle({
+        responseReceived: false,
+        status: null,
+        category: classifyRequestFailure(error, timedOut),
+        accepted: false,
+      });
+    });
+    request.end(payload);
+  });
 }
 
 async function oneCount(sql) {

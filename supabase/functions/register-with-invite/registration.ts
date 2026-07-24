@@ -1,6 +1,7 @@
 export const SIGNUP_EMAIL_REDIRECT_URL = "https://ultreia.run/";
 
 export type RegistrationStage =
+  | "configuration"
   | "invite_lookup"
   | "account_create"
   | "invite_consume"
@@ -25,7 +26,15 @@ export type RegistrationGateway = {
     password: string,
   ): Promise<
     | { state: "created"; accountId: string }
-    | { state: "email_taken" | "weak_password" | "failed" | "timeout" }
+    | {
+      state:
+        | "email_taken"
+        | "weak_password"
+        | "rejected"
+        | "credentials_invalid"
+        | "failed"
+        | "timeout";
+    }
   >;
   consumeInvite(
     code: string,
@@ -53,6 +62,15 @@ function failure(
   retryable: boolean,
 ): RegistrationResult {
   return { status, body: { error, stage, retryable } };
+}
+
+function gatewayFailure(
+  stage: RegistrationStage,
+  state: "failed" | "timeout",
+): RegistrationResult {
+  return state === "timeout"
+    ? failure("registration_timeout", stage, 504, true)
+    : failure("registration_unavailable", stage, 503, true);
 }
 
 async function safely<T>(operation: () => Promise<T>, fallback: T): Promise<T> {
@@ -121,7 +139,7 @@ export async function executeInviteRegistration(
   if (inviteState === "missing") return { status: 400, body: { error: "invalid_code" } };
   if (inviteState === "used") return { status: 400, body: { error: "code_used" } };
   if (inviteState !== "unused") {
-    return failure("registration_unavailable", "invite_lookup", 503, true);
+    return gatewayFailure("invite_lookup", inviteState);
   }
 
   const created = await safely(
@@ -130,8 +148,14 @@ export async function executeInviteRegistration(
   );
   if (created.state === "email_taken") return { status: 400, body: { error: "email_taken" } };
   if (created.state === "weak_password") return { status: 400, body: { error: "weak_password" } };
+  if (created.state === "credentials_invalid") {
+    return failure("registration_unavailable", "configuration", 503, false);
+  }
+  if (created.state === "rejected") {
+    return failure("account_create_rejected", "account_create", 422, false);
+  }
   if (created.state !== "created") {
-    return failure("registration_unavailable", "account_create", 503, true);
+    return gatewayFailure("account_create", created.state);
   }
 
   const consumeState = await safely(
@@ -149,7 +173,8 @@ export async function executeInviteRegistration(
       consumeState !== "unavailable",
     );
     if (!cleaned) return failure("registration_cleanup_required", "cleanup", 500, false);
-    return { status: 400, body: { error: "code_used" } };
+    if (consumeState === "unavailable") return { status: 400, body: { error: "code_used" } };
+    return gatewayFailure("invite_consume", consumeState);
   }
 
   const confirmationState = await safely(
@@ -164,5 +189,7 @@ export async function executeInviteRegistration(
   // strand an unconfirmed account or permanently consume the invitation.
   const cleaned = await cleanUpCreatedAccount(gateway, input.code, created.accountId, true);
   if (!cleaned) return failure("registration_cleanup_required", "cleanup", 500, false);
-  return failure("confirmation_send_failed", "confirmation_send", 503, true);
+  return confirmationState === "timeout"
+    ? gatewayFailure("confirmation_send", confirmationState)
+    : failure("confirmation_send_failed", "confirmation_send", 503, true);
 }

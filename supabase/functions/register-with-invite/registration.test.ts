@@ -66,15 +66,74 @@ describe("register-with-invite lifecycle", () => {
     );
 
     expect(result).toEqual({
-      status: 503,
+      status: 504,
       body: {
-        error: "confirmation_send_failed",
+        error: "registration_timeout",
         stage: "confirmation_send",
         retryable: true,
       },
     });
     expect(deleteCalls).toBe(1);
     expect(releaseCalls).toBe(1);
+  });
+
+  it("returns a determinate timeout boundary when Auth account creation times out", async () => {
+    const result = await executeInviteRegistration(
+      makeGateway({ createAccount: async () => ({ state: "timeout" }) }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 504,
+      body: {
+        error: "registration_timeout",
+        stage: "account_create",
+        retryable: true,
+      },
+    });
+  });
+
+  it("does not expose an Auth rejection detail", async () => {
+    const result = await executeInviteRegistration(
+      makeGateway({ createAccount: async () => ({ state: "rejected" }) }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 422,
+      body: {
+        error: "account_create_rejected",
+        stage: "account_create",
+        retryable: false,
+      },
+    });
+  });
+
+  it("cleans exact ownership before reporting an invite-consume timeout", async () => {
+    let released = false;
+    const result = await executeInviteRegistration(
+      makeGateway({
+        consumeInvite: async () => "timeout",
+        releaseInvite: async () => {
+          released = true;
+          return "released";
+        },
+        inviteOwner: async () => released ? null : "opaque-account",
+      }),
+      testInput,
+      new Date("2026-07-24T00:00:00.000Z"),
+    );
+
+    expect(result).toEqual({
+      status: 504,
+      body: {
+        error: "registration_timeout",
+        stage: "invite_consume",
+        retryable: true,
+      },
+    });
   });
 
   it("uses a bounded exact-account cleanup retry when a delete acknowledgement is indeterminate", async () => {

@@ -22,8 +22,11 @@ const CORS = {
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const REQUEST_TIMEOUT_MS = 4_000;
-const FUNCTION_BUDGET_MS = 25_000;
+// The prior 4-second cap was shorter than a cold Auth admin create on the
+// hosted path. Eight seconds remains bounded while leaving time for the exact
+// account/invite cleanup sequence within the total Function budget.
+const REQUEST_TIMEOUT_MS = 8_000;
+const FUNCTION_BUDGET_MS = 48_000;
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), {
@@ -49,6 +52,12 @@ function errorMessage(error: unknown) {
   return typeof error === "object" && error !== null && "message" in error
     ? String((error as { message?: unknown }).message || "")
     : "";
+}
+
+function errorStatus(error: unknown) {
+  if (typeof error !== "object" || error === null || !("status" in error)) return null;
+  const status = Number((error as { status?: unknown }).status);
+  return Number.isInteger(status) ? status : null;
 }
 
 function errorState(error: unknown): "failed" | "timeout" {
@@ -125,6 +134,13 @@ function createGateway(): RegistrationGateway | null {
             return { state: "email_taken" as const };
           }
           if (message.includes("password")) return { state: "weak_password" as const };
+          const status = errorStatus(error);
+          if (status === 401 || status === 403) {
+            return { state: "credentials_invalid" as const };
+          }
+          if (status !== null && status >= 400 && status < 500) {
+            return { state: "rejected" as const };
+          }
           return { state: "failed" as const };
         }
         if (!data?.user?.id) return { state: "failed" as const };
@@ -241,7 +257,7 @@ Deno.serve(async (req) => {
 
   const gateway = createGateway();
   if (!gateway) {
-    return json({ error: "registration_unavailable", stage: "account_create", retryable: true }, 503);
+    return json({ error: "registration_unavailable", stage: "configuration", retryable: false }, 503);
   }
 
   const result = await executeInviteRegistration(gateway, { email, password, code }, new Date());

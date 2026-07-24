@@ -69,7 +69,7 @@ npx supabase functions deploy daily-coach-dispatch --no-verify-jwt
   - `wallet-status`（旧公开模式钱包状态；当前个人模式不主动调用）
   - `payment-notify-admin`（用户扫码付款后提交充值提醒 → 写管理员 `push_inbox` / FCM；不自动加余额）
   - `admin-wallet-grant`（管理员核对收款后给用户钱包加余额，并给用户写充值完成提醒）
-  - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建未确认 auth 用户 → 条件烧码 → 发送确认邮件；确认邮件失败或超时时会以固定失败阶段响应，并仅在精确账号删除已核实后释放该邀请码；部署加 `--no-verify-jwt`）
+  - `register-with-invite`（邀请码注册，公共注册关闭；service_role 校验一次性邀请码 → 建未确认 auth 用户 → 条件烧码 → 发送确认邮件；每次上游调用最多 8 秒、整次流程最多 48 秒。超时会以 `registration_timeout` 和固定阶段返回 504；确认邮件失败或超时时仅在精确账号删除已核实后释放该邀请码；部署加 `--no-verify-jwt`）
   - `delete-account`（自助注销整个 Aevum 账号；校验当前登录用户后删除 auth 用户，依赖各产品表的外键 cascade 清理 Aevum / Ultreia / Viatica / Sidera 个人数据）
   - `push-test`（已正式退役；保留为受现有网关 JWT 保护的 `410` 终止端点，不读取设备、不调用推送提供方、不接受目标参数。若未来确需恢复，先重新做身份、owner/role、单目标和安全汇总响应审查，再从此变更前的已审查版本回滚并单独部署）
 

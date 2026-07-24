@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Canonical Phase 2 cleanup boundary. Keep this fixed inventory in Ultreia so
@@ -135,54 +138,81 @@ function firstJsonObject(text) {
   return null;
 }
 
-// The Supabase CLI may exit non-zero after a successful query because optional
-// telemetry shutdown timed out. Accept only a fully parseable rows payload;
-// otherwise fail closed without forwarding CLI output.
-export async function runLinkedDbQuery(sql) {
-  const windows = process.platform === "win32";
-  const command = windows ? "powershell.exe" : "npx";
-  const args = windows
-    ? [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      "& npx.cmd supabase db query $env:ULTREIA_REGISTER_AUDIT_SQL --linked --output-format json --log-level error",
-    ]
-    : [
+// Keep SQL out of the native Windows command line. The fixed 28-table query
+// exceeds its length ceiling once PowerShell expands an environment variable.
+// The query file is local, short-lived, and removed after the CLI returns.
+export function linkedDbQueryInvocation(queryFile, windows = process.platform === "win32") {
+  if (typeof queryFile !== "string" || !queryFile) throw new Error("invalid_query_file");
+  if (windows) {
+    return {
+      command: "powershell.exe",
+      args: [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "& npx.cmd supabase db query --file $env:ULTREIA_REGISTER_AUDIT_SQL_FILE --linked --output-format json --log-level error",
+      ],
+      environment: { ULTREIA_REGISTER_AUDIT_SQL_FILE: queryFile },
+    };
+  }
+  return {
+    command: "npx",
+    args: [
       "supabase",
       "db",
       "query",
-      sql,
+      "--file",
+      queryFile,
       "--linked",
       "--output-format",
       "json",
       "--log-level",
       "error",
-    ];
-  const result = await new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: process.cwd(),
-      env: windows
-        ? { ...process.env, ULTREIA_REGISTER_AUDIT_SQL: sql }
-        : process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let stdout = "";
-    child.stdout.setEncoding("utf8");
-    child.stdout.on("data", chunk => { stdout += chunk; });
-    child.once("error", () => reject(new Error("database_query_unavailable")));
-    child.once("close", exitCode => resolve({ exitCode, stdout }));
-  });
+    ],
+    environment: null,
+  };
+}
 
-  const json = firstJsonObject(result.stdout);
-  if (!json) throw new Error("database_query_unavailable");
+// The Supabase CLI may exit non-zero after a successful query because optional
+// telemetry shutdown timed out. Accept only a fully parseable rows payload;
+// otherwise fail closed without forwarding CLI output.
+export async function runLinkedDbQuery(sql) {
+  const queryDirectory = await mkdtemp(join(tmpdir(), "ultreia-register-audit-"));
+  const queryFile = join(queryDirectory, "query.sql");
   try {
-    const parsed = JSON.parse(json);
-    if (!Array.isArray(parsed?.rows)) throw new Error("database_query_unavailable");
-    return parsed.rows;
-  } catch {
-    throw new Error("database_query_unavailable");
+    await writeFile(queryFile, sql, { encoding: "utf8", mode: 0o600 });
+    const invocation = linkedDbQueryInvocation(queryFile);
+    const result = await new Promise((resolve, reject) => {
+      const child = spawn(invocation.command, invocation.args, {
+        cwd: process.cwd(),
+        env: invocation.environment
+          ? { ...process.env, ...invocation.environment }
+          : process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+      let stdout = "";
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", chunk => { stdout += chunk; });
+      child.once("error", () => reject(new Error("database_query_unavailable")));
+      child.once("close", exitCode => resolve({ exitCode, stdout }));
+    });
+
+    const json = firstJsonObject(result.stdout);
+    if (!json) throw new Error("database_query_unavailable");
+    try {
+      const parsed = JSON.parse(json);
+      if (!Array.isArray(parsed?.rows)) throw new Error("database_query_unavailable");
+      return parsed.rows;
+    } catch {
+      throw new Error("database_query_unavailable");
+    }
+  } finally {
+    try {
+      await rm(queryDirectory, { recursive: true, force: true });
+    } catch {
+      // A local temporary-file cleanup failure must not expose query contents.
+    }
   }
 }
 

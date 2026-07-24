@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   REGISTER_WITH_INVITE_PRIVATE_TABLES,
   buildPrivateTableAuditSql,
+  linkedDbQueryInvocation,
   summarizePrivateTableAudit,
 } from "./registerWithInvitePrivateTableAudit.mjs";
 
@@ -20,6 +21,17 @@ describe("register-with-invite private-table cleanup audit", () => {
     expect(sql).not.toContain("DELETE");
     expect(sql).not.toContain("UPDATE");
     expect(sql).not.toContain("INSERT");
+  });
+
+  it("uses a query file so the fixed audit never exceeds the Windows command-line limit", () => {
+    const invocation = linkedDbQueryInvocation("C:\\temp\\register-audit.sql", true);
+
+    expect(invocation.command).toBe("powershell.exe");
+    expect(invocation.args.join(" ")).toContain("--file $env:ULTREIA_REGISTER_AUDIT_SQL_FILE");
+    expect(invocation.args.join(" ")).not.toContain("SELECT");
+    expect(invocation.environment).toEqual({
+      ULTREIA_REGISTER_AUDIT_SQL_FILE: "C:\\temp\\register-audit.sql",
+    });
   });
 
   it("proves a complete zero-result audit without returning row details", () => {

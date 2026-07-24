@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   executeInviteRegistration,
+  registrationFailureDiagnostic,
   SIGNUP_EMAIL_REDIRECT_URL,
   type RegistrationGateway,
 } from "./registration.ts";
 
 const testInput = {
-  email: "temporary@invalid.example",
-  password: "safe-test-password",
-  code: "UL-TESTCODE",
+  email: "account-input",
+  password: "credential-input",
+  code: "invite-input",
 };
 
 function makeGateway(overrides: Partial<RegistrationGateway> = {}): RegistrationGateway {
@@ -26,6 +27,34 @@ function makeGateway(overrides: Partial<RegistrationGateway> = {}): Registration
 }
 
 describe("register-with-invite lifecycle", () => {
+  it("logs only allowlisted failure metadata", () => {
+    expect(registrationFailureDiagnostic({
+      status: 503,
+      body: {
+        error: "registration_unavailable",
+        stage: "account_create",
+        retryable: true,
+      },
+    })).toEqual({
+      event: "register_with_invite_failed",
+      status: 503,
+      stage: "account_create",
+      outcome: "registration_unavailable",
+      retryable: true,
+    });
+
+    expect(registrationFailureDiagnostic({
+      status: 500,
+      body: { error: "unrecognized_failure", retryable: false },
+    })).toEqual({
+      event: "register_with_invite_failed",
+      status: 500,
+      stage: "unknown",
+      outcome: "unexpected",
+      retryable: false,
+    });
+  });
+
   it("succeeds only after invite consumption and confirmation dispatch", async () => {
     let seenRedirect = "";
     const result = await executeInviteRegistration(

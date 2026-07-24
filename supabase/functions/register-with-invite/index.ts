@@ -12,7 +12,9 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
   executeInviteRegistration,
+  registrationFailureDiagnostic,
   type RegistrationGateway,
+  type RegistrationResult,
 } from "./registration.ts";
 
 const CORS = {
@@ -33,6 +35,12 @@ function json(obj: unknown, status = 200): Response {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
+}
+
+function registrationResponse(result: RegistrationResult): Response {
+  const diagnostic = registrationFailureDiagnostic(result);
+  if (diagnostic) console.warn(JSON.stringify(diagnostic));
+  return json(result.body, result.status);
 }
 
 function timeoutError() {
@@ -257,9 +265,12 @@ Deno.serve(async (req) => {
 
   const gateway = createGateway();
   if (!gateway) {
-    return json({ error: "registration_unavailable", stage: "configuration", retryable: false }, 503);
+    return registrationResponse({
+      status: 503,
+      body: { error: "registration_unavailable", stage: "configuration", retryable: false },
+    });
   }
 
   const result = await executeInviteRegistration(gateway, { email, password, code }, new Date());
-  return json(result.body, result.status);
+  return registrationResponse(result);
 });

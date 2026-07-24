@@ -19,6 +19,71 @@ export type RegistrationResult = {
   };
 };
 
+export type RegistrationFailureDiagnostic = {
+  event: "register_with_invite_failed";
+  status: number;
+  stage: RegistrationStage | "unknown";
+  outcome:
+    | "invalid_code"
+    | "code_used"
+    | "email_taken"
+    | "weak_password"
+    | "registration_unavailable"
+    | "registration_timeout"
+    | "account_create_rejected"
+    | "registration_cleanup_required"
+    | "confirmation_send_failed"
+    | "unexpected";
+  retryable: boolean;
+};
+
+const DIAGNOSTIC_STAGES = new Set<RegistrationStage>([
+  "configuration",
+  "invite_lookup",
+  "account_create",
+  "invite_consume",
+  "confirmation_send",
+  "cleanup",
+]);
+
+const DIAGNOSTIC_OUTCOMES = new Set<Exclude<RegistrationFailureDiagnostic["outcome"], "unexpected">>([
+  "invalid_code",
+  "code_used",
+  "email_taken",
+  "weak_password",
+  "registration_unavailable",
+  "registration_timeout",
+  "account_create_rejected",
+  "registration_cleanup_required",
+  "confirmation_send_failed",
+]);
+
+// This is the only diagnostic projection the deployed handler may log. It
+// intentionally rejects arbitrary error text so dashboard logs cannot retain
+// request data, Auth/provider messages, or identifiers.
+export function registrationFailureDiagnostic(
+  result: RegistrationResult,
+): RegistrationFailureDiagnostic | null {
+  if (result.status < 400) return null;
+
+  const stage = result.body.stage && DIAGNOSTIC_STAGES.has(result.body.stage)
+    ? result.body.stage
+    : "unknown";
+  const outcome = result.body.error && DIAGNOSTIC_OUTCOMES.has(
+    result.body.error as Exclude<RegistrationFailureDiagnostic["outcome"], "unexpected">,
+  )
+    ? result.body.error as RegistrationFailureDiagnostic["outcome"]
+    : "unexpected";
+
+  return {
+    event: "register_with_invite_failed",
+    status: result.status,
+    stage,
+    outcome,
+    retryable: result.body.retryable === true,
+  };
+}
+
 export type RegistrationGateway = {
   lookupInvite(code: string): Promise<"unused" | "used" | "missing" | "failed" | "timeout">;
   createAccount(

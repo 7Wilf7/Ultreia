@@ -26,6 +26,14 @@ const SAFE_ERROR_CATEGORIES = new Set([
   "confirmation_send_rejected",
   "confirmation_rate_limited",
 ]);
+const SAFE_FAILURE_STAGES = new Set([
+  "configuration",
+  "invite_lookup",
+  "account_create",
+  "invite_consume",
+  "confirmation_send",
+  "cleanup",
+]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function errorCode(error) {
@@ -69,10 +77,16 @@ export function summarizeFunctionResponse(status, rawBody) {
   const accepted = status === 200
     && parsed?.ok === true
     && parsed?.needsEmailVerification === true;
+  const stage = typeof parsed?.stage === "string" && SAFE_FAILURE_STAGES.has(parsed.stage)
+    ? parsed.stage
+    : null;
+  const retryable = typeof parsed?.retryable === "boolean" ? parsed.retryable : null;
   return {
     responseReceived: true,
     status,
     category: accepted ? "accepted" : error,
+    stage,
+    retryable,
     accepted,
   };
 }
@@ -152,10 +166,12 @@ async function invokeOnce(configuration, body, timeoutMs) {
         });
         response.once("error", error => {
           settle({
-            responseReceived: false,
-            status: null,
-            category: classifyRequestFailure(error, timedOut),
-            accepted: false,
+          responseReceived: false,
+          status: null,
+          category: classifyRequestFailure(error, timedOut),
+          stage: null,
+          retryable: null,
+          accepted: false,
           });
         });
         response.once("end", () => settle(summarizeFunctionResponse(response.statusCode ?? 0, bodyText)));
@@ -165,6 +181,8 @@ async function invokeOnce(configuration, body, timeoutMs) {
         responseReceived: false,
         status: null,
         category: classifyRequestFailure(error, false),
+        stage: null,
+        retryable: null,
         accepted: false,
       });
       return;
@@ -182,6 +200,8 @@ async function invokeOnce(configuration, body, timeoutMs) {
         responseReceived: false,
         status: null,
         category: classifyRequestFailure(error, timedOut),
+        stage: null,
+        retryable: null,
         accepted: false,
       });
     });
@@ -246,6 +266,8 @@ async function runDiagnosis() {
     response_received: response.responseReceived,
     response_status: response.status,
     response_category: response.category,
+    response_stage: response.stage,
+    response_retryable: response.retryable,
     passed,
   });
   if (!passed) process.exitCode = 1;
@@ -263,6 +285,8 @@ async function runLifecycle() {
     response_received: false,
     response_status: null,
     response_category: "not_run",
+    response_stage: null,
+    response_retryable: null,
     auth_before_count: null,
     auth_observed_after_count: null,
     invite_before_count: null,
@@ -296,6 +320,8 @@ async function runLifecycle() {
     result.response_received = response.responseReceived;
     result.response_status = response.status;
     result.response_category = response.category;
+    result.response_stage = response.stage;
+    result.response_retryable = response.retryable;
 
     const accountIds = await exactAccountIds(email);
     result.auth_observed_after_count = accountIds.length;

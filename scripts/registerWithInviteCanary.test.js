@@ -48,14 +48,34 @@ describe("register-with-invite canary transport summaries", () => {
       responseReceived: true,
       status: 200,
       category: "accepted",
+      stage: null,
+      retryable: null,
       accepted: true,
     });
-    expect(summarizeFunctionResponse(500, JSON.stringify({ error: "provider-detail-not-allowed" })))
+    expect(summarizeFunctionResponse(500, JSON.stringify({
+      error: "provider-detail-not-allowed",
+      stage: "provider-detail-not-allowed",
+      retryable: "provider-detail-not-allowed",
+    })))
       .toEqual({
         responseReceived: true,
         status: 500,
         category: "unexpected",
+        stage: null,
+        retryable: null,
         accepted: false,
       });
+  });
+
+  it("retains only allowlisted failure stage and retryability", () => {
+    expect(summarizeFunctionResponse(503, JSON.stringify({
+      error: "registration_unavailable",
+      stage: "account_create",
+      retryable: true,
+    }))).toMatchObject({
+      category: "registration_unavailable",
+      stage: "account_create",
+      retryable: true,
+    });
   });
 });
